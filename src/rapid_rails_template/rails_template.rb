@@ -343,6 +343,12 @@ def install_wallet_siwe
     end
   RUBY
   create_file "config/initializers/siwe.rb", "require \"siwe\"\n"
+  create_file "config/locales/ja.yml", <<~YAML, force: true
+    ja:
+      accounts:
+        destroy:
+          notice: アカウントを削除しました
+  YAML
 
   create_file "app/javascript/controllers/siwe_sign_in_controller.js", <<~JAVASCRIPT
     import { Controller } from "@hotwired/stimulus"
@@ -432,9 +438,27 @@ def install_wallet_siwe
         get account_url
         assert_response :success
         assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: 1
-        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: 1
+        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: 2
+        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: 2
         assert_select 'nav[aria-label="アカウントメニュー"] a[href=?]', root_path, count: 0
+        assert_select '.badge', text: 'ID', count: 0
+
+        get edit_account_url
+        assert_response :success
+        assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', edit_account_path, count: 1
+        assert_select '.list .badge', text: 'ID', count: 1
+        assert_select '.list p.font-semibold', text: key.address.to_s.downcase, count: 1
+        assert_select '.card-actions form[action=?][method="post"]', account_path, count: 1 do
+          assert_select 'input[name="_method"][value="delete"]', count: 1
+          assert_select 'button.btn.btn-error[data-turbo-confirm]', text: 'アカウントを削除', count: 1
+        end
+
+        assert_difference(['User.count', 'Session.count'], -1) do
+          delete account_url
+        end
+        assert_redirected_to root_url
+        follow_redirect!
+        assert_select '.alert.alert-success', text: 'アカウントを削除しました', count: 1
       end
     end
   RUBY
@@ -669,7 +693,6 @@ def configure_default_views
   else
     '<%= link_to "ウォレットで始める", new_session_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
   end
-  account_identity = devise ? "<%= current_user.email %>" : "<%= Current.user.wallet_address %>"
   account_navigation_items = if devise
     <<~ERB
       <li>
@@ -693,11 +716,20 @@ def configure_default_views
   else
     <<~ERB
       <li>
-        <%= link_to account_path, class: "menu-active", aria: { current: "page" } do %>
+        <%= link_to account_path, class: ("menu-active" if current_page?(account_path)), aria: { current: ("page" if current_page?(account_path)) } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
           プロフィール
+        <% end %>
+      </li>
+      <li>
+        <%= link_to edit_account_path, class: ("menu-active" if current_page?(edit_account_path)), aria: { current: ("page" if current_page?(edit_account_path)) } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+          アカウント設定
         <% end %>
       </li>
     ERB
@@ -727,17 +759,38 @@ def configure_default_views
     end
   RUBY
 
-  account_authentication = devise ? "  before_action :authenticate_user!\n" : ""
-  create_file "app/controllers/accounts_controller.rb", <<~RUBY, force: true
-    class AccountsController < ApplicationController
-      layout "account"
-    #{account_authentication}
-      def show; end
-    end
-  RUBY
+  accounts_controller = if devise
+    <<~RUBY
+      class AccountsController < ApplicationController
+        layout "account"
+        before_action :authenticate_user!
+
+        def show; end
+      end
+    RUBY
+  else
+    <<~RUBY
+      class AccountsController < ApplicationController
+        layout "account"
+
+        def show; end
+
+        def edit; end
+
+        def destroy
+          user = Current.user
+          user.destroy!
+          cookies.delete(:session_id)
+          Current.session = nil
+          redirect_to root_path, notice: I18n.t("accounts.destroy.notice", locale: :ja), status: :see_other
+        end
+      end
+    RUBY
+  end
+  create_file "app/controllers/accounts_controller.rb", accounts_controller, force: true
 
   route 'root "home#index"'
-  route "resource :account, only: :show"
+  route devise ? "resource :account, only: :show" : "resource :account, only: %i[show edit destroy]"
 
   create_file "app/views/layouts/application.html.erb", <<~ERB, force: true
     <!DOCTYPE html>
@@ -879,23 +932,8 @@ def configure_default_views
       <header>
         <p class="text-sm font-semibold text-primary">Account</p>
         <h1 class="mt-1 text-2xl font-bold leading-[1.5]">マイページ</h1>
-        <p class="mt-2 text-sm text-neutral">アカウント情報とアプリケーションの状態を確認できます。</p>
+        <p class="mt-2 text-sm text-neutral">プロフィールとアプリケーションの状態を確認できます。</p>
       </header>
-
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
-        <div class="card-body p-5 sm:p-6">
-          <h2 class="card-title text-base leading-[1.5]">プロフィール</h2>
-          <ul class="list mt-3">
-            <li class="list-row px-0">
-              <span class="badge badge-outline">ID</span>
-              <div class="list-col-grow min-w-0">
-                <p class="text-xs text-neutral">ログイン中のアカウント</p>
-                <p class="mt-1 break-all font-semibold">#{account_identity}</p>
-              </div>
-            </li>
-          </ul>
-        </div>
-      </section>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body p-5 sm:p-6">
@@ -908,6 +946,43 @@ def configure_default_views
       </section>
     </div>
   ERB
+
+  unless devise
+    create_file "app/views/accounts/edit.html.erb", <<~ERB, force: true
+      <% content_for :title, "アカウント設定 | Rapid Rails" %>
+      <div class="space-y-6">
+        <header>
+          <p class="text-sm font-semibold text-primary">Account settings</p>
+          <h1 class="mt-2 text-2xl font-bold leading-[1.5]">アカウント設定</h1>
+        </header>
+
+        <section class="card card-border border-base-300 bg-base-100 shadow-none">
+          <div class="card-body p-5 sm:p-6">
+            <h2 class="card-title text-base leading-[1.5]">アカウント情報</h2>
+            <ul class="list mt-3">
+              <li class="list-row px-0">
+                <span class="badge badge-outline">ID</span>
+                <div class="list-col-grow min-w-0">
+                  <p class="text-xs text-neutral">Wallet address</p>
+                  <p class="mt-1 break-all font-semibold"><%= Current.user.wallet_address %></p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="card card-border border-error bg-base-100 shadow-none">
+          <div class="card-body p-5 sm:p-6">
+            <h2 class="card-title text-base leading-[1.5]">アカウントの削除</h2>
+            <p class="text-sm text-neutral">この操作は取り消せません。このアカウントのすべてのセッションも削除されます。</p>
+            <div class="card-actions mt-2 justify-start">
+              <%= button_to "アカウントを削除", account_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "本当に削除しますか？" } %>
+            </div>
+          </div>
+        </section>
+      </div>
+    ERB
+  end
 
   if devise
     configure_devise_views
@@ -1034,6 +1109,8 @@ def configure_default_views
 
         test "protects account and does not expose unimplemented session actions" do
           get account_url
+          assert_redirected_to new_session_url
+          get edit_account_url
           assert_redirected_to new_session_url
           assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path("/session/edit", method: :get) }
         end
@@ -1177,6 +1254,7 @@ after_bundle do
   configure_web_push if VALUES.fetch("web_push") == "use"
   install_solid_components
   configure_dokploy if VALUES.fetch("deployment") == "dokploy"
+  run_checked "bin/rails db:prepare"
   run_checked "bin/rails tailwindcss:build"
   run_checked "bundle binstubs rubocop"
   run_checked "bin/rubocop -a"

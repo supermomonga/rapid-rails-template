@@ -100,7 +100,7 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 
 ### `entrypoint`
 
-`bootstrap.rb`の引数を検証し、環境検証から`runner`の起動までを行います。生成先パス以外の任意な`rails new`引数は受け付けず、個別の設定処理は持ちません。
+`bootstrap.rb`の生成先パスと個別設定引数を検証し、環境検証から`runner`の起動までを行います。個別設定引数は質問への事前回答として扱い、生成先パス以外の任意な`rails new`引数は受け付けません。
 
 ### `generator_options`
 
@@ -112,7 +112,7 @@ Application Template contextで`configuration.json`を読み込み、schemaと�
 
 ### `questionnaire`
 
-対話APIを使って、`rails new`を起動する前に依存順ですべての適用可能な回答を収集します。表示条件だけを評価し、正規化、実行計画の構築、step実行は行いません。
+CLI引数の事前回答を受け取り、`rails new`を起動する前に未回答の適用可能な項目だけを対話APIで依存順に収集します。表示条件だけを評価し、正規化、実行計画の構築、step実行は行いません。
 
 ### `configuration`
 
@@ -170,6 +170,7 @@ Application Template contextで`configuration.json`を読み込み、schemaと�
 - 承認後に追加質問が行われず、設定と実行計画が変化しないこと。
 - 成功、失敗、割り込みのすべてで一時ファイルが削除されること。
 - Rails 8.1.x／Ruby 4.0.xで一時アプリケーションを生成できること。
+- 生成後にpending migrationが残らず、追加の手作業なしでRails testを起動できること。
 - 各選択肢について、選択したstepだけが順序どおり実行されること。
 
 Application Templateが評価される時点では`rails new`による標準ファイル生成が進んでいます。そのため、本プロジェクトは最終確認をApplication Templateの内側へ置かず、`rails new`の前段へ置きます。

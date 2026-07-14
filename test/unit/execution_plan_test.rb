@@ -12,6 +12,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "devise"
     assert_includes plan.steps, "install_daisyui"
     assert_includes plan.steps, "configure_default_views"
+    assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("verify")
     assert_includes plan.artifacts, "package.json"
     assert_includes plan.artifacts, "package-lock.json"
     assert_includes plan.artifacts, "app/views/layouts/application.html.erb"
@@ -32,6 +33,9 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "package-lock.json"
     assert_includes plan.artifacts, "app/views/sessions/new.html.erb"
     assert_includes plan.artifacts, "app/javascript/controllers/siwe_sign_in_controller.js"
+    assert_includes plan.artifacts, "app/views/accounts/edit.html.erb"
+    assert_includes plan.artifacts, "config/locales/ja.yml"
+    assert_includes plan.steps, "prepare_database"
     refute_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     refute_includes plan.artifacts, "Dockerfile.prod"
   end

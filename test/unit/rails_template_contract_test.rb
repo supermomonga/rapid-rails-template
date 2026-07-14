@@ -70,7 +70,8 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/shared/_flash.html.erb" => %w[alert],
       "app/views/shared/_footer.html.erb" => %w[footer],
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
-      "app/views/accounts/show.html.erb" => %w[card card-body card-title list list-row badge btn],
+      "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
+      "app/views/accounts/edit.html.erb" => %w[card card-body card-title list list-row badge btn],
       "app/views/devise/shared/_error_messages.html.erb" => %w[alert],
       "app/views/devise/shared/_links.html.erb" => %w[divider menu],
       "app/views/devise/sessions/new.html.erb" => %w[fieldset fieldset-legend input checkbox btn],
@@ -147,6 +148,28 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes @source, 'import \\"siwe_sign_in\\"'
   end
 
+  def test_wallet_account_settings_own_identity_and_account_deletion
+    profile = generated_file_source("app/views/accounts/show.html.erb")
+    settings = generated_file_source("app/views/accounts/edit.html.erb")
+
+    refute_includes profile, "Current.user.wallet_address"
+    refute_includes profile, ">ID<"
+    assert_includes settings, "Current.user.wallet_address"
+    assert_includes settings, 'button_to "アカウントを削除", account_path, method: :delete'.b
+    assert_includes settings, "btn btn-outline btn-error btn-rapid"
+    assert_includes @source, 'notice: I18n.t("accounts.destroy.notice", locale: :ja)'
+    assert_includes @source, "notice: アカウントを削除しました".b
+  end
+
+  def test_prepares_the_database_after_generators_and_before_verification_commands
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+
+    assert_operator after_bundle.index('configure_dokploy if VALUES.fetch("deployment") == "dokploy"'),
+      :<, after_bundle.index('run_checked "bin/rails db:prepare"')
+    assert_operator after_bundle.index('run_checked "bin/rails db:prepare"'),
+      :<, after_bundle.index('run_checked "bin/rails tailwindcss:build"')
+  end
+
   def test_default_views_follow_the_design_background_breakpoint_and_component_sizing_contracts
     assert_includes @source, 'body class="min-h-screen bg-base-100'
     assert_includes @source, 'main class="flex-1 bg-base-200"'
@@ -196,15 +219,16 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 3, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 3, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 4, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 4, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
     account_item_class_options = account_navigation.lines.filter_map { |line| line[/class: (.*?), aria:/, 1] }
     assert_equal [
       '("menu-active" if current_page?(account_path))',
       '("menu-active" if current_page?(edit_user_registration_path))',
-      '"menu-active"'
+      '("menu-active" if current_page?(account_path))',
+      '("menu-active" if current_page?(edit_account_path))'
     ], account_item_class_options
 
     assert_includes mobile_navigation, "data: { turbo_method: :delete }"

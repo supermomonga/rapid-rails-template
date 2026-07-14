@@ -22,4 +22,18 @@ class QuestionnaireTest < Minitest::Test
     assert_equal "use", answers["pwa"]
     assert_equal "skip", answers["web_push"]
   end
+
+  def test_asks_only_applicable_options_missing_from_initial_answers
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |key, _| key == "mail" }
+    input = StringIO.new("skip\n")
+    output = StringIO.new
+    questionnaire = RapidRailsTemplate::Questionnaire.new(input:, output:)
+
+    answers = questionnaire.ask_all(initial_answers)
+
+    assert_equal "skip", answers["mail"]
+    assert questionnaire.asked_any?
+    assert_includes output.string, "メール機能"
+    refute_includes output.string, "PWAを使用"
+  end
 end

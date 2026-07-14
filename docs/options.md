@@ -31,6 +31,9 @@
 
 ## 設計規則
 
+- 各オプションは、識別子の`_`を`-`に変換したCLI引数`--OPTION=VALUE`で個別に指定できる。
+- CLI引数で指定した回答は再質問せず、未指定の適用可能な項目だけを依存順に質問する。
+- すべての適用可能な項目がCLI引数で確定済みの場合は、対話と最終承認を行わず実行計画を表示して開始する。
 - すべての適用可能な質問は、`rails new`や一時ファイル作成を開始する前に完了させる。
 - 質問中は後続質問の表示条件だけを評価し、Gem追加、step構築、file action、外部commandを実行しない。
 - 全質問の完了後に回答を正規化・検証し、実行開始前に変更不能な設定として確定する。
@@ -71,6 +74,7 @@
 
 ## `pwa`
 
+- CLI引数: `--pwa=use|skip`
 - 質問文: PWAを使用しますか？
 - 選択肢: `use`、`skip`
 - 既定値: `skip`
@@ -81,6 +85,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 ## `web_push`
 
+- CLI引数: `--web-push=use|skip`
 - 質問文: PWAでWeb Pushを使用しますか？
 - 選択肢: `use`、`skip`
 - 既定値: `skip`
@@ -91,6 +96,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 ## `active_job`
 
+- CLI引数: `--active-job=solid_queue|skip`
 - 質問文: ジョブ管理を使用しますか？
 - 選択肢: `solid_queue`、`skip`
 - 既定値: `skip`
@@ -101,6 +107,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 ## `account_authentication`
 
+- CLI引数: `--account-authentication=devise|wallet_siwe`
 - 質問文: アカウント管理方法を選択してください。
 - 選択肢: `devise`、`wallet_siwe`
 - 既定値: `devise`
@@ -109,10 +116,11 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 `devise`はメールアドレスとパスワードによる登録・ログインを提供します。`wallet_siwe`はWalletConnectや外部SaaSを使用せず、注入済みEIP-1193 provider、Web3.js 4.16.0、`siwe-rb` 0.2.xでSIWEを提供します。Railsが17文字のnonceを生成してsessionへ保存し、5分以内の一回限りのchallengeとして検証します。domain、URI、nonce、署名、正のchain IDを検証し、成功時は小文字化したEVM addressだけを一意なUser識別子にします。chain IDはUser識別子に含めないため、同じaddressはどのEVM互換chainでも同一アカウントです。Deviseアカウントとの紐付けは行いません。
 
-どちらの認証方式でもhomeは公開し、`/account`だけを認証必須とします。guest向け認証画面にはauthentication layout、account画面にはaccount layoutを適用します。Wallet SIWEのsession resourceは`new`、`create`、`destroy`だけに制限し、controllerに存在しない`show`、`edit`、`update` routeは生成しません。
+どちらの認証方式でもhomeは公開し、account画面を認証必須とします。guest向け認証画面にはauthentication layout、account画面にはaccount layoutを適用します。Wallet SIWEのsession resourceは`new`、`create`、`destroy`だけに制限し、controllerに存在しない`show`、`edit`、`update` routeは生成しません。Wallet SIWEのaccount resourceは`show`、`edit`、`destroy`を公開し、wallet addressはプロフィールではなくアカウント設定に表示します。削除確認後にUserと従属する全Sessionを削除し、homeへ戻します。
 
 ## `solid_cache`
 
+- CLI引数: `--solid-cache=use|skip`
 - 質問文: Solid Cacheを使用しますか？
 - 選択肢: `use`、`skip`
 - 既定値: `use`
@@ -121,6 +129,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 ## `action_cable`
 
+- CLI引数: `--action-cable=solid_cable|skip`
 - 質問文: Action Cableを使用しますか？
 - 選択肢: `solid_cable`、`skip`
 - 既定値: `skip`
@@ -131,6 +140,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 ## `mail`
 
+- CLI引数: `--mail=auto|use|skip`
 - 質問文: メール機能を使用しますか？
 - 選択肢: `auto`、`use`、`skip`
 - 既定値: `auto`
@@ -141,6 +151,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 ## `action_text`
 
+- CLI引数: `--action-text=use|skip`
 - 質問文: Action Textを使用しますか？
 - 選択肢: `use`、`skip`
 - 既定値: `use`
@@ -151,6 +162,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 ## `deployment`
 
+- CLI引数: `--deployment=dokploy|none`
 - 質問文: デプロイ方法を選択してください。
 - 選択肢: `dokploy`、`none`
 - 既定値: `dokploy`
@@ -168,6 +180,8 @@ primary SQLite databaseは常にLitestreamのreplication対象とし、queueとc
 ## テスト要件
 
 - 各選択肢と既定値が正規化後の設定へ正しく反映されること。
+- CLI引数で指定した項目を再質問せず、未指定の適用可能な項目だけを質問すること。
+- すべての適用可能な項目をCLI引数で指定した場合、標準入力を読まずに実行すること。
 - 表示条件が満たされない質問を行わないこと。
 - すべての適用可能な質問を一度ずつ完了するまで最終確認へ進まないこと。
 - 質問の依存関係に循環がある場合、ランチャーのbuildまたは起動時検証で拒否すること。

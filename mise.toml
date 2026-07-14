@@ -2,7 +2,7 @@
 ruby = "4.0.6"
 
 [tasks.generate-sampleapp]
-description = "sample/を再作成し、デフォルト選択肢でRailsアプリを生成する"
+description = "sample/を再作成し、Devise認証のRailsアプリを生成する"
 run = '''
 #!/usr/bin/env ruby
 require "fileutils"
@@ -11,5 +11,38 @@ require "rbconfig"
 root = File.realpath(Dir.pwd)
 sample = File.join(root, "sample")
 FileUtils.rm_rf(sample)
-exec RbConfig.ruby, File.join(root, "bootstrap.rb"), "--defaults", sample
+exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
+  "--pwa=skip",
+  "--web-push=skip",
+  "--active-job=skip",
+  "--solid-cache=use",
+  "--account-authentication=devise",
+  "--action-cable=skip",
+  "--mail=auto",
+  "--action-text=use",
+  "--deployment=dokploy",
+  sample
+'''
+
+[tasks.generate-sampleapp-wallet-siwe]
+description = "sample/を再作成し、Wallet SIWE認証のRailsアプリを生成する"
+run = '''
+#!/usr/bin/env ruby
+require "fileutils"
+require "rbconfig"
+
+root = File.realpath(Dir.pwd)
+sample = File.join(root, "sample")
+FileUtils.rm_rf(sample)
+exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
+  "--pwa=skip",
+  "--web-push=skip",
+  "--active-job=skip",
+  "--solid-cache=use",
+  "--account-authentication=wallet_siwe",
+  "--action-cable=skip",
+  "--mail=auto",
+  "--action-text=use",
+  "--deployment=dokploy",
+  sample
 '''

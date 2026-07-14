@@ -64,6 +64,7 @@ module RapidRailsTemplate
       result << "install_solid_cache" if configuration["solid_cache"] == "use"
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
       result << "configure_dokploy" if configuration["deployment"] == "dokploy"
+      result << "prepare_database"
       result << "verify"
       result
     end
@@ -96,6 +97,8 @@ module RapidRailsTemplate
       else
         result << "app/views/sessions/new.html.erb"
         result << "app/javascript/controllers/siwe_sign_in_controller.js"
+        result << "app/views/accounts/edit.html.erb"
+        result << "config/locales/ja.yml"
       end
       result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"
       result << "mise.local.toml" if configuration["web_push"] == "use"

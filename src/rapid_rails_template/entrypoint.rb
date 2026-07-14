@@ -2,17 +2,21 @@
 
 module RapidRailsTemplate
   class Entrypoint
+    CLI_OPTIONS = Configuration::VALID_VALUES.to_h do |id, allowed|
+      ["--#{id.tr('_', '-')}", [id, allowed]]
+    end.freeze
+
     def self.run(argv, input: $stdin, output: $stdout, error: $stderr, runner_class: Runner)
-      defaults_mode, app_path = parse_arguments(argv)
+      argument_answers, app_path = parse_arguments(argv)
 
       Environment.validate!
-      questionnaire = Questionnaire.new(input:, output:) unless defaults_mode
-      configuration = defaults_mode ? Configuration.build({}) : Configuration.build(questionnaire.ask_all)
+      questionnaire = Questionnaire.new(input:, output:)
+      configuration = Configuration.build(questionnaire.ask_all(argument_answers))
       plan = ExecutionPlan.build(configuration)
-      if defaults_mode
-        output.puts plan.summary
-      else
+      if questionnaire.asked_any?
         return 0 unless questionnaire.confirm?(plan.summary)
+      else
+        output.puts plan.summary
       end
 
       runner_class.new(app_path:, plan:, template_payload: APPLICATION_TEMPLATE, output:, error:).run
@@ -22,13 +26,40 @@ module RapidRailsTemplate
     end
 
     def self.parse_arguments(argv)
-      return [false, argv.fetch(0)] if argv.length == 1
-      return [true, argv.fetch(1)] if argv.length == 2 && argv.fetch(0) == "--defaults"
+      answers = {}
+      paths = []
 
-      raise Error, "使用方法: ruby bootstrap.rb [--defaults] APP_PATH"
+      argv.each do |argument|
+        unless argument.start_with?("--")
+          paths << argument
+          next
+        end
+
+        option, value = argument.split("=", 2)
+        definition = CLI_OPTIONS[option]
+        raise Error, "不明なオプションです: #{option}\n#{usage}" if definition.nil?
+        raise Error, "#{option}には値が必要です\n#{usage}" if value.nil? || value.empty?
+
+        id, allowed = definition
+        raise Error, "#{option}の値が不正です: #{value}（#{allowed.join('/')}から選択してください）" unless allowed.include?(value)
+        raise Error, "#{option}が複数回指定されています" if answers.key?(id)
+
+        answers[id] = value
+      end
+
+      raise Error, usage unless paths.length == 1
+
+      [answers, paths.fetch(0)]
     end
 
-    private_class_method :parse_arguments
+    def self.usage
+      options = CLI_OPTIONS.map do |option, (_, allowed)|
+        "  #{option}=#{allowed.join('|')}"
+      end
+      (["使用方法: ruby bootstrap.rb [OPTIONS] APP_PATH", "オプション:"] + options).join("\n")
+    end
+
+    private_class_method :parse_arguments, :usage
   end
 end
 

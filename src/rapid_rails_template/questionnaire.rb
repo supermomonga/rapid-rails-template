@@ -19,14 +19,25 @@ module RapidRailsTemplate
     def initialize(input: $stdin, output: $stdout)
       @input = input
       @output = output
+      @asked_question_ids = []
     end
 
-    def ask_all
-      QUESTIONS.each_with_object({}) do |question, answers|
+    def ask_all(initial_answers = {})
+      answers = initial_answers.transform_keys(&:to_s).dup
+
+      QUESTIONS.each do |question|
+        next if answers.key?(question.id.to_s)
         next unless question.condition.nil? || question.condition.call(answers)
 
+        @asked_question_ids << question.id.to_s
         answers[question.id.to_s] = ask(question)
       end
+
+      answers
+    end
+
+    def asked_any?
+      !@asked_question_ids.empty?
     end
 
     def confirm?(summary)

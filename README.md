@@ -25,12 +25,25 @@ ruby /tmp/rapid-rails-bootstrap.rb APP_PATH
 
 `bootstrap.rb`は、生成先を変更する前に質問・回答検証・実行予定の確認を完了し、回答から`rails new`オプションを構築します。その後、内包するApplication Templateを一時ファイルへ展開して`rails new`を起動します。
 
-質問と確認を行わず、すべてデフォルト選択肢で生成する場合は`--defaults`を指定します。リポジトリの`mise run generate-sampleapp`は、既存の`sample/`を削除してから、このモードで同じ場所へアプリを再生成します。
+各選択はCLI引数で個別に指定できます。指定済みの項目は再質問せず、未指定の適用可能な項目だけを質問します。すべての適用可能な項目を指定すると、質問と最終確認を行わず実行します。
 
 ```console
-ruby /tmp/rapid-rails-bootstrap.rb --defaults APP_PATH
+ruby /tmp/rapid-rails-bootstrap.rb \
+  --pwa=skip \
+  --web-push=skip \
+  --active-job=skip \
+  --solid-cache=use \
+  --account-authentication=devise \
+  --action-cable=skip \
+  --mail=auto \
+  --action-text=use \
+  --deployment=dokploy \
+  APP_PATH
 mise run generate-sampleapp
+mise run generate-sampleapp-wallet-siwe
 ```
+
+リポジトリの`mise run generate-sampleapp`はDevise認証、`mise run generate-sampleapp-wallet-siwe`はWallet SIWE認証を指定します。どちらも既存の`sample/`を削除してから、同じ場所へアプリを再生成します。
 
 `bootstrap.rb`は分割されたソースから生成する配布成果物とし、直接編集は行いません。リリースされたcommitまたはtagへ固定されたURLを使用し、可変な内容へ暗黙に切り替えません。
 

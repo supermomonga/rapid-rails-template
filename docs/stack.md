@@ -53,7 +53,7 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 
 Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`とdesktopの`button`群、mobileの`dropdown`と単一の`menu dropdown-content`、footerは内側幅をheaderと共有する`footer`、homeの導入部は`hero`、情報ブロックは`card`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
 
-account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。プロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
+account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。認証方式にかかわらずプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
 
@@ -61,7 +61,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - `/account`は認証必須とし、account sub-layoutで表示する。
 - login、account登録、password再設定はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。
 - Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。
-- Wallet SIWEではsessionの`new`、`create`、`destroy`だけを公開し、login Viewをtheme化する。署名UIはStimulus controllerとして生成し、Turbo遷移ごとのconnect/disconnect lifecycleへ従う。
+- Wallet SIWEではsessionの`new`、`create`、`destroy`だけを公開し、login Viewをtheme化する。署名UIはStimulus controllerとして生成し、Turbo遷移ごとのconnect/disconnect lifecycleへ従う。accountは`show`をプロフィール、`edit`をwallet addressとアカウント削除UIを持つアカウント設定とし、`destroy`でUserと従属Sessionを削除する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。account sub-layoutの外側gridも同じ`max-w-6xl`と水平paddingを使い、header・account・footerの左右content boundaryを一致させる。
 - `640px`以下をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱う。desktopとmobileの両方で1columnへ縮退できることを必須とする。44pxのtouch targetを満たすためにcomponent itemへ一律の`min-h-*`を追加せず、必要な場合はdaisyUIの公式size modifierまたはtheme tokenでcomponent全体として調整する。

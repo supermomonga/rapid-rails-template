@@ -24,7 +24,9 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 
 ## View実装と目視検証
 
-daisyUI componentの内部寸法とpaddingは既定値を優先し、`menu` itemなどへ`min-h-*`や`p-*`を追加しません。サイズ変更が必要な場合はTailwind CSS utilityより先にdaisyUIの公式size modifierまたはtheme tokenを使用し、既定値を上書きする理由を`docs/`とテストへ残してください。
+- Viewを実装するときは、意図に合うdaisyUI component、part、modifierが存在するかを先に確認し、存在する場合はそれらを使用してください。daisyUI componentで表現できるUIをTailwind CSS utilityだけで再実装しません。
+- daisyUI componentの内部寸法とpaddingは既定値を優先し、`menu` itemなどへ`min-h-*`や`p-*`を追加しません。サイズ変更が必要な場合はTailwind CSS utilityより先にdaisyUIの公式size modifierまたはtheme tokenを使用し、既定値を上書きする理由を`docs/`とテストへ残してください。
+- アイコンを使用する場合は、原則として[Heroicons](https://heroicons.com/)のSVGアイコンを利用してください。装飾目的のSVGには`aria-hidden="true"`を設定し、linkやbuttonの意味は隣接するtextまたはaccessible nameで伝えてください。
 
 responsive navigationを変更した場合は、DOM構造のテストだけで完了とせず、組み込みブラウザで最低限、390px幅の未ログインdropdown展開、390px幅のログイン後dropdown展開、390px幅のaccount menu active表示を目視します。さらに320・640・960pxでviewport内へ収まること、961pxでdesktop navigationへ切り替わること、横スクロールがないことをcomputed geometryで確認してください。
 

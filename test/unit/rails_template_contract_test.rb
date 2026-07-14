@@ -194,6 +194,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes account_navigation, '"menu-active" if current_page?'
     refute_includes account_navigation, '"bg-base-content text-base-100" if current_page?'
     refute_includes account_navigation, "min-h-11"
+    refute_includes account_navigation, "ホームへ戻る".b
+    refute_includes account_navigation, "root_path"
+    assert_equal 3, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 3, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
+    assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
     account_item_class_options = account_navigation.lines.filter_map { |line| line[/class: (.*?), aria:/, 1] }
     assert_equal [
       '("menu-active" if current_page?(account_path))',

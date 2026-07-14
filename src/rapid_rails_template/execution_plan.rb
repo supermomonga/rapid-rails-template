@@ -1,0 +1,85 @@
+# frozen_string_literal: true
+
+module RapidRailsTemplate
+  class ExecutionPlan
+    attr_reader :configuration, :generator_options, :gems, :steps, :artifacts, :processes
+
+    def self.build(configuration)
+      new(configuration)
+    end
+
+    def initialize(configuration)
+      @configuration = configuration
+      @generator_options = GeneratorOptions.build(configuration)
+      @gems = build_gems.freeze
+      @steps = build_steps.freeze
+      @artifacts = build_artifacts.freeze
+      @processes = build_processes.freeze
+      freeze
+    end
+
+    def to_h
+      {
+        "configuration" => configuration.to_h,
+        "generator_options" => generator_options,
+        "gems" => gems,
+        "steps" => steps,
+        "artifacts" => artifacts,
+        "processes" => processes
+      }
+    end
+
+    def summary
+      lines = ["\n実行計画", "========", "実効値:"]
+      configuration.values.each { |key, value| lines << "  #{key}: #{value}" }
+      configuration.reasons.each { |key, reason| lines << "    (#{key}: #{reason})" }
+      lines << "rails new options: #{generator_options.join(' ')}"
+      lines << "Gem: #{gems.join(', ')}"
+      lines << "Steps: #{steps.join(' -> ')}"
+      lines << "生成物: #{artifacts.empty? ? '(なし)' : artifacts.join(', ')}"
+      lines << "Production processes: #{processes.empty? ? '(未設定)' : processes.join(', ')}"
+      lines.join("\n")
+    end
+
+    private
+
+    def build_gems
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails capybara capybara-playwright-driver factory_bot factory_bot_rails ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
+      result << "devise" if configuration["account_authentication"] == "devise"
+      result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
+      result << "web-push" if configuration["web_push"] == "use"
+      result << "solid_queue" if configuration["active_job"] == "solid_queue"
+      result << "solid_cache" if configuration["solid_cache"] == "use"
+      result << "solid_cable" if configuration["action_cable"] == "solid_cable"
+      result << "foreman" if configuration["deployment"] == "dokploy"
+      result
+    end
+
+    def build_steps
+      result = %w[declare_gems configure_rubocop configure_test_stack configure_application_gems]
+      result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
+      result << "configure_web_push" if configuration["web_push"] == "use"
+      result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
+      result << "install_solid_cache" if configuration["solid_cache"] == "use"
+      result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
+      result << "configure_dokploy" if configuration["deployment"] == "dokploy"
+      result << "verify"
+      result
+    end
+
+    def build_artifacts
+      result = []
+      result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"
+      result << "mise.local.toml" if configuration["web_push"] == "use"
+      result
+    end
+
+    def build_processes
+      return [] unless configuration["deployment"] == "dokploy"
+
+      result = ["web"]
+      result << "worker" if configuration["active_job"] == "solid_queue"
+      result
+    end
+  end
+end

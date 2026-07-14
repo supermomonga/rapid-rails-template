@@ -1,6 +1,6 @@
 # コントリビューションガイド
 
-Rapid Rails Templateへのコントリビューションを歓迎します。現在は設計段階であり、実行可能なテンプレートコードはまだありません。
+Rapid Rails Templateへのコントリビューションを歓迎します。
 
 ## 開発環境
 
@@ -8,6 +8,9 @@ Rapid Rails Templateへのコントリビューションを歓迎します。現
 
 ```console
 mise install
+bin/build-bootstrap
+bin/verify-bootstrap
+ruby -Itest -e 'Dir["test/{unit,integration}/**/*_test.rb"].sort.each { |file| require_relative file }'
 ```
 
 `.ruby-version`は追加せず、Rubyバージョンは`mise.toml`だけで管理します。
@@ -22,7 +25,7 @@ mise install
 
 ## 生成物の扱い
 
-将来追加するルートの`bootstrap.rb`は、`src/rapid_rails_template/`以下のソースから決定的に生成する成果物です。前段ランチャーとApplication Template payloadの両方を内包します。
+ルートの`bootstrap.rb`は、`src/rapid_rails_template/`以下のソースから決定的に生成する成果物です。前段ランチャーとApplication Template payloadの両方を内包します。
 
 - `bootstrap.rb`を直接編集しない。
 - 分割ソースと異なる生成物をコミットしない。

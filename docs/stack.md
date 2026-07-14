@@ -1,6 +1,6 @@
 # 採用技術とセットアップ要件
 
-この文書は、生成するRailsアプリケーションへ必ず導入する技術と、対話結果に応じて導入する技術を定義します。現在は要件定義段階であり、Gemや設定を追加するコードはまだ実装していません。
+この文書は、生成するRailsアプリケーションへ必ず導入する技術と、対話結果に応じて導入する技術を定義します。
 
 ## 固定構成
 
@@ -75,7 +75,7 @@ https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2
 
 固定されたGistは`AllCops.TargetRubyVersion: 3.4`ですが、本プロジェクトの対象はRuby 4.0.xです。また、現在の`rubocop-rails`と`rubocop-thread_safety`はRuboCopの`plugins`設定を案内し、`momocop`は`require`設定を案内しています。
 
-この差分を無視して設定を適用しません。Gistを更新して新しいcommitへ固定し直すか、取得後にYAMLとして構造化編集するかを実装前に決定します。
+取得後にYAMLとして構造化編集し、`AllCops.TargetRubyVersion`を`4.0`へ設定します。`rubocop-rails`と`rubocop-thread_safety`は`plugins`、`momocop`は`require`で読み込みます。
 
 ## Solid Queue
 
@@ -127,7 +127,7 @@ Dokployではbuild typeをDockerfile、Dockerfile pathを`Dockerfile.prod`に設
 
 #### Docker image
 
-`Dockerfile.prod`はRuby 4.0.6 slim imageを使うmulti-stage buildとします。
+`Dockerfile.prod`は、公式Docker Hubに存在する対象範囲内の固定tag `ruby:4.0.0-slim`を使うmulti-stage buildとします。開発環境は`mise.toml`でRuby 4.0.6へ固定します。
 
 - base stageでproduction用Bundler環境とLitestreamを用意する。
 - build stageでGemをinstallし、`SECRET_KEY_BASE_DUMMY=1`でassetsをprecompileする。
@@ -164,6 +164,7 @@ productionのSQLite databaseは、次の環境変数で`/data`配下へ配置し
 | --- | --- | --- | --- |
 | primary | `DATABASE_PATH` | `/data/production.sqlite3` | 常に必要 |
 | queue | `QUEUE_DATABASE_PATH` | `/data/production_queue.sqlite3` | Solid Queue使用時 |
+| cache | `CACHE_DATABASE_PATH` | `/data/production_cache.sqlite3` | Solid Cache使用時 |
 | cable | `CABLE_DATABASE_PATH` | `/data/production_cable.sqlite3` | Action Cable使用時 |
 
 SQLite共通設定は`transaction_mode: immediate`、`timeout: 20000`とし、connection poolは`DATABASE_POOL_SIZE`、未指定時は`RAILS_MAX_THREADS`を使用します。queueには`db/queue_migrate`、cableには`db/cable_migrate`を`migrations_paths`として設定します。
@@ -198,7 +199,7 @@ Litestreamの設定または認証情報が不足した場合、replicationな�
 - persistent volume mount: `/data`
 - container command: Dockerfileの既定commandを使用
 - 必須secret: `RAILS_MASTER_KEY`、Litestreamのaccess keyとsecret key
-- 必須database path: `DATABASE_PATH`と、選択に応じた`QUEUE_DATABASE_PATH`／`CABLE_DATABASE_PATH`
+- 必須database path: `DATABASE_PATH`と、選択に応じた`QUEUE_DATABASE_PATH`／`CACHE_DATABASE_PATH`／`CABLE_DATABASE_PATH`
 - 必須replica URL: primaryと、選択に応じたqueue／cableのLitestream URL
 - 任意の調整値: `WEB_CONCURRENCY`、`RAILS_MAX_THREADS`、`DATABASE_POOL_SIZE`、`JOB_CONCURRENCY`
 
@@ -212,13 +213,8 @@ Litestreamの設定または認証情報が不足した場合、replicationな�
 
 Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queue`、`solid_cable`をまとめて生成します。本プロジェクトではSolid QueueとSolid Cableがユーザー選択なので、Rails既定の一括導入をそのまま利用できません。
 
-`rails new`開始前にSolid系のgenerator optionを確定し、選択したcomponentだけを公式install generatorで導入します。Solid Cacheを固定で使うか、別の選択肢にするかは未決事項です。
+`rails new`開始前にSolid系のgenerator optionを確定し、標準の一括導入を`--skip-solid`で抑止したうえで、選択したcomponentだけを公式install generatorで導入します。Solid Cacheは既定で使用し、質問で無効化できます。
 
-## 実装前に決定する事項
+## SIWE wallet認証
 
-- PWA、Web Push、Solid Queue、Action Cableの既定値
-- アカウント管理方法の既定値
-- WalletConnect選択時の署名challenge、nonce、session、chain検証の仕様
-- PWAを使わない場合にRails標準のPWA stubを残すか削除するか
-- Solid Cacheを使うかどうか
-- `.rubocop.yml`のGistを更新するか、取得後に構造化編集するか
+`wallet_siwe`では`siwe-rb` 0.2.xとvendor化したWeb3.js 4.16.0を使用します。`siwe-rb`のnative dependencyをbuildするため、macOS開発環境にはAutoconfとAutomake、production Docker build stageには`autoconf`、`automake`、`libtool`を導入します。Ruby 4.0ではBundlerが`eth`の制約に合うBigDecimal 3.xとOpenSSL 3.xを解決します。

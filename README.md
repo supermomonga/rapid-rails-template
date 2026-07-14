@@ -2,8 +2,7 @@
 
 Rapid Rails Templateは、Railsアプリケーションの初期設定を対話的かつ再現可能な形で自動化するためのApplication Templateプロジェクトです。毎回導入するRubyGemsや設定を、Railsが提供するGenerator APIを中心に適用します。
 
-> [!IMPORTANT]
-> 現在は設計段階です。実行可能な`bootstrap.rb`はまだ提供していないため、現時点ではRailsアプリケーションを生成できません。
+実行可能な`bootstrap.rb`は分割ソースから決定的に生成され、質問、実行計画の確認、`rails new`、Application Template適用を一つのコマンドで行います。
 
 ## 対応環境
 
@@ -14,9 +13,9 @@ Rapid Rails Templateは、Railsアプリケーションの初期設定を対話�
 
 上記以外のバージョンに対する後方互換・前方互換処理は追加しません。開発環境ではRuby 4.0.6を使用します。
 
-## 目指す利用方法
+## 利用方法
 
-実装後は、リリースされた単一の`bootstrap.rb`を取得し、生成先のパスを引数として実行します。
+リリースされた単一の`bootstrap.rb`を取得し、生成先のパスを引数として実行します。
 
 ```console
 curl -fsSL BOOTSTRAP_URL -o /tmp/rapid-rails-bootstrap.rb
@@ -24,6 +23,13 @@ ruby /tmp/rapid-rails-bootstrap.rb APP_PATH
 ```
 
 `bootstrap.rb`は、生成先を変更する前に質問・回答検証・実行予定の確認を完了し、回答から`rails new`オプションを構築します。その後、内包するApplication Templateを一時ファイルへ展開して`rails new`を起動します。
+
+質問と確認を行わず、すべてデフォルト選択肢で生成する場合は`--defaults`を指定します。リポジトリの`mise run generate-sampleapp`は、既存の`sample/`を削除してから、このモードで同じ場所へアプリを再生成します。
+
+```console
+ruby /tmp/rapid-rails-bootstrap.rb --defaults APP_PATH
+mise run generate-sampleapp
+```
 
 `bootstrap.rb`は分割されたソースから生成する配布成果物とし、直接編集は行いません。リリースされたcommitまたはtagへ固定されたURLを使用し、可変な内容へ暗黙に切り替えません。
 

@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "digest"
+require "open3"
+require "tempfile"
+
+ROOT = File.expand_path("..", __dir__)
+bootstrap = File.join(ROOT, "bootstrap.rb")
+abort "bootstrap.rbがありません" unless File.file?(bootstrap)
+
+before = Digest::SHA256.file(bootstrap).hexdigest
+stdout, stderr, status = Open3.capture3(File.join(ROOT, "bin", "build-bootstrap"))
+abort stderr unless status.success?
+after = Digest::SHA256.file(bootstrap).hexdigest
+abort "bootstrap.rbが分割ソースと一致しません" unless before == after
+
+puts "bootstrap.rb is synchronized (#{after})"

@@ -48,11 +48,12 @@
 1. PWAを使うか
 2. PWAでWeb Pushを使うか
 3. ジョブ管理を使うか
-4. アカウント管理方法
-5. Action Cableを使うか
-6. メール機能
-7. Action Textを使うか
-8. デプロイ方法
+4. Solid Cacheを使うか
+5. アカウント管理方法
+6. Action Cableを使うか
+7. メール機能
+8. Action Textを使うか
+9. デプロイ方法
 
 この順序で適用可能な質問をすべて完了するまで、実行予定の確認へ進みません。表示条件を満たさない質問は利用者へ表示せず、全質問完了後の正規化で仕様どおりの値を設定します。
 
@@ -72,27 +73,27 @@
 
 - 質問文: PWAを使用しますか？
 - 選択肢: `use`、`skip`
-- 既定値: 未決定
+- 既定値: `skip`
 - 表示条件: 常に表示する
 - 影響する処理: PWA manifest、service worker、関連routeの有効化と無効時のstub取扱い
 
-Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`skip`時にstubを残すか、Rails/Thorのfile actionで削除するかは実装前に決定します。存在しないgenerator optionや曖昧な文字列編集では処理しません。
+Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`skip`時もstubは残します。存在しないgenerator optionや曖昧な文字列編集では処理しません。
 
 ## `web_push`
 
 - 質問文: PWAでWeb Pushを使用しますか？
 - 選択肢: `use`、`skip`
-- 既定値: 未決定
+- 既定値: `skip`
 - 表示条件: `pwa == use`
 - 影響する処理: `use`の場合だけ`web-push` gemを追加し、Web Push設定stepを実行する
 
-`pwa == skip`の場合は質問せず、値を`skip`へ正規化します。VAPID keyの生成・保存先は実装前に決定します。
+`pwa == skip`の場合は質問せず、値を`skip`へ正規化します。`use`の場合はVAPID鍵を自動生成し、git管理外の`mise.local.toml`の`[env]`へ`VAPID_PUBLIC_KEY`と`VAPID_PRIVATE_KEY`として保存します。
 
 ## `active_job`
 
 - 質問文: ジョブ管理を使用しますか？
 - 選択肢: `solid_queue`、`skip`
-- 既定値: 未決定
+- 既定値: `skip`
 - 表示条件: 常に表示する
 - 影響する処理: `solid_queue` gemとinstall generator、SQLite queue database、Active Job adapter、development用Puma plugin、production worker
 
@@ -101,18 +102,26 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 ## `account_authentication`
 
 - 質問文: アカウント管理方法を選択してください。
-- 選択肢: `devise`、`wallet_connect`
-- 既定値: 未決定
+- 選択肢: `devise`、`wallet_siwe`
+- 既定値: `devise`
 - 表示条件: 常に表示する
-- 影響する処理: Deviseのinstall・model生成、またはWalletConnectを使うwallet認証処理
+- 影響する処理: Deviseのinstall・model生成、またはRails組み込み認証基盤、`siwe-rb`、Web3.jsを使うEVM wallet認証処理
 
-`devise`はメールアドレスとパスワードによる登録・ログインを提供します。`wallet_connect`はWalletConnect対応walletとの接続を表し、それだけでRails側の認証を完結させません。署名challenge、nonceの一回性、署名・chain検証、session確立と失効を実装前に仕様化します。
+`devise`はメールアドレスとパスワードによる登録・ログインを提供します。`wallet_siwe`はWalletConnectや外部SaaSを使用せず、注入済みEIP-1193 provider、Web3.js 4.16.0、`siwe-rb` 0.2.xでSIWEを提供します。Railsが17文字のnonceを生成してsessionへ保存し、5分以内の一回限りのchallengeとして検証します。domain、URI、nonce、署名、正のchain IDを検証し、成功時は小文字化したEVM addressだけを一意なUser識別子にします。chain IDはUser識別子に含めないため、同じaddressはどのEVM互換chainでも同一アカウントです。Deviseアカウントとの紐付けは行いません。
+
+## `solid_cache`
+
+- 質問文: Solid Cacheを使用しますか？
+- 選択肢: `use`、`skip`
+- 既定値: `use`
+- 表示条件: 常に表示する
+- 影響する処理: `solid_cache` gem、install generator、production cache database
 
 ## `action_cable`
 
 - 質問文: Action Cableを使用しますか？
 - 選択肢: `solid_cable`、`skip`
-- 既定値: 未決定
+- 既定値: `skip`
 - 表示条件: 常に表示する
 - 影響する処理: RailsのAction Cable生成option、`solid_cable` gemとinstall generator、production cable databaseと`cable.yml`
 
@@ -154,7 +163,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 primary SQLite databaseは常にLitestreamのreplication対象とし、queueとcableは対応する機能を選択した場合だけ追加します。必要なdatabase path、replica URL、S3互換storageの認証情報が不足した場合は実行を失敗させます。
 
-## 将来のテスト要件
+## テスト要件
 
 - 各選択肢と既定値が正規化後の設定へ正しく反映されること。
 - 表示条件が満たされない質問を行わないこと。
@@ -166,7 +175,7 @@ primary SQLite databaseは常にLitestreamのreplication対象とし、queueとc
 - 最終確認で中止した場合、どの選択結果でもテンプレート固有の変更を開始しないこと。
 - 最終確認に質問時の回答、正規化後の実効値、解決理由、全実行予定が表示されること。
 - 承認後に質問が行われず、確定済み設定と実行計画が変化しないこと。
-- `mail == auto`がDeviseでは`use`、WalletConnectでは`skip`へ正規化されること。
+- `mail == auto`がDeviseでは`use`、SIWE wallet認証では`skip`へ正規化されること。
 - PWAを使わない場合、Web Pushを質問せず`web-push` gemを追加しないこと。
 - Solid Queueを使わない場合、queue database、Puma plugin、production workerを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。

@@ -11,7 +11,7 @@
 | Asset Pipeline | `propshaft` | Sprocketsへ切り替えない |
 | JavaScript配布 | `importmap-rails` | Node.jsを前提とするJS bundlerを導入しない |
 | Hotwire | `turbo-rails`、`stimulus-rails` | TurboとStimulusを使用する |
-| CSS | `tailwindcss-rails` | Rails統合版Tailwind CSSを使用する |
+| CSS | `tailwindcss-rails`、`daisyui` | Rails統合版Tailwind CSS 4と最新のdaisyUI 5を使用する |
 | テスト | Minitest | Rails標準のtest frameworkを維持する |
 | システムテスト | `capybara`、`capybara-playwright-driver` | SeleniumではなくPlaywright driverを使用する |
 | fixture/factory | `factory_bot`、`factory_bot_rails` | テストデータ生成にFactory Botを使用する |
@@ -21,6 +21,48 @@
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
 
 Rails 8.1では、SQLite、Puma、Propshaft、Importmap、Turbo、Stimulus、Minitestが標準構成に含まれます。これらをGemfileへ重複追加せず、対象の`rails new`オプションと生成結果を検証します。Tailwind CSSは`--css=tailwind`を指定し、Railsが提供する`tailwindcss:install`処理を利用します。
+
+daisyUIはTailwind CSS 4用pluginとして、Application Templateのpost-bundleフェーズで`npm install --save-dev daisyui@latest`により導入します。生成された`package.json`と`package-lock.json`を管理し、`app/assets/tailwind/application.css`へ組み込みthemeを無効化した`@plugin "daisyui"`と`@plugin "daisyui/theme"`によるcustom themeを登録します。JavaScript配布は引き続きImportmapを使用し、Node.jsはJavaScript bundlerではなくTailwind CSS plugin依存のinstallとasset buildにのみ使用します。`node_modules`はGitおよびDocker build contextへ含めません。
+
+Dokploy用のproduction imageではbuild stageにNode.jsとnpmを導入し、lockfileに対して`npm ci`を実行してから`assets:precompile`を行います。生成済みCSSだけをfinal stageへ引き継ぎ、`node_modules`とNode.js runtimeはfinal imageへ含めません。
+
+### daisyUIカスタムテーマ
+
+組み込みthemeは`rapid-rails`という名前のlight themeとし、これだけを既定themeとして有効にします。daisyUI custom themeが要求する変数へ、`DESIGN.md`のZenn系デザインを次のように対応させます。
+
+| theme token | 値 | 用途 |
+| --- | --- | --- |
+| `base-100` | `#ffffff` | page・card背景 |
+| `base-200` | `#f1f5f9` | section・sub-layout背景 |
+| `base-300` | `#d6e3ed` | border・separator |
+| `base-content` | `rgba(0, 0, 0, 0.82)` | 本文 |
+| `neutral` | `rgba(0, 0, 0, 0.55)` | 補足文・label |
+| `primary` | `#3ea8ff` | 主要CTAとlink |
+| `secondary` | `#0f83fd` | primaryのhover・press |
+| `success` | `#10b981` | 成功通知 |
+| `warning` | `#f59e0b` | 警告通知 |
+| `error` | `#f43f5e` | error・危険操作 |
+
+field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnoiseは`0`に固定します。本文は16px・line-height 1.8、見出しはline-height 1.5、codeは14px・line-height 1.5とし、指定のsystem/Japanese font stackを使用します。本文へ`palt`を適用せず、`word-break: break-all`と`overflow-wrap: break-word`を設定します。補足文はopacityを重ねず`neutral`を直接使用して実効alphaを`0.55`に保ちます。入力欄にはdaisyUIの`--input-color` contractを利用する`input-rapid` utilityを併用し、通常時を`base-300`、focus時を`primary`へ切り替え、font sizeを16pxにします。buttonには`btn-rapid` utilityを併用して16px・weight 700とし、secondary buttonは公式の`btn-primary btn-outline`を組み合わせます。
+
+`DESIGN.md`は任意のCSS Custom Propertiesへ依存しない方針ですが、daisyUI custom themeとcomponent自体が公式の`--color-*`、`--radius-*`、`--size-*`、`--input-color`等をcontractとします。daisyUIのtheme・component contractに必要な変数だけを例外として使用し、独自の追加変数やView内のraw palette colorは定義しません。
+
+### 標準View構成
+
+生成アプリケーションには、共通application layout、認証用sub-layout、account用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。全Viewは`data-theme="rapid-rails"`配下でdaisyUI componentとsemantic colorを使用します。
+
+Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`とdesktopの`button`群、mobileの`dropdown`と単一の`menu dropdown-content`、footerは内側幅をheaderと共有する`footer`、homeの導入部は`hero`、情報ブロックは`card`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
+
+component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
+
+- `/`は認証方式にかかわらず公開する。
+- `/account`は認証必須とし、account sub-layoutで表示する。
+- login、account登録、password再設定はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。
+- Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。
+- Wallet SIWEではsessionの`new`、`create`、`destroy`だけを公開し、login Viewをtheme化する。署名UIはStimulus controllerとして生成し、Turbo遷移ごとのconnect/disconnect lifecycleへ従う。
+- bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
+- headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。account sub-layoutの外側gridも同じ`max-w-6xl`と水平paddingを使い、header・account・footerの左右content boundaryを一致させる。
+- `640px`以下をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱う。desktopとmobileの両方で1columnへ縮退できることを必須とする。44pxのtouch targetを満たすためにcomponent itemへ一律の`min-h-*`を追加せず、必要な場合はdaisyUIの公式size modifierまたはtheme tokenでcomponent全体として調整する。
 
 Rails標準のシステムテスト構成にはCapybaraとSelenium WebDriverが含まれます。本構成ではCapybaraを維持し、Selenium WebDriverを`capybara-playwright-driver`へ置き換えます。Minitestプロジェクトなので、文書とコードでは「system spec」ではなくRailsの用語に合わせて「システムテスト」と呼びます。
 

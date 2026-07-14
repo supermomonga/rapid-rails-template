@@ -76,6 +76,118 @@ def run_checked(command)
   raise "コマンドが失敗しました: #{command}" unless run(command)
 end
 
+def install_daisyui
+  stylesheet_path = "app/assets/tailwind/application.css"
+  stylesheet = File.binread(stylesheet_path)
+  import_statement = '@import "tailwindcss";'
+  raise "#{stylesheet_path}のTailwind CSS importが一意ではありません" unless stylesheet.lines.count { |line| line.strip == import_statement } == 1
+  raise "#{stylesheet_path}には既にdaisyUI pluginが登録されています" if stylesheet.include?('@plugin "daisyui"')
+
+  create_file "package.json", JSON.pretty_generate("private" => true) + "\n"
+  run_checked "npm install --save-dev daisyui@latest"
+  package = JSON.parse(File.read("package.json"))
+  raise "package.jsonにdaisyUIが登録されていません" unless package.dig("devDependencies", "daisyui")
+  raise "package-lock.jsonが生成されませんでした" unless File.file?("package-lock.json")
+
+  append_to_file stylesheet_path, <<~CSS
+    @plugin "daisyui" {
+      themes: false;
+      logs: false;
+    }
+
+    @plugin "daisyui/theme" {
+      name: "rapid-rails";
+      default: true;
+      prefersdark: false;
+      color-scheme: light;
+
+      --color-base-100: #ffffff;
+      --color-base-200: #f1f5f9;
+      --color-base-300: #d6e3ed;
+      --color-base-content: rgba(0, 0, 0, 0.82);
+      --color-primary: #3ea8ff;
+      --color-primary-content: #ffffff;
+      --color-secondary: #0f83fd;
+      --color-secondary-content: #ffffff;
+      --color-accent: #3ea8ff;
+      --color-accent-content: #ffffff;
+      --color-neutral: rgba(0, 0, 0, 0.55);
+      --color-neutral-content: #ffffff;
+      --color-info: #3ea8ff;
+      --color-info-content: #ffffff;
+      --color-success: #10b981;
+      --color-success-content: rgba(0, 0, 0, 0.82);
+      --color-warning: #f59e0b;
+      --color-warning-content: rgba(0, 0, 0, 0.82);
+      --color-error: #f43f5e;
+      --color-error-content: #ffffff;
+
+      --radius-selector: 0.5rem;
+      --radius-field: 0.5rem;
+      --radius-box: 0.75rem;
+      --size-selector: 0.25rem;
+      --size-field: 0.25rem;
+      --border: 1px;
+      --depth: 0;
+      --noise: 0;
+    }
+
+    @layer base {
+      html {
+        font-size: 16px;
+      }
+
+      body {
+        font-family: -apple-system, system-ui, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+        font-size: 1rem;
+        line-height: 1.8;
+        letter-spacing: normal;
+        font-feature-settings: normal;
+        word-break: break-all;
+        overflow-wrap: break-word;
+      }
+
+      h1, h2, h3, h4, h5, h6 {
+        line-height: 1.5;
+      }
+
+      code, pre, kbd, samp {
+        font-family: SFMono-Regular, Consolas, Menlo, monospace;
+        font-size: 0.875rem;
+        line-height: 1.5;
+      }
+    }
+
+    @utility shadow-elevation-1 {
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    @utility shadow-elevation-2 {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    @utility shadow-elevation-3 {
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    @utility input-rapid {
+      --input-color: var(--color-base-300);
+      font-size: 1rem;
+
+      &:focus,
+      &:focus-within {
+        --input-color: var(--color-primary);
+      }
+    }
+
+    @utility btn-rapid {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+  CSS
+  append_to_file ".gitignore", "\n/node_modules\n" unless File.read(".gitignore").lines.map(&:strip).include?("/node_modules")
+end
+
 def configure_rubocop
   config = YAML.safe_load_file(".rubocop.yml", aliases: true) || {}
   config["AllCops"] ||= {}
@@ -92,12 +204,23 @@ end
 def install_devise
   generate "devise:install"
   generate "devise", "User"
+  generate "devise:views", "-v", "sessions", "registrations", "passwords"
+  create_file "test/fixtures/users.yml", <<~YAML, force: true
+    one:
+      email: one@example.com
+      encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
+
+    two:
+      email: two@example.com
+      encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
+  YAML
 end
 
 def install_wallet_siwe
   generate "authentication", "--api"
   remove_ruby_call_statement("Gemfile", :gem, "bcrypt")
   remove_ruby_call_statement("config/routes.rb", :resources, "passwords")
+  remove_ruby_call_statement("config/routes.rb", :resource, "session")
   remove_file "app/controllers/passwords_controller.rb"
   remove_file "app/mailers/passwords_mailer.rb" if File.exist?("app/mailers/passwords_mailer.rb")
   remove_dir "app/views/passwords_mailer" if Dir.exist?("app/views/passwords_mailer")
@@ -215,59 +338,56 @@ def install_wallet_siwe
 
       def destroy
         terminate_session
-        redirect_to new_session_path
+        redirect_to new_session_path, status: :see_other
       end
     end
   RUBY
-
-  create_file "app/views/sessions/new.html.erb", <<~ERB, force: true
-    <h1>Sign in with Ethereum</h1>
-    <button type="button" data-siwe-sign-in>ウォレットでサインイン</button>
-    <p data-siwe-error role="alert"></p>
-  ERB
   create_file "config/initializers/siwe.rb", "require \"siwe\"\n"
 
-  create_file "app/javascript/siwe_sign_in.js", <<~JAVASCRIPT
-    const button = document.querySelector("[data-siwe-sign-in]")
-    const error = document.querySelector("[data-siwe-error]")
+  create_file "app/javascript/controllers/siwe_sign_in_controller.js", <<~JAVASCRIPT
+    import { Controller } from "@hotwired/stimulus"
 
-    button?.addEventListener("click", async () => {
-      try {
-        if (!window.ethereum) throw new Error("EVM互換ウォレットが見つかりません")
-        const web3 = new window.Web3(window.ethereum)
-        await window.ethereum.request({ method: "eth_requestAccounts" })
-        const [address] = await web3.eth.getAccounts()
-        const chainId = Number(await web3.eth.getChainId())
-        const nonceResponse = await fetch("/session/nonce", { headers: { Accept: "application/json" } })
-        if (!nonceResponse.ok) throw new Error("nonceを取得できません")
-        const { nonce } = await nonceResponse.json()
-        const domain = window.location.host
-        const uri = window.location.origin
-        const issuedAt = new Date().toISOString()
-        const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to ${domain}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`
-        const signature = await web3.eth.personal.sign(message, address, "")
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
-        const response = await fetch("/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, Accept: "application/json" },
-          body: JSON.stringify({ message, signature })
-        })
-        if (!response.ok) throw new Error("署名を検証できません")
-        window.location.assign((await response.json()).redirect_url)
-      } catch (exception) {
-        error.textContent = exception.message
+    export default class extends Controller {
+      static targets = ["error"]
+
+      async signIn() {
+        this.errorTarget.classList.add("hidden")
+        this.errorTarget.textContent = ""
+
+        try {
+          if (!window.ethereum) throw new Error("EVM互換ウォレットが見つかりません")
+          const web3 = new window.Web3(window.ethereum)
+          await window.ethereum.request({ method: "eth_requestAccounts" })
+          const [address] = await web3.eth.getAccounts()
+          const chainId = Number(await web3.eth.getChainId())
+          const nonceResponse = await fetch("/session/nonce", { headers: { Accept: "application/json" } })
+          if (!nonceResponse.ok) throw new Error("nonceを取得できません")
+          const { nonce } = await nonceResponse.json()
+          const domain = window.location.host
+          const uri = window.location.origin
+          const issuedAt = new Date().toISOString()
+          const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to ${domain}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`
+          const signature = await web3.eth.personal.sign(message, address, "")
+          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+          const response = await fetch("/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, Accept: "application/json" },
+            body: JSON.stringify({ message, signature })
+          })
+          if (!response.ok) throw new Error("署名を検証できません")
+          window.location.assign((await response.json()).redirect_url)
+        } catch (exception) {
+          this.errorTarget.textContent = exception.message
+          this.errorTarget.classList.remove("hidden")
+        }
       }
-    })
+    }
   JAVASCRIPT
-  append_to_file "app/javascript/application.js", "\nimport \"siwe_sign_in\"\n"
+  route "resource :session, only: %i[new create destroy]"
   route "get 'session/nonce', to: 'sessions#nonce'"
   get WEB3_URL, "public/vendor/web3-4.16.0.min.js"
   actual_web3_sha256 = Digest::SHA256.file("public/vendor/web3-4.16.0.min.js").hexdigest
   raise "Web3.jsのSHA-256が一致しません" unless actual_web3_sha256 == WEB3_SHA256
-  inject_into_file "app/views/layouts/application.html.erb",
-    "  <script src=\"/vendor/web3-4.16.0.min.js\" defer></script>\n",
-    before: "<%= javascript_importmap_tags %>"
-
   remove_file "test/controllers/passwords_controller_test.rb" if File.exist?("test/controllers/passwords_controller_test.rb")
   create_file "test/models/user_test.rb", <<~RUBY, force: true
     require 'test_helper'
@@ -308,9 +428,590 @@ def install_wallet_siwe
           post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
         end
         assert_response :success
+
+        get account_url
+        assert_response :success
+        assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
       end
     end
   RUBY
+end
+
+def configure_devise_views
+  create_file "app/views/devise/shared/_error_messages.html.erb", <<~ERB, force: true
+    <% if resource.errors.any? %>
+      <div class="alert alert-error mb-6" role="alert">
+        <div>
+          <h2 class="font-bold leading-[1.5]"><%= t("errors.messages.not_saved", count: resource.errors.count, resource: resource.class.model_name.human.downcase) %></h2>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+            <% resource.errors.full_messages.each do |message| %>
+              <li><%= message %></li>
+            <% end %>
+          </ul>
+        </div>
+      </div>
+    <% end %>
+  ERB
+
+  create_file "app/views/devise/shared/_links.html.erb", <<~ERB, force: true
+    <div class="divider"></div>
+    <ul class="menu menu-sm w-full">
+      <% if controller_name != "sessions" %>
+        <li><%= link_to "ログイン画面へ", new_session_path(resource_name) %></li>
+      <% end %>
+      <% if devise_mapping.registerable? && controller_name != "registrations" %>
+        <li><%= link_to "アカウントを作成", new_registration_path(resource_name) %></li>
+      <% end %>
+      <% if devise_mapping.recoverable? && controller_name != "passwords" && controller_name != "registrations" %>
+        <li><%= link_to "パスワードをお忘れですか？", new_password_path(resource_name) %></li>
+      <% end %>
+    </ul>
+  ERB
+
+  create_file "app/views/devise/sessions/new.html.erb", <<~ERB, force: true
+    <% content_for :title, "ログイン | Rapid Rails" %>
+    <header class="mb-8">
+      <p class="text-sm font-semibold text-primary">Welcome back</p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">ログイン</h1>
+      <p class="mt-2 text-sm text-neutral">登録済みのメールアドレスとパスワードを入力してください。</p>
+    </header>
+
+    <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "space-y-5" }) do |f| %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+        <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "パスワード" %></legend>
+        <%= f.password_field :password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
+      </fieldset>
+      <% if devise_mapping.rememberable? %>
+        <label class="label cursor-pointer justify-start gap-3 text-base-content">
+          <%= f.check_box :remember_me, class: "checkbox checkbox-sm" %>
+          <span>ログイン状態を保持する</span>
+        </label>
+      <% end %>
+      <%= f.submit "ログイン", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+    <% end %>
+
+    <%= render "devise/shared/links" %>
+  ERB
+
+  create_file "app/views/devise/registrations/new.html.erb", <<~ERB, force: true
+    <% content_for :title, "アカウント作成 | Rapid Rails" %>
+    <header class="mb-8">
+      <p class="text-sm font-semibold text-primary">Get started</p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">アカウント作成</h1>
+      <p class="mt-2 text-sm text-neutral">開発を始めるためのアカウントを作成します。</p>
+    </header>
+
+    <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "space-y-5" }) do |f| %>
+      <%= render "devise/shared/error_messages", resource: resource %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+        <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "パスワード" %></legend>
+        <%= f.password_field :password, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
+        <% if @minimum_password_length %>
+          <p class="label text-sm text-neutral"><%= @minimum_password_length %>文字以上で入力してください。</p>
+        <% end %>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation, "パスワード（確認）" %></legend>
+        <%= f.password_field :password_confirmation, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
+      </fieldset>
+      <%= f.submit "アカウントを作成", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+    <% end %>
+
+    <%= render "devise/shared/links" %>
+  ERB
+
+  create_file "app/views/devise/registrations/edit.html.erb", <<~ERB, force: true
+    <% content_for :title, "アカウント設定 | Rapid Rails" %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Account settings</p>
+        <h1 class="mt-2 text-2xl font-bold leading-[1.5]">アカウント設定</h1>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body p-5 sm:p-6">
+          <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
+            <%= render "devise/shared/error_messages", resource: resource %>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+              <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "新しいパスワード" %></legend>
+              <%= f.password_field :password, autocomplete: "new-password", class: "input input-rapid w-full" %>
+              <p class="label text-sm text-neutral">変更しない場合は空欄にしてください。</p>
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation, "新しいパスワード（確認）" %></legend>
+              <%= f.password_field :password_confirmation, autocomplete: "new-password", class: "input input-rapid w-full" %>
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :current_password, "現在のパスワード" %></legend>
+              <%= f.password_field :current_password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
+            </fieldset>
+            <%= f.submit "設定を更新", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="card card-border border-error bg-base-100 shadow-none">
+        <div class="card-body p-5 sm:p-6">
+          <h2 class="card-title text-base leading-[1.5]">アカウントの削除</h2>
+          <p class="text-sm text-neutral">この操作は取り消せません。</p>
+          <div class="card-actions mt-2 justify-start">
+            <%= button_to "アカウントを削除", registration_path(resource_name), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "本当に削除しますか？" } %>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/devise/passwords/new.html.erb", <<~ERB, force: true
+    <% content_for :title, "パスワード再設定 | Rapid Rails" %>
+    <header class="mb-8">
+      <p class="text-sm font-semibold text-primary">Password reset</p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">パスワード再設定</h1>
+      <p class="mt-2 text-sm text-neutral">再設定用リンクをメールで送信します。</p>
+    </header>
+
+    <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "space-y-5" }) do |f| %>
+      <%= render "devise/shared/error_messages", resource: resource %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+        <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
+      </fieldset>
+      <%= f.submit "再設定メールを送信", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+    <% end %>
+
+    <%= render "devise/shared/links" %>
+  ERB
+
+  create_file "app/views/devise/passwords/edit.html.erb", <<~ERB, force: true
+    <% content_for :title, "新しいパスワード | Rapid Rails" %>
+    <header class="mb-8">
+      <p class="text-sm font-semibold text-primary">Choose a password</p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">新しいパスワード</h1>
+    </header>
+
+    <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
+      <%= render "devise/shared/error_messages", resource: resource %>
+      <%= f.hidden_field :reset_password_token %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "新しいパスワード" %></legend>
+        <%= f.password_field :password, autofocus: true, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation, "新しいパスワード（確認）" %></legend>
+        <%= f.password_field :password_confirmation, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
+      </fieldset>
+      <%= f.submit "パスワードを変更", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+    <% end %>
+
+    <%= render "devise/shared/links" %>
+  ERB
+end
+
+def configure_default_views
+  devise = VALUES.fetch("account_authentication") == "devise"
+  desktop_navigation_items = if devise
+    <<~ERB
+      <% if user_signed_in? %>
+        <%= link_to "マイページ", account_path, class: "btn btn-ghost btn-rapid" %>
+        <%= button_to "ログアウト", destroy_user_session_path, method: :delete, class: "btn btn-ghost btn-rapid" %>
+      <% else %>
+        <%= link_to "ログイン", new_user_session_path, class: "btn btn-ghost btn-rapid" %>
+        <%= link_to "アカウント作成", new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
+      <% end %>
+    ERB
+  else
+    <<~ERB
+      <% if authenticated? %>
+        <%= link_to "マイページ", account_path, class: "btn btn-ghost btn-rapid" %>
+        <%= button_to "ログアウト", session_path, method: :delete, class: "btn btn-ghost btn-rapid" %>
+      <% else %>
+        <%= link_to "ログイン", new_session_path, class: "btn btn-ghost btn-rapid" %>
+      <% end %>
+    ERB
+  end
+  mobile_navigation_items = if devise
+    <<~ERB
+      <% if user_signed_in? %>
+        <li><%= link_to "マイページ", account_path %></li>
+        <li><%= link_to "ログアウト", destroy_user_session_path, data: { turbo_method: :delete } %></li>
+      <% else %>
+        <li><%= link_to "ログイン", new_user_session_path %></li>
+        <li><%= link_to "アカウント作成", new_user_registration_path %></li>
+      <% end %>
+    ERB
+  else
+    <<~ERB
+      <% if authenticated? %>
+        <li><%= link_to "マイページ", account_path %></li>
+        <li><%= link_to "ログアウト", session_path, data: { turbo_method: :delete } %></li>
+      <% else %>
+        <li><%= link_to "ログイン", new_session_path %></li>
+      <% end %>
+    ERB
+  end
+  home_action = if devise
+    '<%= link_to "無料で始める", new_user_registration_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
+  else
+    '<%= link_to "ウォレットで始める", new_session_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
+  end
+  account_identity = devise ? "<%= current_user.email %>" : "<%= Current.user.wallet_address %>"
+  account_navigation_items = if devise
+    <<~ERB
+      <li><%= link_to "プロフィール", account_path, class: ("menu-active" if current_page?(account_path)), aria: { current: ("page" if current_page?(account_path)) } %></li>
+      <li><%= link_to "アカウント設定", edit_user_registration_path, class: ("menu-active" if current_page?(edit_user_registration_path)), aria: { current: ("page" if current_page?(edit_user_registration_path)) } %></li>
+      <li><%= link_to "ホームへ戻る", root_path %></li>
+    ERB
+  else
+    <<~ERB
+      <li><%= link_to "プロフィール", account_path, class: "menu-active", aria: { current: "page" } %></li>
+      <li><%= link_to "ホームへ戻る", root_path %></li>
+    ERB
+  end
+  account_navigation_items = account_navigation_items.lines.map { |line| "                #{line}" }.join
+  layout_method = if devise
+    'devise_controller? ? (controller_name == "registrations" && %w[edit update].include?(action_name) ? "account" : "authentication") : "application"'
+  else
+    'controller_path == "sessions" ? "authentication" : "application"'
+  end
+  wallet_script = devise ? "" : "    <script src=\"/vendor/web3-4.16.0.min.js\" defer></script>\n"
+
+  inject_into_class "app/controllers/application_controller.rb", "ApplicationController", <<~RUBY
+      layout :application_layout
+
+      def application_layout
+        #{layout_method}
+      end
+      private :application_layout
+
+  RUBY
+
+  home_authentication = devise ? "" : "  allow_unauthenticated_access only: :index\n\n"
+  create_file "app/controllers/home_controller.rb", <<~RUBY, force: true
+    class HomeController < ApplicationController
+    #{home_authentication}  def index; end
+    end
+  RUBY
+
+  account_authentication = devise ? "  before_action :authenticate_user!\n" : ""
+  create_file "app/controllers/accounts_controller.rb", <<~RUBY, force: true
+    class AccountsController < ApplicationController
+      layout "account"
+    #{account_authentication}
+      def show; end
+    end
+  RUBY
+
+  route 'root "home#index"'
+  route "resource :account, only: :show"
+
+  create_file "app/views/layouts/application.html.erb", <<~ERB, force: true
+    <!DOCTYPE html>
+    <html lang="ja" data-theme="rapid-rails">
+      <head>
+        <title><%= content_for(:title) || "Rapid Rails" %></title>
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <%= csrf_meta_tags %>
+        <%= csp_meta_tag %>
+        <%= yield :head %>
+        <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
+        <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    #{wallet_script}    <%= javascript_importmap_tags %>
+      </head>
+      <body class="min-h-screen bg-base-100 text-base-content antialiased" data-layout="application">
+        <div class="flex min-h-screen flex-col">
+          <%= render "shared/header" %>
+          <main class="flex-1 bg-base-200">
+            <%= render "shared/flash" %>
+            <%= content_for?(:content) ? yield(:content) : yield %>
+          </main>
+          <%= render "shared/footer" %>
+        </div>
+      </body>
+    </html>
+  ERB
+
+  create_file "app/views/layouts/authentication.html.erb", <<~ERB, force: true
+    <% content_for :content do %>
+      <section class="hero mx-auto w-full max-w-md px-5 py-10 md:py-16" data-layout="authentication">
+        <div class="hero-content w-full max-w-none p-0">
+          <div class="card card-border w-full border-base-300 bg-base-100 shadow-none">
+            <div class="card-body p-6 sm:p-8">
+              <%= yield %>
+            </div>
+          </div>
+        </div>
+      </section>
+    <% end %>
+    <%= render template: "layouts/application" %>
+  ERB
+
+  create_file "app/views/layouts/account.html.erb", <<~ERB, force: true
+    <% content_for :content do %>
+      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="account">
+        <aside class="h-fit">
+          <nav aria-label="アカウントメニュー">
+            <ul class="menu w-full rounded-box bg-base-100">
+              <li class="menu-title"><span>マイページ</span></li>
+    #{account_navigation_items}          </ul>
+          </nav>
+        </aside>
+        <div class="min-w-0"><%= yield %></div>
+      </div>
+    <% end %>
+    <%= render template: "layouts/application" %>
+  ERB
+
+  create_file "app/views/shared/_header.html.erb", <<~ERB, force: true
+    <header class="border-b border-base-300 bg-base-100">
+      <nav class="navbar mx-auto w-full max-w-6xl px-5" aria-label="メインナビゲーション">
+        <div class="navbar-start">
+          <%= link_to "Rapid Rails", root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
+        </div>
+        <div class="navbar-end hidden items-center gap-1 min-[961px]:flex">
+    #{desktop_navigation_items}    </div>
+        <div class="navbar-end min-[961px]:hidden">
+          <details class="dropdown dropdown-end">
+            <summary class="btn btn-ghost">メニュー</summary>
+            <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow-elevation-2">
+    #{mobile_navigation_items}      </ul>
+          </details>
+        </div>
+      </nav>
+    </header>
+  ERB
+
+  create_file "app/views/shared/_flash.html.erb", <<~ERB, force: true
+    <% if notice.present? %>
+      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
+        <div class="alert alert-success" role="status"><span><%= notice %></span></div>
+      </div>
+    <% end %>
+    <% if alert.present? %>
+      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
+        <div class="alert alert-error" role="alert"><span><%= alert %></span></div>
+      </div>
+    <% end %>
+  ERB
+
+  create_file "app/views/shared/_footer.html.erb", <<~ERB, force: true
+    <div class="border-t border-base-300 bg-base-100">
+      <footer class="footer footer-vertical mx-auto w-full max-w-6xl px-5 py-8 text-sm sm:footer-horizontal">
+        <aside><p class="font-semibold text-base-content">Rapid Rails</p></aside>
+      </footer>
+    </div>
+  ERB
+
+  create_file "app/views/home/index.html.erb", <<~ERB, force: true
+    <% content_for :title, "Rapid Rails | Build with clarity" %>
+    <div class="mx-auto w-full max-w-[820px] space-y-8 px-5 py-10 md:py-14">
+      <section class="hero rounded-box border border-base-300 bg-base-100">
+        <div class="hero-content w-full max-w-none flex-col items-start gap-6 p-6 sm:p-8 md:p-10">
+          <span class="badge badge-outline">Rails application template</span>
+          <div>
+            <h1 class="text-[1.75rem] font-bold leading-[1.5] min-[961px]:text-[2.4rem]">迷わず始められる、<br class="hidden sm:block">モダンなRails開発環境。</h1>
+            <p class="mt-5 max-w-2xl text-neutral">Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。</p>
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            #{home_action}
+            <%= link_to "構成を見る", "#features", class: "btn btn-primary btn-outline btn-rapid px-6" %>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" aria-labelledby="features-title">
+        <div class="mb-5">
+          <p class="text-sm font-semibold text-primary">Starter kit</p>
+          <h2 id="features-title" class="mt-1 text-xl font-bold leading-[1.5]">最初から揃う開発基盤</h2>
+        </div>
+        <div class="grid gap-4 min-[961px]:grid-cols-3">
+          <% [["01", "Rails native", "Generator APIを中心に、安全な初期構成を生成します。"], ["02", "Readable UI", "daisyUIとsemantic colorで、読みやすい画面を用意します。"], ["03", "Production ready", "SQLiteとLitestreamを前提に、運用経路まで設計します。"]].each do |number, title, description| %>
+            <article class="card card-border border-base-300 bg-base-100 shadow-none transition-shadow hover:shadow-elevation-1">
+              <div class="card-body gap-3 p-5">
+                <span class="text-xs font-bold text-primary"><%= number %></span>
+                <h3 class="card-title text-base leading-[1.5]"><%= title %></h3>
+                <p class="text-sm text-neutral"><%= description %></p>
+              </div>
+            </article>
+          <% end %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/accounts/show.html.erb", <<~ERB, force: true
+    <% content_for :title, "マイページ | Rapid Rails" %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Account</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">マイページ</h1>
+        <p class="mt-2 text-sm text-neutral">アカウント情報とアプリケーションの状態を確認できます。</p>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body p-5 sm:p-6">
+          <h2 class="card-title text-base leading-[1.5]">プロフィール</h2>
+          <ul class="list mt-3">
+            <li class="list-row px-0">
+              <span class="badge badge-outline">ID</span>
+              <div class="list-col-grow min-w-0">
+                <p class="text-xs text-neutral">ログイン中のアカウント</p>
+                <p class="mt-1 break-all font-semibold">#{account_identity}</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body p-5 sm:p-6">
+          <h2 class="card-title text-base leading-[1.5]">次のステップ</h2>
+          <p class="text-sm text-neutral">このページを起点に、プロフィール編集や利用設定を追加できます。</p>
+          <div class="card-actions mt-2 justify-end">
+            <%= link_to "ホームへ戻る", root_path, class: "btn btn-primary btn-outline btn-rapid" %>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  if devise
+    configure_devise_views
+  else
+    create_file "app/views/sessions/new.html.erb", <<~ERB, force: true
+      <% content_for :title, "ウォレットでログイン | Rapid Rails" %>
+      <div data-controller="siwe-sign-in">
+        <header class="mb-8">
+          <p class="text-sm font-semibold text-primary">Sign in with Ethereum</p>
+          <h1 class="mt-2 text-2xl font-bold leading-[1.5]">ウォレットでログイン</h1>
+          <p class="mt-2 text-sm text-neutral">EVM互換ウォレットで署名し、アカウントを安全に確認します。</p>
+        </header>
+        <button type="button" class="btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" data-action="click->siwe-sign-in#signIn">ウォレットを接続</button>
+        <p class="alert alert-error mt-5 hidden" data-siwe-sign-in-target="error" role="alert"></p>
+        <div class="divider"></div>
+        <div class="alert alert-info alert-soft text-sm" role="note"><span>署名要求に秘密鍵や送金は必要ありません。</span></div>
+      </div>
+    ERB
+  end
+
+  default_pages_test = if devise
+    <<~RUBY
+      require "test_helper"
+
+      class DefaultPagesTest < ActionDispatch::IntegrationTest
+        include Devise::Test::IntegrationHelpers
+
+        test "renders public and authentication pages with the custom theme" do
+          get root_url
+          assert_response :success
+          assert_select 'html[data-theme="rapid-rails"]'
+          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label="メインナビゲーション"]'
+          assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
+          assert_select 'header ul.menu.dropdown-content > li > a', count: 2
+          assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
+          assert_select 'header ul.menu.dropdown-content .divider, header ul.menu.dropdown-content .btn', count: 0
+          assert_select 'header a[href=?].btn.btn-ghost.btn-rapid', new_user_session_path, count: 1
+          assert_select 'header a[href=?].btn.btn-outline.btn-rapid', new_user_registration_path, count: 1
+          assert_select '.hero > .hero-content', count: 1
+          assert_select '#features article.card > .card-body', count: 3
+          assert_select '#features .card-title', count: 3
+          assert_select 'footer.footer.mx-auto.w-full.max-w-6xl.px-5', count: 1
+          refute_includes response.body, 'Rails 8.1 / Tailwind CSS 4 / daisyUI 5'
+
+          [new_user_session_url, new_user_registration_url, new_user_password_url].each do |url|
+            get url
+            assert_response :success
+            assert_select '[data-layout="authentication"].hero > .hero-content .card > .card-body'
+            assert_select 'form fieldset.fieldset', minimum: 1
+            assert_select 'form fieldset.fieldset > legend.fieldset-legend > label', minimum: 1
+            assert_select 'form .input.input-rapid', minimum: 1
+            assert_select 'form .btn.btn-block.btn-rapid', minimum: 1
+            assert_select '.divider + .menu > li > a', minimum: 1
+            assert_select '.divider + .menu > li > a[class]', count: 0
+          end
+        end
+
+        test "protects account and renders its sub-layout after login" do
+          get account_url
+          assert_redirected_to new_user_session_url
+
+          user = User.create!(email: "sample@example.com", password: "password123", password_confirmation: "password123")
+          sign_in user
+          get account_url
+          assert_response :success
+          assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
+          assert_select 'header ul.menu.dropdown-content > li > a', count: 2
+          assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
+          assert_select 'header ul.menu.dropdown-content a[data-turbo-method="delete"][href=?]', destroy_user_session_path, count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li.menu-title', text: 'マイページ', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', account_path, count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[class="menu-active"]', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a[class]', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a.min-h-11', count: 0
+          assert_select '.list'
+
+          get edit_user_registration_url
+          assert_response :success
+          assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', edit_user_registration_path, count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[class="menu-active"]', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a[class]', count: 1
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a.min-h-11', count: 0
+          assert_select '.card .fieldset', minimum: 1
+          assert_select '.card-actions .btn.btn-error', count: 1
+        end
+      end
+    RUBY
+  else
+    <<~RUBY
+      require "test_helper"
+
+      class DefaultPagesTest < ActionDispatch::IntegrationTest
+        test "renders public and wallet login pages with the custom theme" do
+          get root_url
+          assert_response :success
+          assert_select 'html[data-theme="rapid-rails"]'
+          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label="メインナビゲーション"]'
+          assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
+          assert_select 'header ul.menu.dropdown-content > li > a', count: 1
+          assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
+          assert_select 'header ul.menu.dropdown-content .divider, header ul.menu.dropdown-content .btn', count: 0
+          assert_select 'header a[href=?].btn.btn-ghost.btn-rapid', new_session_path, count: 1
+          assert_select '.hero > .hero-content', count: 1
+          assert_select 'footer.footer.mx-auto.w-full.max-w-6xl.px-5', count: 1
+          refute_includes response.body, 'Rails 8.1 / Tailwind CSS 4 / daisyUI 5'
+
+          get new_session_url
+          assert_response :success
+          assert_select '[data-layout="authentication"].hero > .hero-content .card > .card-body'
+          assert_select '[data-controller="siwe-sign-in"]'
+          assert_select '[data-action="click->siwe-sign-in#signIn"].btn.btn-block.btn-rapid'
+          assert_select '[data-siwe-sign-in-target="error"]'
+          assert_select '.divider + .alert.alert-info.alert-soft', count: 1
+        end
+
+        test "protects account and does not expose unimplemented session actions" do
+          get account_url
+          assert_redirected_to new_session_url
+          assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path("/session/edit", method: :get) }
+        end
+      end
+    RUBY
+  end
+  create_file "test/integration/default_pages_test.rb", default_pages_test, force: true
 end
 
 def configure_web_push
@@ -342,9 +1043,6 @@ def configure_common_files
       config.enabled_environments = %w[production]
     end
   RUBY
-  create_file "app/controllers/home_controller.rb", "class HomeController < ApplicationController\n  def index; end\nend\n"
-  create_file "app/views/home/index.html.erb", "<h1>Rapid Rails</h1>\n"
-  route 'root "home#index"'
   create_file "test/application_system_test_case.rb", <<~RUBY
     require "test_helper"
 
@@ -395,7 +1093,7 @@ def configure_dokploy
   replicas << "  - path: ${QUEUE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_QUEUE_REPLICA_URL}" if VALUES.fetch("active_job") == "solid_queue"
   replicas << "  - path: ${CABLE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_CABLE_REPLICA_URL}" if VALUES.fetch("action_cable") == "solid_cable"
   create_file "litestream.yml", "dbs:\n#{replicas.join("\n")}\n"
-  create_file ".dockerignore", ".git\nlog/*\ntmp/*\nstorage/*\nconfig/master.key\nmise.local.toml\n"
+  create_file ".dockerignore", ".git\nlog/*\ntmp/*\nstorage/*\nnode_modules\nconfig/master.key\nmise.local.toml\n"
   create_file "bin/docker-entrypoint", <<~SH
     #!/bin/sh
     set -eu
@@ -412,11 +1110,13 @@ def configure_dokploy
     ENV RAILS_ENV=production BUNDLE_DEPLOYMENT=1 BUNDLE_PATH=/usr/local/bundle BUNDLE_WITHOUT=development:test RUBY_YJIT_ENABLE=1
 
     FROM base AS build
-    RUN apt-get update -qq && apt-get install --no-install-recommends -y build-essential git pkg-config autoconf automake libtool libssl-dev libsqlite3-dev libyaml-dev && rm -rf /var/lib/apt/lists/*
+    RUN apt-get update -qq && apt-get install --no-install-recommends -y build-essential git nodejs npm pkg-config autoconf automake libtool libssl-dev libsqlite3-dev libyaml-dev && rm -rf /var/lib/apt/lists/*
     COPY Gemfile Gemfile.lock ./
     RUN bundle install
+    COPY package.json package-lock.json ./
+    RUN npm ci
     COPY . .
-    RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
+    RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile && rm -rf node_modules
 
     FROM base AS final
     ARG TARGETARCH
@@ -440,12 +1140,15 @@ def configure_dokploy
 end
 
 after_bundle do
+  install_daisyui
   configure_rubocop
   configure_common_files
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
+  configure_default_views
   configure_web_push if VALUES.fetch("web_push") == "use"
   install_solid_components
   configure_dokploy if VALUES.fetch("deployment") == "dokploy"
+  run_checked "bin/rails tailwindcss:build"
   run_checked "bundle binstubs rubocop"
   run_checked "bin/rubocop -a"
 end

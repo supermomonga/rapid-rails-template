@@ -10,6 +10,15 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.gems, "solid_queue"
     refute_includes plan.gems, "solid_cable"
     assert_includes plan.gems, "devise"
+    assert_includes plan.steps, "install_daisyui"
+    assert_includes plan.steps, "configure_default_views"
+    assert_includes plan.artifacts, "package.json"
+    assert_includes plan.artifacts, "package-lock.json"
+    assert_includes plan.artifacts, "app/views/layouts/application.html.erb"
+    assert_includes plan.artifacts, "app/views/layouts/authentication.html.erb"
+    assert_includes plan.artifacts, "app/views/layouts/account.html.erb"
+    assert_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
+    assert_includes plan.artifacts, "app/views/accounts/show.html.erb"
   end
 
   def test_wallet_plan_uses_siwe_and_not_devise
@@ -19,7 +28,12 @@ class ExecutionPlanTest < Minitest::Test
 
     assert_includes plan.gems, "siwe-rb"
     refute_includes plan.gems, "devise"
-    assert_empty plan.artifacts
+    assert_includes plan.artifacts, "package.json"
+    assert_includes plan.artifacts, "package-lock.json"
+    assert_includes plan.artifacts, "app/views/sessions/new.html.erb"
+    assert_includes plan.artifacts, "app/javascript/controllers/siwe_sign_in_controller.js"
+    refute_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
+    refute_includes plan.artifacts, "Dockerfile.prod"
   end
 
   def test_generator_options_disable_solid_bundle_and_selected_frameworks

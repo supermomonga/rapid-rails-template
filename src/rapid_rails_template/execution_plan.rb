@@ -56,8 +56,9 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems configure_rubocop configure_test_stack configure_application_gems]
+      result = %w[declare_gems install_daisyui configure_rubocop configure_test_stack configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
+      result << "configure_default_views"
       result << "configure_web_push" if configuration["web_push"] == "use"
       result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
       result << "install_solid_cache" if configuration["solid_cache"] == "use"
@@ -68,7 +69,34 @@ module RapidRailsTemplate
     end
 
     def build_artifacts
-      result = []
+      result = %w[
+        package.json
+        package-lock.json
+        app/assets/tailwind/application.css
+        app/controllers/home_controller.rb
+        app/controllers/accounts_controller.rb
+        app/views/layouts/application.html.erb
+        app/views/layouts/authentication.html.erb
+        app/views/layouts/account.html.erb
+        app/views/shared/_header.html.erb
+        app/views/shared/_flash.html.erb
+        app/views/shared/_footer.html.erb
+        app/views/home/index.html.erb
+        app/views/accounts/show.html.erb
+        test/integration/default_pages_test.rb
+      ]
+      if configuration["account_authentication"] == "devise"
+        result.concat(%w[
+          app/views/devise/sessions/new.html.erb
+          app/views/devise/registrations/new.html.erb
+          app/views/devise/registrations/edit.html.erb
+          app/views/devise/passwords/new.html.erb
+          app/views/devise/passwords/edit.html.erb
+        ])
+      else
+        result << "app/views/sessions/new.html.erb"
+        result << "app/javascript/controllers/siwe_sign_in_controller.js"
+      end
       result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"
       result << "mise.local.toml" if configuration["web_push"] == "use"
       result

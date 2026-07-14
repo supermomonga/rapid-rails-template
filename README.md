@@ -10,6 +10,7 @@ Rapid Rails Templateは、Railsアプリケーションの初期設定を対話�
 | --- | --- |
 | Rails | `>= 8.1, < 8.2` |
 | Ruby | `>= 4.0, < 4.1` |
+| Node.js / npm | daisyUIのinstallとTailwind CSS asset buildで使用する |
 
 上記以外のバージョンに対する後方互換・前方互換処理は追加しません。開発環境ではRuby 4.0.6を使用します。
 

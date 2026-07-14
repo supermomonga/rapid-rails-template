@@ -109,6 +109,8 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 `devise`はメールアドレスとパスワードによる登録・ログインを提供します。`wallet_siwe`はWalletConnectや外部SaaSを使用せず、注入済みEIP-1193 provider、Web3.js 4.16.0、`siwe-rb` 0.2.xでSIWEを提供します。Railsが17文字のnonceを生成してsessionへ保存し、5分以内の一回限りのchallengeとして検証します。domain、URI、nonce、署名、正のchain IDを検証し、成功時は小文字化したEVM addressだけを一意なUser識別子にします。chain IDはUser識別子に含めないため、同じaddressはどのEVM互換chainでも同一アカウントです。Deviseアカウントとの紐付けは行いません。
 
+どちらの認証方式でもhomeは公開し、`/account`だけを認証必須とします。guest向け認証画面にはauthentication layout、account画面にはaccount layoutを適用します。Wallet SIWEのsession resourceは`new`、`create`、`destroy`だけに制限し、controllerに存在しない`show`、`edit`、`update` routeは生成しません。
+
 ## `solid_cache`
 
 - 質問文: Solid Cacheを使用しますか？

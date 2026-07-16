@@ -11,6 +11,7 @@ class ConfigurationTest < Minitest::Test
     assert_equal "skip", configuration["active_job"]
     assert_equal "use", configuration["solid_cache"]
     assert_equal "devise", configuration["account_authentication"]
+    assert_equal "enable", configuration["api"]
     assert_equal "skip", configuration["action_cable"]
     assert_equal "use", configuration["mail"]
   end

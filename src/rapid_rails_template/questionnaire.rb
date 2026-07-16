@@ -10,6 +10,7 @@ module RapidRailsTemplate
       Question.new(:active_job, "ジョブ管理を使用しますか？", %w[solid_queue skip], "skip", nil),
       Question.new(:solid_cache, "Solid Cacheを使用しますか？", %w[use skip], "use", nil),
       Question.new(:account_authentication, "アカウント管理方法を選択してください。", %w[devise wallet_siwe], "devise", nil),
+      Question.new(:api, "API機能を有効にしますか？", %w[enable disable], "enable", nil),
       Question.new(:action_cable, "Action Cableを使用しますか？", %w[solid_cable skip], "skip", nil),
       Question.new(:mail, "メール機能を使用しますか？", %w[auto use skip], "auto", nil),
       Question.new(:action_text, "Action Textを使用しますか？", %w[use skip], "use", nil),

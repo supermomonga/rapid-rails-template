@@ -53,10 +53,11 @@
 3. ジョブ管理を使うか
 4. Solid Cacheを使うか
 5. アカウント管理方法
-6. Action Cableを使うか
-7. メール機能
-8. Action Textを使うか
-9. デプロイ方法
+6. API機能を有効にするか
+7. Action Cableを使うか
+8. メール機能
+9. Action Textを使うか
+10. デプロイ方法
 
 この順序で適用可能な質問をすべて完了するまで、実行予定の確認へ進みません。表示条件を満たさない質問は利用者へ表示せず、全質問完了後の正規化で仕様どおりの値を設定します。
 
@@ -117,6 +118,19 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 `devise`はメールアドレスとパスワードによる登録・ログインを提供します。`wallet_siwe`はWalletConnectや外部SaaSを使用せず、注入済みEIP-1193 provider、Web3.js 4.16.0、`siwe-rb` 0.2.xでSIWEを提供します。Railsが17文字のnonceを生成してsessionへ保存し、5分以内の一回限りのchallengeとして検証します。domain、URI、nonce、署名、正のchain IDを検証し、成功時は小文字化したEVM addressだけを一意なUser識別子にします。chain IDはUser識別子に含めないため、同じaddressはどのEVM互換chainでも同一アカウントです。Deviseアカウントとの紐付けは行いません。
 
 どちらの認証方式でもhomeは公開し、account画面を認証必須とします。guest向け認証画面にはauthentication layout、account画面にはaccount layoutを適用します。Wallet SIWEのsession resourceは`new`、`create`、`destroy`だけに制限し、controllerに存在しない`show`、`edit`、`update` routeは生成しません。Wallet SIWEのaccount resourceは`show`、`edit`、`destroy`を公開し、wallet addressはプロフィールではなくアカウント設定に表示します。削除確認後にUserと従属する全Sessionを削除し、homeへ戻します。
+
+## `api`
+
+- CLI引数: `--api=enable|disable`
+- 質問文: API機能を有効にしますか？
+- 選択肢: `enable`、`disable`
+- 既定値: `enable`
+- 表示条件: 常に表示する
+- 影響する処理: `/api` namespace、Bearer token認証基盤、`ApiCredential` modelとAPI/Web CRUD、マイページのAPIキー管理画面
+
+`enable`では、`Api::ApiController`を`ActionController::API`基盤の共通controllerとして生成し、`Authorization: Bearer <api_key>.<api_secret>`を検証します。`api_secret`は生成時と再発行時に一度だけ返し、databaseにはSHA-256 digestだけを保存します。照合には定数時間比較を使い、認証済みcredentialが属するUserのデータだけを操作します。
+
+`Api::ApiCredentialsController`は`/api/api_credentials`でCRUDと`revoke`を提供します。マイページ側の`ApiCredentialsController`も同じUser所有scopeでCRUDし、「APIキーの管理」から作成、表示、名称変更、削除、ApiSecretのrevoke（新しいsecretへの再発行）を行えます。API key自体はcredentialを識別する公開値として維持し、revokeではsecretだけを差し替えます。一覧画面と詳細画面ではAPI keyをreadonly inputとコピーボタンで表示し、ApiSecretも作成・再発行直後に限って同じコピーUIで一度だけ表示します。Bearer tokenは画面には表示しません。`disable`ではmodel、migration、controller、route、View、メニュー項目を生成しません。
 
 ## `solid_cache`
 

@@ -11,6 +11,7 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.gems, "solid_cable"
     assert_includes plan.gems, "devise"
     assert_includes plan.steps, "install_daisyui"
+    assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "configure_default_views"
     assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("verify")
     assert_includes plan.artifacts, "package.json"
@@ -20,6 +21,20 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/views/layouts/account.html.erb"
     assert_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     assert_includes plan.artifacts, "app/views/accounts/show.html.erb"
+    assert_includes plan.artifacts, "app/models/api_credential.rb"
+    assert_includes plan.artifacts, "app/controllers/api/api_controller.rb"
+    assert_includes plan.artifacts, "app/javascript/controllers/clipboard_controller.js"
+    assert_includes plan.artifacts, "app/views/api_credentials/index.html.erb"
+  end
+
+  def test_api_disabled_plan_omits_api_steps_and_artifacts
+    plan = RapidRailsTemplate::ExecutionPlan.build(RapidRailsTemplate::Configuration.build("api" => "disable"))
+
+    refute_includes plan.steps, "configure_api"
+    refute_includes plan.artifacts, "app/models/api_credential.rb"
+    refute_includes plan.artifacts, "app/controllers/api/api_controller.rb"
+    refute_includes plan.artifacts, "app/javascript/controllers/clipboard_controller.js"
+    refute_includes plan.artifacts, "app/views/api_credentials/index.html.erb"
   end
 
   def test_wallet_plan_uses_siwe_and_not_devise

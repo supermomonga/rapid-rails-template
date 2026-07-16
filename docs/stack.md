@@ -59,12 +59,21 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 
 - `/`は認証方式にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
+- API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
 - login、account登録、password再設定はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。
 - Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。
 - Wallet SIWEではsessionの`new`、`create`、`destroy`だけを公開し、login Viewをtheme化する。署名UIはStimulus controllerとして生成し、Turbo遷移ごとのconnect/disconnect lifecycleへ従う。accountは`show`をプロフィール、`edit`をwallet addressとアカウント削除UIを持つアカウント設定とし、`destroy`でUserと従属Sessionを削除する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。account sub-layoutの外側gridも同じ`max-w-6xl`と水平paddingを使い、header・account・footerの左右content boundaryを一致させる。
 - `640px`以下をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱う。desktopとmobileの両方で1columnへ縮退できることを必須とする。44pxのtouch targetを満たすためにcomponent itemへ一律の`min-h-*`を追加せず、必要な場合はdaisyUIの公式size modifierまたはtheme tokenでcomponent全体として調整する。
+
+### API認証とApiCredential
+
+API機能を有効にした場合だけ、`/api` namespaceと`ApiCredential`を生成します。API requestは`Authorization: Bearer <api_key>.<api_secret>`で認証し、共通の`Api::ApiController`がcredentialと所有Userを確定します。認証失敗はHTTP 401、所有scope外のresourceはHTTP 404、validation失敗はHTTP 422のJSON responseとします。
+
+`api_key`と`api_secret`は暗号学的乱数から個別に生成します。`api_key`は一意な検索キーとして保存し、`api_secret`は平文保存せずSHA-256 digestだけを保存します。secret比較には`ActiveSupport::SecurityUtils.secure_compare`を使用します。平文secretはcredential作成時とrevokeによる再発行時だけWeb画面またはJSON responseへ含め、後から再表示しません。revokeはcredentialや`api_key`を作り直さず、secret digestだけを原子的に更新します。
+
+`User`は`ApiCredential`を複数所有し、User削除時に従属credentialも削除します。WebとAPIのCRUDはいずれも認証済みUserのassociationからresourceを検索し、別Userのcredentialを参照・変更できない構造にします。
 
 Rails標準のシステムテスト構成にはCapybaraとSelenium WebDriverが含まれます。本構成ではCapybaraを維持し、Selenium WebDriverを`capybara-playwright-driver`へ置き換えます。Minitestプロジェクトなので、文書とコードでは「system spec」ではなくRailsの用語に合わせて「システムテスト」と呼びます。
 

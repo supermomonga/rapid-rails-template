@@ -34,6 +34,7 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --active-job=skip \
   --solid-cache=use \
   --account-authentication=devise \
+  --api=enable \
   --action-cable=skip \
   --mail=auto \
   --action-text=use \

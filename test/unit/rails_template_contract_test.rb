@@ -72,6 +72,11 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
       "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
       "app/views/accounts/edit.html.erb" => %w[card card-body card-title list list-row badge btn],
+      "app/views/api_credentials/_form.html.erb" => %w[alert fieldset fieldset-legend input btn],
+      "app/views/api_credentials/index.html.erb" => %w[card card-body table join join-item input alert btn],
+      "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card card-body card-title btn],
+      "app/views/api_credentials/new.html.erb" => %w[card card-body],
+      "app/views/api_credentials/edit.html.erb" => %w[card card-body],
       "app/views/devise/shared/_error_messages.html.erb" => %w[alert],
       "app/views/devise/shared/_links.html.erb" => %w[divider menu],
       "app/views/devise/sessions/new.html.erb" => %w[fieldset fieldset-legend input checkbox btn],
@@ -91,7 +96,7 @@ class RailsTemplateContractTest < Minitest::Test
     end
 
     views = ([generated_file_source("app/views/layouts/application.html.erb")] + view_sources.values).join("\n")
-    %w[navbar menu dropdown hero card fieldset input checkbox btn alert footer badge divider list].each do |component|
+    %w[navbar menu dropdown hero card fieldset input checkbox btn alert footer badge divider list table].each do |component|
       assert class_attributes(views).any? { |classes| classes.include?(component) }, component
     end
     %w[bg-base-100 bg-base-200 border-base-300 text-base-content btn-primary].each { |utility| assert_includes views, utility }
@@ -161,6 +166,47 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, "notice: アカウントを削除しました".b
   end
 
+  def test_api_credentials_use_digest_authentication_owner_scopes_and_one_time_secret_views
+    model = generated_file_source("app/models/api_credential.rb")
+    api_controller = generated_file_source("app/controllers/api/api_controller.rb")
+    api_credentials_controller = generated_file_source("app/controllers/api/api_credentials_controller.rb")
+    web_controller = generated_file_source("app/controllers/api_credentials_controller.rb")
+    index = generated_file_source("app/views/api_credentials/index.html.erb")
+    show = generated_file_source("app/views/api_credentials/show.html.erb")
+    clipboard_controller = generated_file_source("app/javascript/controllers/clipboard_controller.js")
+
+    assert_includes model, "Digest::SHA256.hexdigest(value)"
+    assert_includes model, "ActiveSupport::SecurityUtils.secure_compare"
+    assert_includes model, "def revoke_api_secret!"
+    assert_includes @source, 'remove_file "test/fixtures/api_credentials.yml"'
+    refute_match(/t\.string :api_secret(?:,|\n)/, @source)
+    assert_includes api_controller, "authenticate_with_http_token"
+    assert_includes api_controller, 'token.to_s.split(".", 2)'
+    assert_includes api_controller, "credential.update!(last_used_at: Time.current)"
+    refute_includes api_controller, "credential.touch"
+    assert_includes api_credentials_controller, "current_api_user.api_credentials"
+    assert_includes api_credentials_controller, "params.expect(api_credential: [:name])"
+    assert_includes web_controller, "account_user.api_credentials.find(params.expect(:id))"
+    assert_includes show, "ApiSecretはこの画面で一度だけ表示されます。".b
+    assert_includes show, 'input type="text" value="<%= @api_secret %>" readonly'.b
+    assert_includes show, 'input type="text" value="<%= @api_credential.api_key %>" readonly'.b
+    assert_includes index, 'input type="text" value="<%= credential.api_key %>" readonly'.b
+    assert_includes index, 'aria-label="<%= credential.name %>のAPI key"'.b
+    assert_includes index, 'class="join w-80" data-controller="clipboard"'.b
+    assert_includes index, 'data-action="clipboard#copy"'
+    assert_equal 2, show.scan('data-controller="clipboard"').length
+    assert_equal 2, show.scan('class="join w-full"').length
+    refute_includes show, "Bearer token"
+    assert_includes clipboard_controller, 'static targets = ["source", "button"]'
+    assert_includes clipboard_controller, "await navigator.clipboard.writeText(this.sourceTarget.value)"
+    assert_includes clipboard_controller, 'this.buttonTarget.textContent = "コピーしました"'.b
+    assert_includes @source, 'd="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"'
+    assert_includes @source, "namespace :api do"
+    assert_includes @source, "resources :api_credentials, only: %i[index show create update destroy]"
+    assert_includes @source, 'configure_api if VALUES.fetch("api") == "enable"'
+    refute_includes @source, "account_navigation_items << <<~ERB"
+  end
+
   def test_prepares_the_database_after_generators_and_before_verification_commands
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
 
@@ -219,8 +265,8 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 4, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 4, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
     account_item_class_options = account_navigation.lines.filter_map { |line| line[/class: (.*?), aria:/, 1] }
@@ -228,7 +274,8 @@ class RailsTemplateContractTest < Minitest::Test
       '("menu-active" if current_page?(account_path))',
       '("menu-active" if current_page?(edit_user_registration_path))',
       '("menu-active" if current_page?(account_path))',
-      '("menu-active" if current_page?(edit_account_path))'
+      '("menu-active" if current_page?(edit_account_path))',
+      '("menu-active" if controller_path == "api_credentials")'
     ], account_item_class_options
 
     assert_includes mobile_navigation, "data: { turbo_method: :delete }"

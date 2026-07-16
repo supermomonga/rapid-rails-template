@@ -58,6 +58,7 @@ module RapidRailsTemplate
     def build_steps
       result = %w[declare_gems install_daisyui configure_rubocop configure_test_stack configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
+      result << "configure_api" if configuration["api"] == "enable"
       result << "configure_default_views"
       result << "configure_web_push" if configuration["web_push"] == "use"
       result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
@@ -86,6 +87,23 @@ module RapidRailsTemplate
         app/views/accounts/show.html.erb
         test/integration/default_pages_test.rb
       ]
+      if configuration["api"] == "enable"
+        result.concat(%w[
+          app/models/api_credential.rb
+          app/controllers/api/api_controller.rb
+          app/controllers/api/api_credentials_controller.rb
+          app/controllers/api_credentials_controller.rb
+          app/javascript/controllers/clipboard_controller.js
+          app/views/api_credentials/index.html.erb
+          app/views/api_credentials/show.html.erb
+          app/views/api_credentials/new.html.erb
+          app/views/api_credentials/edit.html.erb
+          app/views/api_credentials/_form.html.erb
+          test/models/api_credential_test.rb
+          test/controllers/api/api_credentials_controller_test.rb
+          test/controllers/api_credentials_controller_test.rb
+        ])
+      end
       if configuration["account_authentication"] == "devise"
         result.concat(%w[
           app/views/devise/sessions/new.html.erb

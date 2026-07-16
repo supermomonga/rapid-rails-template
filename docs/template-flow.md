@@ -21,7 +21,7 @@ flowchart TD
     L --> M["pre_bundle: Gemを宣言"]
     M --> N["bundle install"]
     N --> O["post_bundle: generatorを実行"]
-    O --> P["設定API・構造化データ・Prismで編集"]
+    O --> P["認証・選択機能を生成し、設定API・構造化データ・Prismで編集"]
     P --> Q["db:prepareで生成済みmigrationを適用"]
     Q --> U["verify: 生成結果を検証"]
     U --> R["一時ファイルを削除"]
@@ -60,7 +60,7 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 ### `post_bundle`
 
-認証とSolid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。生成直後のdevelopmentとtestにpending migrationを残しません。
+認証、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。生成直後のdevelopmentとtestにpending migrationを残しません。
 
 依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account layoutと標準ページを生成し、Tailwind CSSをbuildします。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
 

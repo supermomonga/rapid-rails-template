@@ -18,7 +18,7 @@ class BootstrapTest < Minitest::Test
     system(File.join(ROOT, "bin", "build-bootstrap"), out: File::NULL)
     Dir.mktmpdir do |directory|
       destination = File.join(directory, "path with spaces & metacharacters")
-      input = "\n" * 8 + "n\n"
+      input = "\n" * 9 + "n\n"
       _stdout, stderr, status = Open3.capture3(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), destination, stdin_data: input)
 
       assert status.success?, stderr

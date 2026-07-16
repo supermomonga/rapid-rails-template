@@ -4,7 +4,7 @@ require_relative "../test_helper"
 
 class QuestionnaireTest < Minitest::Test
   def test_skips_web_push_question_when_pwa_is_disabled
-    input = StringIO.new("\n\n\n\n\n\n\n\n")
+    input = StringIO.new("\n\n\n\n\n\n\n\n\n")
     output = StringIO.new
     answers = RapidRailsTemplate::Questionnaire.new(input:, output:).ask_all
 
@@ -14,7 +14,7 @@ class QuestionnaireTest < Minitest::Test
   end
 
   def test_reprompts_invalid_value_without_side_effects
-    input = StringIO.new("invalid\nuse\nskip\n\n\n\n\n\n\n\n")
+    input = StringIO.new("invalid\nuse\nskip\n\n\n\n\n\n\n\n\n")
     output = StringIO.new
     answers = RapidRailsTemplate::Questionnaire.new(input:, output:).ask_all
 

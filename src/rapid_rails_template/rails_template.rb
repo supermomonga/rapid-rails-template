@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication action_cable mail action_text deployment].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication api action_cable mail action_text deployment].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -407,9 +407,13 @@ def install_wallet_siwe
       end
     end
   RUBY
+  account_navigation_count = VALUES.fetch("api") == "enable" ? 3 : 2
   create_file "test/fixtures/users.yml", <<~YAML, force: true
     one:
       wallet_address: 0x1111111111111111111111111111111111111111
+
+    two:
+      wallet_address: 0x2222222222222222222222222222222222222222
   YAML
   create_file "test/controllers/sessions_controller_test.rb", <<~RUBY, force: true
     require 'test_helper'
@@ -438,8 +442,8 @@ def install_wallet_siwe
         get account_url
         assert_response :success
         assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: 2
-        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: 2
+        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: #{account_navigation_count}
+        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: #{account_navigation_count}
         assert_select 'nav[aria-label="アカウントメニュー"] a[href=?]', root_path, count: 0
         assert_select '.badge', text: 'ID', count: 0
 
@@ -459,6 +463,540 @@ def install_wallet_siwe
         assert_redirected_to root_url
         follow_redirect!
         assert_select '.alert.alert-success', text: 'アカウントを削除しました', count: 1
+      end
+    end
+  RUBY
+end
+
+def configure_api
+  devise = VALUES.fetch("account_authentication") == "devise"
+  generate "model", "ApiCredential", "user:references", "name:string", "api_key:string:uniq", "api_secret_digest:string", "last_used_at:datetime"
+  remove_file "test/fixtures/api_credentials.yml"
+
+  migration = Dir.glob("db/migrate/*_create_api_credentials.rb")
+  raise "CreateApiCredentials migrationが一意ではありません" unless migration.one?
+
+  create_file migration.first, <<~RUBY, force: true
+    class CreateApiCredentials < ActiveRecord::Migration[8.1]
+      def change
+        create_table :api_credentials do |t|
+          t.references :user, null: false, foreign_key: true
+          t.string :name, null: false
+          t.string :api_key, null: false
+          t.string :api_secret_digest, null: false
+          t.datetime :last_used_at
+          t.timestamps
+        end
+
+        add_index :api_credentials, :api_key, unique: true
+      end
+    end
+  RUBY
+
+  create_file "app/models/api_credential.rb", <<~RUBY, force: true
+    require "digest"
+    require "securerandom"
+
+    class ApiCredential < ApplicationRecord
+      belongs_to :user
+
+      attr_reader :api_secret
+
+      validates :name, :api_key, :api_secret_digest, presence: true
+      validates :api_key, uniqueness: true
+
+      before_validation :assign_api_key, :assign_api_secret, on: :create
+
+      def authenticate_api_secret(candidate)
+        return false if candidate.blank?
+
+        ActiveSupport::SecurityUtils.secure_compare(api_secret_digest, digest(candidate))
+      end
+
+      def revoke_api_secret!
+        secret = generate_api_secret
+        update!(api_secret_digest: digest(secret))
+        @api_secret = secret
+      end
+
+      private
+        def assign_api_key
+          self.api_key ||= "rak_" + SecureRandom.urlsafe_base64(24, false)
+        end
+
+        def assign_api_secret
+          return if api_secret_digest.present?
+
+          @api_secret = generate_api_secret
+          self.api_secret_digest = digest(@api_secret)
+        end
+
+        def generate_api_secret
+          "ras_" + SecureRandom.urlsafe_base64(32, false)
+        end
+
+        def digest(value)
+          Digest::SHA256.hexdigest(value)
+        end
+    end
+  RUBY
+
+  inject_into_class "app/models/user.rb", "User", <<~RUBY
+      has_many :api_credentials, dependent: :destroy
+
+  RUBY
+
+  create_file "app/controllers/api/api_controller.rb", <<~RUBY, force: true
+    module Api
+      class ApiController < ActionController::API
+        include ActionController::HttpAuthentication::Token::ControllerMethods
+
+        before_action :authenticate_api_credential!
+
+        attr_reader :current_api_credential, :current_api_user
+
+        rescue_from ActiveRecord::RecordNotFound, with: -> { head :not_found }
+        rescue_from ActionController::ParameterMissing do |error|
+          render json: { errors: [error.message] }, status: :bad_request
+        end
+
+        private
+          def authenticate_api_credential!
+            token = authenticate_with_http_token { |candidate, _options| candidate }
+            api_key, api_secret = token.to_s.split(".", 2)
+            credential = ApiCredential.find_by(api_key: api_key)
+            return head :unauthorized unless credential&.authenticate_api_secret(api_secret)
+
+            @current_api_credential = credential
+            @current_api_user = credential.user
+            credential.update!(last_used_at: Time.current)
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/api/api_credentials_controller.rb", <<~RUBY, force: true
+    module Api
+      class ApiCredentialsController < ApiController
+        before_action :set_api_credential, only: %i[show update destroy revoke]
+
+        def index
+          render json: current_api_user.api_credentials.order(created_at: :desc).map { |credential| credential_payload(credential) }
+        end
+
+        def show
+          render json: credential_payload(@api_credential)
+        end
+
+        def create
+          credential = current_api_user.api_credentials.new(api_credential_params)
+          if credential.save
+            render json: credential_payload(credential).merge(api_secret: credential.api_secret), status: :created
+          else
+            render json: { errors: credential.errors.full_messages }, status: :unprocessable_content
+          end
+        end
+
+        def update
+          if @api_credential.update(api_credential_params)
+            render json: credential_payload(@api_credential)
+          else
+            render json: { errors: @api_credential.errors.full_messages }, status: :unprocessable_content
+          end
+        end
+
+        def destroy
+          @api_credential.destroy!
+          head :no_content
+        end
+
+        def revoke
+          secret = @api_credential.revoke_api_secret!
+          render json: credential_payload(@api_credential).merge(api_secret: secret)
+        end
+
+        private
+          def set_api_credential
+            @api_credential = current_api_user.api_credentials.find(params.expect(:id))
+          end
+
+          def api_credential_params
+            params.expect(api_credential: [:name])
+          end
+
+          def credential_payload(credential)
+            credential.as_json(only: %i[id name api_key last_used_at created_at updated_at])
+          end
+      end
+    end
+  RUBY
+
+  account_user = devise ? "current_user" : "Current.user"
+  devise_authentication = devise ? "  before_action :authenticate_user!\n" : ""
+  create_file "app/controllers/api_credentials_controller.rb", <<~RUBY, force: true
+    class ApiCredentialsController < ApplicationController
+      layout "account"
+    #{devise_authentication}  before_action :set_api_credential, only: %i[show edit update destroy revoke]
+
+      def index
+        @api_credentials = account_user.api_credentials.order(created_at: :desc)
+      end
+
+      def show; end
+
+      def new
+        @api_credential = account_user.api_credentials.new
+      end
+
+      def edit; end
+
+      def create
+        @api_credential = account_user.api_credentials.new(api_credential_params)
+        if @api_credential.save
+          @api_secret = @api_credential.api_secret
+          render :show, status: :created
+        else
+          render :new, status: :unprocessable_content
+        end
+      end
+
+      def update
+        if @api_credential.update(api_credential_params)
+          redirect_to @api_credential
+        else
+          render :edit, status: :unprocessable_content
+        end
+      end
+
+      def destroy
+        @api_credential.destroy!
+        redirect_to api_credentials_path, status: :see_other
+      end
+
+      def revoke
+        @api_secret = @api_credential.revoke_api_secret!
+        render :show
+      end
+
+      private
+        def account_user
+          #{account_user}
+        end
+
+        def set_api_credential
+          @api_credential = account_user.api_credentials.find(params.expect(:id))
+        end
+
+        def api_credential_params
+          params.expect(api_credential: [:name])
+        end
+    end
+  RUBY
+
+  create_file "app/javascript/controllers/clipboard_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["source", "button"]
+
+      async copy() {
+        await navigator.clipboard.writeText(this.sourceTarget.value)
+        this.buttonTarget.textContent = "コピーしました"
+      }
+    }
+  JAVASCRIPT
+
+  route <<~RUBY
+    resources :api_credentials do
+      patch :revoke, on: :member
+    end
+    namespace :api do
+      resources :api_credentials, only: %i[index show create update destroy] do
+        patch :revoke, on: :member
+      end
+    end
+  RUBY
+
+  create_file "app/views/api_credentials/_form.html.erb", <<~ERB, force: true
+    <%= form_with model: api_credential, class: "space-y-5" do |form| %>
+      <% if api_credential.errors.any? %>
+        <div class="alert alert-error" role="alert">
+          <ul class="list-disc pl-5">
+            <% api_credential.errors.full_messages.each do |message| %>
+              <li><%= message %></li>
+            <% end %>
+          </ul>
+        </div>
+      <% end %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= form.label :name, "名前" %></legend>
+        <%= form.text_field :name, required: true, autocomplete: "off", class: "input input-rapid w-full" %>
+        <p class="label">利用用途が分かる名前を入力してください。</p>
+      </fieldset>
+      <div class="flex flex-col gap-3 sm:flex-row">
+        <%= form.submit class: "btn btn-primary btn-rapid" %>
+        <%= link_to "キャンセル", api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: "btn btn-outline btn-rapid" %>
+      </div>
+    <% end %>
+  ERB
+
+  create_file "app/views/api_credentials/index.html.erb", <<~ERB, force: true
+    <% content_for :title, "APIキーの管理 | Rapid Rails" %>
+    <div class="space-y-6">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="text-sm font-semibold text-primary">API credentials</p>
+          <h1 class="mt-1 text-2xl font-bold leading-[1.5]">APIキーの管理</h1>
+          <p class="mt-2 text-sm text-neutral">アプリケーションからAPIへ接続するためのcredentialを管理します。</p>
+        </div>
+        <%= link_to "APIキーを作成", new_api_credential_path, class: "btn btn-primary btn-rapid" %>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body p-5 sm:p-6">
+          <% if @api_credentials.any? %>
+            <div class="overflow-x-auto">
+              <table class="table">
+                <thead><tr><th>名前</th><th>API key</th><th>最終利用</th><th></th></tr></thead>
+                <tbody>
+                  <% @api_credentials.each do |credential| %>
+                    <tr>
+                      <td class="font-semibold"><%= credential.name %></td>
+                      <td>
+                        <div class="join w-80" data-controller="clipboard">
+                          <input type="text" value="<%= credential.api_key %>" readonly autocomplete="off" aria-label="<%= credential.name %>のAPI key" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
+                          <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy">コピー</button>
+                        </div>
+                      </td>
+                      <td><%= credential.last_used_at ? l(credential.last_used_at, format: :short) : "未使用" %></td>
+                      <td><%= link_to "詳細", api_credential_path(credential), class: "btn btn-outline btn-sm" %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% else %>
+            <div class="alert alert-info alert-soft" role="status"><span>APIキーはまだありません。</span></div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/api_credentials/show.html.erb", <<~ERB, force: true
+    <% content_for :title, "APIキー詳細 | Rapid Rails" %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">API credential</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @api_credential.name %></h1>
+      </header>
+
+      <% if @api_secret.present? %>
+        <div class="alert alert-warning alert-vertical grid-cols-1 justify-items-stretch" role="status">
+          <p class="font-bold">ApiSecretはこの画面で一度だけ表示されます。</p>
+          <fieldset class="fieldset w-full" data-controller="clipboard">
+            <legend class="fieldset-legend">API Secret</legend>
+            <div class="join w-full">
+              <input type="text" value="<%= @api_secret %>" readonly autocomplete="off" aria-label="API Secret" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
+              <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy">コピー</button>
+            </div>
+          </fieldset>
+        </div>
+      <% end %>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body p-5 sm:p-6">
+          <h2 class="card-title text-base leading-[1.5]">Credential情報</h2>
+          <div class="mt-3 grid gap-4">
+            <fieldset class="fieldset w-full" data-controller="clipboard">
+              <legend class="fieldset-legend">API key</legend>
+              <div class="join w-full">
+                <input type="text" value="<%= @api_credential.api_key %>" readonly autocomplete="off" aria-label="API key" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
+                <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy">コピー</button>
+              </div>
+            </fieldset>
+            <dl>
+            <div><dt class="text-sm text-neutral">最終利用</dt><dd><%= @api_credential.last_used_at ? l(@api_credential.last_used_at, format: :short) : "未使用" %></dd></div>
+            </dl>
+          </div>
+          <div class="card-actions mt-4 justify-start">
+            <%= link_to "編集", edit_api_credential_path(@api_credential), class: "btn btn-outline btn-rapid" %>
+            <%= button_to "ApiSecretを再発行", revoke_api_credential_path(@api_credential), method: :patch, class: "btn btn-warning btn-outline btn-rapid", data: { turbo_confirm: "現在のApiSecretは無効になります。再発行しますか？" } %>
+            <%= button_to "削除", api_credential_path(@api_credential), method: :delete, class: "btn btn-error btn-outline btn-rapid", data: { turbo_confirm: "このAPIキーを削除しますか？" } %>
+          </div>
+        </div>
+      </section>
+      <%= link_to "APIキー一覧へ", api_credentials_path, class: "btn btn-outline btn-rapid" %>
+    </div>
+  ERB
+
+  create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
+    <% content_for :title, "APIキーを作成 | Rapid Rails" %>
+    <div class="space-y-6">
+      <header><p class="text-sm font-semibold text-primary">New credential</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">APIキーを作成</h1></header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+    </div>
+  ERB
+
+  create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
+    <% content_for :title, "APIキーを編集 | Rapid Rails" %>
+    <div class="space-y-6">
+      <header><p class="text-sm font-semibold text-primary">Edit credential</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">APIキーを編集</h1></header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+    </div>
+  ERB
+
+  create_file "test/models/api_credential_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class ApiCredentialTest < ActiveSupport::TestCase
+      test "stores only the digest and invalidates the revoked secret" do
+        credential = users(:one).api_credentials.create!(name: "CLI")
+        original_secret = credential.api_secret
+
+        assert credential.authenticate_api_secret(original_secret)
+        refute credential.authenticate_api_secret("invalid")
+        refute_equal original_secret, credential.api_secret_digest
+
+        replacement_secret = credential.revoke_api_secret!
+
+        refute credential.authenticate_api_secret(original_secret)
+        assert credential.authenticate_api_secret(replacement_secret)
+        assert_equal credential.api_key, credential.reload.api_key
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/api/api_credentials_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Api::ApiCredentialsControllerTest < ActionDispatch::IntegrationTest
+      setup do
+        @credential = users(:one).api_credentials.create!(name: "Primary")
+        @api_secret = @credential.api_secret
+      end
+
+      test "requires a valid bearer token" do
+        get api_api_credentials_url, headers: { "Authorization" => "Bearer invalid" }
+
+        assert_response :unauthorized
+      end
+
+      test "does not expose HTML form routes" do
+        helpers = Rails.application.routes.url_helpers
+
+        assert_not_respond_to helpers, :new_api_api_credential_url
+        assert_not_respond_to helpers, :edit_api_api_credential_url
+      end
+
+      test "manages only the authenticated users credentials" do
+        other = users(:two).api_credentials.create!(name: "Other")
+
+        get api_api_credentials_url, headers: authorization
+        assert_response :success
+        assert_equal [@credential.id], response.parsed_body.pluck("id")
+
+        get api_api_credential_url(other), headers: authorization
+        assert_response :not_found
+
+        post api_api_credentials_url, params: { api_credential: { name: "Automation" } }, headers: authorization, as: :json
+        assert_response :created
+        assert response.parsed_body.fetch("api_secret").start_with?("ras_")
+      end
+
+      test "revoke returns a new secret and invalidates the old bearer token" do
+        patch revoke_api_api_credential_url(@credential), headers: authorization
+        assert_response :success
+        replacement_secret = response.parsed_body.fetch("api_secret")
+
+        get api_api_credentials_url, headers: authorization
+        assert_response :unauthorized
+
+        get api_api_credentials_url, headers: authorization(replacement_secret)
+        assert_response :success
+      end
+
+      private
+        def authorization(secret = @api_secret)
+          { "Authorization" => "Bearer " + [@credential.api_key, secret].join(".") }
+        end
+    end
+  RUBY
+
+  web_test_authentication = if devise
+    <<~RUBY
+          include Devise::Test::IntegrationHelpers
+
+          setup do
+            @user = users(:one)
+            sign_in @user
+          end
+    RUBY
+  else
+    <<~RUBY
+          require "eth"
+
+          setup do
+            get session_nonce_url
+            nonce = response.parsed_body.fetch("nonce")
+            key = Eth::Key.new
+            message = Siwe::Message.new(
+              domain: "www.example.com",
+              address: key.address.to_s,
+              uri: "http://www.example.com",
+              chain_id: 1,
+              nonce: nonce,
+              issued_at: Time.current.iso8601,
+              statement: "Sign in to www.example.com"
+            ).prepare_message
+            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            @user = User.find_by!(wallet_address: key.address.to_s.downcase)
+          end
+    RUBY
+  end
+  create_file "test/controllers/api_credentials_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class ApiCredentialsControllerTest < ActionDispatch::IntegrationTest
+    #{web_test_authentication}
+      test "creates updates revokes and deletes an API credential" do
+        get api_credentials_url
+        assert_response :success
+        assert_select "table.table", count: 0
+
+        assert_difference("ApiCredential.count", 1) do
+          post api_credentials_url, params: { api_credential: { name: "CLI" } }
+        end
+        assert_response :created
+        credential = @user.api_credentials.find_by!(name: "CLI")
+        assert_select '.alert.alert-warning input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
+        assert_select 'input[aria-label="API key"][readonly][value=?]', credential.api_key, count: 1
+        assert_select 'button[data-action="clipboard#copy"]', text: "コピー", count: 2
+        assert_select ".alert.alert-warning", text: /Bearer token/, count: 0
+        original_digest = credential.api_secret_digest
+
+        patch api_credential_url(credential), params: { api_credential: { name: "Batch" } }
+        assert_redirected_to api_credential_url(credential)
+
+        patch revoke_api_credential_url(credential)
+        assert_response :success
+        assert_select '.alert.alert-warning input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
+        refute_equal original_digest, credential.reload.api_secret_digest
+
+        get api_credential_url(credential)
+        assert_response :success
+        assert_select ".alert.alert-warning", count: 0
+        assert_select 'input[aria-label="API key"][readonly][value=?]', credential.api_key, count: 1
+
+        get api_credentials_url
+        assert_response :success
+        assert_select 'table.table input[aria-label="BatchのAPI key"][readonly][value=?]', credential.api_key, count: 1
+        assert_select 'table.table button[data-action="clipboard#copy"]', text: "コピー", count: 1
+
+        assert_difference("ApiCredential.count", -1) do
+          delete api_credential_url(credential)
+        end
+        assert_redirected_to api_credentials_url
       end
     end
   RUBY
@@ -648,6 +1186,8 @@ end
 
 def configure_default_views
   devise = VALUES.fetch("account_authentication") == "devise"
+  api_enabled = VALUES.fetch("api") == "enable"
+  account_navigation_count = api_enabled ? 3 : 2
   desktop_navigation_items = if devise
     <<~ERB
       <% if user_signed_in? %>
@@ -730,6 +1270,18 @@ def configure_default_views
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
           アカウント設定
+        <% end %>
+      </li>
+    ERB
+  end
+  if api_enabled
+    account_navigation_items += <<~ERB
+      <li>
+        <%= link_to api_credentials_path, class: ("menu-active" if controller_path == "api_credentials"), aria: { current: ("page" if controller_path == "api_credentials") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
+          </svg>
+          APIキーの管理
         <% end %>
       </li>
     ERB
@@ -1053,21 +1605,21 @@ def configure_default_views
           assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
           assert_select 'header ul.menu.dropdown-content a[data-turbo-method="delete"][href=?]', destroy_user_session_path, count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li.menu-title', text: 'マイページ', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: 2
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: 2
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: #{account_navigation_count}
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: #{account_navigation_count}
           assert_select 'nav[aria-label="アカウントメニュー"] a[href=?]', root_path, count: 0
           assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', account_path, count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active', count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[class="menu-active"]', count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a[class]', count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a.min-h-11', count: 0
-          assert_select '.list'
+          assert_select '.card > .card-body', count: 1
 
           get edit_user_registration_url
           assert_response :success
           assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: 2
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: 2
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: #{account_navigation_count}
+          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: #{account_navigation_count}
           assert_select 'nav[aria-label="アカウントメニュー"] a[href=?]', root_path, count: 0
           assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', edit_user_registration_path, count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active', count: 1
@@ -1250,6 +1802,7 @@ after_bundle do
   configure_rubocop
   configure_common_files
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
+  configure_api if VALUES.fetch("api") == "enable"
   configure_default_views
   configure_web_push if VALUES.fetch("web_push") == "use"
   install_solid_components

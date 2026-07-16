@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication api action_cable mail action_text deployment].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication profile_features api action_cable mail action_text deployment].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -407,7 +407,7 @@ def install_wallet_siwe
       end
     end
   RUBY
-  account_navigation_count = VALUES.fetch("api") == "enable" ? 3 : 2
+  account_navigation_count = 2 + (VALUES.fetch("profile_features").any? ? 1 : 0) + (VALUES.fetch("api") == "enable" ? 1 : 0)
   create_file "test/fixtures/users.yml", <<~YAML, force: true
     one:
       wallet_address: 0x1111111111111111111111111111111111111111
@@ -466,6 +466,244 @@ def install_wallet_siwe
       end
     end
   RUBY
+end
+
+def configure_profile
+  features = VALUES.fetch("profile_features")
+  devise = VALUES.fetch("account_authentication") == "devise"
+  attributes = ["user:references"]
+  attributes << "screen_name:string" if features.include?("screen_name")
+  attributes << "display_name:string" if features.include?("display_name")
+  generate "model", "Profile", *attributes
+
+  migration = Dir.glob("db/migrate/*_create_profiles.rb")
+  raise "CreateProfiles migrationが一意ではありません" unless migration.one?
+
+  columns = []
+  columns << "      t.string :screen_name" if features.include?("screen_name")
+  columns << "      t.string :display_name" if features.include?("display_name")
+  create_file migration.first, <<~RUBY, force: true
+    class CreateProfiles < ActiveRecord::Migration[8.1]
+      def change
+        create_table :profiles do |t|
+          t.references :user, null: false, foreign_key: true, index: { unique: true }
+    #{columns.join("\n")}
+          t.timestamps
+        end
+      end
+    end
+  RUBY
+
+  model_lines = ["  belongs_to :user"]
+  model_lines << "  has_one_attached :avatar" if features.include?("avatar")
+  if features.include?("screen_name")
+    model_lines << '  validates :screen_name, format: { with: /\\A[a-z0-9_]+\\z/ }, allow_blank: true'
+  end
+  create_file "app/models/profile.rb", <<~RUBY, force: true
+    class Profile < ApplicationRecord
+    #{model_lines.join("\n")}
+    end
+  RUBY
+
+  inject_into_class "app/models/user.rb", "User", <<~RUBY
+      has_one :profile, dependent: :destroy
+      after_create :create_profile!
+
+  RUBY
+
+  profile_owner = devise ? "current_user" : "Current.user"
+  authentication = devise ? "  before_action :authenticate_user!\n" : ""
+  permitted_features = features.map { |feature| ":#{feature}" }.join(", ")
+  create_file "app/controllers/profiles_controller.rb", <<~RUBY, force: true
+    class ProfilesController < ApplicationController
+      layout "account"
+    #{authentication}
+      def show
+        @profile = #{profile_owner}.profile
+      end
+
+      def edit
+        @profile = #{profile_owner}.profile
+      end
+
+      def update
+        @profile = #{profile_owner}.profile
+        if @profile.update(profile_params)
+          redirect_to profile_path, notice: I18n.t("profiles.update.notice", locale: :ja), status: :see_other
+        else
+          render :edit, status: :unprocessable_content
+        end
+      end
+
+      private
+        def profile_params
+          params.expect(profile: [#{permitted_features}])
+        end
+    end
+  RUBY
+  route "resource :profile, only: %i[show edit update]"
+
+  locale_path = "config/locales/ja.yml"
+  locale = File.exist?(locale_path) ? YAML.safe_load_file(locale_path) : {}
+  locale["ja"] ||= {}
+  locale["ja"]["profiles"] = { "update" => { "notice" => "プロフィールを更新しました" } }
+  create_file locale_path, YAML.dump(locale, line_width: -1), force: true
+
+  fixture_fields = []
+  fixture_fields << "  screen_name: profile_one" if features.include?("screen_name")
+  fixture_fields << "  display_name: Profile One" if features.include?("display_name")
+  second_fixture_fields = []
+  second_fixture_fields << "  screen_name: profile_two" if features.include?("screen_name")
+  second_fixture_fields << "  display_name: Profile Two" if features.include?("display_name")
+  create_file "test/fixtures/profiles.yml", <<~YAML, force: true
+    one:
+      user: one
+    #{fixture_fields.join("\n")}
+
+    two:
+      user: two
+    #{second_fixture_fields.join("\n")}
+  YAML
+
+  profile_test_body = if features.include?("screen_name")
+    <<~RUBY
+      test "screen_name only accepts lowercase alphanumeric characters and underscores" do
+        profile = profiles(:one)
+        profile.screen_name = "Invalid-Name"
+
+        assert_not profile.valid?
+        assert_includes profile.errors[:screen_name], "is invalid"
+      end
+    RUBY
+  else
+    <<~RUBY
+      test "belongs to one user" do
+        assert_equal users(:one), profiles(:one).user
+      end
+    RUBY
+  end
+  create_file "test/models/profile_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class ProfileTest < ActiveSupport::TestCase
+    #{profile_test_body}end
+  RUBY
+
+  form_fields = []
+  if features.include?("screen_name")
+    form_fields << <<~ERB
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :screen_name, "スクリーンネーム" %></legend>
+        <%= form.text_field :screen_name, class: "input input-rapid w-full", pattern: "[a-z0-9_]+", autocomplete: "username" %>
+        <p class="label">小文字の英数字とアンダースコアが使えます。</p>
+      </fieldset>
+    ERB
+  end
+  if features.include?("display_name")
+    form_fields << <<~ERB
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :display_name, "表示名" %></legend>
+        <%= form.text_field :display_name, class: "input input-rapid w-full", autocomplete: "name" %>
+      </fieldset>
+    ERB
+  end
+  if features.include?("avatar")
+    form_fields << <<~ERB
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :avatar, "アバター画像" %></legend>
+        <%= form.file_field :avatar, class: "file-input w-full", accept: "image/*" %>
+      </fieldset>
+    ERB
+  end
+  form_fields = form_fields.join("\n").lines.map { |line| "  #{line}" }.join
+  create_file "app/views/profiles/_form.html.erb", <<~ERB, force: true
+    <%= form_with model: profile, url: profile_path, class: "space-y-5" do |form| %>
+      <% if profile.errors.any? %>
+        <div class="alert alert-error" role="alert">
+          <ul class="list-disc pl-5">
+            <% profile.errors.full_messages.each do |message| %>
+              <li><%= message %></li>
+            <% end %>
+          </ul>
+        </div>
+      <% end %>
+
+    #{form_fields}  <div class="card-actions justify-end">
+        <%= link_to "キャンセル", profile_path, class: "btn btn-ghost btn-rapid" %>
+        <%= form.submit "保存", class: "btn btn-primary btn-rapid" %>
+      </div>
+    <% end %>
+  ERB
+
+  profile_rows = []
+  if features.include?("avatar")
+    profile_rows << <<~ERB
+      <li class="list-row">
+        <span class="text-sm text-neutral">アバター</span>
+        <div class="avatar avatar-placeholder">
+          <div class="w-16 rounded-full bg-base-200">
+            <% if @profile.avatar.attached? %>
+              <%= image_tag @profile.avatar, alt: "現在のアバター", class: "object-cover" %>
+            <% else %>
+              <span aria-hidden="true">?</span>
+            <% end %>
+          </div>
+        </div>
+      </li>
+    ERB
+  end
+  if features.include?("display_name")
+    profile_rows << <<~ERB
+      <li class="list-row">
+        <span class="text-sm text-neutral">表示名</span>
+        <strong><%= @profile.display_name.presence || "未設定" %></strong>
+      </li>
+    ERB
+  end
+  if features.include?("screen_name")
+    profile_rows << <<~ERB
+      <li class="list-row">
+        <span class="text-sm text-neutral">スクリーンネーム</span>
+        <strong><%= @profile.screen_name.present? ? "@\#{@profile.screen_name}" : "未設定" %></strong>
+      </li>
+    ERB
+  end
+  profile_rows = profile_rows.join("\n").lines.map { |line| "        #{line}" }.join
+  create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
+    <% content_for :title, "プロフィール | Rapid Rails" %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Profile</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">プロフィール</h1>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <ul class="list">
+    #{profile_rows}      </ul>
+          <div class="card-actions justify-end">
+            <%= link_to "プロフィールを編集", edit_profile_path, class: "btn btn-primary btn-outline btn-rapid" %>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/profiles/edit.html.erb", <<~ERB, force: true
+    <% content_for :title, "プロフィール編集 | Rapid Rails" %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Profile</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">プロフィール編集</h1>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <%= render "form", profile: @profile %>
+        </div>
+      </section>
+    </div>
+  ERB
 end
 
 def configure_api
@@ -1187,93 +1425,61 @@ end
 def configure_default_views
   devise = VALUES.fetch("account_authentication") == "devise"
   api_enabled = VALUES.fetch("api") == "enable"
-  account_navigation_count = api_enabled ? 3 : 2
-  desktop_navigation_items = if devise
-    <<~ERB
-      <% if user_signed_in? %>
-        <%= link_to "マイページ", account_path, class: "btn btn-ghost btn-rapid" %>
-        <%= button_to "ログアウト", destroy_user_session_path, method: :delete, class: "btn btn-ghost btn-rapid" %>
-      <% else %>
-        <%= link_to "ログイン", new_user_session_path, class: "btn btn-ghost btn-rapid" %>
-        <%= link_to "アカウント作成", new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
-      <% end %>
-    ERB
+  profile_features = VALUES.fetch("profile_features")
+  profile_enabled = profile_features.any?
+  avatar_enabled = profile_features.include?("avatar")
+  screen_name_enabled = profile_features.include?("screen_name")
+  display_name_enabled = profile_features.include?("display_name")
+  account_navigation_count = 2 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0)
+  account_page_description = if profile_enabled
+    "プロフィールとアプリケーションの状態を確認できます。"
   else
-    <<~ERB
-      <% if authenticated? %>
-        <%= link_to "マイページ", account_path, class: "btn btn-ghost btn-rapid" %>
-        <%= button_to "ログアウト", session_path, method: :delete, class: "btn btn-ghost btn-rapid" %>
-      <% else %>
-        <%= link_to "ログイン", new_session_path, class: "btn btn-ghost btn-rapid" %>
-      <% end %>
-    ERB
+    "アプリケーションの状態を確認できます。"
   end
-  mobile_navigation_items = if devise
-    <<~ERB
-      <% if user_signed_in? %>
-        <li><%= link_to "マイページ", account_path %></li>
-        <li><%= link_to "ログアウト", destroy_user_session_path, data: { turbo_method: :delete } %></li>
-      <% else %>
-        <li><%= link_to "ログイン", new_user_session_path %></li>
-        <li><%= link_to "アカウント作成", new_user_registration_path %></li>
-      <% end %>
-    ERB
+  account_page_action = if profile_enabled
+    "サイドメニューからプロフィールや利用設定を管理できます。"
   else
-    <<~ERB
-      <% if authenticated? %>
-        <li><%= link_to "マイページ", account_path %></li>
-        <li><%= link_to "ログアウト", session_path, data: { turbo_method: :delete } %></li>
-      <% else %>
-        <li><%= link_to "ログイン", new_session_path %></li>
-      <% end %>
-    ERB
+    "サイドメニューから利用設定を管理できます。"
   end
   home_action = if devise
     '<%= link_to "無料で始める", new_user_registration_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
   else
     '<%= link_to "ウォレットで始める", new_session_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
   end
-  account_navigation_items = if devise
-    <<~ERB
+  account_navigation_items = <<~ERB
+    <li>
+      <%= link_to account_path, class: ("menu-active" if current_page?(account_path)), aria: { current: ("page" if current_page?(account_path)) } do %>
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955a1.125 1.125 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+        </svg>
+        マイページ
+      <% end %>
+    </li>
+  ERB
+  if profile_enabled
+    account_navigation_items += <<~ERB
       <li>
-        <%= link_to account_path, class: ("menu-active" if current_page?(account_path)), aria: { current: ("page" if current_page?(account_path)) } do %>
+        <%= link_to profile_path, class: ("menu-active" if controller_path == "profiles"), aria: { current: ("page" if controller_path == "profiles") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
           プロフィール
-        <% end %>
-      </li>
-      <li>
-        <%= link_to edit_user_registration_path, class: ("menu-active" if current_page?(edit_user_registration_path)), aria: { current: ("page" if current_page?(edit_user_registration_path)) } do %>
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-          </svg>
-          アカウント設定
-        <% end %>
-      </li>
-    ERB
-  else
-    <<~ERB
-      <li>
-        <%= link_to account_path, class: ("menu-active" if current_page?(account_path)), aria: { current: ("page" if current_page?(account_path)) } do %>
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-          </svg>
-          プロフィール
-        <% end %>
-      </li>
-      <li>
-        <%= link_to edit_account_path, class: ("menu-active" if current_page?(edit_account_path)), aria: { current: ("page" if current_page?(edit_account_path)) } do %>
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-          </svg>
-          アカウント設定
         <% end %>
       </li>
     ERB
   end
+  account_settings_path = devise ? "edit_user_registration_path" : "edit_account_path"
+  account_navigation_items += <<~ERB
+    <li>
+      <%= link_to #{account_settings_path}, class: ("menu-active" if current_page?(#{account_settings_path})), aria: { current: ("page" if current_page?(#{account_settings_path})) } do %>
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+        アカウント設定
+      <% end %>
+    </li>
+  ERB
   if api_enabled
     account_navigation_items += <<~ERB
       <li>
@@ -1286,7 +1492,87 @@ def configure_default_views
       </li>
     ERB
   end
-  account_navigation_items = account_navigation_items.lines.map { |line| "                #{line}" }.join
+  account_navigation_for_layout = account_navigation_items.lines.map { |line| "                #{line}" }.join
+  account_navigation_for_dropdown = account_navigation_items.lines.map { |line| "          #{line}" }.join
+  signed_in_condition = devise ? "user_signed_in?" : "authenticated?"
+  profile_owner = devise ? "current_user.profile" : "Current.user.profile"
+  logout_path = devise ? "destroy_user_session_path" : "session_path"
+  guest_desktop_navigation = if devise
+    <<~ERB
+      <%= link_to "ログイン", new_user_session_path, class: "btn btn-ghost btn-rapid" %>
+      <%= link_to "アカウント作成", new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
+    ERB
+  else
+    '<%= link_to "ログイン", new_session_path, class: "btn btn-ghost btn-rapid" %>\n'
+  end
+  guest_mobile_navigation = if devise
+    <<~ERB
+      <li><%= link_to "ログイン", new_user_session_path %></li>
+      <li><%= link_to "アカウント作成", new_user_registration_path %></li>
+    ERB
+  else
+    '<li><%= link_to "ログイン", new_session_path %></li>\n'
+  end
+  profile_identity = if display_name_enabled || screen_name_enabled
+    display_name = if display_name_enabled
+      <<~ERB
+        <% if #{profile_owner}.display_name.present? %>
+          <strong class="block"><%= #{profile_owner}.display_name %></strong>
+        <% end %>
+      ERB
+    else
+      ""
+    end
+    screen_name = if screen_name_enabled
+      <<~ERB
+        <% if #{profile_owner}.screen_name.present? %>
+          <span class="block text-neutral">@<%= #{profile_owner}.screen_name %></span>
+        <% end %>
+      ERB
+    else
+      ""
+    end
+    condition = [
+      ("#{profile_owner}.display_name.present?" if display_name_enabled),
+      ("#{profile_owner}.screen_name.present?" if screen_name_enabled)
+    ].compact.join(" || ")
+    <<~ERB
+      <% if #{condition} %>
+        <li class="menu-title">
+          <span>
+      #{display_name.lines.map { |line| "      #{line}" }.join}#{screen_name.lines.map { |line| "      #{line}" }.join}    </span>
+        </li>
+      <% end %>
+    ERB
+  else
+    ""
+  end
+  account_menu_trigger = if avatar_enabled
+    <<~ERB
+      <summary class="btn btn-circle btn-ghost" aria-label="アカウントメニューを開く">
+        <div class="avatar avatar-placeholder">
+          <div class="w-10 rounded-full bg-base-200">
+            <% if #{profile_owner}.avatar.attached? %>
+              <%= image_tag #{profile_owner}.avatar, alt: "アバター", class: "object-cover" %>
+            <% else %>
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+            <% end %>
+          </div>
+        </div>
+      </summary>
+    ERB
+  else
+    <<~ERB
+      <summary class="btn btn-ghost">
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+        <span>MENU</span>
+      </summary>
+    ERB
+  end
   layout_method = if devise
     'devise_controller? ? (controller_name == "registrations" && %w[edit update].include?(action_name) ? "account" : "authentication") : "application"'
   else
@@ -1392,7 +1678,7 @@ def configure_default_views
           <nav aria-label="アカウントメニュー">
             <ul class="menu w-full rounded-box bg-base-100">
               <li class="menu-title"><span>マイページ</span></li>
-    #{account_navigation_items}          </ul>
+    #{account_navigation_for_layout}          </ul>
           </nav>
         </aside>
         <div class="min-w-0"><%= yield %></div>
@@ -1407,15 +1693,25 @@ def configure_default_views
         <div class="navbar-start">
           <%= link_to "Rapid Rails", root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
         </div>
-        <div class="navbar-end hidden items-center gap-1 min-[961px]:flex">
-    #{desktop_navigation_items}    </div>
-        <div class="navbar-end min-[961px]:hidden">
-          <details class="dropdown dropdown-end">
-            <summary class="btn btn-ghost">メニュー</summary>
-            <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow-elevation-2">
-    #{mobile_navigation_items}      </ul>
-          </details>
-        </div>
+        <% if #{signed_in_condition} %>
+          <div class="navbar-end">
+            <details class="dropdown dropdown-end dropdown-hover">
+    #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
+    #{profile_identity.lines.map { |line| "            #{line}" }.join}#{account_navigation_for_dropdown}            <li class="border-t border-base-300"><%= link_to "ログアウト", #{logout_path}, data: { turbo_method: :delete } %></li>
+              </ul>
+            </details>
+          </div>
+        <% else %>
+          <div class="navbar-end hidden items-center gap-1 min-[961px]:flex">
+    #{guest_desktop_navigation.lines.map { |line| "        #{line}" }.join}      </div>
+          <div class="navbar-end min-[961px]:hidden">
+            <details class="dropdown dropdown-end">
+              <summary class="btn btn-ghost">メニュー</summary>
+              <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow-elevation-2">
+    #{guest_mobile_navigation.lines.map { |line| "            #{line}" }.join}          </ul>
+            </details>
+          </div>
+        <% end %>
       </nav>
     </header>
   ERB
@@ -1484,13 +1780,13 @@ def configure_default_views
       <header>
         <p class="text-sm font-semibold text-primary">Account</p>
         <h1 class="mt-1 text-2xl font-bold leading-[1.5]">マイページ</h1>
-        <p class="mt-2 text-sm text-neutral">プロフィールとアプリケーションの状態を確認できます。</p>
+        <p class="mt-2 text-sm text-neutral">#{account_page_description}</p>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body p-5 sm:p-6">
           <h2 class="card-title text-base leading-[1.5]">次のステップ</h2>
-          <p class="text-sm text-neutral">このページを起点に、プロフィール編集や利用設定を追加できます。</p>
+          <p class="text-sm text-neutral">#{account_page_action}</p>
           <div class="card-actions mt-2 justify-end">
             <%= link_to "ホームへ戻る", root_path, class: "btn btn-primary btn-outline btn-rapid" %>
           </div>
@@ -1555,6 +1851,82 @@ def configure_default_views
     ERB
   end
 
+  profile_setup = if display_name_enabled || screen_name_enabled
+    attributes = []
+    attributes << 'screen_name: "sample_user"' if screen_name_enabled
+    attributes << 'display_name: "Sample User"' if display_name_enabled
+    "      user.profile.update!(#{attributes.join(', ')})\n"
+  else
+    ""
+  end
+  profile_trigger_assertion = if avatar_enabled
+    "      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-circle .avatar.avatar-placeholder', count: 1\n"
+  else
+    <<~RUBY.lines.map { |line| "      #{line}" }.join
+      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-ghost', text: 'MENU', count: 1 do
+        assert_select 'svg[data-slot="icon"]', count: 1
+      end
+    RUBY
+  end
+  profile_identity_assertion = if display_name_enabled && screen_name_enabled
+    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', text: /Sample User.*@sample_user/m, count: 1\n"
+  elsif display_name_enabled
+    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', text: 'Sample User', count: 1\n"
+  elsif screen_name_enabled
+    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', text: '@sample_user', count: 1\n"
+  else
+    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', count: 0\n"
+  end
+  profile_page_assertions = if profile_enabled
+    form_assertions = []
+    if screen_name_enabled
+      form_assertions << <<~RUBY
+        assert_select 'form[action=?] input[name="profile[screen_name]"][pattern="[a-z0-9_]+"]', profile_path, count: 1
+      RUBY
+    end
+    if display_name_enabled
+      form_assertions << <<~RUBY
+        assert_select 'form[action=?] input[name="profile[display_name]"]', profile_path, count: 1
+      RUBY
+    end
+    if avatar_enabled
+      form_assertions << <<~RUBY
+        assert_select 'form[action=?] input.file-input[name="profile[avatar]"][accept="image/*"]', profile_path, count: 1
+      RUBY
+    end
+    update_assertion = if screen_name_enabled
+      <<~RUBY
+        patch profile_url, params: { profile: { screen_name: 'updated_user' } }
+        assert_redirected_to profile_url
+        assert_equal 'updated_user', user.profile.reload.screen_name
+      RUBY
+    elsif display_name_enabled
+      <<~RUBY
+        patch profile_url, params: { profile: { display_name: 'Updated User' } }
+        assert_redirected_to profile_url
+        assert_equal 'Updated User', user.profile.reload.display_name
+      RUBY
+    else
+      ""
+    end
+    <<~RUBY
+      get profile_url
+      assert_response :success
+      assert_select '[data-layout="account"] .list > .list-row', count: #{profile_features.length}
+      assert_select 'a[href=?]', edit_profile_path, text: 'プロフィールを編集', count: 1
+
+      get edit_profile_url
+      assert_response :success
+      #{form_assertions.join}#{update_assertion}
+    RUBY
+  else
+    <<~RUBY
+      assert_nil User.reflect_on_association(:profile)
+      assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path('/profile', method: :get) }
+    RUBY
+  end
+  profile_page_assertions = profile_page_assertions.lines.map { |line| "      #{line}" }.join
+
   default_pages_test = if devise
     <<~RUBY
       require "test_helper"
@@ -1597,13 +1969,13 @@ def configure_default_views
           assert_redirected_to new_user_session_url
 
           user = User.create!(email: "sample@example.com", password: "password123", password_confirmation: "password123")
-          sign_in user
+    #{profile_setup}      sign_in user
           get account_url
           assert_response :success
           assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-          assert_select 'header ul.menu.dropdown-content > li > a', count: 2
-          assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
-          assert_select 'header ul.menu.dropdown-content a[data-turbo-method="delete"][href=?]', destroy_user_session_path, count: 1
+    #{profile_trigger_assertion}
+          assert_select 'header ul.menu.dropdown-content > li > a', count: #{account_navigation_count + 1}
+    #{profile_identity_assertion}      assert_select 'header ul.menu.dropdown-content a[data-turbo-method="delete"][href=?]', destroy_user_session_path, count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li.menu-title', text: 'マイページ', count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: #{account_navigation_count}
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: #{account_navigation_count}
@@ -1614,6 +1986,8 @@ def configure_default_views
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a[class]', count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a.min-h-11', count: 0
           assert_select '.card > .card-body', count: 1
+
+    #{profile_page_assertions}
 
           get edit_user_registration_url
           assert_response :success
@@ -1802,6 +2176,8 @@ after_bundle do
   configure_rubocop
   configure_common_files
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
+  rails_command "active_storage:install" if VALUES.fetch("profile_features").include?("avatar")
+  configure_profile if VALUES.fetch("profile_features").any?
   configure_api if VALUES.fetch("api") == "enable"
   configure_default_views
   configure_web_push if VALUES.fetch("web_push") == "use"

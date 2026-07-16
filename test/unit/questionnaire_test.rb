@@ -17,7 +17,7 @@ class QuestionnaireTest < Minitest::Test
       @choose_calls << [choices, options]
       return @answers.shift unless @answers.empty?
 
-      options.fetch(:selected).fetch(0)
+      options[:no_limit] ? options.fetch(:selected) : options.fetch(:selected).fetch(0)
     end
 
     def confirm(message, **options)
@@ -60,6 +60,33 @@ class QuestionnaireTest < Minitest::Test
     assert_equal "skip", answers["mail"]
     assert questionnaire.asked_any?
     assert_equal ["メール機能を使用しますか？"], prompt.choose_calls.map { |(_, options)| options.fetch(:header) }
+  end
+
+  def test_uses_unlimited_gum_multiple_selection_for_profile_features
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |key, _| key == "profile_features" }
+    prompt = RecordingPrompt.new(answers: [%w[avatar screen_name]])
+    questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)
+
+    answers = questionnaire.ask_all(initial_answers)
+
+    assert_equal %w[screen_name avatar], answers["profile_features"]
+    assert_equal [
+      %w[screen_name display_name avatar],
+      {
+        header: "プロフィール機能を選択してください。",
+        selected: %w[screen_name display_name avatar],
+        no_limit: true
+      }
+    ], prompt.choose_calls.fetch(0)
+  end
+
+  def test_accepts_no_selected_profile_features
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |key, _| key == "profile_features" }
+    prompt = RecordingPrompt.new(answers: [[]])
+
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all(initial_answers)
+
+    assert_empty answers["profile_features"]
   end
 
   def test_cancelled_selection_fails_before_configuration_is_built

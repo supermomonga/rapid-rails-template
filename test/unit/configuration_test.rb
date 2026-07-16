@@ -11,6 +11,7 @@ class ConfigurationTest < Minitest::Test
     assert_equal "skip", configuration["active_job"]
     assert_equal "use", configuration["solid_cache"]
     assert_equal "devise", configuration["account_authentication"]
+    assert_equal %w[screen_name display_name avatar], configuration["profile_features"]
     assert_equal "enable", configuration["api"]
     assert_equal "skip", configuration["action_cable"]
     assert_equal "use", configuration["mail"]
@@ -32,6 +33,21 @@ class ConfigurationTest < Minitest::Test
   def test_rejects_invalid_choice
     assert_raises(RapidRailsTemplate::InvalidConfiguration) do
       RapidRailsTemplate::Configuration.build("pwa" => "maybe")
+    end
+  end
+
+  def test_accepts_an_empty_profile_feature_selection
+    configuration = RapidRailsTemplate::Configuration.build("profile_features" => [])
+
+    assert_empty configuration["profile_features"]
+  end
+
+  def test_rejects_unknown_or_duplicate_profile_features
+    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name unknown])
+    end
+    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("profile_features" => %w[avatar avatar])
     end
   end
 end

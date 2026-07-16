@@ -12,6 +12,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "devise"
     assert_includes plan.steps, "install_daisyui"
     assert_includes plan.steps, "configure_api"
+    assert_includes plan.steps, "install_active_storage"
+    assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "configure_default_views"
     assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("verify")
     assert_includes plan.artifacts, "package.json"
@@ -21,6 +23,9 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/views/layouts/account.html.erb"
     assert_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     assert_includes plan.artifacts, "app/views/accounts/show.html.erb"
+    assert_includes plan.artifacts, "app/models/profile.rb"
+    assert_includes plan.artifacts, "app/controllers/profiles_controller.rb"
+    assert_includes plan.artifacts, "app/views/profiles/edit.html.erb"
     assert_includes plan.artifacts, "app/models/api_credential.rb"
     assert_includes plan.artifacts, "app/controllers/api/api_controller.rb"
     assert_includes plan.artifacts, "app/javascript/controllers/clipboard_controller.js"
@@ -37,6 +42,27 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "app/views/api_credentials/index.html.erb"
   end
 
+  def test_empty_profile_features_omit_profile_and_active_storage_steps_and_artifacts
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build("profile_features" => [])
+    )
+
+    refute_includes plan.steps, "install_active_storage"
+    refute_includes plan.steps, "configure_profile"
+    refute_includes plan.artifacts, "app/models/profile.rb"
+    refute_includes plan.artifacts, "app/controllers/profiles_controller.rb"
+    refute_includes plan.artifacts, "app/views/profiles/edit.html.erb"
+  end
+
+  def test_profile_without_avatar_does_not_install_active_storage
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name display_name])
+    )
+
+    assert_includes plan.steps, "configure_profile"
+    refute_includes plan.steps, "install_active_storage"
+  end
+
   def test_wallet_plan_uses_siwe_and_not_devise
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("account_authentication" => "wallet_siwe", "deployment" => "none")
@@ -50,6 +76,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/javascript/controllers/siwe_sign_in_controller.js"
     assert_includes plan.artifacts, "app/views/accounts/edit.html.erb"
     assert_includes plan.artifacts, "config/locales/ja.yml"
+    assert_equal plan.artifacts.uniq, plan.artifacts
     assert_includes plan.steps, "prepare_database"
     refute_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     refute_includes plan.artifacts, "Dockerfile.prod"

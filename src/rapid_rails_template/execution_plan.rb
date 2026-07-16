@@ -58,6 +58,8 @@ module RapidRailsTemplate
     def build_steps
       result = %w[declare_gems install_daisyui configure_rubocop configure_test_stack configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
+      result << "install_active_storage" if configuration["profile_features"].include?("avatar")
+      result << "configure_profile" if configuration["profile_features"].any?
       result << "configure_api" if configuration["api"] == "enable"
       result << "configure_default_views"
       result << "configure_web_push" if configuration["web_push"] == "use"
@@ -104,6 +106,17 @@ module RapidRailsTemplate
           test/controllers/api_credentials_controller_test.rb
         ])
       end
+      if configuration["profile_features"].any?
+        result.concat(%w[
+          app/models/profile.rb
+          app/controllers/profiles_controller.rb
+          app/views/profiles/show.html.erb
+          app/views/profiles/edit.html.erb
+          app/views/profiles/_form.html.erb
+          config/locales/ja.yml
+          test/models/profile_test.rb
+        ])
+      end
       if configuration["account_authentication"] == "devise"
         result.concat(%w[
           app/views/devise/sessions/new.html.erb
@@ -120,7 +133,7 @@ module RapidRailsTemplate
       end
       result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"
       result << "mise.local.toml" if configuration["web_push"] == "use"
-      result
+      result.uniq
     end
 
     def build_processes

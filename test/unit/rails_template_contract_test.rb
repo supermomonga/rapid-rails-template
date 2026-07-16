@@ -96,7 +96,12 @@ class RailsTemplateContractTest < Minitest::Test
     end
 
     views = ([generated_file_source("app/views/layouts/application.html.erb")] + view_sources.values).join("\n")
-    %w[navbar menu dropdown hero card fieldset input checkbox btn alert footer badge divider list table].each do |component|
+    profile_configuration = source_between("def configure_profile", "def configure_api")
+    %w[alert fieldset fieldset-legend input file-input card card-body list list-row avatar btn].each do |component|
+      assert class_attributes(profile_configuration).any? { |classes| classes.include?(component) }, "profile: #{component}"
+    end
+    views += profile_configuration
+    %w[navbar menu dropdown avatar hero card fieldset input file-input checkbox btn alert footer badge divider list table].each do |component|
       assert class_attributes(views).any? { |classes| classes.include?(component) }, component
     end
     %w[bg-base-100 bg-base-200 border-base-300 text-base-content btn-primary].each { |utility| assert_includes views, utility }
@@ -164,6 +169,24 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes settings, "btn btn-outline btn-error btn-rapid"
     assert_includes @source, 'notice: I18n.t("accounts.destroy.notice", locale: :ja)'
     assert_includes @source, "notice: アカウントを削除しました".b
+  end
+
+  def test_profile_generation_is_conditional_and_uses_selected_features
+    controller = generated_file_source("app/controllers/profiles_controller.rb")
+    profile_configuration = source_between("def configure_profile", "def configure_api")
+
+    assert_includes @source, 'configure_profile if VALUES.fetch("profile_features").any?'
+    assert_includes @source, 'rails_command "active_storage:install" if VALUES.fetch("profile_features").include?("avatar")'
+    assert_includes @source, 't.references :user, null: false, foreign_key: true, index: { unique: true }'
+    assert_includes @source, 'has_one :profile, dependent: :destroy'
+    assert_includes @source, 'after_create :create_profile!'
+    assert_includes profile_configuration, 'has_one_attached :avatar'
+    assert_includes profile_configuration, 'validates :screen_name, format:'
+    assert_includes profile_configuration, '[a-z0-9_]+'
+    assert_includes controller, 'params.expect(profile: ['
+    assert_includes controller, 'I18n.t("profiles.update.notice", locale: :ja)'
+    assert_includes profile_configuration, 'form.file_field :avatar, class: "file-input w-full", accept: "image/*"'
+    assert_includes @source, 'route "resource :profile, only: %i[show edit update]"'
   end
 
   def test_api_credentials_use_digest_authentication_owner_scopes_and_one_time_secret_views
@@ -240,16 +263,16 @@ class RailsTemplateContractTest < Minitest::Test
     home = generated_file_source("app/views/home/index.html.erb")
     shared_links = generated_file_source("app/views/devise/shared/_links.html.erb")
     login = generated_file_source("app/views/devise/sessions/new.html.erb")
-    mobile_navigation = source_between("  mobile_navigation_items = if devise", "  home_action = if devise")
     account_navigation = source_between(
-      "  account_navigation_items = if devise",
-      "  account_navigation_items = account_navigation_items.lines"
+      "  account_navigation_items = <<~ERB",
+      "  account_navigation_for_layout = account_navigation_items.lines"
     )
 
     assert_class_tokens header, "navbar", "mx-auto", "w-full", "max-w-6xl", "px-5"
-    assert_class_tokens header, "dropdown", "dropdown-end"
+    assert_class_tokens header, "dropdown", "dropdown-end", "dropdown-hover"
     assert_class_tokens header, "menu", "menu-sm", "dropdown-content"
     assert_class_tokens header, "btn", "btn-ghost"
+    assert_class_tokens @source, "avatar", "avatar-placeholder"
     mobile_menu_classes = class_attributes(header).find { |classes| classes.include?("dropdown-content") }
     refute_nil mobile_menu_classes
     refute mobile_menu_classes.any? { |token| token.match?(/\Ap(?:[trblxy])?-/) }, mobile_menu_classes.inspect
@@ -265,24 +288,16 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 4, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 4, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_includes account_navigation, "profile_path"
+    assert_includes account_navigation, "マイページ".b
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
-    account_item_class_options = account_navigation.lines.filter_map { |line| line[/class: (.*?), aria:/, 1] }
-    assert_equal [
-      '("menu-active" if current_page?(account_path))',
-      '("menu-active" if current_page?(edit_user_registration_path))',
-      '("menu-active" if current_page?(account_path))',
-      '("menu-active" if current_page?(edit_account_path))',
-      '("menu-active" if controller_path == "api_credentials")'
-    ], account_item_class_options
-
-    assert_includes mobile_navigation, "data: { turbo_method: :delete }"
-    refute_includes mobile_navigation, "min-h-11"
-    refute_includes mobile_navigation, "button_to"
-    refute_includes mobile_navigation, "divider"
-    refute_match(/\bclass:/, mobile_navigation)
+    assert_includes header, 'data: { turbo_method: :delete }'
+    assert_includes @source, 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'
+    assert_includes @source, '<span>MENU</span>'
+    refute_includes header, "min-h-11 items-center gap"
 
     assert_class_tokens authentication_layout, "hero"
     assert_class_tokens authentication_layout, "hero-content"

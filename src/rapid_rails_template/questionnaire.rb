@@ -2,19 +2,20 @@
 
 module RapidRailsTemplate
   class Questionnaire
-    Question = Data.define(:id, :prompt, :choices, :default, :condition)
+    Question = Data.define(:id, :prompt, :choices, :default, :condition, :multiple)
 
     QUESTIONS = [
-      Question.new(:pwa, "PWAを使用しますか？", %w[use skip], "skip", nil),
-      Question.new(:web_push, "PWAでWeb Pushを使用しますか？", %w[use skip], "skip", ->(a) { a["pwa"] == "use" }),
-      Question.new(:active_job, "ジョブ管理を使用しますか？", %w[solid_queue skip], "skip", nil),
-      Question.new(:solid_cache, "Solid Cacheを使用しますか？", %w[use skip], "use", nil),
-      Question.new(:account_authentication, "アカウント管理方法を選択してください。", %w[devise wallet_siwe], "devise", nil),
-      Question.new(:api, "API機能を有効にしますか？", %w[enable disable], "enable", nil),
-      Question.new(:action_cable, "Action Cableを使用しますか？", %w[solid_cable skip], "skip", nil),
-      Question.new(:mail, "メール機能を使用しますか？", %w[auto use skip], "auto", nil),
-      Question.new(:action_text, "Action Textを使用しますか？", %w[use skip], "use", nil),
-      Question.new(:deployment, "デプロイ方法を選択してください。", %w[dokploy none], "dokploy", nil)
+      Question.new(:pwa, "PWAを使用しますか？", %w[use skip], "skip", nil, false),
+      Question.new(:web_push, "PWAでWeb Pushを使用しますか？", %w[use skip], "skip", ->(a) { a["pwa"] == "use" }, false),
+      Question.new(:active_job, "ジョブ管理を使用しますか？", %w[solid_queue skip], "skip", nil, false),
+      Question.new(:solid_cache, "Solid Cacheを使用しますか？", %w[use skip], "use", nil, false),
+      Question.new(:account_authentication, "アカウント管理方法を選択してください。", %w[devise wallet_siwe], "devise", nil, false),
+      Question.new(:profile_features, "プロフィール機能を選択してください。", Configuration::PROFILE_FEATURES, Configuration::PROFILE_FEATURES, nil, true),
+      Question.new(:api, "API機能を有効にしますか？", %w[enable disable], "enable", nil, false),
+      Question.new(:action_cable, "Action Cableを使用しますか？", %w[solid_cable skip], "skip", nil, false),
+      Question.new(:mail, "メール機能を使用しますか？", %w[auto use skip], "auto", nil, false),
+      Question.new(:action_text, "Action Textを使用しますか？", %w[use skip], "use", nil, false),
+      Question.new(:deployment, "デプロイ方法を選択してください。", %w[dokploy none], "dokploy", nil, false)
     ].freeze
 
     def initialize(prompt:, output: $stdout)
@@ -56,14 +57,20 @@ module RapidRailsTemplate
     private
 
     def ask(question)
+      options = { header: question.prompt, selected: Array(question.default) }
+      options[:no_limit] = true if question.multiple
       answer = with_prompt_error do
-        @prompt.choose(
-          question.choices,
-          header: question.prompt,
-          selected: [question.default]
-        )
+        @prompt.choose(question.choices, **options)
       end
       raise PromptError, "選択がキャンセルされました: #{question.prompt}" if answer.nil?
+
+      if question.multiple
+        valid = answer.is_a?(Array) && answer.uniq == answer && (answer - question.choices).empty?
+        raise PromptError, "選択UIが不正な値を返しました: #{answer.inspect}" unless valid
+
+        return question.choices.select { |choice| answer.include?(choice) }
+      end
+
       raise PromptError, "選択UIが不正な値を返しました: #{answer}" unless question.choices.include?(answer)
 
       answer

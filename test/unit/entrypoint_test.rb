@@ -30,7 +30,8 @@ class EntrypointTest < Minitest::Test
   def test_individual_options_run_without_reading_input_when_all_are_specified
     output = StringIO.new
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
-      "--#{id.tr('_', '-')}=#{value}"
+      serialized = value.is_a?(Array) ? value.join(",") : value
+      "--#{id.tr('_', '-')}=#{serialized}"
     end
 
     status = RapidRailsTemplate::Entrypoint.run(
@@ -64,7 +65,10 @@ class EntrypointTest < Minitest::Test
 
   def test_non_applicable_option_can_be_omitted_without_reading_input
     answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |id, _| id == "web_push" }
-    arguments = answers.map { |id, value| "--#{id.tr('_', '-')}=#{value}" }
+    arguments = answers.map do |id, value|
+      serialized = value.is_a?(Array) ? value.join(",") : value
+      "--#{id.tr('_', '-')}=#{serialized}"
+    end
 
     status = RapidRailsTemplate::Entrypoint.run(
       [*arguments, "sample"],
@@ -76,6 +80,58 @@ class EntrypointTest < Minitest::Test
 
     assert_equal 0, status
     assert_equal "skip", RecordingRunner.arguments.fetch(:plan).configuration["web_push"]
+  end
+
+  def test_profile_features_accept_comma_separated_values
+    arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
+      serialized = value.is_a?(Array) ? "avatar,screen_name" : value
+      "--#{id.tr('_', '-')}=#{serialized}"
+    end
+
+    status = RapidRailsTemplate::Entrypoint.run(
+      [*arguments, "sample"],
+      output: StringIO.new,
+      error: StringIO.new,
+      runner_class: RecordingRunner,
+      prompt: UnexpectedPrompt
+    )
+
+    assert_equal 0, status
+    assert_equal %w[screen_name avatar], RecordingRunner.arguments.fetch(:plan).configuration["profile_features"]
+  end
+
+  def test_empty_profile_features_value_disables_profiles_without_prompting
+    arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
+      serialized = id == "profile_features" ? "" : value
+      "--#{id.tr('_', '-')}=#{serialized}"
+    end
+
+    status = RapidRailsTemplate::Entrypoint.run(
+      [*arguments, "sample"],
+      output: StringIO.new,
+      error: StringIO.new,
+      runner_class: RecordingRunner,
+      prompt: UnexpectedPrompt
+    )
+
+    assert_equal 0, status
+    assert_empty RecordingRunner.arguments.fetch(:plan).configuration["profile_features"]
+  end
+
+  def test_rejects_unknown_duplicate_and_blank_profile_features
+    ["screen_name,unknown", "avatar,avatar", "screen_name,"].each do |value|
+      error = StringIO.new
+
+      status = RapidRailsTemplate::Entrypoint.run(
+        ["--profile-features=#{value}", "sample"],
+        error:,
+        runner_class: RecordingRunner,
+        prompt: UnexpectedPrompt
+      )
+
+      assert_equal 1, status
+      assert_includes error.string, "--profile-featuresの値が不正です"
+    end
   end
 
   def test_rejects_unknown_option

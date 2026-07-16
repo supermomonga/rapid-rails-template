@@ -42,7 +42,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 ### 質問と計画
 
-CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。各質問では仕様上の既定値を選択済みとして表示します。すべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
+CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、`profile_features`では全featureを選択済みとして表示し、`no_limit: true`の複数選択を使用します。選択なしと`--profile-features=`はProfile生成を無効にする明示回答です。すべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
 
 全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production processを一覧で提示します。
 
@@ -60,7 +60,7 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 ### `post_bundle`
 
-認証、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。生成直後のdevelopmentとtestにpending migrationを残しません。
+認証、選択済みProfile feature、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。`avatar`選択時だけ`active_storage:install`を実行します。生成直後のdevelopmentとtestにpending migrationを残しません。
 
 依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account layoutと標準ページを生成し、Tailwind CSSをbuildします。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
 

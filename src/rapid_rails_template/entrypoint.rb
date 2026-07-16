@@ -38,13 +38,10 @@ module RapidRailsTemplate
         option, value = argument.split("=", 2)
         definition = CLI_OPTIONS[option]
         raise Error, "不明なオプションです: #{option}\n#{usage}" if definition.nil?
-        raise Error, "#{option}には値が必要です\n#{usage}" if value.nil? || value.empty?
-
         id, allowed = definition
-        raise Error, "#{option}の値が不正です: #{value}（#{allowed.join('/')}から選択してください）" unless allowed.include?(value)
         raise Error, "#{option}が複数回指定されています" if answers.key?(id)
 
-        answers[id] = value
+        answers[id] = parse_option_value(option, id, allowed, value)
       end
 
       raise Error, usage unless paths.length == 1
@@ -54,12 +51,33 @@ module RapidRailsTemplate
 
     def self.usage
       options = CLI_OPTIONS.map do |option, (_, allowed)|
-        "  #{option}=#{allowed.join('|')}"
+        separator = option == "--profile-features" ? "," : "|"
+        "  #{option}=#{allowed.join(separator)}"
       end
       (["使用方法: ruby bootstrap.rb [OPTIONS] APP_PATH", "オプション:"] + options).join("\n")
     end
 
-    private_class_method :parse_arguments, :usage
+    def self.parse_option_value(option, id, allowed, value)
+      raise Error, "#{option}には値が必要です\n#{usage}" if value.nil?
+
+      unless id == "profile_features"
+        raise Error, "#{option}には値が必要です\n#{usage}" if value.empty?
+        raise Error, "#{option}の値が不正です: #{value}（#{allowed.join('/')}から選択してください）" unless allowed.include?(value)
+
+        return value
+      end
+
+      features = value.split(",", -1)
+      features = [] if value.empty?
+      valid = features.uniq == features && features.none?(&:empty?) && (features - allowed).empty?
+      unless valid
+        raise Error, "#{option}の値が不正です: #{value}（#{allowed.join(',')}をカンマ区切りで指定してください）"
+      end
+
+      allowed.select { |feature| features.include?(feature) }
+    end
+
+    private_class_method :parse_arguments, :parse_option_value, :usage
   end
 end
 

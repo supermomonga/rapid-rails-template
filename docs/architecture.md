@@ -154,7 +154,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未回
 
 ## 依存方向
 
-`entrypoint`は`questionnaire`、`configuration`、`generator_options`、`execution_plan`、`runner`を組み立てます。`runner`は確定済みのgenerator optionとApplication Template payloadだけを子プロセスへ渡します。`rails_template`は確定済み設定から`steps`を登録し、`steps`は必要に応じて対象別の`editors`を利用します。下位コンポーネントから対話処理や`entrypoint`へ依存させません。
+`entrypoint`は`configuration`、`questionnaire`、`generator_options`、`execution_plan`、`runner`を組み立てます。`configuration`が複数選択可能な`profile_features`の値集合を定義し、`questionnaire`がGumの複数選択として収集します。`runner`は確定済みのgenerator optionとApplication Template payloadだけを子プロセスへ渡します。`rails_template`は確定済み設定から`steps`を登録し、`steps`は必要に応じて対象別の`editors`を利用します。下位コンポーネントから対話処理や`entrypoint`へ依存させません。
 
 固定技術スタック、条件付き機能、デプロイ要件は[採用技術とセットアップ要件](stack.md)を正本とします。対話項目と依存関係は[対話オプションの定義方針](options.md)を正本とします。
 

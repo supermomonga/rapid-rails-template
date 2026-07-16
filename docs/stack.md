@@ -55,14 +55,15 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 
 生成アプリケーションには、共通application layout、認証用sub-layout、account用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。全Viewは`data-theme="rapid-rails"`配下でdaisyUI componentとsemantic colorを使用します。
 
-Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`とdesktopの`button`群、mobileの`dropdown`と単一の`menu dropdown-content`、footerは内側幅をheaderと共有する`footer`、homeの導入部は`hero`、情報ブロックは`card`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
+Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`、guest向けdesktopの`button`群、guest向けmobileと認証後の`dropdown` + `menu dropdown-content`、footerは内側幅をheaderと共有する`footer`、homeの導入部は`hero`、情報ブロックは`card`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`file-input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
 
-account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。認証方式にかかわらずプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
+account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownも同じ項目群を使用します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
 
 - `/`は認証方式にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
+- `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。`avatar`選択時だけActive Storageをinstallする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
 - login、account登録、password再設定はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。
 - Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。

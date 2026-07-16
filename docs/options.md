@@ -121,6 +121,23 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 どちらの認証方式でもhomeは公開し、account画面を認証必須とします。guest向け認証画面にはauthentication layout、account画面にはaccount layoutを適用します。Wallet SIWEのsession resourceは`new`、`create`、`destroy`だけに制限し、controllerに存在しない`show`、`edit`、`update` routeは生成しません。Wallet SIWEのaccount resourceは`show`、`edit`、`destroy`を公開し、wallet addressはプロフィールではなくアカウント設定に表示します。削除確認後にUserと従属する全Sessionを削除し、homeへ戻します。
 
+## `profile_features`
+
+- CLI引数: `--profile-features=screen_name,display_name,avatar`
+- 質問文: プロフィール機能を選択してください。
+- 選択肢: `screen_name`、`display_name`、`avatar`の複数選択
+- 既定値: 3機能すべて
+- 表示条件: 常に表示する
+- 影響する処理: Profile model・1対1 User association・プロフィール表示／編集画面・headerの認証後メニュー・Active Storage
+
+対話UIは`Gum.choose(..., no_limit: true)`を使用し、3項目を選択済みとして表示します。何も選択しない回答は有効です。CLIではカンマ区切りで指定し、`--profile-features=`を何も選択しない回答として扱います。未知の値、重複値、空要素を含む値は生成開始前に拒否します。
+
+1つ以上を選択した場合だけ、Userと1対1のProfile model、表示画面、編集画面、更新処理、account navigationの「プロフィール」を生成します。ProfileはUser作成時に同時作成し、User削除時に従属削除します。`screen_name`は小文字の英数字とアンダースコアだけを許可し、`display_name`は公開表示名として扱います。
+
+`avatar`を選択した場合だけ`active_storage:install`を実行し、Profileへ`has_one_attached :avatar`を追加します。認証後のheader menu triggerはアバター画像（未設定時はavatar placeholder）とし、クリックとhoverの両方で展開します。`avatar`を選択しない場合はHeroiconsの`bars-3`と`MENU` textをtriggerにします。展開内容は、選択済みなら`display_name`と`screen_name`、account navigationと同じ項目群、ログアウトの順です。
+
+何も選択しなかった場合はProfile model、migration、controller、route、View、test fixtureを生成しません。header menuは`bars-3` + `MENU`を使い、account navigationからプロフィール項目を除外します。
+
 ## `api`
 
 - CLI引数: `--api=enable|disable`
@@ -197,6 +214,9 @@ primary SQLite databaseは常にLitestreamのreplication対象とし、queueとc
 
 - 各選択肢と既定値が正規化後の設定へ正しく反映されること。
 - CLI引数で指定した項目を再質問せず、未指定の適用可能な項目だけを質問すること。
+- `profile_features`をGumの複数選択で収集し、選択なしを有効な回答として扱うこと。
+- `--profile-features`のカンマ区切り値を正規化し、空値でProfile関連生成物をすべて省略すること。
+- `avatar`選択時だけActive Storageをinstallし、headerのアバターtriggerを生成すること。
 - すべての適用可能な項目をCLI引数で指定した場合、標準入力を読まずに実行すること。
 - 表示条件が満たされない質問を行わないこと。
 - すべての適用可能な質問を一度ずつ完了するまで最終確認へ進まないこと。

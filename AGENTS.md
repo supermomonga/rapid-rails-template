@@ -9,6 +9,7 @@
 ## ビルド、テスト、開発コマンド
 
 - `mise install`: 固定された Ruby 4.0.6 をインストールします。`.ruby-version` は追加せず、`mise.toml` を正本とします。
+- `gem install gum -v 0.3.2`: `bootstrap.rb`の対話UIとテストで使用する固定versionのgum gemをインストールします。
 - `ruby --version`: 開発環境が Ruby 4.0.x であることを確認します。
 - `git diff --check`: コミット前に空白エラーを検出します。
 
@@ -21,6 +22,10 @@
 Ruby は2スペースでインデントします。ファイル、メソッド、オプション識別子には `snake_case`、クラスとモジュールには `CamelCase` を使用します。`docs/architecture.md` の責務境界を守り、質問間の依存関係は非巡回にしてください。生成先では構造化補正済み`.rubocop.yml`と`bin/rubocop -a`を使用します。
 
 変更手段は、Rails Generator/Application Template API、ライブラリの generator、構造化データ操作、Prism による AST 編集の順で選びます。grep ベースの書き換え、曖昧な文字列置換、暗黙のフォールバック、Rails 8.1.x／Ruby 4.0.x の対象範囲外に対する互換処理は追加しません。
+
+## オプション選択UI
+
+`bootstrap.rb`の対話的な選択肢と最終確認には、`marcoroth/gum-ruby`が提供する`Gum.choose`と`Gum.confirm`を使用してください。標準入力を直接読み取る独自の選択UIや、gumが利用できない場合の代替UIは追加しません。対応するgum gemのversionと実行可能ファイルを質問開始前に検証し、利用できない場合は明示的に失敗させてください。
 
 ## View実装と目視検証
 

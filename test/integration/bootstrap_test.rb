@@ -18,8 +18,29 @@ class BootstrapTest < Minitest::Test
     system(File.join(ROOT, "bin", "build-bootstrap"), out: File::NULL)
     Dir.mktmpdir do |directory|
       destination = File.join(directory, "path with spaces & metacharacters")
-      input = "\n" * 9 + "n\n"
-      _stdout, stderr, status = Open3.capture3(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), destination, stdin_data: input)
+      gum_directory = File.join(directory, "gum")
+      Dir.mkdir(gum_directory)
+      gum_executable = File.join(gum_directory, "gum")
+      File.write(gum_executable, <<~RUBY)
+        #!/usr/bin/env ruby
+        command = ARGV.shift
+        if command == "choose"
+          selected = ARGV.find { |argument| argument.start_with?("--selected=") }
+          puts selected.split("=", 2).fetch(1)
+        elsif command == "confirm"
+          exit 1
+        else
+          abort "unexpected Gum command: \#{command}"
+        end
+      RUBY
+      File.chmod(0o755, gum_executable)
+
+      _stdout, stderr, status = Open3.capture3(
+        { "GUM_INSTALL_DIR" => gum_directory },
+        RbConfig.ruby,
+        File.join(ROOT, "bootstrap.rb"),
+        destination
+      )
 
       assert status.success?, stderr
       refute_path_exists destination

@@ -8,6 +8,7 @@ module RapidRailsTemplate
   class Error < StandardError; end
   class InvalidConfiguration < Error; end
   class EnvironmentError < Error; end
+  class PromptError < Error; end
 end
 
 # frozen_string_literal: true
@@ -18,6 +19,7 @@ module RapidRailsTemplate
   class Environment
     RUBY_RANGE = Gem::Requirement.new(">= 4.0", "< 4.1")
     RAILS_RANGE = Gem::Requirement.new(">= 8.1", "< 8.2")
+    GUM_VERSION = Gem::Version.new("0.3.2")
 
     def self.validate!
       ruby_version = Gem::Version.new(RUBY_VERSION)
@@ -26,8 +28,32 @@ module RapidRailsTemplate
       rails_spec = Gem::Specification.find_all_by_name("rails").select { |spec| RAILS_RANGE.satisfied_by?(spec.version) }.max_by(&:version)
       raise EnvironmentError, "Rails 8.1.xがインストールされていません" if rails_spec.nil?
 
+      load_gum!
       rails_spec
     end
+
+    def self.gum
+      Object.const_get(:Gum)
+    end
+
+    def self.load_gum!
+      gum_spec = Gem::Specification.find_all_by_name("gum").find { |spec| spec.version == GUM_VERSION }
+      raise EnvironmentError, "gum #{GUM_VERSION}がインストールされていません（gem install gum -v #{GUM_VERSION}を実行してください）" if gum_spec.nil?
+
+      begin
+        gum_spec.activate
+        require "gum"
+      rescue Gem::LoadError, LoadError => e
+        raise EnvironmentError, "gum #{GUM_VERSION}を読み込めません: #{e.message}"
+      end
+
+      begin
+        Gum.executable
+      rescue Gum::Error => e
+        raise EnvironmentError, "Gum実行可能ファイルを利用できません: #{e.message}"
+      end
+    end
+    private_class_method :load_gum!
   end
 end
 
@@ -50,8 +76,8 @@ module RapidRailsTemplate
       Question.new(:deployment, "デプロイ方法を選択してください。", %w[dokploy none], "dokploy", nil)
     ].freeze
 
-    def initialize(input: $stdin, output: $stdout)
-      @input = input
+    def initialize(prompt:, output: $stdout)
+      @prompt = prompt
       @output = output
       @asked_question_ids = []
     end
@@ -76,28 +102,42 @@ module RapidRailsTemplate
 
     def confirm?(summary)
       @output.puts summary
-      @output.print "この内容で実行しますか？ [y/N]: "
-      %w[y yes].include?(read_line.downcase)
+      with_prompt_error do
+        @prompt.confirm(
+          "この内容で実行しますか？",
+          default: false,
+          affirmative: "実行",
+          negative: "中止"
+        )
+      end
     end
 
     private
 
     def ask(question)
-      loop do
-        @output.print "#{question.prompt} (#{question.choices.join('/')}) [#{question.default}]: "
-        answer = read_line
-        answer = question.default if answer.empty?
-        return answer if question.choices.include?(answer)
-
-        @output.puts "無効な値です: #{answer}"
+      answer = with_prompt_error do
+        @prompt.choose(
+          question.choices,
+          header: question.prompt,
+          selected: [question.default]
+        )
       end
+      raise PromptError, "選択がキャンセルされました: #{question.prompt}" if answer.nil?
+      raise PromptError, "選択UIが不正な値を返しました: #{answer}" unless question.choices.include?(answer)
+
+      answer
     end
 
-    def read_line
-      value = @input.gets
-      raise Error, "入力が終了しました" if value.nil?
+    def with_prompt_error
+      yield
+    rescue StandardError => e
+      raise unless gum_error?(e)
 
-      value.strip
+      raise PromptError, "Gumの実行に失敗しました: #{e.message}"
+    end
+
+    def gum_error?(error)
+      @prompt.respond_to?(:const_defined?) && @prompt.const_defined?(:Error) && error.is_a?(@prompt.const_get(:Error))
     end
   end
 end
@@ -420,11 +460,11 @@ module RapidRailsTemplate
       ["--#{id.tr('_', '-')}", [id, allowed]]
     end.freeze
 
-    def self.run(argv, input: $stdin, output: $stdout, error: $stderr, runner_class: Runner)
+    def self.run(argv, output: $stdout, error: $stderr, runner_class: Runner, prompt: nil)
       argument_answers, app_path = parse_arguments(argv)
 
       Environment.validate!
-      questionnaire = Questionnaire.new(input:, output:)
+      questionnaire = Questionnaire.new(prompt: prompt || Environment.gum, output:)
       configuration = Configuration.build(questionnaire.ask_all(argument_answers))
       plan = ExecutionPlan.build(configuration)
       if questionnaire.asked_any?

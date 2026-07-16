@@ -8,6 +8,7 @@ Rapid Rails Templateへのコントリビューションを歓迎します。
 
 ```console
 mise install
+gem install gum -v 0.3.2
 bin/build-bootstrap
 bin/verify-bootstrap
 ruby -Itest -e 'Dir["test/{unit,integration}/**/*_test.rb"].sort.each { |file| require_relative file }'

@@ -6,11 +6,11 @@ module RapidRailsTemplate
       ["--#{id.tr('_', '-')}", [id, allowed]]
     end.freeze
 
-    def self.run(argv, input: $stdin, output: $stdout, error: $stderr, runner_class: Runner)
+    def self.run(argv, output: $stdout, error: $stderr, runner_class: Runner, prompt: nil)
       argument_answers, app_path = parse_arguments(argv)
 
       Environment.validate!
-      questionnaire = Questionnaire.new(input:, output:)
+      questionnaire = Questionnaire.new(prompt: prompt || Environment.gum, output:)
       configuration = Configuration.build(questionnaire.ask_all(argument_answers))
       plan = ExecutionPlan.build(configuration)
       if questionnaire.asked_any?

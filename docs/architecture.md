@@ -45,6 +45,7 @@ docs/
 利用者はリリースされた`bootstrap.rb`をローカルへ取得し、生成先パスを引数としてRubyで実行します。可変なbranchではなく、release tagまたはcommitへ固定されたURLを正式な配布URLとします。
 
 ```console
+gem install gum -v 0.3.2
 curl -fsSL BOOTSTRAP_URL -o /tmp/rapid-rails-bootstrap.rb
 ruby /tmp/rapid-rails-bootstrap.rb APP_PATH
 ```
@@ -70,7 +71,7 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 
 「すべての質問」は、依存条件を満たす適用可能な質問をすべて意味します。たとえばPWAを使わない場合はWeb Pushを質問せず、仕様で定めた`skip`へ正規化します。質問を省略した結果を暗黙に推測せず、必ず明示的な正規化規則を持たせます。
 
-質問中は、生成先directory、一時ファイル、Gemfile、設定ファイル、外部commandのいずれも作成・変更・実行しません。回答が別の質問に影響しても、その場でstepを実行せず、後続質問の表示条件だけを評価します。
+質問中に実行する外部commandは対話UIを提供するGum実行可能ファイルだけです。生成先directory、一時ファイル、Gemfile、設定ファイルは作成・変更せず、generatorや設定commandも実行しません。回答が別の質問に影響しても、その場でstepを実行せず、後続質問の表示条件だけを評価します。
 
 全質問の完了後に、`Auto`値、条件により省略した値、選択肢間の制約を解決します。確認画面には、少なくとも次を表示します。
 
@@ -85,7 +86,7 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 
 ## ランチャーからApplication Templateへの引き継ぎ
 
-`bootstrap.rb`はRuby標準ライブラリだけで起動し、Rails 8.1.xとRuby 4.0.xを検証します。Rails executableはRubyGemsから解決し、shell文字列ではなく引数配列で子プロセスを起動します。
+`bootstrap.rb`はRuby標準ライブラリと、対話UI用に事前導入された`gum` 0.3.2で起動します。Rails 8.1.x、Ruby 4.0.x、gum 0.3.2、gum gemに同梱された現在のplatform向けGum実行可能ファイルを質問開始前に検証します。gumを自動installしたり、標準入力を直接読む代替UIへ切り替えたりしません。Rails executableはRubyGemsから解決し、shell文字列ではなく引数配列で子プロセスを起動します。
 
 確認後は、次の一時ファイルを作成します。
 
@@ -112,7 +113,7 @@ Application Template contextで`configuration.json`を読み込み、schemaと�
 
 ### `questionnaire`
 
-CLI引数の事前回答を受け取り、`rails new`を起動する前に未回答の適用可能な項目だけを対話APIで依存順に収集します。表示条件だけを評価し、正規化、実行計画の構築、step実行は行いません。
+CLI引数の事前回答を受け取り、`rails new`を起動する前に未回答の適用可能な項目だけを`Gum.choose`で依存順に収集します。各質問は既定値を選択済みとして表示し、Gumで選べる値だけを回答として受け取ります。実行計画の最終承認には`Gum.confirm`を使用します。表示条件だけを評価し、正規化、実行計画の構築、step実行は行いません。
 
 ### `configuration`
 
@@ -170,6 +171,8 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未回
 - 承認後に追加質問が行われず、設定と実行計画が変化しないこと。
 - 成功、失敗、割り込みのすべてで一時ファイルが削除されること。
 - Rails 8.1.x／Ruby 4.0.xで一時アプリケーションを生成できること。
+- gum 0.3.2と現在のplatform向けGum実行可能ファイルがない場合、質問開始前に失敗すること。
+- 対話的な選択と最終確認が`Gum.choose`と`Gum.confirm`を通り、キャンセル時に生成を開始しないこと。
 - 生成後にpending migrationが残らず、追加の手作業なしでRails testを起動できること。
 - 各選択肢について、選択したstepだけが順序どおり実行されること。
 

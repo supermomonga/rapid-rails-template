@@ -17,8 +17,8 @@ module RapidRailsTemplate
       Question.new(:deployment, "デプロイ方法を選択してください。", %w[dokploy none], "dokploy", nil)
     ].freeze
 
-    def initialize(input: $stdin, output: $stdout)
-      @input = input
+    def initialize(prompt:, output: $stdout)
+      @prompt = prompt
       @output = output
       @asked_question_ids = []
     end
@@ -43,28 +43,42 @@ module RapidRailsTemplate
 
     def confirm?(summary)
       @output.puts summary
-      @output.print "この内容で実行しますか？ [y/N]: "
-      %w[y yes].include?(read_line.downcase)
+      with_prompt_error do
+        @prompt.confirm(
+          "この内容で実行しますか？",
+          default: false,
+          affirmative: "実行",
+          negative: "中止"
+        )
+      end
     end
 
     private
 
     def ask(question)
-      loop do
-        @output.print "#{question.prompt} (#{question.choices.join('/')}) [#{question.default}]: "
-        answer = read_line
-        answer = question.default if answer.empty?
-        return answer if question.choices.include?(answer)
-
-        @output.puts "無効な値です: #{answer}"
+      answer = with_prompt_error do
+        @prompt.choose(
+          question.choices,
+          header: question.prompt,
+          selected: [question.default]
+        )
       end
+      raise PromptError, "選択がキャンセルされました: #{question.prompt}" if answer.nil?
+      raise PromptError, "選択UIが不正な値を返しました: #{answer}" unless question.choices.include?(answer)
+
+      answer
     end
 
-    def read_line
-      value = @input.gets
-      raise Error, "入力が終了しました" if value.nil?
+    def with_prompt_error
+      yield
+    rescue StandardError => e
+      raise unless gum_error?(e)
 
-      value.strip
+      raise PromptError, "Gumの実行に失敗しました: #{e.message}"
+    end
+
+    def gum_error?(error)
+      @prompt.respond_to?(:const_defined?) && @prompt.const_defined?(:Error) && error.is_a?(@prompt.const_get(:Error))
     end
   end
 end

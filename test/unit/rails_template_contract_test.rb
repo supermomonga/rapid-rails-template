@@ -316,4 +316,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens login, "checkbox"
     assert_class_tokens login, "btn", "btn-block", "btn-rapid"
   end
+
+  def test_wallet_guest_navigation_uses_real_line_breaks
+    guest_navigation = source_between(
+      "  guest_desktop_navigation = if devise",
+      "  profile_identity = if display_name_enabled"
+    )
+
+    assert_equal 4, guest_navigation.scan("<<~ERB").size
+    refute_includes guest_navigation, "\\\\n'"
+  end
 end

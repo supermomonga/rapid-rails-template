@@ -1503,7 +1503,9 @@ def configure_default_views
       <%= link_to "アカウント作成", new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
     ERB
   else
-    '<%= link_to "ログイン", new_session_path, class: "btn btn-ghost btn-rapid" %>\n'
+    <<~ERB
+      <%= link_to "ログイン", new_session_path, class: "btn btn-ghost btn-rapid" %>
+    ERB
   end
   guest_mobile_navigation = if devise
     <<~ERB
@@ -1511,7 +1513,9 @@ def configure_default_views
       <li><%= link_to "アカウント作成", new_user_registration_path %></li>
     ERB
   else
-    '<li><%= link_to "ログイン", new_session_path %></li>\n'
+    <<~ERB
+      <li><%= link_to "ログイン", new_session_path %></li>
+    ERB
   end
   profile_identity = if display_name_enabled || screen_name_enabled
     display_name = if display_name_enabled

@@ -22,6 +22,7 @@ gem "sentry-rails"
 gem "prism"
 
 gem_group :development do
+  gem "annotaterb"
   gem "ruby-lsp", require: false
   gem "ruby-lsp-rails", require: false
   gem "rubocop-rails", require: false
@@ -2559,6 +2560,35 @@ def configure_common_files
   append_to_file "test/test_helper.rb", "\nrequire_relative \"support/factory_bot\"\n"
 end
 
+def configure_annotaterb
+  generate "annotate_rb:install"
+  create_file "test/annotations_test.rb", <<~RUBY, force: true
+    # frozen_string_literal: true
+
+    require "test_helper"
+    require "open3"
+
+    class AnnotationsTest < ActiveSupport::TestCase
+      test "schema annotations are up to date" do
+        stdout, stderr, status = Open3.capture3(
+          { "RAILS_ENV" => "test" },
+          Rails.root.join("bin/annotaterb").to_s,
+          "models",
+          "--frozen"
+        )
+        output = [stdout, stderr].reject(&:empty?).join("\\n")
+
+        assert status.success?, <<~MESSAGE
+          Schema annotations are out of date.
+          Run bin/annotaterb models and commit the updated annotations.
+
+          \#{output}
+        MESSAGE
+      end
+    end
+  RUBY
+end
+
 def configure_database
   databases = {
     "primary" => { "database" => "<%= ENV.fetch(\"DATABASE_PATH\", \"/data/production.sqlite3\") %>" }
@@ -2649,6 +2679,7 @@ after_bundle do
   configure_generator_view_templates
   configure_rubocop
   configure_common_files
+  configure_annotaterb
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
   rails_command "active_storage:install" if VALUES.fetch("profile_features").include?("avatar")
   configure_profile if VALUES.fetch("profile_features").any?
@@ -2658,6 +2689,8 @@ after_bundle do
   install_solid_components
   configure_dokploy if VALUES.fetch("deployment") == "dokploy"
   run_checked "bin/rails db:prepare"
+  run_checked "bundle binstubs annotaterb"
+  run_checked "bin/annotaterb models"
   run_checked "bin/rails tailwindcss:build"
   run_checked "bundle binstubs rubocop"
   run_checked "bin/rubocop -a"

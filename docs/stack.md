@@ -117,17 +117,22 @@ factory_bot_rails
 
 Playwright driverの登録、browser種別、headless設定、Playwright CLIとbrowser binaryの導入方法は、ローカル環境とCIで同じ結果になるよう実装フェーズで固定します。必要な実行ファイルがない場合にSeleniumへ戻すフォールバックは設けません。
 
-## Linter・Formatter・開発支援
+## Schema annotation・Linter・Formatter・開発支援
 
-development groupへ次を`require: false`で追加します。
+development groupへ次を追加します。`annotaterb`はRails generatorから読み込むため通常どおり追加し、それ以外は`require: false`とします。
 
 ```text
+annotaterb
 ruby-lsp
 ruby-lsp-rails
 rubocop-rails
 rubocop-thread_safety
 momocop
 ```
+
+`annotaterb`は公式の`annotate_rb:install` generatorで`.annotaterb.yml`と`lib/tasks/annotate_rb.rake`を生成します。設定は公式既定を使用し、modelに加えて対応するfixture、test、factory、serializerもschema annotationの対象とします。routes annotationは既定どおり無効とします。
+
+すべてのmigrationを適用した後に`bin/annotaterb`を生成して`bin/annotaterb models`を実行し、生成直後のannotationを確定します。以後はdevelopment環境の`bin/rails db:migrate`など、公式hook対象のdatabase task後に自動更新します。通常のRails testには`RAILS_ENV=test bin/annotaterb models --frozen`を実行する検査を含め、annotationの変更が必要な場合はファイルを書き換えずに失敗させます。修正時は`bin/annotaterb models`を実行し、更新されたannotationをcommitします。
 
 Rails標準の`rubocop-rails-omakase`は使用しません。生成後に`bundle remove`するのではなく、`rails new`へ`--skip-rubocop`を渡して最初から生成対象外とし、上記GemをApplication Templateの`gem` APIでbundle install前に宣言します。
 

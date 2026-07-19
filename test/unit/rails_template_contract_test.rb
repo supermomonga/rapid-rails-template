@@ -333,6 +333,28 @@ class RailsTemplateContractTest < Minitest::Test
       :<, after_bundle.index('run_checked "bin/rails tailwindcss:build"')
   end
 
+  def test_installs_annotaterb_and_checks_annotations_in_the_regular_test_suite
+    annotation_test = generated_file_source("test/annotations_test.rb")
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+    development_gems = source_between("gem_group :development do", "gem_group :test do")
+
+    assert_includes development_gems, 'gem "annotaterb"'
+    assert_includes @source, 'generate "annotate_rb:install"'
+    assert_includes after_bundle, "configure_annotaterb"
+    assert_operator after_bundle.index("configure_annotaterb"),
+      :<, after_bundle.index('run_checked "bin/rails db:prepare"')
+    assert_operator after_bundle.index('run_checked "bin/rails db:prepare"'),
+      :<, after_bundle.index('run_checked "bundle binstubs annotaterb"')
+    assert_operator after_bundle.index('run_checked "bundle binstubs annotaterb"'),
+      :<, after_bundle.index('run_checked "bin/annotaterb models"')
+    assert_includes annotation_test, '{ "RAILS_ENV" => "test" }'
+    assert_includes annotation_test, 'Rails.root.join("bin/annotaterb").to_s'
+    assert_includes annotation_test, '"models"'
+    assert_includes annotation_test, '"--frozen"'
+    assert_includes annotation_test, "assert status.success?"
+    assert_includes annotation_test, "Run bin/annotaterb models"
+  end
+
   def test_default_views_follow_the_design_background_breakpoint_and_component_sizing_contracts
     assert_includes @source, 'body class="min-h-screen bg-base-100'
     assert_includes @source, 'main class="flex-1 bg-base-200"'

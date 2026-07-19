@@ -44,7 +44,7 @@ module RapidRailsTemplate
     private
 
     def build_gems
-      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails capybara capybara-playwright-driver factory_bot factory_bot_rails ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
       result << "devise" if configuration["account_authentication"] == "devise"
       result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
@@ -58,7 +58,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_application_gems]
+      result = %w[declare_gems install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack install_annotaterb configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
       result << "install_active_storage" if configuration["profile_features"].include?("avatar")
       result << "configure_profile" if configuration["profile_features"].any?
@@ -70,6 +70,7 @@ module RapidRailsTemplate
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
       result << "configure_dokploy" if configuration["deployment"] == "dokploy"
       result << "prepare_database"
+      result << "annotate_models"
       result << "verify"
       result
     end
@@ -78,6 +79,10 @@ module RapidRailsTemplate
       result = %w[
         package.json
         package-lock.json
+        .annotaterb.yml
+        lib/tasks/annotate_rb.rake
+        bin/annotaterb
+        test/annotations_test.rb
         app/assets/tailwind/application.css
         lib/templates/erb/scaffold/index.html.erb.tt
         lib/templates/erb/scaffold/show.html.erb.tt

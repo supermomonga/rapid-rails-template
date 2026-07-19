@@ -12,6 +12,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "devise"
     assert_includes plan.gems, "haikunator"
     assert_includes plan.gems, "boring_avatars"
+    assert_includes plan.gems, "annotaterb"
     assert_includes plan.steps, "install_daisyui"
     assert_includes plan.steps, "configure_generator_view_templates"
     assert_operator plan.steps.index("install_daisyui"), :<, plan.steps.index("configure_generator_view_templates")
@@ -20,9 +21,17 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.steps, "install_active_storage"
     assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "configure_default_views"
+    assert_includes plan.steps, "install_annotaterb"
+    assert_operator plan.steps.index("install_annotaterb"), :<, plan.steps.index("prepare_database")
     assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("verify")
+    assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("annotate_models")
+    assert_operator plan.steps.index("annotate_models"), :<, plan.steps.index("verify")
     assert_includes plan.artifacts, "package.json"
     assert_includes plan.artifacts, "package-lock.json"
+    assert_includes plan.artifacts, ".annotaterb.yml"
+    assert_includes plan.artifacts, "lib/tasks/annotate_rb.rake"
+    assert_includes plan.artifacts, "bin/annotaterb"
+    assert_includes plan.artifacts, "test/annotations_test.rb"
     assert_includes plan.artifacts, "app/views/layouts/application.html.erb"
     assert_includes plan.artifacts, "lib/templates/erb/scaffold/index.html.erb.tt"
     assert_includes plan.artifacts, "lib/templates/erb/scaffold/_form.html.erb.tt"

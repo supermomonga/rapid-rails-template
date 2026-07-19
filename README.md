@@ -47,7 +47,7 @@ mise run generate-sampleapp
 mise run generate-sampleapp-wallet-siwe
 ```
 
-`--profile-features`は`screen_name`、`display_name`、`avatar`をカンマ区切りで指定します。既定では3機能すべてを選択し、`--profile-features=`と空値を指定するとProfile modelとプロフィール管理画面を生成しません。対話時はGumの複数選択を使用します。`screen_name`と`display_name`は選択時に必須かつ一意となり、User作成時にHaikunatorで自動生成されます。両方を選択した場合、`display_name`には自動生成した`screen_name`のCamelCaseを設定します。
+`--profile-features`は`screen_name`、`display_name`、`avatar`をカンマ区切りで指定します。既定では3機能すべてを選択し、`--profile-features=`と空値を指定するとProfile modelとプロフィール管理画面を生成しません。対話時はGumの複数選択を使用します。`screen_name`と`display_name`は選択時に必須かつ一意となり、User作成時にHaikunatorで自動生成されます。両方を選択した場合、`display_name`には自動生成した`screen_name`のCamelCaseを設定します。`avatar`を選択した場合、画像未設定時はUser IDから決定的に生成したBoring Avatarを表示し、設定済み画像はプロフィール編集画面から削除してBoring Avatarへ戻せます。生成seedを保存する追加columnは作りません。
 
 リポジトリの`mise run generate-sampleapp`はDevise認証、`mise run generate-sampleapp-wallet-siwe`はWallet SIWE認証を指定します。どちらも既存の`sample/`を削除してから、同じ場所へアプリを再生成します。
 

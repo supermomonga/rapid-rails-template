@@ -39,6 +39,7 @@ end
 gem "devise" if VALUES.fetch("account_authentication") == "devise"
 gem "siwe-rb", "~> 0.2.0" if VALUES.fetch("account_authentication") == "wallet_siwe"
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
+gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
 gem "web-push" if VALUES.fetch("web_push") == "use"
 gem "solid_queue" if VALUES.fetch("active_job") == "solid_queue"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
@@ -472,6 +473,7 @@ end
 def configure_profile
   features = VALUES.fetch("profile_features")
   devise = VALUES.fetch("account_authentication") == "devise"
+  avatar_enabled = features.include?("avatar")
   attributes = ["user:references"]
   attributes << "screen_name:string" if features.include?("screen_name")
   attributes << "display_name:string" if features.include?("display_name")
@@ -500,7 +502,7 @@ def configure_profile
   RUBY
 
   model_lines = ["  belongs_to :user"]
-  model_lines << "  has_one_attached :avatar" if features.include?("avatar")
+  model_lines << "  has_one_attached :avatar" if avatar_enabled
   if features.include?("screen_name")
     model_lines << '  validates :screen_name, presence: true, uniqueness: true, format: { with: /\\A[a-z0-9_]+\\z/ }'
   end
@@ -580,6 +582,17 @@ def configure_profile
   profile_owner = devise ? "current_user" : "Current.user"
   authentication = devise ? "  before_action :authenticate_user!\n" : ""
   permitted_features = features.map { |feature| ":#{feature}" }.join(", ")
+  destroy_avatar_action = if avatar_enabled
+    <<~RUBY
+
+        def destroy_avatar
+          #{profile_owner}.profile.avatar.purge if #{profile_owner}.profile.avatar.attached?
+          redirect_to profile_path, notice: I18n.t("profiles.avatar.destroy.notice", locale: :ja), status: :see_other
+        end
+    RUBY
+  else
+    ""
+  end
   create_file "app/controllers/profiles_controller.rb", <<~RUBY, force: true
     class ProfilesController < ApplicationController
       layout "account"
@@ -600,6 +613,7 @@ def configure_profile
           render :edit, status: :unprocessable_content
         end
       end
+    #{destroy_avatar_action}
 
       private
         def profile_params
@@ -608,12 +622,83 @@ def configure_profile
     end
   RUBY
   route "resource :profile, only: %i[show edit update]"
+  route 'delete "profile/avatar", to: "profiles#destroy_avatar", as: :profile_avatar' if avatar_enabled
 
   locale_path = "config/locales/ja.yml"
   locale = File.exist?(locale_path) ? YAML.safe_load_file(locale_path) : {}
   locale["ja"] ||= {}
   locale["ja"]["profiles"] = { "update" => { "notice" => "プロフィールを更新しました" } }
+  if avatar_enabled
+    locale["ja"]["profiles"]["avatar"] = { "destroy" => { "notice" => "アバター画像を削除しました" } }
+  end
   create_file locale_path, YAML.dump(locale, line_width: -1), force: true
+
+  if avatar_enabled
+    create_file "app/helpers/avatar_helper.rb", <<~RUBY, force: true
+      module AvatarHelper
+        BORING_AVATAR_COLORS = %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e].freeze
+
+        def profile_avatar(profile, size:, alt:)
+          if profile.avatar.attached?
+            image_tag profile.avatar, alt: alt, class: "object-cover"
+          else
+            accessibility = alt.present? ? { label: alt } : { hidden: true }
+            boring_avatar(
+              profile.user_id.to_s,
+              variant: :marble,
+              colors: BORING_AVATAR_COLORS,
+              size: size,
+              class: "object-cover",
+              aria: accessibility
+            )
+          end
+        end
+      end
+    RUBY
+
+    create_file "test/helpers/avatar_helper_test.rb", <<~RUBY, force: true
+      require "test_helper"
+      require "stringio"
+
+      class AvatarHelperTest < ActionView::TestCase
+        test "generates the default avatar from the user id and Rapid Rails palette" do
+          profile = profiles(:one)
+          view = ApplicationController.helpers
+          expected = view.boring_avatar(
+            profile.user_id.to_s,
+            variant: :marble,
+            colors: AvatarHelper::BORING_AVATAR_COLORS,
+            size: 64,
+            class: "object-cover",
+            aria: { label: "デフォルトアバター" }
+          )
+
+          actual = profile_avatar(profile, size: 64, alt: "デフォルトアバター")
+
+          assert_equal normalize_boring_avatar_ids(expected), normalize_boring_avatar_ids(actual)
+        end
+
+        test "renders an attached image instead of a Boring Avatar" do
+          profile = profiles(:one)
+          profile.avatar.attach(io: StringIO.new("avatar"), filename: "avatar.png", content_type: "image/png")
+
+          rendered = profile_avatar(profile, size: 64, alt: "現在のアバター")
+
+          assert_includes rendered, "<img"
+          assert_not_includes rendered, "<svg"
+        end
+
+        private
+          def boring_avatar(...)
+            ApplicationController.helpers.boring_avatar(...)
+          end
+
+          def normalize_boring_avatar_ids(svg)
+            svg.gsub(/ba-[0-9a-f]{20}/, "ba-normalized")
+          end
+      end
+    RUBY
+  end
 
   fixture_fields = []
   fixture_fields << "  screen_name: profile_one" if features.include?("screen_name")
@@ -735,7 +820,7 @@ def configure_profile
       </fieldset>
     ERB
   end
-  if features.include?("avatar")
+  if avatar_enabled
     form_fields << <<~ERB
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :avatar, "アバター画像" %></legend>
@@ -764,17 +849,13 @@ def configure_profile
   ERB
 
   profile_rows = []
-  if features.include?("avatar")
+  if avatar_enabled
     profile_rows << <<~ERB
       <li class="list-row">
         <span class="text-sm text-neutral">アバター</span>
-        <div class="avatar avatar-placeholder">
-          <div class="w-16 rounded-full bg-base-200">
-            <% if @profile.avatar.attached? %>
-              <%= image_tag @profile.avatar, alt: "現在のアバター", class: "object-cover" %>
-            <% else %>
-              <span aria-hidden="true">?</span>
-            <% end %>
+        <div class="avatar">
+          <div class="w-16 rounded-full">
+            <%= profile_avatar(@profile, size: 64, alt: "現在のアバター") %>
           </div>
         </div>
       </li>
@@ -797,6 +878,24 @@ def configure_profile
     ERB
   end
   profile_rows = profile_rows.join("\n").lines.map { |line| "        #{line}" }.join
+  avatar_delete_section = if avatar_enabled
+    <<~ERB
+
+      <% if @profile.avatar.attached? %>
+        <section class="card card-border border-error bg-base-100 shadow-none">
+          <div class="card-body">
+            <h2 class="card-title text-base leading-[1.5]">アバター画像の削除</h2>
+            <p class="text-sm text-neutral">設定済みの画像を削除し、IDから生成したアバターへ戻します。</p>
+            <div class="card-actions justify-start">
+              <%= button_to "設定済み画像を削除", profile_avatar_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "設定済みのアバター画像を削除しますか？" } %>
+            </div>
+          </div>
+        </section>
+      <% end %>
+    ERB
+  else
+    ""
+  end
   create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
     <% content_for :title, "プロフィール | Rapid Rails" %>
     <div class="space-y-6">
@@ -830,7 +929,7 @@ def configure_profile
           <%= render "form", profile: @profile %>
         </div>
       </section>
-    </div>
+    #{avatar_delete_section}</div>
   ERB
 end
 
@@ -1682,15 +1781,9 @@ def configure_default_views
   account_menu_trigger = if avatar_enabled
     <<~ERB
       <summary class="btn btn-circle btn-ghost" aria-label="アカウントメニューを開く">
-        <div class="avatar avatar-placeholder">
-          <div class="w-10 rounded-full bg-base-200">
-            <% if #{profile_owner}.avatar.attached? %>
-              <%= image_tag #{profile_owner}.avatar, alt: "アバター", class: "object-cover" %>
-            <% else %>
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              </svg>
-            <% end %>
+        <div class="avatar">
+          <div class="w-10 rounded-full">
+            <%= profile_avatar(#{profile_owner}, size: 40, alt: "") %>
           </div>
         </div>
       </summary>
@@ -2012,7 +2105,12 @@ def configure_default_views
     ""
   end
   profile_trigger_assertion = if avatar_enabled
-    "      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-circle .avatar.avatar-placeholder', count: 1\n"
+    <<~RUBY.lines.map { |line| "      #{line}" }.join
+      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-circle .avatar', count: 1 do
+        assert_select 'svg[width="40"][height="40"][aria-hidden="true"]', count: 1
+      end
+      assert_select 'header .avatar-placeholder', count: 0
+    RUBY
   else
     <<~RUBY.lines.map { |line| "      #{line}" }.join
       assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-ghost', text: 'MENU', count: 1 do
@@ -2044,6 +2142,7 @@ def configure_default_views
     if avatar_enabled
       form_assertions << <<~RUBY
         assert_select 'form[action=?] input.file-input[name="profile[avatar]"][accept="image/*"]', profile_path, count: 1
+        assert_select 'form[action=?]', profile_avatar_path, count: 0
       RUBY
     end
     update_assertion = if screen_name_enabled
@@ -2066,10 +2165,30 @@ def configure_default_views
       assert_response :success
       assert_select '[data-layout="account"] .list > .list-row', count: #{profile_features.length}
       assert_select 'a[href=?]', edit_profile_path, text: 'プロフィールを編集', count: 1
+      #{avatar_enabled ? "assert_select '.list .avatar svg[width=\"64\"][height=\"64\"]', count: 1\n      assert_select '.avatar-placeholder', count: 0" : ""}
 
       get edit_profile_url
       assert_response :success
       #{form_assertions.join}#{update_assertion}
+      #{if avatar_enabled
+          <<~RUBY
+            user.profile.avatar.attach(io: StringIO.new("avatar"), filename: "avatar.png", content_type: "image/png")
+            get edit_profile_url
+            assert_select 'form[action=?][method="post"]', profile_avatar_path, count: 1 do
+              assert_select 'input[name="_method"][value="delete"]', count: 1
+              assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm]', text: '設定済み画像を削除', count: 1
+            end
+
+            delete profile_avatar_url
+            assert_redirected_to profile_url
+            assert_not user.profile.reload.avatar.attached?
+            follow_redirect!
+            assert_select '.alert.alert-success', text: 'アバター画像を削除しました', count: 1
+            assert_select '.list .avatar svg[width="64"][height="64"]', count: 1
+          RUBY
+        else
+          ""
+        end}
     RUBY
   else
     <<~RUBY
@@ -2082,6 +2201,7 @@ def configure_default_views
   default_pages_test = if devise
     <<~RUBY
       require "test_helper"
+      require "stringio"
 
       class DefaultPagesTest < ActionDispatch::IntegrationTest
         include Devise::Test::IntegrationHelpers

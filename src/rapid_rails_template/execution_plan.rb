@@ -48,6 +48,7 @@ module RapidRailsTemplate
       result << "devise" if configuration["account_authentication"] == "devise"
       result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
+      result << "boring_avatars" if configuration["profile_features"].include?("avatar")
       result << "web-push" if configuration["web_push"] == "use"
       result << "solid_queue" if configuration["active_job"] == "solid_queue"
       result << "solid_cache" if configuration["solid_cache"] == "use"
@@ -116,6 +117,12 @@ module RapidRailsTemplate
           app/views/profiles/_form.html.erb
           config/locales/ja.yml
           test/models/profile_test.rb
+        ])
+      end
+      if configuration["profile_features"].include?("avatar")
+        result.concat(%w[
+          app/helpers/avatar_helper.rb
+          test/helpers/avatar_helper_test.rb
         ])
       end
       if configuration["account_authentication"] == "devise"

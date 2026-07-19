@@ -100,7 +100,8 @@ class RailsTemplateContractTest < Minitest::Test
     %w[alert fieldset fieldset-legend input file-input card card-body list list-row avatar btn].each do |component|
       assert class_attributes(profile_configuration).any? { |classes| classes.include?(component) }, "profile: #{component}"
     end
-    views += profile_configuration
+    avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
+    views += profile_configuration.sub(avatar_helper, "")
     %w[navbar menu dropdown avatar hero card fieldset input file-input checkbox btn alert footer badge divider list table].each do |component|
       assert class_attributes(views).any? { |classes| classes.include?(component) }, component
     end
@@ -173,6 +174,8 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_profile_generation_is_conditional_and_uses_selected_features
     controller = generated_file_source("app/controllers/profiles_controller.rb")
+    avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
+    avatar_helper_test = generated_file_source("test/helpers/avatar_helper_test.rb")
     profile_configuration = source_between("def configure_profile", "def configure_api")
 
     assert_includes @source, 'configure_profile if VALUES.fetch("profile_features").any?'
@@ -181,6 +184,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'has_one :profile, dependent: :destroy'
     assert_includes @source, 'after_create :create_profile!'
     assert_includes @source, 'gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?'
+    assert_includes @source, 'gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")'
     assert_includes profile_configuration, 't.string :screen_name, null: false'
     assert_includes profile_configuration, 't.string :display_name, null: false'
     assert_includes profile_configuration, 't.index :screen_name, unique: true'
@@ -199,7 +203,27 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes controller, 'I18n.t("profiles.update.notice", locale: :ja)'
     assert_includes profile_configuration, 'form.file_field :avatar, class: "file-input w-full", accept: "image/*"'
     assert_includes @source, 'route "resource :profile, only: %i[show edit update]"'
+    assert_includes profile_configuration, 'delete "profile/avatar", to: "profiles#destroy_avatar", as: :profile_avatar'
+    assert_includes profile_configuration, "def destroy_avatar"
+    assert_includes profile_configuration, ".profile.avatar.purge if"
+    assert_includes profile_configuration, 'I18n.t("profiles.avatar.destroy.notice", locale: :ja)'
+    assert_includes profile_configuration, "アバター画像を削除しました".b
+    assert_includes avatar_helper, "BORING_AVATAR_COLORS = %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e].freeze"
+    assert_includes avatar_helper, "profile.user_id.to_s"
+    assert_includes avatar_helper, "variant: :marble"
+    assert_includes avatar_helper, "image_tag profile.avatar"
+    assert_includes avatar_helper_test, "profile.user_id.to_s"
+    assert_includes avatar_helper_test, "normalize_boring_avatar_ids"
+    refute_includes profile_configuration, "boring_avatar_seed"
     assert_includes @source, 'assert_equal user.profile.screen_name.camelize, user.profile.display_name'
+  end
+
+  def test_boring_avatar_palette_matches_the_rapid_rails_theme
+    helper = generated_file_source("app/helpers/avatar_helper.rb")
+    palette = helper[/BORING_AVATAR_COLORS = %w\[(.*?)\]/, 1].split
+
+    assert_equal %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e], palette
+    palette.each { |color| assert_match(/--color-[^:]+: #{Regexp.escape(color)};/, @source) }
   end
 
   def test_api_credentials_use_digest_authentication_owner_scopes_and_one_time_secret_views
@@ -285,7 +309,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens header, "dropdown", "dropdown-end", "dropdown-hover"
     assert_class_tokens header, "menu", "menu-sm", "dropdown-content"
     assert_class_tokens header, "btn", "btn-ghost"
-    assert_class_tokens @source, "avatar", "avatar-placeholder"
+    assert_class_tokens @source, "avatar"
+    refute class_attributes(@source).any? { |classes| classes.include?("avatar-placeholder") }
     mobile_menu_classes = class_attributes(header).find { |classes| classes.include?("dropdown-content") }
     refute_nil mobile_menu_classes
     refute mobile_menu_classes.any? { |token| token.match?(/\Ap(?:[trblxy])?-/) }, mobile_menu_classes.inspect

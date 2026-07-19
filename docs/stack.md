@@ -24,6 +24,7 @@
 | 認可 | `action_policy` | authorization policyの標準実装とする |
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
 | Profile名生成 | `haikunator` | `screen_name`または`display_name`を選択した場合だけUser作成時の既定値生成に使用する |
+| 既定アバター生成 | `boring_avatars ~> 0.1.0` | `avatar`を選択した場合だけUser IDから決定的なSVGを生成する |
 
 Rails 8.1では、SQLite、Puma、Propshaft、Importmap、Turbo、Stimulus、Minitestが標準構成に含まれます。これらをGemfileへ重複追加せず、対象の`rails new`オプションと生成結果を検証します。Tailwind CSSは`--css=tailwind`を指定し、Railsが提供する`tailwindcss:install`処理を利用します。
 
@@ -64,7 +65,8 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 
 - `/`は認証方式にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
-- `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。`avatar`選択時だけActive Storageをinstallする。
+- `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。`avatar`選択時だけBoring AvatarsとActive Storageを導入する。
+- 画像未設定時はUser IDの文字列表現から`marble` variantのBoring Avatarを生成し、themeのprimary、secondary、success、warning、errorに対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
 - login、account登録、password再設定はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。
@@ -99,6 +101,8 @@ sentry-rails
 SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジトリへ埋め込みません。設定方法は実装フェーズで別途定義します。
 
 `haikunator`は`screen_name`または`display_name`が選択された場合だけapplication Gemとして追加します。`screen_name`は`Haikunator.haikunate(9999, "_")`の候補から既存値と衝突しない値を採用します。`display_name`だけを選択した場合は`Haikunator.haikunate`の候補から既存値と衝突しない値を採用し、両方を選択した場合は一意な`screen_name`候補のCamelCaseも未使用であることを確認して同時に設定します。model validationに加えてdatabaseの`NOT NULL`制約とunique indexで不変条件を保証します。
+
+`boring_avatars`は`avatar`選択時だけRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。theme色はserver-side generatorが要求する16進色の定数として一元化し、CSS themeとの一致を契約テストで保証します。
 
 ## テスト用Gem
 

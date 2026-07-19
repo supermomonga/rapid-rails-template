@@ -58,11 +58,11 @@ CLI引数で指定された個別設定を事前回答とし、依存順に未�
 
 Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。
 
-`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。
+`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。`avatar`が選択されている場合だけ`boring_avatars ~> 0.1.0`をRails binding付きで宣言し、画像未設定時のSVG生成に使用します。
 
 ### `post_bundle`
 
-認証、選択済みProfile feature、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。`avatar`選択時だけ`active_storage:install`を実行します。生成直後のdevelopmentとtestにpending migrationを残しません。
+認証、選択済みProfile feature、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。`avatar`選択時だけ`active_storage:install`を実行し、User IDをseedにする共通avatar helperと設定済み画像の削除routeを生成します。seed保存用migrationは作成しません。生成直後のdevelopmentとtestにpending migrationを残しません。
 
 依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account layoutと標準ページを生成し、Tailwind CSSをbuildします。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
 

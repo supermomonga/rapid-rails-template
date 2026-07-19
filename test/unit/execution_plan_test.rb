@@ -11,6 +11,7 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.gems, "solid_cable"
     assert_includes plan.gems, "devise"
     assert_includes plan.gems, "haikunator"
+    assert_includes plan.gems, "boring_avatars"
     assert_includes plan.steps, "install_daisyui"
     assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "install_active_storage"
@@ -27,6 +28,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/models/profile.rb"
     assert_includes plan.artifacts, "app/controllers/profiles_controller.rb"
     assert_includes plan.artifacts, "app/views/profiles/edit.html.erb"
+    assert_includes plan.artifacts, "app/helpers/avatar_helper.rb"
+    assert_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
     assert_includes plan.artifacts, "app/models/api_credential.rb"
     assert_includes plan.artifacts, "app/controllers/api/api_controller.rb"
     assert_includes plan.artifacts, "app/javascript/controllers/clipboard_controller.js"
@@ -51,9 +54,12 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.steps, "install_active_storage"
     refute_includes plan.steps, "configure_profile"
     refute_includes plan.gems, "haikunator"
+    refute_includes plan.gems, "boring_avatars"
     refute_includes plan.artifacts, "app/models/profile.rb"
     refute_includes plan.artifacts, "app/controllers/profiles_controller.rb"
     refute_includes plan.artifacts, "app/views/profiles/edit.html.erb"
+    refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
+    refute_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
   end
 
   def test_profile_without_avatar_does_not_install_active_storage
@@ -63,6 +69,8 @@ class ExecutionPlanTest < Minitest::Test
 
     assert_includes plan.steps, "configure_profile"
     refute_includes plan.steps, "install_active_storage"
+    refute_includes plan.gems, "boring_avatars"
+    refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
   end
 
   def test_avatar_only_profile_does_not_install_haikunator
@@ -71,7 +79,10 @@ class ExecutionPlanTest < Minitest::Test
     )
 
     assert_includes plan.steps, "configure_profile"
+    assert_includes plan.gems, "boring_avatars"
     refute_includes plan.gems, "haikunator"
+    assert_includes plan.artifacts, "app/helpers/avatar_helper.rb"
+    assert_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
   end
 
   def test_wallet_plan_uses_siwe_and_not_devise

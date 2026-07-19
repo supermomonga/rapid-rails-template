@@ -23,6 +23,7 @@
 | active link | `active_link_to` | 現在ページに応じたリンク表示に使用する |
 | 認可 | `action_policy` | authorization policyの標準実装とする |
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
+| Profile名生成 | `haikunator` | `screen_name`または`display_name`を選択した場合だけUser作成時の既定値生成に使用する |
 
 Rails 8.1では、SQLite、Puma、Propshaft、Importmap、Turbo、Stimulus、Minitestが標準構成に含まれます。これらをGemfileへ重複追加せず、対象の`rails new`オプションと生成結果を検証します。Tailwind CSSは`--css=tailwind`を指定し、Railsが提供する`tailwindcss:install`処理を利用します。
 
@@ -64,6 +65,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - `/`は認証方式にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
 - `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。`avatar`選択時だけActive Storageをinstallする。
+- `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
 - login、account登録、password再設定はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。
 - Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。
@@ -95,6 +97,8 @@ sentry-rails
 ```
 
 SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジトリへ埋め込みません。設定方法は実装フェーズで別途定義します。
+
+`haikunator`は`screen_name`または`display_name`が選択された場合だけapplication Gemとして追加します。`screen_name`は`Haikunator.haikunate(9999, "_")`の候補から既存値と衝突しない値を採用します。`display_name`だけを選択した場合は`Haikunator.haikunate`の候補から既存値と衝突しない値を採用し、両方を選択した場合は一意な`screen_name`候補のCamelCaseも未使用であることを確認して同時に設定します。model validationに加えてdatabaseの`NOT NULL`制約とunique indexで不変条件を保証します。
 
 ## テスト用Gem
 

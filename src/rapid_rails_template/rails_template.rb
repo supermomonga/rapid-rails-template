@@ -38,6 +38,7 @@ end
 
 gem "devise" if VALUES.fetch("account_authentication") == "devise"
 gem "siwe-rb", "~> 0.2.0" if VALUES.fetch("account_authentication") == "wallet_siwe"
+gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "web-push" if VALUES.fetch("web_push") == "use"
 gem "solid_queue" if VALUES.fetch("active_job") == "solid_queue"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
@@ -480,14 +481,18 @@ def configure_profile
   raise "CreateProfiles migrationが一意ではありません" unless migration.one?
 
   columns = []
-  columns << "      t.string :screen_name" if features.include?("screen_name")
-  columns << "      t.string :display_name" if features.include?("display_name")
+  columns << "      t.string :screen_name, null: false" if features.include?("screen_name")
+  columns << "      t.string :display_name, null: false" if features.include?("display_name")
+  indexes = []
+  indexes << "      t.index :screen_name, unique: true" if features.include?("screen_name")
+  indexes << "      t.index :display_name, unique: true" if features.include?("display_name")
   create_file migration.first, <<~RUBY, force: true
     class CreateProfiles < ActiveRecord::Migration[8.1]
       def change
         create_table :profiles do |t|
           t.references :user, null: false, foreign_key: true, index: { unique: true }
     #{columns.join("\n")}
+    #{indexes.join("\n")}
           t.timestamps
         end
       end
@@ -497,11 +502,72 @@ def configure_profile
   model_lines = ["  belongs_to :user"]
   model_lines << "  has_one_attached :avatar" if features.include?("avatar")
   if features.include?("screen_name")
-    model_lines << '  validates :screen_name, format: { with: /\\A[a-z0-9_]+\\z/ }, allow_blank: true'
+    model_lines << '  validates :screen_name, presence: true, uniqueness: true, format: { with: /\\A[a-z0-9_]+\\z/ }'
+  end
+  model_lines << "  validates :display_name, presence: true, uniqueness: true" if features.include?("display_name")
+
+  generated_name_methods = if features.include?("screen_name") && features.include?("display_name")
+    <<~RUBY
+
+      before_validation :assign_generated_names, on: :create
+
+      private
+        def assign_generated_names
+          self.screen_name = generate_unique_screen_name if screen_name.blank?
+          self.display_name = screen_name.camelize if display_name.blank?
+        end
+
+        def generate_unique_screen_name
+          loop do
+            candidate = Haikunator.haikunate(9999, "_")
+            next if self.class.exists?(screen_name: candidate)
+            next if self.class.exists?(display_name: candidate.camelize)
+
+            return candidate
+          end
+        end
+    RUBY
+  elsif features.include?("screen_name")
+    <<~RUBY
+
+      before_validation :assign_generated_screen_name, on: :create
+
+      private
+        def assign_generated_screen_name
+          self.screen_name = generate_unique_screen_name if screen_name.blank?
+        end
+
+        def generate_unique_screen_name
+          loop do
+            candidate = Haikunator.haikunate(9999, "_")
+            return candidate unless self.class.exists?(screen_name: candidate)
+          end
+        end
+    RUBY
+  elsif features.include?("display_name")
+    <<~RUBY
+
+      before_validation :assign_generated_display_name, on: :create
+
+      private
+        def assign_generated_display_name
+          self.display_name = generate_unique_display_name if display_name.blank?
+        end
+
+        def generate_unique_display_name
+          loop do
+            candidate = Haikunator.haikunate
+            return candidate unless self.class.exists?(display_name: candidate)
+          end
+        end
+    RUBY
+  else
+    ""
   end
   create_file "app/models/profile.rb", <<~RUBY, force: true
     class Profile < ApplicationRecord
     #{model_lines.join("\n")}
+    #{generated_name_methods}
     end
   RUBY
 
@@ -565,8 +631,9 @@ def configure_profile
     #{second_fixture_fields.join("\n")}
   YAML
 
-  profile_test_body = if features.include?("screen_name")
-    <<~RUBY
+  profile_tests = []
+  if features.include?("screen_name")
+    profile_tests << <<~RUBY
       test "screen_name only accepts lowercase alphanumeric characters and underscores" do
         profile = profiles(:one)
         profile.screen_name = "Invalid-Name"
@@ -574,9 +641,70 @@ def configure_profile
         assert_not profile.valid?
         assert_includes profile.errors[:screen_name], "is invalid"
       end
+
+      test "screen_name is required and unique" do
+        profile = profiles(:two)
+        profile.screen_name = nil
+
+        assert_not profile.valid?
+        assert_includes profile.errors[:screen_name], "can't be blank"
+
+        profile.screen_name = profiles(:one).screen_name
+
+        assert_not profile.valid?
+        assert_includes profile.errors[:screen_name], "has already been taken"
+      end
+    RUBY
+  end
+  if features.include?("display_name")
+    profile_tests << <<~RUBY
+      test "display_name is required and unique" do
+        profile = profiles(:two)
+        profile.display_name = nil
+
+        assert_not profile.valid?
+        assert_includes profile.errors[:display_name], "can't be blank"
+
+        profile.display_name = profiles(:one).display_name
+
+        assert_not profile.valid?
+        assert_includes profile.errors[:display_name], "has already been taken"
+      end
+    RUBY
+  end
+  if features.include?("screen_name") && features.include?("display_name")
+    profile_tests << <<~RUBY
+      test "generates display_name from the CamelCase screen_name" do
+        profile = Profile.new(user: users(:one))
+
+        assert profile.valid?
+
+        assert_match(/\\A[a-z0-9_]+\\z/, profile.screen_name)
+        assert_equal profile.screen_name.camelize, profile.display_name
+      end
+    RUBY
+  elsif features.include?("screen_name")
+    profile_tests << <<~RUBY
+      test "generates screen_name with Haikunator" do
+        profile = Profile.new(user: users(:one))
+
+        assert profile.valid?
+
+        assert_match(/\\A[a-z0-9_]+\\z/, profile.screen_name)
+      end
+    RUBY
+  elsif features.include?("display_name")
+    profile_tests << <<~RUBY
+      test "generates display_name with Haikunator" do
+        profile = Profile.new(user: users(:one))
+
+        assert profile.valid?
+
+        assert_predicate profile.display_name, :present?
+      end
     RUBY
   else
-    <<~RUBY
+    profile_tests << <<~RUBY
       test "belongs to one user" do
         assert_equal users(:one), profiles(:one).user
       end
@@ -586,7 +714,7 @@ def configure_profile
     require "test_helper"
 
     class ProfileTest < ActiveSupport::TestCase
-    #{profile_test_body}end
+    #{profile_tests.join("\n")}end
   RUBY
 
   form_fields = []
@@ -594,7 +722,7 @@ def configure_profile
     form_fields << <<~ERB
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :screen_name, "スクリーンネーム" %></legend>
-        <%= form.text_field :screen_name, class: "input input-rapid w-full", pattern: "[a-z0-9_]+", autocomplete: "username" %>
+        <%= form.text_field :screen_name, class: "input input-rapid w-full", pattern: "[a-z0-9_]+", autocomplete: "username", required: true %>
         <p class="label">小文字の英数字とアンダースコアが使えます。</p>
       </fieldset>
     ERB
@@ -603,7 +731,7 @@ def configure_profile
     form_fields << <<~ERB
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :display_name, "表示名" %></legend>
-        <%= form.text_field :display_name, class: "input input-rapid w-full", autocomplete: "name" %>
+        <%= form.text_field :display_name, class: "input input-rapid w-full", autocomplete: "name", required: true %>
       </fieldset>
     ERB
   end
@@ -1855,6 +1983,26 @@ def configure_default_views
     ERB
   end
 
+  generated_profile_assertion = if display_name_enabled && screen_name_enabled
+    <<~RUBY
+      assert_predicate user.profile, :persisted?
+      assert_match(/\\A[a-z0-9_]+\\z/, user.profile.screen_name)
+      assert_equal user.profile.screen_name.camelize, user.profile.display_name
+    RUBY
+  elsif screen_name_enabled
+    <<~RUBY
+      assert_predicate user.profile, :persisted?
+      assert_match(/\\A[a-z0-9_]+\\z/, user.profile.screen_name)
+    RUBY
+  elsif display_name_enabled
+    <<~RUBY
+      assert_predicate user.profile, :persisted?
+      assert_predicate user.profile.display_name, :present?
+    RUBY
+  else
+    ""
+  end
+  generated_profile_assertion = generated_profile_assertion.lines.map { |line| "      #{line}" }.join
   profile_setup = if display_name_enabled || screen_name_enabled
     attributes = []
     attributes << 'screen_name: "sample_user"' if screen_name_enabled
@@ -1973,7 +2121,7 @@ def configure_default_views
           assert_redirected_to new_user_session_url
 
           user = User.create!(email: "sample@example.com", password: "password123", password_confirmation: "password123")
-    #{profile_setup}      sign_in user
+    #{generated_profile_assertion}#{profile_setup}      sign_in user
           get account_url
           assert_response :success
           assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1

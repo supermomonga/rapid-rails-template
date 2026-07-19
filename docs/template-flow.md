@@ -58,6 +58,8 @@ CLI引数で指定された個別設定を事前回答とし、依存順に未�
 
 Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。
 
+`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。
+
 ### `post_bundle`
 
 認証、選択済みProfile feature、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。`avatar`選択時だけ`active_storage:install`を実行します。生成直後のdevelopmentとtestにpending migrationを残しません。

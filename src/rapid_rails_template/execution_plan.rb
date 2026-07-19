@@ -47,6 +47,7 @@ module RapidRailsTemplate
       result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails capybara capybara-playwright-driver factory_bot factory_bot_rails ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
       result << "devise" if configuration["account_authentication"] == "devise"
       result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
+      result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
       result << "web-push" if configuration["web_push"] == "use"
       result << "solid_queue" if configuration["active_job"] == "solid_queue"
       result << "solid_cache" if configuration["solid_cache"] == "use"

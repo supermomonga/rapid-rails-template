@@ -10,6 +10,7 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.gems, "solid_queue"
     refute_includes plan.gems, "solid_cable"
     assert_includes plan.gems, "devise"
+    assert_includes plan.gems, "haikunator"
     assert_includes plan.steps, "install_daisyui"
     assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "install_active_storage"
@@ -49,6 +50,7 @@ class ExecutionPlanTest < Minitest::Test
 
     refute_includes plan.steps, "install_active_storage"
     refute_includes plan.steps, "configure_profile"
+    refute_includes plan.gems, "haikunator"
     refute_includes plan.artifacts, "app/models/profile.rb"
     refute_includes plan.artifacts, "app/controllers/profiles_controller.rb"
     refute_includes plan.artifacts, "app/views/profiles/edit.html.erb"
@@ -61,6 +63,15 @@ class ExecutionPlanTest < Minitest::Test
 
     assert_includes plan.steps, "configure_profile"
     refute_includes plan.steps, "install_active_storage"
+  end
+
+  def test_avatar_only_profile_does_not_install_haikunator
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build("profile_features" => %w[avatar])
+    )
+
+    assert_includes plan.steps, "configure_profile"
+    refute_includes plan.gems, "haikunator"
   end
 
   def test_wallet_plan_uses_siwe_and_not_devise

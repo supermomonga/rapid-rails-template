@@ -132,7 +132,9 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 対話UIは`Gum.choose(..., no_limit: true)`を使用し、3項目を選択済みとして表示します。何も選択しない回答は有効です。CLIではカンマ区切りで指定し、`--profile-features=`を何も選択しない回答として扱います。未知の値、重複値、空要素を含む値は生成開始前に拒否します。
 
-1つ以上を選択した場合だけ、Userと1対1のProfile model、表示画面、編集画面、更新処理、account navigationの「プロフィール」を生成します。ProfileはUser作成時に同時作成し、User削除時に従属削除します。`screen_name`は小文字の英数字とアンダースコアだけを許可し、`display_name`は公開表示名として扱います。
+1つ以上を選択した場合だけ、Userと1対1のProfile model、表示画面、編集画面、更新処理、account navigationの「プロフィール」を生成します。ProfileはUser作成時に同時作成し、User削除時に従属削除します。
+
+`screen_name`を選択した場合はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`を選択した場合もUser作成時にHaikunator由来の値を自動生成し、必須かつ一意な公開表示名として扱います。両方を選択した場合は、先に一意な`screen_name`を生成し、その値をCamelCaseへ変換した同一由来の値を`display_name`に設定します。databaseには各選択済みcolumnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
 
 `avatar`を選択した場合だけ`active_storage:install`を実行し、Profileへ`has_one_attached :avatar`を追加します。認証後のheader menu triggerはアバター画像（未設定時はavatar placeholder）とし、クリックとhoverの両方で展開します。`avatar`を選択しない場合はHeroiconsの`bars-3`と`MENU` textをtriggerにします。展開内容は、選択済みなら`display_name`と`screen_name`、account navigationと同じ項目群、ログアウトの順です。
 

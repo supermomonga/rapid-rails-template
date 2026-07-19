@@ -13,6 +13,9 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "haikunator"
     assert_includes plan.gems, "boring_avatars"
     assert_includes plan.steps, "install_daisyui"
+    assert_includes plan.steps, "configure_generator_view_templates"
+    assert_operator plan.steps.index("install_daisyui"), :<, plan.steps.index("configure_generator_view_templates")
+    assert_operator plan.steps.index("configure_generator_view_templates"), :<, plan.steps.index("configure_default_views")
     assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "install_active_storage"
     assert_includes plan.steps, "configure_profile"
@@ -21,6 +24,9 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "package.json"
     assert_includes plan.artifacts, "package-lock.json"
     assert_includes plan.artifacts, "app/views/layouts/application.html.erb"
+    assert_includes plan.artifacts, "lib/templates/erb/scaffold/index.html.erb.tt"
+    assert_includes plan.artifacts, "lib/templates/erb/scaffold/_form.html.erb.tt"
+    assert_includes plan.artifacts, "lib/templates/erb/controller/view.html.erb.tt"
     assert_includes plan.artifacts, "app/views/layouts/authentication.html.erb"
     assert_includes plan.artifacts, "app/views/layouts/account.html.erb"
     assert_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"

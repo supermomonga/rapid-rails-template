@@ -64,7 +64,7 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 認証、選択済みProfile feature、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。`avatar`選択時だけ`active_storage:install`を実行し、User IDをseedにする共通avatar helperと設定済み画像の削除routeを生成します。seed保存用migrationは作成しません。生成直後のdevelopmentとtestにpending migrationを残しません。
 
-依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account layoutと標準ページを生成し、Tailwind CSSをbuildします。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
+依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。続けてRails 8.1.3の標準templateを基準とするscaffold 6 Viewとcontroller Viewの上書きtemplateを`lib/templates/erb`へ配置し、以後の`bin/rails generate scaffold`と`bin/rails generate controller`がdaisyUI componentを使用するようにします。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account layoutと標準ページを生成し、Tailwind CSSをbuildします。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
 
 ### `verify`
 

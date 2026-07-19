@@ -111,6 +111,63 @@ class RailsTemplateContractTest < Minitest::Test
     refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, views)
   end
 
+  def test_generator_view_overrides_preserve_rails_contracts_and_use_daisyui_components
+    paths = %w[
+      lib/templates/erb/scaffold/index.html.erb.tt
+      lib/templates/erb/scaffold/show.html.erb.tt
+      lib/templates/erb/scaffold/new.html.erb.tt
+      lib/templates/erb/scaffold/edit.html.erb.tt
+      lib/templates/erb/scaffold/_form.html.erb.tt
+      lib/templates/erb/scaffold/partial.html.erb.tt
+      lib/templates/erb/controller/view.html.erb.tt
+    ]
+    templates = paths.to_h { |path| [path, generated_file_source(path)] }
+    combined = templates.values.join("\n")
+    form = templates.fetch("lib/templates/erb/scaffold/_form.html.erb.tt")
+    index = templates.fetch("lib/templates/erb/scaffold/index.html.erb.tt")
+    show = templates.fetch("lib/templates/erb/scaffold/show.html.erb.tt")
+    partial = templates.fetch("lib/templates/erb/scaffold/partial.html.erb.tt")
+    controller = templates.fetch("lib/templates/erb/controller/view.html.erb.tt")
+
+    assert_equal paths.sort, @source.scan(/create_file "(lib\/templates\/erb\/[^"]+)"/).flatten.sort
+    assert_includes @source, "configure_generator_view_templates\n  configure_rubocop"
+    assert_includes form, "<%%= form_with(model: <%= model_resource_name %>"
+    assert_includes form, "attributes.each do |attribute|"
+    assert_includes form, "attribute.password_digest?"
+    assert_includes form, "attribute.attachments?"
+    assert_includes form, 'when :textarea, :rich_textarea then "textarea w-full"'
+    assert_includes form, 'when :file_field then "file-input w-full"'
+    assert_includes form, 'else "input input-rapid w-full"'
+    assert_includes form, 'class: "checkbox"'
+    assert_class_tokens(form, "alert", "alert-error")
+    assert_class_tokens(form, "fieldset")
+    assert_class_tokens(form, "fieldset-legend")
+    assert_class_tokens(form, "btn", "btn-primary", "btn-rapid")
+
+    assert_class_tokens(index, "table", "table-sm", "table-pin-rows")
+    assert_class_tokens(index, "overflow-x-auto")
+    assert_includes index, "<%%= dom_id <%= singular_table_name %> %>"
+    assert_includes index, "attribute.attachment?"
+    assert_includes index, "attribute.attachments?"
+    assert_includes index, "model_resource_name(singular_table_name)"
+    refute_includes index, "notice"
+
+    assert_class_tokens(show, "card", "card-border")
+    assert_includes show, 'method: :delete, class: "btn btn-outline btn-error btn-rapid"'
+    assert_class_tokens(partial, "list")
+    assert_class_tokens(partial, "list-row")
+    assert_includes partial, "<%%= dom_id <%= singular_name %> %>"
+    assert_class_tokens(controller, "card", "card-border")
+    assert_includes controller, "<%= class_name %>#<%= @action %>"
+    assert_includes controller, "Find me in <%= @path %>"
+
+    refute_match(/style\s*=/, combined)
+    refute_match(/(?:bg|text|border)-(?:blue|gray|slate|red|green|yellow)-\d+/, combined)
+    refute_includes combined, "dark:"
+    refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, combined)
+    refute_match(/\bmin-h-\d+/, combined)
+  end
+
   def test_devise_fixtures_satisfy_the_generated_unique_email_constraint
     assert_includes @source, 'email: one@example.com'
     assert_includes @source, 'email: two@example.com'

@@ -59,6 +59,8 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 
 Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`、guest向けdesktopの`button`群、guest向けmobileと認証後の`dropdown` + `menu dropdown-content`、footerは内側幅をheaderと共有する`footer`、homeの導入部は`hero`、情報ブロックは`card`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`file-input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
 
+Rails 8.1.3の`bin/rails app:templates:copy`で取得した標準ERB templateを基準に、`generate scaffold`用の6 Viewと`generate controller NAME ACTION`用のViewをdaisyUI向けに上書きします。生成アプリケーションの`lib/templates/erb/scaffold`と`lib/templates/erb/controller`へ変更したtemplateだけを配置し、mailerやRuby generator templateの未変更copyは配置しません。scaffoldの一覧は`table table-sm table-pin-rows`を`overflow-x-auto`で囲み、詳細・編集画面は`card`、属性表示は`list`、formは属性型に対応する`input`、`textarea`、`file-input`、`checkbox`を使用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。
+
 account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownも同じ項目群を使用します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。

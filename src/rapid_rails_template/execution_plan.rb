@@ -58,7 +58,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_daisyui configure_rubocop configure_test_stack configure_application_gems]
+      result = %w[declare_gems install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
       result << "install_active_storage" if configuration["profile_features"].include?("avatar")
       result << "configure_profile" if configuration["profile_features"].any?
@@ -79,6 +79,13 @@ module RapidRailsTemplate
         package.json
         package-lock.json
         app/assets/tailwind/application.css
+        lib/templates/erb/scaffold/index.html.erb.tt
+        lib/templates/erb/scaffold/show.html.erb.tt
+        lib/templates/erb/scaffold/new.html.erb.tt
+        lib/templates/erb/scaffold/edit.html.erb.tt
+        lib/templates/erb/scaffold/_form.html.erb.tt
+        lib/templates/erb/scaffold/partial.html.erb.tt
+        lib/templates/erb/controller/view.html.erb.tt
         app/controllers/home_controller.rb
         app/controllers/accounts_controller.rb
         app/views/layouts/application.html.erb

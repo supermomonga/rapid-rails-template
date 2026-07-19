@@ -190,6 +190,207 @@ def install_daisyui
   append_to_file ".gitignore", "\n/node_modules\n" unless File.read(".gitignore").lines.map(&:strip).include?("/node_modules")
 end
 
+def configure_generator_view_templates
+  create_file "lib/templates/erb/scaffold/_form.html.erb.tt", <<~ERB, force: true
+    <%%= form_with(model: <%= model_resource_name %>, class: "space-y-5") do |form| %>
+      <%% if <%= singular_table_name %>.errors.any? %>
+        <div class="alert alert-error" role="alert">
+          <div>
+            <h2 class="font-semibold leading-[1.5]"><%%= pluralize(<%= singular_table_name %>.errors.count, "error") %> prohibited this <%= singular_table_name %> from being saved:</h2>
+            <ul class="mt-2 list-disc pl-5">
+              <%% <%= singular_table_name %>.errors.each do |error| %>
+                <li><%%= error.full_message %></li>
+              <%% end %>
+            </ul>
+          </div>
+        </div>
+      <%% end %>
+
+    <% attributes.each do |attribute| -%>
+    <% if attribute.password_digest? -%>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%%= form.label :password %></legend>
+        <%%= form.password_field :password, class: "input input-rapid w-full" %>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%%= form.label :password_confirmation %></legend>
+        <%%= form.password_field :password_confirmation, class: "input input-rapid w-full" %>
+      </fieldset>
+    <% elsif attribute.field_type == :checkbox -%>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= attribute.human_name %></legend>
+        <label class="label cursor-pointer justify-start gap-3">
+          <%%= form.checkbox :<%= attribute.column_name %>, class: "checkbox" %>
+          <span><%= attribute.human_name %></span>
+        </label>
+      </fieldset>
+    <% else -%>
+    <% field_class = case attribute.field_type
+       when :textarea, :rich_textarea then "textarea w-full"
+       when :file_field then "file-input w-full"
+       else "input input-rapid w-full"
+       end -%>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%%= form.label :<%= attribute.column_name %> %></legend>
+    <% if attribute.attachments? -%>
+        <%%= form.<%= attribute.field_type %> :<%= attribute.column_name %>, multiple: true, class: "<%= field_class %>" %>
+    <% else -%>
+        <%%= form.<%= attribute.field_type %> :<%= attribute.column_name %>, class: "<%= field_class %>" %>
+    <% end -%>
+      </fieldset>
+
+    <% end -%>
+    <% end -%>
+      <div class="flex justify-end">
+        <%%= form.submit class: "btn btn-primary btn-rapid" %>
+      </div>
+    <%% end %>
+  ERB
+
+  create_file "lib/templates/erb/scaffold/index.html.erb.tt", <<~ERB, force: true
+    <%% content_for :title, "<%= human_name.pluralize %>" %>
+
+    <div class="mx-auto w-full max-w-6xl space-y-6 px-5 py-10 md:py-14">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <h1 class="text-2xl font-bold leading-[1.5]"><%= human_name.pluralize %></h1>
+        <%%= link_to "New <%= human_name.downcase %>", <%= new_helper(type: :path) %>, class: "btn btn-primary btn-rapid" %>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <div class="overflow-x-auto">
+            <table class="table table-sm table-pin-rows">
+              <thead>
+                <tr>
+    <% attributes.reject(&:password_digest?).each do |attribute| -%>
+                  <th scope="col"><%= attribute.human_name %></th>
+    <% end -%>
+                  <th scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="<%= plural_table_name %>">
+                <%% @<%= plural_table_name %>.each do |<%= singular_table_name %>| %>
+                  <tr id="<%%= dom_id <%= singular_table_name %> %>">
+    <% attributes.reject(&:password_digest?).each do |attribute| -%>
+                    <td>
+    <% if attribute.attachment? -%>
+                      <%%= link_to <%= singular_table_name %>.<%= attribute.column_name %>.filename, <%= singular_table_name %>.<%= attribute.column_name %> if <%= singular_table_name %>.<%= attribute.column_name %>.attached? %>
+    <% elsif attribute.attachments? -%>
+                      <%% <%= singular_table_name %>.<%= attribute.column_name %>.each do |<%= attribute.singular_name %>| %>
+                        <div><%%= link_to <%= attribute.singular_name %>.filename, <%= attribute.singular_name %> %></div>
+                      <%% end %>
+    <% else -%>
+                      <%%= <%= singular_table_name %>.<%= attribute.column_name %> %>
+    <% end -%>
+                    </td>
+    <% end -%>
+                    <td class="text-right">
+                      <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(singular_table_name) %>, class: "btn btn-rapid" %>
+                    </td>
+                  </tr>
+                <%% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "lib/templates/erb/scaffold/partial.html.erb.tt", <<~ERB, force: true
+    <div id="<%%= dom_id <%= singular_name %> %>">
+      <ul class="list">
+    <% attributes.reject(&:password_digest?).each do |attribute| -%>
+        <li class="list-row">
+          <span class="text-sm text-neutral"><%= attribute.human_name %></span>
+          <div class="list-col-grow min-w-0">
+    <% if attribute.attachment? -%>
+            <%%= link_to <%= singular_name %>.<%= attribute.column_name %>.filename, <%= singular_name %>.<%= attribute.column_name %> if <%= singular_name %>.<%= attribute.column_name %>.attached? %>
+    <% elsif attribute.attachments? -%>
+            <%% <%= singular_name %>.<%= attribute.column_name %>.each do |<%= attribute.singular_name %>| %>
+              <div><%%= link_to <%= attribute.singular_name %>.filename, <%= attribute.singular_name %> %></div>
+            <%% end %>
+    <% else -%>
+            <%%= <%= singular_name %>.<%= attribute.column_name %> %>
+    <% end -%>
+          </div>
+        </li>
+    <% end -%>
+      </ul>
+    </div>
+  ERB
+
+  create_file "lib/templates/erb/scaffold/show.html.erb.tt", <<~ERB, force: true
+    <%% content_for :title, "<%= human_name %>" %>
+
+    <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
+      <h1 class="text-2xl font-bold leading-[1.5]"><%= human_name %></h1>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <%%= render @<%= singular_table_name %> %>
+          <div class="card-actions justify-end">
+            <%%= link_to "Edit this <%= human_name.downcase %>", <%= edit_helper(type: :path) %>, class: "btn btn-rapid" %>
+            <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
+            <%%= button_to "Destroy this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, method: :delete, class: "btn btn-outline btn-error btn-rapid" %>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "lib/templates/erb/scaffold/new.html.erb.tt", <<~ERB, force: true
+    <%% content_for :title, "New <%= human_name.downcase %>" %>
+
+    <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <h1 class="text-2xl font-bold leading-[1.5]">New <%= human_name.downcase %></h1>
+        <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "lib/templates/erb/scaffold/edit.html.erb.tt", <<~ERB, force: true
+    <%% content_for :title, "Editing <%= human_name.downcase %>" %>
+
+    <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <h1 class="text-2xl font-bold leading-[1.5]">Editing <%= human_name.downcase %></h1>
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, class: "btn btn-rapid" %>
+          <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
+        </div>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "lib/templates/erb/controller/view.html.erb.tt", <<~ERB, force: true
+    <%% content_for :title, "<%= class_name %>#<%= @action %>" %>
+
+    <div class="mx-auto w-full max-w-[820px] px-5 py-10 md:py-14">
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <h1 class="card-title text-2xl leading-[1.5]"><%= class_name %>#<%= @action %></h1>
+          <p class="text-neutral">Find me in <%= @path %></p>
+        </div>
+      </section>
+    </div>
+  ERB
+end
+
 def configure_rubocop
   config = YAML.safe_load_file(".rubocop.yml", aliases: true) || {}
   config["AllCops"] ||= {}
@@ -2445,6 +2646,7 @@ end
 
 after_bundle do
   install_daisyui
+  configure_generator_view_templates
   configure_rubocop
   configure_common_files
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe

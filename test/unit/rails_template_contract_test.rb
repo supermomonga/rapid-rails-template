@@ -72,6 +72,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
       "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
       "app/views/accounts/edit.html.erb" => %w[card card-body card-title list list-row badge btn],
+      "app/views/admin/users/index.html.erb" => %w[card card-body table badge btn join join-item],
       "app/views/api_credentials/_form.html.erb" => %w[alert fieldset fieldset-legend input btn],
       "app/views/api_credentials/index.html.erb" => %w[card card-body table join join-item input alert btn],
       "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card card-body card-title btn],
@@ -172,6 +173,126 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'email: one@example.com'
     assert_includes @source, 'email: two@example.com'
     assert_includes @source, 'Devise::Encryptor.digest(User, "password123")'
+  end
+
+  def test_generates_fixed_multi_role_storage_and_action_policy_authorization
+    roles = source_between("def configure_roles", "def configure_profile")
+    model = generated_file_source("app/models/user_role.rb")
+    policy = generated_file_source("app/policies/user_policy.rb")
+    users_controller = generated_file_source("app/controllers/admin/users_controller.rb")
+    roles_controller = generated_file_source("app/controllers/admin/user_roles_controller.rb")
+
+    assert_includes roles, 'generate "action_policy:install"'
+    assert_includes roles, 'generate "model", "UserRole", "user:references", "role:string"'
+    assert_includes roles, 't.references :user, null: false, foreign_key: { on_delete: :cascade }'
+    assert_includes roles, 'add_index :user_roles, [:user_id, :role], unique: true'
+    assert_includes roles, 'add_check_constraint :user_roles, "role IN (\'admin\')", name: "user_roles_role_check"'
+    assert_includes model, 'ROLES = { admin: "admin" }.freeze'
+    assert_includes model, 'enum :role, ROLES, validate: true'
+    assert_includes model, 'validates :role, uniqueness: { scope: :user_id }'
+    assert_includes model, 'before_destroy :ensure_admin_remains, if: :admin?'
+    assert_includes roles, 'has_many :user_roles, dependent: :destroy'
+    assert_includes roles, 'def has_role?(role)'
+    assert_includes roles, 'def grant_role!(role)'
+    assert_includes roles, 'find_or_create_by!(role: normalized_role)'
+    assert_includes roles, 'def revoke_role!(role)'
+    assert_includes roles, 'def last_admin?'
+
+    assert_includes roles, 'authorize :user, through: :authorization_user'
+    assert_includes roles, 'helper_method :authorization_user'
+    assert_includes roles, 'rescue_from ActionPolicy::Unauthorized, with: :render_forbidden'
+    assert_includes roles, 'include Pagy::Method'
+    assert_includes policy, 'def index?'
+    assert_includes policy, 'def manage_roles?'
+    assert_includes policy, 'relation_scope do |relation|'
+    assert_includes users_controller, 'authorize! User, to: :index?'
+    assert_includes users_controller, 'authorized_scope(User.all)'
+    assert_includes users_controller, 'pagy(:offset, users, limit: 25)'
+    assert_includes roles_controller, 'authorize! @user, to: :manage_roles?'
+    assert_includes roles_controller, '@user == authorization_user'
+    assert_includes roles_controller, 'head :unprocessable_content'
+    assert_includes roles, 'resources :roles, only: %i[create destroy], controller: "user_roles", param: :role'
+  end
+
+  def test_generates_admin_role_ui_bootstrap_task_and_local_seed_hook
+    roles = source_between("def configure_roles", "def configure_profile")
+    view = generated_file_source("app/views/admin/users/index.html.erb")
+    task = generated_file_source("lib/tasks/roles.rake")
+    local_seed = generated_file_source("db/seeds.local.rb.example")
+    locale = generated_file_source("config/locales/roles.ja.yml")
+
+    assert_class_tokens view, "card", "card-border"
+    assert_class_tokens view, "overflow-x-auto"
+    assert_class_tokens view, "table", "table-sm", "table-pin-rows"
+    assert_class_tokens view, "badge"
+    assert_class_tokens view, "btn", "btn-outline", "btn-error"
+    assert_class_tokens view, "join"
+    assert_class_tokens view, "btn", "join-item"
+    assert_includes view, 'admin_user_roles_path(user)'
+    assert_includes view, 'admin_user_role_path(user, "admin")'
+    assert_includes view, '@pagy.page_url(:previous)'
+    assert_includes view, '@pagy.page_url(:next)'
+    refute_match(/(?:bg|text|border)-(?:blue|gray|slate|red|green|yellow)-\d+/, view)
+    refute_includes view, "dark:"
+    refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, view)
+
+    assert_includes task, 'task :grant_admin, [:identifier] => :environment'
+    assert_includes task, 'find_by!('
+    assert_includes task, 'user.grant_role!(:admin)'
+    assert_includes roles, 'Rails.root.join("db/seeds.local.rb")'
+    assert_includes roles, 'load local_seeds if local_seeds.file?'
+    assert_includes roles, 'append_to_file ".gitignore", "\\n/db/seeds.local.rb\\n"'
+    assert_includes local_seed, 'ENV.fetch("#{identifier_environment}")'
+    assert_includes local_seed, 'admin.grant_role!(:admin)'
+    assert_includes locale, 'last_admin: 最後の管理者はアカウントを削除できません'.b
+    assert_includes roles, 'I18n.t("admin.user_roles.create.notice", locale: :ja)'
+    assert_includes roles, 'I18n.t("admin.user_roles.destroy.self_forbidden", locale: :ja)'
+  end
+
+  def test_role_generation_covers_both_authentication_contexts_and_last_admin_deletion
+    roles = source_between("def configure_roles", "def configure_profile")
+    devise_registration = generated_file_source("app/controllers/users/registrations_controller.rb")
+    defaults = source_between("def configure_default_views", "def configure_web_push")
+
+    assert_includes roles, 'authorization_user = devise ? "current_user" : "Current.user"'
+    assert_includes roles, 'authentication_callback = devise ? "    before_action :authenticate_user!\\n" : ""'
+    assert_includes roles, 'configure_devise_registration_route'
+    assert_includes @source, 'devise_for :users, controllers: { registrations: "users/registrations" }'
+    assert_includes devise_registration, 'if resource.last_admin?'
+    assert_includes devise_registration, 'I18n.t("accounts.destroy.last_admin", locale: :ja)'
+    assert_includes defaults, 'if user.last_admin?'
+    assert_includes defaults, 'I18n.t("accounts.destroy.last_admin", locale: :ja)'
+    assert_match(/install_wallet_siwe\n  configure_roles/, @source)
+  end
+
+  def test_role_tests_cover_storage_policy_controllers_and_task
+    model_test = generated_file_source("test/models/user_role_test.rb")
+    policy_test = generated_file_source("test/policies/user_policy_test.rb")
+    users_controller_test = generated_file_source("test/controllers/admin/users_controller_test.rb")
+    roles_controller_test = generated_file_source("test/controllers/admin/user_roles_controller_test.rb")
+    task_test = generated_file_source("test/tasks/roles_task_test.rb")
+
+    assert_includes model_test, 'assert_not invalid.valid?'
+    assert_includes model_test, 'assert_no_difference("UserRole.count") { user.grant_role!(:admin) }'
+    assert_includes model_test, 'UserRole.insert_all!'
+    assert_includes model_test, 'assert_raises(ActiveRecord::NotNullViolation)'
+    assert_includes model_test, 'assert_raises(ActiveRecord::RecordNotDestroyed)'
+    assert_includes model_test, 'assert_not user.destroy'
+    assert_includes policy_test, 'apply(:index?)'
+    assert_includes policy_test, 'apply_scope(User.all, type: :active_record_relation)'
+    assert_includes users_controller_test, 'assert_have_authorized_scope(type: :active_record_relation, with: UserPolicy)'
+    assert_includes users_controller_test, 'assert_response :forbidden'
+    assert_includes users_controller_test, 'create_additional_users(25)'
+    assert_includes users_controller_test, 'nav[aria-label="ユーザー一覧のページング"] .join'.b
+    assert_includes roles_controller_test, 'assert_no_difference("UserRole.count")'
+    assert_includes roles_controller_test, 'assert_response :unprocessable_content'
+    assert_includes @source, 'test "refuses deletion of the last admin account"'
+    assert_includes task_test, 'assert_no_difference("User.count")'
+    assert_includes task_test, '@task.reenable'
+    assert_includes task_test, 'load Rails.root.join("db/seeds.rb")'
+    assert_includes task_test, 'File.write(local_seeds, \'ENV["ROLE_LOCAL_SEED_LOADED"] = "yes"\\n\')'
+    assert_includes @source, 'require "action_policy/test_helper"'
+    assert_includes @source, 'include ActionPolicy::TestHelper'
   end
 
   def test_generated_form_controls_and_cards_keep_design_system_dimensions_and_borders
@@ -405,12 +526,15 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 4, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 4, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, "profile_path"
     assert_includes account_navigation, "マイページ".b
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
+    assert_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
+    assert_includes account_navigation, 'allowed_to?(:index?, User)'
+    assert_includes account_navigation, 'admin_users_path'
     assert_includes header, 'data: { turbo_method: :delete }'
     assert_includes @source, 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'
     assert_includes @source, '<span>MENU</span>'

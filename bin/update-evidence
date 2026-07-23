@@ -1,0 +1,90 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "open3"
+require "tmpdir"
+require_relative "../src/rapid_rails_template/evidence"
+
+ROOT = File.expand_path("..", __dir__)
+SAMPLE = File.join(ROOT, "sample")
+DESTINATION = File.join(ROOT, "docs/evidence")
+COMMON_OPTIONS = %w[
+  --pwa=skip
+  --web-push=skip
+  --active-job=skip
+  --solid-cache=use
+  --profile-features=screen_name,display_name,avatar
+  --api=enable
+  --action-cable=skip
+  --mail=auto
+  --action-text=use
+  --deployment=dokploy
+].freeze
+VARIANTS = {
+  "devise" => "devise",
+  "siwe" => "wallet_siwe"
+}.freeze
+
+def run!(*command, env: {}, chdir: ROOT)
+  puts "+ #{command.join(" ")}"
+  success = system(env, *command, chdir: chdir)
+  raise "コマンドが失敗しました: #{command.join(" ")}" unless success
+end
+
+run!(File.join(ROOT, "bin/build-bootstrap"))
+run!(File.join(ROOT, "bin/verify-bootstrap"))
+source_fingerprint = RapidRailsTemplate::Evidence.fingerprint(ROOT)
+base_commit, status = Open3.capture2("git", "rev-parse", "HEAD", chdir: ROOT)
+raise "base commitを取得できません" unless status.success?
+
+staging_root = Dir.mktmpdir(".evidence-", ROOT)
+begin
+  manifests = {}
+  VARIANTS.each do |variant, authentication|
+    FileUtils.rm_rf(SAMPLE)
+    options = COMMON_OPTIONS + ["--account-authentication=#{authentication}", SAMPLE]
+    run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *options)
+
+    playwright = File.join(SAMPLE, "node_modules/.bin/playwright")
+    raise "Playwright CLIが生成されていません: #{playwright}" unless File.executable?(playwright)
+    run!(playwright, "install", "chromium", chdir: SAMPLE)
+
+    output_directory = File.join(staging_root, variant)
+    FileUtils.mkdir_p(output_directory)
+    run!(
+      File.join(SAMPLE, "bin/rails"),
+      "evidence:capture",
+      env: {
+        "RAILS_ENV" => "test",
+        "EVIDENCE_OUTPUT_DIR" => output_directory,
+        "PLAYWRIGHT_CLI_EXECUTABLE_PATH" => playwright
+      },
+      chdir: SAMPLE
+    )
+    manifests[variant] = RapidRailsTemplate::Evidence.finalize_variant(
+      directory: output_directory,
+      authentication: variant,
+      source_fingerprint: source_fingerprint,
+      base_commit: base_commit.strip
+    )
+  end
+
+  RapidRailsTemplate::Evidence.write_index(staging_root, manifests)
+  RapidRailsTemplate::Evidence.verify(root: ROOT, evidence_root: staging_root)
+
+  backup = "#{DESTINATION}.backup-#{Process.pid}"
+  FileUtils.rm_rf(backup)
+  File.rename(DESTINATION, backup) if File.exist?(DESTINATION)
+  begin
+    File.rename(staging_root, DESTINATION)
+    FileUtils.rm_rf(backup)
+  rescue Exception
+    File.rename(backup, DESTINATION) if File.exist?(backup) && !File.exist?(DESTINATION)
+    raise
+  end
+ensure
+  FileUtils.rm_rf(staging_root) if File.exist?(staging_root)
+end
+
+puts "UI evidence updated: #{DESTINATION}"

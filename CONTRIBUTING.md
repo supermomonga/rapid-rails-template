@@ -23,6 +23,9 @@ ruby -Itest -e 'Dir["test/{unit,integration}/**/*_test.rb"].sort.each { |file| r
 3. 実装開始後は、分割ソースと単体テストを変更する。
 4. 生成コマンドでルートの`bootstrap.rb`を再生成する。
 5. 生成物の同期検証と、Railsアプリケーションを生成する統合テストを実行する。
+6. テンプレートの内容fingerprintが変わった場合は`rake evidence:update`でDevise／SIWEのUIエビデンスを更新する。
+
+`rake evidence:verify`はChromiumを起動せずに保存済みエビデンスの鮮度と整合性を検証します。通常のMinitestにも同じ検証が含まれます。スクリーンショット更新は一時ディレクトリで両認証方式が成功してから`docs/evidence/`へ反映されるため、途中失敗時は既存成果物を維持します。
 
 ## 生成物の扱い
 

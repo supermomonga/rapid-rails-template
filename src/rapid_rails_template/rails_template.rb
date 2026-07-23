@@ -3256,6 +3256,9 @@ def install_solid_components
 end
 
 def configure_common_files
+  require "playwright"
+  playwright_version = Playwright::COMPATIBLE_PLAYWRIGHT_VERSION.strip
+  run_checked "npm install --save-dev playwright@#{playwright_version}"
   create_file "config/initializers/pagy.rb", "Pagy::DEFAULT.freeze\n"
   create_file "config/initializers/sentry.rb", <<~RUBY
     Sentry.init do |config|
@@ -3267,11 +3270,277 @@ def configure_common_files
     require "test_helper"
 
     class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
-      driven_by :playwright, using: :chromium, screen_size: [1400, 1400]
+      driven_by :playwright,
+        using: :chromium,
+        screen_size: [1400, 900],
+        options: {
+          headless: true,
+          playwright_cli_executable_path: Rails.root.join("node_modules/.bin/playwright").to_s
+        }
     end
   RUBY
   create_file "test/support/factory_bot.rb", "ActiveSupport.on_load(:active_support_test_case) { include FactoryBot::Syntax::Methods }\n"
   append_to_file "test/test_helper.rb", "\nrequire_relative \"support/factory_bot\"\n"
+end
+
+def configure_evidence_capture
+  authentication = VALUES.fetch("account_authentication") == "devise" ? "devise" : "siwe"
+  runner = <<~'RUBY'
+    # frozen_string_literal: true
+
+    require "application_system_test_case"
+    require "digest"
+    require "fileutils"
+    require "json"
+    require "uri"
+
+    class EvidenceCapture < ApplicationSystemTestCase
+      self.use_transactional_tests = false
+
+      AUTHENTICATION = __AUTHENTICATION__
+      require "eth" if AUTHENTICATION == "siwe"
+      VIEWPORTS = {
+        "desktop" => { "width" => 1400, "height" => 900 },
+        "mobile" => { "width" => 390, "height" => 844 }
+      }.freeze
+      PRIVATE_KEY = "1".rjust(64, "0")
+      PASSWORD = "password123"
+
+      test "captures every generated page and key visual state" do
+        @output_directory = Pathname(ENV.fetch("EVIDENCE_OUTPUT_DIR")).expand_path
+        raise "EVIDENCE_OUTPUT_DIR must be an existing empty directory" unless @output_directory.directory? && @output_directory.children.empty?
+
+        @captures = []
+        VIEWPORTS.each do |viewport_name, viewport|
+          page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
+          prepare_guest_data
+          capture_guest_pages(viewport_name)
+          authenticate
+          prepare_authenticated_data
+          capture_authenticated_pages(viewport_name)
+          Capybara.reset_sessions!
+        end
+
+        File.write(
+          @output_directory.join("captures.json"),
+          JSON.pretty_generate(
+            "authentication" => AUTHENTICATION,
+            "viewports" => VIEWPORTS,
+            "captures" => @captures
+          ) + "\n"
+        )
+      end
+
+      private
+        def devise?
+          AUTHENTICATION == "devise"
+        end
+
+        def prepare_guest_data
+          return unless devise?
+
+          @user = User.find_or_create_by!(email: "evidence@example.com") do |user|
+            user.password = PASSWORD
+            user.password_confirmation = PASSWORD
+          end
+          @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
+        end
+
+        def capture_guest_pages(viewport)
+          capture_page("home-guest", "ホーム（未ログイン）", root_path, "迷わず始められる", viewport)
+          login_path = devise? ? new_user_session_path : new_session_path
+          login_heading = devise? ? "ログイン" : "ウォレットでログイン"
+          capture_page("login", login_heading, login_path, login_heading, viewport)
+
+          if devise?
+            capture_page("registration", "アカウント作成", new_user_registration_path, "アカウント作成", viewport)
+            capture_page("password-reset-request", "パスワード再設定", new_user_password_path, "パスワード再設定", viewport)
+            reset_token = @user.send_reset_password_instructions
+            capture_page(
+              "password-reset-edit",
+              "新しいパスワード",
+              edit_user_password_path(reset_password_token: reset_token),
+              "新しいパスワード",
+              viewport
+            )
+          end
+
+          return unless viewport == "mobile"
+
+          visit root_path
+          find("header details.dropdown > summary", visible: :visible).click
+          capture_current_page("navigation-guest-open", "モバイルメニュー（未ログイン）", viewport)
+        end
+
+        def authenticate
+          if devise?
+            visit new_user_session_path
+            fill_in "メールアドレス", with: @user.email
+            fill_in "パスワード", with: PASSWORD
+            click_button "ログイン"
+            assert_current_path root_path
+          else
+            authenticate_wallet_siwe
+          end
+        end
+
+        def authenticate_wallet_siwe
+          visit root_path
+          browser_uri = URI(page.current_url)
+          integration = ActionDispatch::Integration::Session.new(Rails.application)
+          integration.host! browser_uri.host + (browser_uri.port == 80 ? "" : ":#{browser_uri.port}")
+          integration.get "/session/nonce"
+          assert_equal 200, integration.response.status
+
+          key = Eth::Key.new(priv: PRIVATE_KEY)
+          nonce = integration.response.parsed_body.fetch("nonce")
+          origin = "#{browser_uri.scheme}://#{browser_uri.host}:#{browser_uri.port}"
+          message = Siwe::Message.new(
+            domain: browser_uri.host + (browser_uri.port == 80 ? "" : ":#{browser_uri.port}"),
+            address: key.address.to_s,
+            uri: origin,
+            chain_id: 1,
+            nonce: nonce,
+            issued_at: Time.zone.parse("2026-01-01 00:00:00 UTC").iso8601,
+            statement: "Sign in to Rapid Rails"
+          ).prepare_message
+          integration.post "/session", params: { message: message, signature: key.personal_sign(message) }, as: :json
+          assert_equal 200, integration.response.status
+
+          cookie = integration.cookies.to_hash.fetch("session_id")
+          page.driver.with_playwright_page do |playwright_page|
+            playwright_page.context.add_cookies([{ name: "session_id", value: cookie, url: origin }])
+          end
+          visit root_path
+          @user = User.find_by!(wallet_address: key.address.to_s.downcase)
+        end
+
+        def prepare_authenticated_data
+          @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
+          @user.grant_role!(:admin)
+          identifier = devise? ? { email: "member@example.com", password: PASSWORD, password_confirmation: PASSWORD } :
+            { wallet_address: "0x2222222222222222222222222222222222222222" }
+          User.find_or_create_by!(identifier.slice(devise? ? :email : :wallet_address)) do |user|
+            identifier.each { |name, value| user.public_send("#{name}=", value) }
+          end
+        end
+
+        def capture_authenticated_pages(viewport)
+          capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, "迷わず始められる", viewport)
+          capture_page("account", "マイページ", account_path, "マイページ", viewport)
+          capture_page("profile", "プロフィール", profile_path, "プロフィール", viewport)
+          capture_page("profile-edit", "プロフィール編集", edit_profile_path, "プロフィール編集", viewport)
+          account_settings_path = devise? ? edit_user_registration_path : edit_account_path
+          capture_page("account-settings", "アカウント設定", account_settings_path, "アカウント設定", viewport)
+
+          @user.api_credentials.destroy_all
+          capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, "APIキーの管理", viewport)
+          capture_page("api-credential-new", "APIキー作成", new_api_credential_path, "APIキーを作成", viewport)
+          fill_in "名前", with: "Evidence CLI"
+          with_deterministic_secure_random do
+            find('input[type="submit"]').click
+          end
+          assert_text "ApiSecretはこの画面で一度だけ表示されます。"
+          capture_current_page("api-credential-secret", "APIキー詳細（初回secret）", viewport)
+          credential = @user.api_credentials.find_by!(name: "Evidence CLI")
+          capture_page("api-credential-show", "APIキー詳細", api_credential_path(credential), "Evidence CLI", viewport)
+          capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), "APIキーを編集", viewport)
+          capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, "APIキーの管理", viewport)
+          capture_page("admin-users", "ユーザー管理", admin_users_path, "ユーザー管理", viewport)
+
+          return unless viewport == "mobile"
+
+          visit root_path
+          find("header details.dropdown > summary", visible: :visible).click
+          capture_current_page("navigation-authenticated-open", "モバイルメニュー（ログイン済み）", viewport)
+        end
+
+        def capture_page(identifier, title, path, heading, viewport)
+          visit path
+          assert_equal 200, page.status_code
+          assert_selector "h1", text: heading
+          capture_current_page(identifier, title, viewport)
+        end
+
+        def with_deterministic_secure_random
+          singleton_class = SecureRandom.singleton_class
+          original_method = SecureRandom.method(:urlsafe_base64)
+          singleton_class.define_method(:urlsafe_base64) do |length, _padding = false|
+            length == 24 ? "A" * 32 : "B" * 43
+          end
+          yield
+        ensure
+          singleton_class.define_method(:urlsafe_base64, original_method)
+        end
+
+        def capture_current_page(identifier, title, viewport)
+          filename = "#{identifier}--#{viewport}.png"
+          path = @output_directory.join(filename)
+          page.driver.with_playwright_page do |playwright_page|
+            playwright_page.emulate_media(reducedMotion: "reduce")
+            playwright_page.add_style_tag(content: <<~CSS)
+              *, *::before, *::after {
+                animation: none !important;
+                caret-color: transparent !important;
+                scroll-behavior: auto !important;
+                transition: none !important;
+              }
+            CSS
+            playwright_page.evaluate("() => document.fonts.ready")
+            playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")
+          end
+          @captures << { "id" => identifier, "title" => title, "viewport" => viewport, "path" => filename }
+        end
+    end
+  RUBY
+  runner = runner.sub("__AUTHENTICATION__", authentication.inspect)
+  create_file "test/support/evidence_capture.rb", runner, force: true
+  create_file "lib/tasks/evidence.rake", <<~'RAKE', force: true
+    # frozen_string_literal: true
+
+    require "fileutils"
+    require "rbconfig"
+
+    namespace :evidence do
+      desc "CapybaraとPlaywrightでUIエビデンスを撮影する"
+      task capture: :environment do
+        raise "evidence:captureはRAILS_ENV=testでのみ実行できます" unless Rails.env.test?
+
+        output_directory = Pathname(ENV.fetch("EVIDENCE_OUTPUT_DIR")).expand_path
+        raise "EVIDENCE_OUTPUT_DIRにroot directoryは指定できません" if output_directory.root?
+        FileUtils.mkdir_p(output_directory)
+        raise "EVIDENCE_OUTPUT_DIRは空である必要があります" unless output_directory.children.empty?
+
+        rails = Rails.root.join("bin/rails").to_s
+        rebuild_test_database = lambda do
+          system({ "RAILS_ENV" => "test" }, rails, "db:test:purge", "db:test:prepare")
+        end
+        capture_error = nil
+
+        begin
+          raise "test databaseの再構築に失敗しました" unless rebuild_test_database.call
+
+          system(
+            { "RAILS_ENV" => "test", "EVIDENCE_OUTPUT_DIR" => output_directory.to_s },
+            RbConfig.ruby,
+            "-Itest",
+            Rails.root.join("test/support/evidence_capture.rb").to_s
+          ) || raise("UIエビデンスの撮影に失敗しました")
+        rescue StandardError => error
+          capture_error = error
+        ensure
+          cleanup_succeeded = rebuild_test_database.call
+        end
+
+        if capture_error
+          raise "#{capture_error.message}\ntest databaseの後始末にも失敗しました" unless cleanup_succeeded
+
+          raise capture_error
+        end
+        raise "test databaseの後始末に失敗しました" unless cleanup_succeeded
+      end
+    end
+  RAKE
 end
 
 def configure_annotaterb
@@ -3393,6 +3662,7 @@ after_bundle do
   configure_generator_view_templates
   configure_rubocop
   configure_common_files
+  configure_evidence_capture
   configure_annotaterb
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
   configure_roles

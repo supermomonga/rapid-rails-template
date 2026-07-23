@@ -31,11 +31,15 @@ src/rapid_rails_template/
 └── editors/                        # Prism等による対象別構造化編集
 bin/
 ├── build-bootstrap                 # bootstrap.rbの決定的生成
-└── verify-bootstrap                # 生成物と分割ソースの同期確認
+├── verify-bootstrap                # 生成物と分割ソースの同期確認
+├── update-evidence                 # 両認証方式の生成・撮影・成果物置換
+└── verify-evidence                 # エビデンスの鮮度と整合性確認
 test/
 ├── unit/
 └── integration/
-docs/
+docs/evidence/
+├── devise/
+└── siwe/
 ```
 
 ## 配布モデル
@@ -136,6 +140,12 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未回
 - `verify`: 生成結果と設定の検証
 
 各stepは必要な選択結果を明示し、他のstepの内部状態へ依存しません。
+
+### UIエビデンス
+
+生成アプリケーションにはtest環境専用の`evidence:capture` Rake taskを配置します。taskは撮影前にtest databaseを再構築し、Capybaraで実ページを操作してPlaywright Chromiumでfull-page PNGと撮影レポートを出力します。撮影の成否にかかわらずtest databaseを再度初期化するため、証跡用データは通常のfixture testへ残りません。Deviseでは実際のlogin form、Wallet SIWEでは実際のnonce・署名検証を通して認証し、テスト専用login routeや認証fallbackは追加しません。
+
+リポジトリ側の`rake evidence:update`はDevise版とWallet SIWE版を個別に生成し、両方の撮影が成功してからmanifest、Markdown索引、画像hashを確定して`docs/evidence/`を置換します。鮮度はcommit hashではなく、テンプレート分割ソースと撮影オーケストレーターの内容fingerprintで判定します。base commitは追跡情報としてだけ記録します。
 
 ### `editors`
 

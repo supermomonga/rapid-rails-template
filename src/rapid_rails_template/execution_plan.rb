@@ -58,7 +58,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack install_annotaterb configure_application_gems]
+      result = %w[declare_gems install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
       result << "configure_roles"
       result << "install_active_storage" if configuration["profile_features"].include?("avatar")
@@ -84,6 +84,8 @@ module RapidRailsTemplate
         lib/tasks/annotate_rb.rake
         bin/annotaterb
         test/annotations_test.rb
+        test/support/evidence_capture.rb
+        lib/tasks/evidence.rake
         app/models/user_role.rb
         app/policies/application_policy.rb
         app/policies/user_policy.rb

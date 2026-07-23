@@ -70,6 +70,8 @@ AnnotateRbの公式install generatorで設定とmigration hookを生成します
 
 generatorの成果物、必要な設定、コマンドの終了状態を検証します。生成アプリケーションの通常テストには`bin/annotaterb models --frozen`を実行するtestを含め、annotation不足をファイル変更なしで失敗として検出します。既存の`bin/rails test`、`bin/ci`、GitHub Actionsは同じtestを実行します。検証失敗を成功として扱うフォールバックは設けず、失敗した処理と理由を表示します。
 
+通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。リポジトリの`rake evidence:update`はDevise版とWallet SIWE版を同じ固定optionで順番に生成し、互換versionのPlaywright CLIとChromiumを使って一時ディレクトリへ撮影します。両方の撮影、manifest生成、整合性検証が成功した場合だけ`docs/evidence/`を置換します。
+
 ### 後始末
 
 子プロセスの成否や割り込みにかかわらず、Application Template payloadと設定の一時ファイルを削除します。生成済みアプリケーションは、途中失敗を隠すために自動削除せず、失敗したstepと状態を利用者へ報告します。

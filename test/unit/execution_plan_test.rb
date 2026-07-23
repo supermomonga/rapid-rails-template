@@ -21,6 +21,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.steps, "install_active_storage"
     assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "configure_default_views"
+    assert_includes plan.steps, "configure_evidence_capture"
     assert_includes plan.steps, "configure_roles"
     assert_operator plan.steps.index("install_devise"), :<, plan.steps.index("configure_roles")
     assert_includes plan.steps, "install_annotaterb"
@@ -34,6 +35,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "lib/tasks/annotate_rb.rake"
     assert_includes plan.artifacts, "bin/annotaterb"
     assert_includes plan.artifacts, "test/annotations_test.rb"
+    assert_includes plan.artifacts, "test/support/evidence_capture.rb"
+    assert_includes plan.artifacts, "lib/tasks/evidence.rake"
     assert_includes plan.artifacts, "app/models/user_role.rb"
     assert_includes plan.artifacts, "app/policies/application_policy.rb"
     assert_includes plan.artifacts, "app/policies/user_policy.rb"

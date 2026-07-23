@@ -1,6 +1,14 @@
 [tools]
 ruby = "4.0.6"
 
+[tasks.evidence-update]
+description = "Devise版とSIWE版のUIエビデンスを再生成する"
+run = "rake evidence:update"
+
+[tasks.evidence-verify]
+description = "保存済みUIエビデンスの鮮度と整合性を検証する"
+run = "rake evidence:verify"
+
 [tasks.generate-sampleapp]
 description = "sample/を再作成し、Devise認証のRailsアプリを生成する"
 run = '''

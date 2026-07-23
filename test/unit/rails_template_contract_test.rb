@@ -476,6 +476,33 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes annotation_test, "Run bin/annotaterb models"
   end
 
+  def test_generates_deterministic_playwright_evidence_capture
+    evidence = source_between("def configure_evidence_capture", "def configure_annotaterb").force_encoding(Encoding::UTF_8)
+    common_files = source_between("def configure_common_files", "def configure_evidence_capture").force_encoding(Encoding::UTF_8)
+
+    assert_includes @source, 'Playwright::COMPATIBLE_PLAYWRIGHT_VERSION.strip'
+    assert_includes @source, 'npm install --save-dev playwright@#{playwright_version}'
+    assert_includes common_files, 'playwright_cli_executable_path: Rails.root.join("node_modules/.bin/playwright").to_s'
+    assert_includes evidence, 'task capture: :environment do'
+    assert_includes evidence, 'raise "evidence:captureはRAILS_ENV=testでのみ実行できます"'
+    assert_includes evidence, "ensure\n          cleanup_succeeded = rebuild_test_database.call"
+    assert_includes evidence, 'raise "test databaseの後始末に失敗しました" unless cleanup_succeeded'
+    assert_includes evidence, 'VIEWPORTS = {'
+    assert_includes evidence, '"desktop" => { "width" => 1400, "height" => 900 }'
+    assert_includes evidence, '"mobile" => { "width" => 390, "height" => 844 }'
+    assert_includes evidence, 'playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")'
+    assert_includes evidence, 'integration.post "/session"'
+    assert_includes evidence, 'playwright_page.context.add_cookies'
+    assert_includes evidence, 'fill_in "メールアドレス", with: @user.email'
+    assert_includes evidence, '"api-credential-secret"'
+    assert_includes evidence, "def with_deterministic_secure_random"
+    assert_includes evidence, "singleton_class.define_method(:urlsafe_base64, original_method)"
+    assert_includes evidence, '"navigation-authenticated-open"'
+    assert_includes evidence, 'runner = runner.sub("__AUTHENTICATION__", authentication.inspect)'
+    refute_includes evidence, "runner.sub!"
+    assert_includes @source, "configure_common_files\n  configure_evidence_capture"
+  end
+
   def test_default_views_follow_the_design_background_breakpoint_and_component_sizing_contracts
     assert_includes @source, 'body class="min-h-screen bg-base-100'
     assert_includes @source, 'main class="flex-1 bg-base-200"'

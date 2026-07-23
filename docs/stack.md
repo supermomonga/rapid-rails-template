@@ -123,7 +123,9 @@ factory_bot
 factory_bot_rails
 ```
 
-Playwright driverの登録、browser種別、headless設定、Playwright CLIとbrowser binaryの導入方法は、ローカル環境とCIで同じ結果になるよう実装フェーズで固定します。必要な実行ファイルがない場合にSeleniumへ戻すフォールバックは設けません。
+Playwright driverはChromium・headlessへ固定し、`playwright-ruby-client`が公開する互換CLI versionを`package.json`へ導入します。実行時は生成アプリケーションの`node_modules/.bin/playwright`を明示し、`playwright install chromium`でbrowser binaryを準備します。必要な実行ファイルがない場合にSeleniumへ戻すフォールバックは設けません。
+
+UIエビデンスはCapybaraのroute遷移・入力・表示確認と、Playwright native pageのfull-page screenshotを組み合わせます。基本画面を1400×900と390×844で撮影し、認証方式別のMarkdownとmanifestへ列挙します。Deviseは実際のログインform、Wallet SIWEは実際のnonce・署名検証でsessionを作成し、テスト専用認証routeは生成しません。
 
 ## Schema annotation・Linter・Formatter・開発支援
 

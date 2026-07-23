@@ -21,6 +21,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.steps, "install_active_storage"
     assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "configure_default_views"
+    assert_includes plan.steps, "configure_roles"
+    assert_operator plan.steps.index("install_devise"), :<, plan.steps.index("configure_roles")
     assert_includes plan.steps, "install_annotaterb"
     assert_operator plan.steps.index("install_annotaterb"), :<, plan.steps.index("prepare_database")
     assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("verify")
@@ -32,6 +34,20 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "lib/tasks/annotate_rb.rake"
     assert_includes plan.artifacts, "bin/annotaterb"
     assert_includes plan.artifacts, "test/annotations_test.rb"
+    assert_includes plan.artifacts, "app/models/user_role.rb"
+    assert_includes plan.artifacts, "app/policies/application_policy.rb"
+    assert_includes plan.artifacts, "app/policies/user_policy.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/users_controller.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/user_roles_controller.rb"
+    assert_includes plan.artifacts, "app/views/admin/users/index.html.erb"
+    assert_includes plan.artifacts, "lib/tasks/roles.rake"
+    assert_includes plan.artifacts, "db/seeds.local.rb.example"
+    assert_includes plan.artifacts, "config/locales/roles.ja.yml"
+    assert_includes plan.artifacts, "test/models/user_role_test.rb"
+    assert_includes plan.artifacts, "test/policies/user_policy_test.rb"
+    assert_includes plan.artifacts, "test/controllers/admin/users_controller_test.rb"
+    assert_includes plan.artifacts, "test/controllers/admin/user_roles_controller_test.rb"
+    assert_includes plan.artifacts, "test/tasks/roles_task_test.rb"
     assert_includes plan.artifacts, "app/views/layouts/application.html.erb"
     assert_includes plan.artifacts, "lib/templates/erb/scaffold/index.html.erb.tt"
     assert_includes plan.artifacts, "lib/templates/erb/scaffold/_form.html.erb.tt"
@@ -115,6 +131,10 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "config/locales/ja.yml"
     assert_equal plan.artifacts.uniq, plan.artifacts
     assert_includes plan.steps, "prepare_database"
+    assert_includes plan.steps, "configure_roles"
+    assert_includes plan.artifacts, "app/models/user_role.rb"
+    assert_includes plan.artifacts, "app/policies/user_policy.rb"
+    assert_includes plan.artifacts, "app/views/admin/users/index.html.erb"
     refute_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     refute_includes plan.artifacts, "Dockerfile.prod"
   end

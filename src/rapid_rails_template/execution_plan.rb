@@ -60,6 +60,7 @@ module RapidRailsTemplate
     def build_steps
       result = %w[declare_gems install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack install_annotaterb configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
+      result << "configure_roles"
       result << "install_active_storage" if configuration["profile_features"].include?("avatar")
       result << "configure_profile" if configuration["profile_features"].any?
       result << "configure_api" if configuration["api"] == "enable"
@@ -83,6 +84,22 @@ module RapidRailsTemplate
         lib/tasks/annotate_rb.rake
         bin/annotaterb
         test/annotations_test.rb
+        app/models/user_role.rb
+        app/policies/application_policy.rb
+        app/policies/user_policy.rb
+        app/controllers/admin/base_controller.rb
+        app/controllers/admin/users_controller.rb
+        app/controllers/admin/user_roles_controller.rb
+        app/views/admin/users/index.html.erb
+        lib/tasks/roles.rake
+        db/seeds.local.rb.example
+        config/locales/roles.ja.yml
+        test/fixtures/user_roles.yml
+        test/models/user_role_test.rb
+        test/policies/user_policy_test.rb
+        test/controllers/admin/users_controller_test.rb
+        test/controllers/admin/user_roles_controller_test.rb
+        test/tasks/roles_task_test.rb
         app/assets/tailwind/application.css
         lib/templates/erb/scaffold/index.html.erb.tt
         lib/templates/erb/scaffold/show.html.erb.tt
@@ -139,6 +156,7 @@ module RapidRailsTemplate
       end
       if configuration["account_authentication"] == "devise"
         result.concat(%w[
+          app/controllers/users/registrations_controller.rb
           app/views/devise/sessions/new.html.erb
           app/views/devise/registrations/new.html.erb
           app/views/devise/registrations/edit.html.erb

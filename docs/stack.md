@@ -106,6 +106,14 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 `boring_avatars`は`avatar`選択時だけRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。theme色はserver-side generatorが要求する16進色の定数として一元化し、CSS themeとの一致を契約テストで保証します。
 
+### Roleと認可
+
+認証方式にかかわらず、生成アプリケーションには固定roleを複数付与できる`UserRole`とAction Policyのpolicy基盤を常に生成します。初期roleは`admin`だけとし、一般Userはroleを持ちません。`UserRole`は`user_id`と文字列`role`を持ち、組み合わせの一意制約、外部キー、`NOT NULL`、許可roleのdatabase check constraintで不変条件を保証します。role定義はコードとmigrationで管理し、管理画面からrole種別そのものを追加・編集しません。
+
+`User`は`has_role?`、`grant_role!`、`revoke_role!`を公開し、role付与を冪等にします。一般の登録・アカウント更新parameterへroleを含めず、role変更はAction Policyで保護された管理画面に限定します。複数roleの権限は許可を加算し、role階層と明示denyは持ちません。
+
+管理画面は`/admin/users`にユーザー一覧をページング表示し、`admin`の付与と解除を提供します。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。最初のadminは、認証方式に応じたemailまたはwallet addressを引数に取る`roles:grant_admin` taskで既存Userへ付与します。`db/seeds.rb`は存在する場合だけgit管理外の`db/seeds.local.rb`を読み込み、管理対象の`.example`には秘密値や実識別子を含めません。
+
 ## テスト用Gem
 
 ```text

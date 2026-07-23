@@ -75,6 +75,36 @@ def remove_ruby_call_statement(path, call_name, first_argument)
   File.binwrite(path, source.byteslice(0, line_start) + source.byteslice(line_end..))
 end
 
+def configure_devise_registration_route
+  require "prism"
+  path = "config/routes.rb"
+  source = File.binread(path)
+  result = Prism.parse(source)
+  raise "#{path}をRubyとして解析できません: #{result.errors.map(&:message).join(', ')}" unless result.success?
+
+  calls = []
+  queue = [result.value]
+  until queue.empty?
+    node = queue.shift
+    if node.is_a?(Prism::CallNode) && node.name == :devise_for
+      argument = node.arguments&.arguments&.first
+      calls << node if argument.is_a?(Prism::SymbolNode) && argument.unescaped == "users"
+    end
+    queue.concat(node.compact_child_nodes)
+  end
+  raise "#{path}のdevise_for(:users)が一意ではありません" unless calls.one?
+
+  call = calls.first
+  actual = source.byteslice(call.location.start_offset, call.location.length)
+  raise "#{path}のdevise_for(:users)が想定外の構造です: #{actual}" unless actual == "devise_for :users"
+
+  replacement = 'devise_for :users, controllers: { registrations: "users/registrations" }'
+  File.binwrite(
+    path,
+    source.byteslice(0, call.location.start_offset) + replacement + source.byteslice(call.location.end_offset..)
+  )
+end
+
 def run_checked(command)
   raise "コマンドが失敗しました: #{command}" unless run(command)
 end
@@ -670,6 +700,673 @@ def install_wallet_siwe
       end
     end
   RUBY
+end
+
+def configure_roles
+  devise = VALUES.fetch("account_authentication") == "devise"
+  identifier_attribute = devise ? "email" : "wallet_address"
+  identifier_label = devise ? "メールアドレス" : "Wallet address"
+  identifier_environment = devise ? "ADMIN_EMAIL" : "ADMIN_WALLET_ADDRESS"
+  authentication_callback = devise ? "    before_action :authenticate_user!\n" : ""
+  authorization_user = devise ? "current_user" : "Current.user"
+
+  generate "action_policy:install"
+  generate "model", "UserRole", "user:references", "role:string"
+  migration = Dir.glob("db/migrate/*_create_user_roles.rb")
+  raise "CreateUserRoles migrationが一意ではありません" unless migration.one?
+
+  create_file migration.first, <<~RUBY, force: true
+    class CreateUserRoles < ActiveRecord::Migration[8.1]
+      def change
+        create_table :user_roles do |t|
+          t.references :user, null: false, foreign_key: { on_delete: :cascade }
+          t.string :role, null: false
+          t.timestamps
+        end
+
+        add_index :user_roles, [:user_id, :role], unique: true
+        add_index :user_roles, :role
+        add_check_constraint :user_roles, "role IN ('admin')", name: "user_roles_role_check"
+      end
+    end
+  RUBY
+
+  create_file "app/models/user_role.rb", <<~RUBY, force: true
+    class UserRole < ApplicationRecord
+      ROLES = { admin: "admin" }.freeze
+
+      belongs_to :user
+
+      enum :role, ROLES, validate: true
+      validates :role, uniqueness: { scope: :user_id }
+
+      before_destroy :ensure_admin_remains, if: :admin?
+
+      private
+        def ensure_admin_remains
+          return if self.class.admin.where.not(id: id).exists?
+
+          errors.add(:base, I18n.t("roles.errors.last_admin", locale: :ja))
+          throw :abort
+        end
+    end
+  RUBY
+
+  inject_into_class "app/models/user.rb", "User", <<~RUBY
+      has_many :user_roles, dependent: :destroy
+
+      def has_role?(role)
+        normalized_role = UserRole.roles[role.to_s]
+        return false if normalized_role.nil?
+
+        if user_roles.loaded?
+          user_roles.any? { |assignment| assignment.role == normalized_role }
+        else
+          user_roles.exists?(role: normalized_role)
+        end
+      end
+
+      def grant_role!(role)
+        normalized_role = UserRole.roles.fetch(role.to_s)
+        user_roles.find_or_create_by!(role: normalized_role)
+      end
+
+      def revoke_role!(role)
+        normalized_role = UserRole.roles.fetch(role.to_s)
+        assignment = user_roles.find_by(role: normalized_role)
+        return if assignment.nil?
+
+        assignment.destroy!
+      end
+
+      def last_admin?
+        has_role?(:admin) && UserRole.admin.where.not(user_id: id).none?
+      end
+
+  RUBY
+
+  inject_into_class "app/controllers/application_controller.rb", "ApplicationController", <<~RUBY
+      include Pagy::Method
+
+      authorize :user, through: :authorization_user
+      helper_method :authorization_user
+
+      rescue_from ActionPolicy::Unauthorized, with: :render_forbidden
+
+      private
+        def authorization_user
+          #{authorization_user}
+        end
+
+        def render_forbidden
+          head :forbidden
+        end
+
+  RUBY
+
+  append_to_file "test/test_helper.rb", <<~RUBY
+
+    require "action_policy/test_helper"
+
+    class ActionDispatch::IntegrationTest
+      include ActionPolicy::TestHelper
+    end
+  RUBY
+
+  create_file "app/policies/user_policy.rb", <<~RUBY, force: true
+    class UserPolicy < ApplicationPolicy
+      def index?
+        admin?
+      end
+
+      def manage_roles?
+        admin?
+      end
+
+      relation_scope do |relation|
+        admin? ? relation : relation.none
+      end
+
+      private
+        def admin?
+          user&.has_role?(:admin) || false
+        end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/base_controller.rb", <<~RUBY, force: true
+    module Admin
+      class BaseController < ApplicationController
+        layout "application"
+    #{authentication_callback}  end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/users_controller.rb", <<~RUBY, force: true
+    module Admin
+      class UsersController < BaseController
+        def index
+          authorize! User, to: :index?
+          users = authorized_scope(User.all).includes(:user_roles).order(:id)
+          @pagy, @users = pagy(:offset, users, limit: 25)
+        end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/user_roles_controller.rb", <<~RUBY, force: true
+    module Admin
+      class UserRolesController < BaseController
+        before_action :set_user
+
+        def create
+          authorize! @user, to: :manage_roles?
+          @user.grant_role!(role_param)
+          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.create.notice", locale: :ja), status: :see_other
+        rescue KeyError, ActiveRecord::RecordInvalid
+          head :unprocessable_content
+        end
+
+        def destroy
+          authorize! @user, to: :manage_roles?
+          if @user == authorization_user
+            redirect_to admin_users_path, alert: I18n.t("admin.user_roles.destroy.self_forbidden", locale: :ja), status: :see_other
+            return
+          end
+
+          @user.revoke_role!(role_param)
+          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.destroy.notice", locale: :ja), status: :see_other
+        rescue KeyError
+          head :unprocessable_content
+        rescue ActiveRecord::RecordNotDestroyed => error
+          redirect_to admin_users_path, alert: error.record.errors.full_messages.to_sentence, status: :see_other
+        end
+
+        private
+          def set_user
+            @user = User.find(params.expect(:user_id))
+          end
+
+          def role_param
+            params.expect(:role)
+          end
+      end
+    end
+  RUBY
+
+  route <<~RUBY
+    namespace :admin do
+      resources :users, only: :index do
+        resources :roles, only: %i[create destroy], controller: "user_roles", param: :role
+      end
+    end
+  RUBY
+
+  create_file "app/views/admin/users/index.html.erb", <<~ERB, force: true
+    <% content_for :title, "ユーザー管理 | Rapid Rails" %>
+    <div class="mx-auto w-full max-w-6xl space-y-6 px-5 py-10 md:py-14">
+      <header>
+        <p class="text-sm font-semibold text-primary">Administration</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">ユーザー管理</h1>
+        <p class="mt-2 text-sm text-neutral">固定roleをユーザーへ付与または解除します。</p>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <div class="overflow-x-auto">
+            <table class="table table-sm table-pin-rows">
+              <thead>
+                <tr>
+                  <th scope="col">ID</th>
+                  <th scope="col">#{identifier_label}</th>
+                  <th scope="col">Role</th>
+                  <th scope="col"><span class="sr-only">操作</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <% @users.each do |user| %>
+                  <tr>
+                    <td><%= user.id %></td>
+                    <td class="break-all"><%= user.#{identifier_attribute} %></td>
+                    <td>
+                      <% if user.has_role?(:admin) %>
+                        <span class="badge">管理者</span>
+                      <% else %>
+                        <span class="text-sm text-neutral">なし</span>
+                      <% end %>
+                    </td>
+                    <td class="text-right">
+                      <% if user.has_role?(:admin) %>
+                        <% if user == authorization_user %>
+                          <button type="button" class="btn btn-disabled btn-rapid" disabled>自分自身は解除不可</button>
+                        <% else %>
+                          <%= button_to "管理者を解除", admin_user_role_path(user, "admin"), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "管理者roleを解除しますか？" } %>
+                        <% end %>
+                      <% else %>
+                        <%= button_to "管理者にする", admin_user_roles_path(user), params: { role: "admin" }, class: "btn btn-rapid" %>
+                      <% end %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <% if @pagy.last > 1 %>
+        <nav aria-label="ユーザー一覧のページング">
+          <div class="join">
+            <% if (previous_url = @pagy.page_url(:previous)) %>
+              <%= link_to "前へ", previous_url, class: "btn join-item" %>
+            <% else %>
+              <span class="btn btn-disabled join-item" role="link" aria-disabled="true">前へ</span>
+            <% end %>
+            <span class="btn btn-active join-item" aria-current="page"><%= @pagy.page %> / <%= @pagy.last %></span>
+            <% if (next_url = @pagy.page_url(:next)) %>
+              <%= link_to "次へ", next_url, class: "btn join-item" %>
+            <% else %>
+              <span class="btn btn-disabled join-item" role="link" aria-disabled="true">次へ</span>
+            <% end %>
+          </div>
+        </nav>
+      <% end %>
+    </div>
+  ERB
+
+  create_file "lib/tasks/roles.rake", <<~RAKE, force: true
+    namespace :roles do
+      desc "Grant the admin role to an existing User identified by #{identifier_attribute}"
+      task :grant_admin, [:identifier] => :environment do |_task, arguments|
+        identifier = arguments[:identifier].to_s.strip
+        raise ArgumentError, "identifierを指定してください" if identifier.empty?
+
+        user = User.find_by!(#{identifier_attribute}: identifier.downcase)
+        user.grant_role!(:admin)
+        puts "admin role granted to #{identifier_attribute}=\#{user.#{identifier_attribute}}"
+      end
+    end
+  RAKE
+
+  append_to_file "db/seeds.rb", <<~RUBY
+
+    local_seeds = Rails.root.join("db/seeds.local.rb")
+    load local_seeds if local_seeds.file?
+  RUBY
+  create_file "db/seeds.local.rb.example", <<~RUBY, force: true
+    admin = User.find_by!(#{identifier_attribute}: ENV.fetch("#{identifier_environment}").downcase)
+    admin.grant_role!(:admin)
+  RUBY
+  append_to_file ".gitignore", "\n/db/seeds.local.rb\n" unless File.read(".gitignore").lines.map(&:strip).include?("/db/seeds.local.rb")
+
+  create_file "config/locales/roles.ja.yml", <<~YAML, force: true
+    ja:
+      roles:
+        errors:
+          last_admin: 最後の管理者roleは解除できません
+      admin:
+        user_roles:
+          create:
+            notice: 管理者roleを付与しました
+          destroy:
+            notice: 管理者roleを解除しました
+            self_forbidden: 自分自身の管理者roleは解除できません
+      accounts:
+        destroy:
+          last_admin: 最後の管理者はアカウントを削除できません
+  YAML
+
+  create_file "test/fixtures/user_roles.yml", "# Role assignments are created explicitly by tests.\n", force: true
+
+  create_file "test/models/user_role_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class UserRoleTest < ActiveSupport::TestCase
+      test "rejects invalid and duplicate roles" do
+        user = users(:one)
+        invalid = user.user_roles.build(role: "unknown")
+
+        assert_not invalid.valid?
+        user.grant_role!(:admin)
+        duplicate = user.user_roles.build(role: :admin)
+        assert_not duplicate.valid?
+      end
+
+      test "grants a role idempotently" do
+        user = users(:one)
+
+        assert_difference("UserRole.count", 1) { user.grant_role!(:admin) }
+        assert_no_difference("UserRole.count") { user.grant_role!(:admin) }
+        assert user.has_role?(:admin)
+      end
+
+      test "database constraints reject invalid duplicate and null roles" do
+        user = users(:one)
+        now = Time.current
+        user.grant_role!(:admin)
+
+        # These writes intentionally bypass model validations to exercise database constraints.
+        # rubocop:disable Rails/SkipsModelValidations
+        assert_raises(ActiveRecord::StatementInvalid) do
+          UserRole.insert_all!([{ user_id: user.id, role: "admin", created_at: now, updated_at: now }])
+        end
+        assert_raises(ActiveRecord::StatementInvalid) do
+          UserRole.insert_all!([{ user_id: users(:two).id, role: "unknown", created_at: now, updated_at: now }])
+        end
+        assert_raises(ActiveRecord::NotNullViolation) do
+          UserRole.insert_all!([{ user_id: users(:two).id, role: nil, created_at: now, updated_at: now }])
+        end
+        # rubocop:enable Rails/SkipsModelValidations
+      end
+
+      test "does not remove the final admin assignment" do
+        user = users(:one)
+        user.grant_role!(:admin)
+
+        assert_raises(ActiveRecord::RecordNotDestroyed) { user.revoke_role!(:admin) }
+        assert user.reload.has_role?(:admin)
+        assert_not user.destroy
+      end
+
+      test "removes an admin when another admin remains" do
+        first = users(:one)
+        second = users(:two)
+        first.grant_role!(:admin)
+        second.grant_role!(:admin)
+
+        assert first.revoke_role!(:admin)
+        assert_not first.reload.has_role?(:admin)
+        assert second.reload.has_role?(:admin)
+      end
+
+      test "destroys assignments with a non-final admin user" do
+        first = users(:one)
+        second = users(:two)
+        first.grant_role!(:admin)
+        second.grant_role!(:admin)
+        role_id = first.user_roles.find_by!(role: :admin).id
+
+        assert first.destroy
+        assert_not UserRole.exists?(role_id)
+      end
+    end
+  RUBY
+
+  create_file "test/policies/user_policy_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class UserPolicyTest < ActiveSupport::TestCase
+      test "allows admins and denies regular users" do
+        admin = users(:one)
+        regular = users(:two)
+        admin.grant_role!(:admin)
+
+        assert UserPolicy.new(User, user: admin).apply(:index?)
+        assert UserPolicy.new(regular, user: admin).apply(:manage_roles?)
+        assert_not UserPolicy.new(User, user: regular).apply(:index?)
+        assert_not UserPolicy.new(admin, user: regular).apply(:manage_roles?)
+      end
+
+      test "scopes users to admins" do
+        admin = users(:one)
+        regular = users(:two)
+        admin.grant_role!(:admin)
+
+        assert_equal User.all, UserPolicy.new(User, user: admin).apply_scope(User.all, type: :active_record_relation)
+        assert_empty UserPolicy.new(User, user: regular).apply_scope(User.all, type: :active_record_relation)
+      end
+    end
+  RUBY
+
+  controller_test_support = if devise
+    <<~RUBY
+        include Devise::Test::IntegrationHelpers
+
+        setup do
+          @admin = User.create!(email: "role-admin@example.com", password: "password123", password_confirmation: "password123")
+          @regular = User.create!(email: "role-regular@example.com", password: "password123", password_confirmation: "password123")
+          @admin.grant_role!(:admin)
+        end
+
+        private
+          def sign_in_as(user, _key = nil)
+            sign_in user
+          end
+
+          def create_additional_users(count)
+            count.times do |index|
+              User.create!(
+                email: "role-page-\#{index}@example.com",
+                password: "password123",
+                password_confirmation: "password123"
+              )
+            end
+          end
+    RUBY
+  else
+    <<~RUBY
+        require "eth"
+
+        setup do
+          @admin, @admin_key = create_wallet_user
+          @regular, @regular_key = create_wallet_user
+          @admin.grant_role!(:admin)
+        end
+
+        private
+          def create_wallet_user
+            key = Eth::Key.new
+            [User.create!(wallet_address: key.address.to_s), key]
+          end
+
+          def sign_in_as(_user, key)
+            get session_nonce_url
+            nonce = response.parsed_body.fetch("nonce")
+            message = Siwe::Message.new(
+              domain: "www.example.com",
+              address: key.address.to_s,
+              uri: "http://www.example.com",
+              chain_id: 1,
+              nonce: nonce,
+              issued_at: Time.current.iso8601,
+              statement: "Sign in to www.example.com"
+            ).prepare_message
+            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            assert_response :success
+          end
+
+          def create_additional_users(count)
+            count.times { |index| User.create!(wallet_address: format("0x%040x", index + 100)) }
+          end
+    RUBY
+  end
+
+  account_deletion_test = if devise
+    <<~RUBY
+      test "refuses deletion of the last admin account" do
+        sign_in_as(@admin)
+
+        delete user_registration_url
+
+        assert_redirected_to edit_user_registration_url
+        assert User.exists?(@admin.id)
+        assert @admin.reload.has_role?(:admin)
+      end
+    RUBY
+  else
+    <<~RUBY
+      test "refuses deletion of the last admin account" do
+        sign_in_as(@admin, @admin_key)
+
+        delete account_url
+
+        assert_redirected_to edit_account_url
+        assert User.exists?(@admin.id)
+        assert @admin.reload.has_role?(:admin)
+      end
+    RUBY
+  end
+
+  create_file "test/controllers/admin/users_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::UsersControllerTest < ActionDispatch::IntegrationTest
+    #{controller_test_support}
+      test "requires authentication" do
+        get admin_users_url
+
+        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+      end
+
+      test "denies regular users" do
+        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+        get admin_users_url
+
+        assert_response :forbidden
+      end
+
+      test "authorizes scopes and renders the admin list" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        assert_have_authorized_scope(type: :active_record_relation, with: UserPolicy) do
+          get admin_users_url
+        end
+        assert_response :success
+        assert_select "table.table.table-sm.table-pin-rows"
+        assert_select ".badge", text: "管理者", minimum: 1
+        assert_select ".join", count: 0
+      end
+
+
+      test "paginates the admin list" do
+        create_additional_users(25)
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        get admin_users_url
+
+        assert_response :success
+        assert_select 'nav[aria-label="ユーザー一覧のページング"] .join', count: 1
+        assert_select '.join .join-item', count: 3
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/admin/user_roles_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::UserRolesControllerTest < ActionDispatch::IntegrationTest
+    #{controller_test_support}
+      test "allows an admin to grant and revoke another users role" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        assert_difference("UserRole.count", 1) do
+          post admin_user_roles_url(@regular), params: { role: "admin" }
+        end
+        assert_redirected_to admin_users_url
+
+        assert_difference("UserRole.count", -1) do
+          delete admin_user_role_url(@regular, "admin")
+        end
+        assert_redirected_to admin_users_url
+      end
+
+      test "denies role changes by regular users" do
+        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+
+        assert_no_difference("UserRole.count") do
+          post admin_user_roles_url(@regular), params: { role: "admin" }
+        end
+        assert_response :forbidden
+      end
+
+      test "refuses self revocation" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        assert_no_difference("UserRole.count") do
+          delete admin_user_role_url(@admin, "admin")
+        end
+        assert_redirected_to admin_users_url
+        assert @admin.reload.has_role?(:admin)
+      end
+
+      test "rejects unknown roles" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        post admin_user_roles_url(@regular), params: { role: "unknown" }
+
+        assert_response :unprocessable_content
+      end
+
+
+    #{account_deletion_test.lines.map { |line| "  #{line}" }.join}end
+  RUBY
+
+  create_file "test/tasks/roles_task_test.rb", <<~RUBY, force: true
+    require "test_helper"
+    require "fileutils"
+    require "rake"
+
+    class RolesTaskTest < ActiveSupport::TestCase
+      setup do
+        Rails.application.load_tasks if Rake::Task.tasks.empty?
+        @task = Rake::Task["roles:grant_admin"]
+      end
+
+      test "grants admin idempotently to an existing user" do
+        user = users(:two)
+        identifier = user.#{identifier_attribute}
+
+        assert_difference("UserRole.count", 1) { invoke(identifier) }
+        assert_no_difference("UserRole.count") { invoke(identifier) }
+        assert user.reload.has_role?(:admin)
+      end
+
+      test "does not create an unknown user" do
+        assert_no_difference("User.count") do
+          assert_raises(ActiveRecord::RecordNotFound) { invoke("missing-#{identifier_attribute}") }
+        end
+      end
+
+      test "loads local seeds only when the ignored file exists" do
+        local_seeds = Rails.root.join("db/seeds.local.rb")
+        FileUtils.rm_f(local_seeds)
+
+        load Rails.root.join("db/seeds.rb")
+        assert_nil ENV["ROLE_LOCAL_SEED_LOADED"]
+
+        File.write(local_seeds, 'ENV["ROLE_LOCAL_SEED_LOADED"] = "yes"\n')
+        load Rails.root.join("db/seeds.rb")
+        assert_equal "yes", ENV["ROLE_LOCAL_SEED_LOADED"]
+      ensure
+        FileUtils.rm_f(local_seeds) if local_seeds
+        ENV.delete("ROLE_LOCAL_SEED_LOADED")
+      end
+
+      private
+        def invoke(identifier)
+          @task.reenable
+          capture_io { @task.invoke(identifier) }
+        end
+    end
+  RUBY
+
+  if devise
+    configure_devise_registration_route
+    create_file "app/controllers/users/registrations_controller.rb", <<~RUBY, force: true
+      module Users
+        class RegistrationsController < Devise::RegistrationsController
+          def destroy
+            if resource.last_admin?
+              redirect_to edit_user_registration_path, alert: I18n.t("accounts.destroy.last_admin", locale: :ja), status: :see_other
+              return
+            end
+
+            super
+          end
+        end
+      end
+    RUBY
+  end
 end
 
 def configure_profile
@@ -1921,6 +2618,18 @@ def configure_default_views
       </li>
     ERB
   end
+  account_navigation_items += <<~ERB
+    <% if allowed_to?(:index?, User) %>
+      <li>
+        <%= link_to admin_users_path, class: ("menu-active" if controller_path.start_with?("admin/")), aria: { current: ("page" if controller_path.start_with?("admin/")) } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m6-3c0 7.142-3.75 12-9 13.5C6.75 18.75 3 13.892 3 6.75c3.75 0 7.5-1.5 9-4.5 1.5 3 5.25 4.5 9 4.5Z" />
+          </svg>
+          ユーザー管理
+        <% end %>
+      </li>
+    <% end %>
+  ERB
   account_navigation_for_layout = account_navigation_items.lines.map { |line| "                #{line}" }.join
   account_navigation_for_dropdown = account_navigation_items.lines.map { |line| "          #{line}" }.join
   signed_in_condition = devise ? "user_signed_in?" : "authenticated?"
@@ -2044,6 +2753,11 @@ def configure_default_views
 
         def destroy
           user = Current.user
+          if user.last_admin?
+            redirect_to edit_account_path, alert: I18n.t("accounts.destroy.last_admin", locale: :ja), status: :see_other
+            return
+          end
+
           user.destroy!
           cookies.delete(:session_id)
           Current.session = nil
@@ -2681,6 +3395,7 @@ after_bundle do
   configure_common_files
   configure_annotaterb
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
+  configure_roles
   rails_command "active_storage:install" if VALUES.fetch("profile_features").include?("avatar")
   configure_profile if VALUES.fetch("profile_features").any?
   configure_api if VALUES.fetch("api") == "enable"

@@ -46,7 +46,7 @@ module RapidRailsTemplate
     private
 
     def build_gems
-      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
       result << "devise" if configuration["account_authentication"] == "devise"
       result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
@@ -60,7 +60,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_action_text configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems]
+      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
       result << "configure_roles"
       result << "configure_content_management"
@@ -71,6 +71,8 @@ module RapidRailsTemplate
       result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
       result << "install_solid_cache" if configuration["solid_cache"] == "use"
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
+      result << "configure_database"
+      result << "configure_active_storage_db"
       result << "configure_dokploy" if configuration["deployment"] == "dokploy"
       result << "prepare_database"
       result << "annotate_models"
@@ -161,6 +163,10 @@ module RapidRailsTemplate
         app/views/home/index.html.erb
         app/views/accounts/show.html.erb
         test/integration/default_pages_test.rb
+        config/storage.yml
+        config/initializers/active_storage_db.rb
+        db/storage_migrate/*_create_active_storage_db_files.active_storage_db.rb
+        test/models/active_storage_db_test.rb
       ]
       if configuration["api"] == "enable"
         result.concat(%w[

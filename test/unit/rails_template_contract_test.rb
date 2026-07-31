@@ -420,6 +420,46 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator after_bundle.index("configure_lexxy"), :<, after_bundle.index("install_daisyui")
   end
 
+  def test_stores_active_storage_files_in_a_dedicated_sqlite_database
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+    storage = generated_file_source("config/storage.yml")
+    initializer = generated_file_source("config/initializers/active_storage_db.rb")
+    storage_test = generated_file_source("test/models/active_storage_db_test.rb")
+    install = source_between("def install_active_storage_db", "def replace_active_storage_service")
+    service_configuration = source_between("def configure_active_storage_db", "def configure_lexxy")
+    database_configuration = source_between("def configure_database", "def configure_dokploy")
+
+    assert_includes @source, 'gem "active_storage_db"'
+    assert_includes install, 'run_checked "bin/rails active_storage_db:install:migrations"'
+    assert_includes install, 'db/migrate/*_create_active_storage_db_files.active_storage_db.rb'
+    assert_includes install, 'FileUtils.mv(installed_migrations.first, File.join("db/storage_migrate"'
+    assert_includes storage, "db:\n      service: DB"
+    assert_includes initializer, "ActiveStorageDB::ApplicationRecord.connects_to database: { writing: :storage, reading: :storage }"
+    assert_includes service_configuration, '%w[development test production].each'
+    assert_includes service_configuration, 'mount ActiveStorageDB::Engine => "/active_storage_db"'
+    assert_includes database_configuration, '"storage/development_storage.sqlite3"'
+    assert_includes database_configuration, '"storage/test_storage.sqlite3"'
+    assert_includes database_configuration, '"storage/production_storage.sqlite3"'
+    assert_includes database_configuration, "STORAGE_DATABASE_PATH"
+    assert_includes database_configuration, '"db/storage_migrate"'
+    assert_includes storage_test, "ActiveStorage::Blob.create_and_upload!"
+    assert_includes storage_test, 'assert_equal "storage", ActiveStorageDB::ApplicationRecord.connection_db_config.name'
+    assert_includes storage_test, "assert_equal contents, blob.download"
+    assert_includes storage_test, "blob.purge"
+    assert_operator after_bundle.index("install_action_text"), :<, after_bundle.index("install_active_storage_db")
+    assert_operator after_bundle.index("install_active_storage_db"), :<, after_bundle.index("configure_lexxy")
+    assert_operator after_bundle.index("install_solid_components"), :<, after_bundle.index("configure_database")
+    assert_operator after_bundle.index("configure_database"), :<, after_bundle.index("configure_active_storage_db")
+    assert_operator after_bundle.index("configure_active_storage_db"), :<, after_bundle.index('run_checked "bin/rails db:prepare"')
+  end
+
+  def test_dokploy_replicates_the_active_storage_database
+    dokploy = source_between("def configure_dokploy", "after_bundle do")
+
+    assert_includes dokploy, '${STORAGE_DATABASE_PATH}'
+    assert_includes dokploy, '${LITESTREAM_STORAGE_REPLICA_URL}'
+  end
+
   def test_generates_fixed_pages_faqs_footer_settings_and_admin_management
     page_model = generated_file_source("app/models/page.rb")
     faq_model = generated_file_source("app/models/faq.rb")
@@ -504,9 +544,18 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes @source, "account_navigation_items << <<~ERB"
   end
 
+  def test_default_page_integration_uses_the_generated_role_api
+    assert_includes @source, "user.grant_role!(:admin)"
+    refute_includes @source, "user.add_role(:admin)"
+  end
+
   def test_prepares_the_database_after_generators_and_before_verification_commands
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
 
+    assert_operator after_bundle.index("configure_database"),
+      :<, after_bundle.index('run_checked "bin/rails db:prepare"')
+    assert_operator after_bundle.index("configure_active_storage_db"),
+      :<, after_bundle.index('run_checked "bin/rails db:prepare"')
     assert_operator after_bundle.index('configure_dokploy if VALUES.fetch("deployment") == "dokploy"'),
       :<, after_bundle.index('run_checked "bin/rails db:prepare"')
     assert_operator after_bundle.index('run_checked "bin/rails db:prepare"'),

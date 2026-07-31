@@ -20,6 +20,7 @@ gem "action_policy"
 gem "sentry-ruby"
 gem "sentry-rails"
 gem "lexxy", "~> 0.9.21"
+gem "active_storage_db"
 gem "prism"
 
 gem_group :development do
@@ -112,6 +113,93 @@ end
 
 def install_action_text
   generate "action_text:install"
+end
+
+def install_active_storage_db
+  require "fileutils"
+
+  migration_pattern = "db/migrate/*_create_active_storage_db_files.active_storage_db.rb"
+  existing_migrations = Dir.glob(migration_pattern)
+  raise "Active Storage DBのmigrationが既に存在します: #{existing_migrations.join(', ')}" unless existing_migrations.empty?
+
+  run_checked "bin/rails active_storage_db:install:migrations"
+  installed_migrations = Dir.glob(migration_pattern)
+  raise "Active Storage DBのmigrationを一意に特定できません: #{installed_migrations.join(', ')}" unless installed_migrations.one?
+
+  FileUtils.mkdir_p("db/storage_migrate")
+  FileUtils.mv(installed_migrations.first, File.join("db/storage_migrate", File.basename(installed_migrations.first)))
+end
+
+def replace_active_storage_service(environment)
+  require "prism"
+
+  path = "config/environments/#{environment}.rb"
+  source = File.binread(path)
+  result = Prism.parse(source)
+  raise "#{path}をRubyとして解析できません: #{result.errors.map(&:message).join(', ')}" unless result.success?
+
+  assignments = []
+  queue = [result.value]
+  until queue.empty?
+    node = queue.shift
+    if node.is_a?(Prism::CallNode) && node.name == :service=
+      active_storage = node.receiver
+      config = active_storage&.receiver
+      assignments << node if active_storage&.name == :active_storage && config&.name == :config && config.receiver.nil?
+    end
+    queue.concat(node.compact_child_nodes)
+  end
+  raise "#{path}のActive Storage service設定が一意ではありません" unless assignments.one?
+
+  assignment = assignments.first
+  File.binwrite(
+    path,
+    source.byteslice(0, assignment.location.start_offset) +
+      "config.active_storage.service = :db" +
+      source.byteslice(assignment.location.end_offset..)
+  )
+end
+
+def configure_active_storage_db
+  create_file "config/storage.yml", <<~YAML, force: true
+    db:
+      service: DB
+  YAML
+  %w[development test production].each { |environment| replace_active_storage_service(environment) }
+  create_file "config/initializers/active_storage_db.rb", <<~RUBY, force: true
+    # frozen_string_literal: true
+
+    Rails.application.config.after_initialize do
+      ActiveStorageDB::ApplicationRecord.connects_to database: { writing: :storage, reading: :storage }
+    end
+  RUBY
+  route 'mount ActiveStorageDB::Engine => "/active_storage_db"'
+  create_file "test/models/active_storage_db_test.rb", <<~RUBY, force: true
+    # frozen_string_literal: true
+
+    require "test_helper"
+    require "stringio"
+
+    class ActiveStorageDBTest < ActiveSupport::TestCase
+      test "stores, downloads, and deletes attachment data in the storage database" do
+        contents = "sqlite attachment data"
+        blob = ActiveStorage::Blob.create_and_upload!(
+          io: StringIO.new(contents),
+          filename: "attachment.txt",
+          content_type: "text/plain"
+        )
+
+        stored_file = ActiveStorageDB::File.find_by!(ref: blob.key)
+        assert_equal "storage", ActiveStorageDB::ApplicationRecord.connection_db_config.name
+        assert_equal contents, stored_file.data
+        assert_equal contents, blob.download
+
+        key = blob.key
+        blob.purge
+        refute ActiveStorageDB::File.exists?(ref: key)
+      end
+    end
+  RUBY
 end
 
 def configure_lexxy
@@ -4336,7 +4424,7 @@ def configure_default_views
           assert_redirected_to new_user_session_url
 
           user = User.create!(email: "sample@example.com", password: "password123", password_confirmation: "password123")
-    #{generated_profile_assertion}#{profile_setup}      user.add_role(:admin)
+    #{generated_profile_assertion}#{profile_setup}      user.grant_role!(:admin)
           sign_in user
           get account_url
           assert_response :success
@@ -4907,41 +4995,67 @@ def configure_annotaterb
 end
 
 def configure_database
+  dokploy = VALUES.fetch("deployment") == "dokploy"
+  production_paths = if dokploy
+    {
+      "primary" => "<%= ENV.fetch(\"DATABASE_PATH\", \"/data/production.sqlite3\") %>",
+      "storage" => "<%= ENV.fetch(\"STORAGE_DATABASE_PATH\", \"/data/production_storage.sqlite3\") %>",
+      "queue" => "<%= ENV.fetch(\"QUEUE_DATABASE_PATH\", \"/data/production_queue.sqlite3\") %>",
+      "cache" => "<%= ENV.fetch(\"CACHE_DATABASE_PATH\", \"/data/production_cache.sqlite3\") %>",
+      "cable" => "<%= ENV.fetch(\"CABLE_DATABASE_PATH\", \"/data/production_cable.sqlite3\") %>"
+    }
+  else
+    {
+      "primary" => "storage/production.sqlite3",
+      "storage" => "storage/production_storage.sqlite3",
+      "queue" => "storage/production_queue.sqlite3",
+      "cache" => "storage/production_cache.sqlite3",
+      "cable" => "storage/production_cable.sqlite3"
+    }
+  end
   databases = {
-    "primary" => { "database" => "<%= ENV.fetch(\"DATABASE_PATH\", \"/data/production.sqlite3\") %>" }
+    "primary" => { "database" => production_paths.fetch("primary") },
+    "storage" => { "database" => production_paths.fetch("storage"), "migrations_paths" => "db/storage_migrate" }
   }
   if VALUES.fetch("active_job") == "solid_queue"
-    databases["queue"] = { "database" => "<%= ENV.fetch(\"QUEUE_DATABASE_PATH\", \"/data/production_queue.sqlite3\") %>", "migrations_paths" => "db/queue_migrate" }
+    databases["queue"] = { "database" => production_paths.fetch("queue"), "migrations_paths" => "db/queue_migrate" }
   end
   if VALUES.fetch("solid_cache") == "use"
-    databases["cache"] = { "database" => "<%= ENV.fetch(\"CACHE_DATABASE_PATH\", \"/data/production_cache.sqlite3\") %>", "migrations_paths" => "db/cache_migrate" }
+    databases["cache"] = { "database" => production_paths.fetch("cache"), "migrations_paths" => "db/cache_migrate" }
   end
   if VALUES.fetch("action_cable") == "solid_cable"
-    databases["cable"] = { "database" => "<%= ENV.fetch(\"CABLE_DATABASE_PATH\", \"/data/production_cable.sqlite3\") %>", "migrations_paths" => "db/cable_migrate" }
+    databases["cable"] = { "database" => production_paths.fetch("cable"), "migrations_paths" => "db/cable_migrate" }
   end
   production = databases.transform_values do |database|
     { "adapter" => "sqlite3", "pool" => "<%= ENV.fetch(\"DATABASE_POOL_SIZE\", ENV.fetch(\"RAILS_MAX_THREADS\", 5)) %>", "timeout" => 20_000, "transaction_mode" => "immediate" }.merge(database)
   end
   config = {
     "default" => { "adapter" => "sqlite3", "pool" => "<%= ENV.fetch(\"RAILS_MAX_THREADS\", 5) %>", "timeout" => 5000 },
-    "development" => { "database" => "storage/development.sqlite3" },
-    "test" => { "database" => "storage/test.sqlite3" },
+    "development" => {
+      "primary" => { "database" => "storage/development.sqlite3" },
+      "storage" => { "database" => "storage/development_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
+    },
+    "test" => {
+      "primary" => { "database" => "storage/test.sqlite3" },
+      "storage" => { "database" => "storage/test_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
+    },
     "production" => production
   }
   database_yaml = YAML.dump(config, line_width: -1)
     .sub("default:\n", "default: &default\n")
-    .gsub(/^development:\n/, "development:\n  <<: *default\n")
-    .gsub(/^test:\n/, "test:\n  <<: *default\n")
+    .gsub(/^  ([a-z]+):\n(?=    (?:adapter|database):)/, "  \\1:\n    <<: *default\n")
   create_file "config/database.yml", database_yaml, force: true
 end
 
 def configure_dokploy
-  configure_database
   processes = ["web: bundle exec puma -p 3000 -C ./config/puma.rb"]
   processes << "worker: bin/jobs --mode async" if VALUES.fetch("active_job") == "solid_queue"
   create_file "Procfile.prod", processes.join("\n") + "\n"
 
-  replicas = ["  - path: ${DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_REPLICA_URL}"]
+  replicas = [
+    "  - path: ${DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_REPLICA_URL}",
+    "  - path: ${STORAGE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_STORAGE_REPLICA_URL}"
+  ]
   replicas << "  - path: ${QUEUE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_QUEUE_REPLICA_URL}" if VALUES.fetch("active_job") == "solid_queue"
   replicas << "  - path: ${CABLE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_CABLE_REPLICA_URL}" if VALUES.fetch("action_cable") == "solid_cable"
   create_file "litestream.yml", "dbs:\n#{replicas.join("\n")}\n"
@@ -4993,6 +5107,7 @@ end
 
 after_bundle do
   install_action_text
+  install_active_storage_db
   configure_lexxy
   install_daisyui
   configure_generator_view_templates
@@ -5008,6 +5123,8 @@ after_bundle do
   configure_default_views
   configure_web_push if VALUES.fetch("web_push") == "use"
   install_solid_components
+  configure_database
+  configure_active_storage_db
   configure_dokploy if VALUES.fetch("deployment") == "dokploy"
   run_checked "bin/rails db:prepare"
   run_checked "bundle binstubs annotaterb"

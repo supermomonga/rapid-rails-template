@@ -1,7 +1,7 @@
 # Devise エビデンス
 
-- Source fingerprint: `62d0bcfcbb4c1ece1df9dc481f4b0e230f27f1b5c1a37b5610c5517dd4c56915`
-- Base commit: `ac0d8da0b24e395d21ccbed8c201d1bbc2a2b522`
+- Source fingerprint: `f58356a2f435c1caa0881fc92d2d8b79623bd2c73a0220cc7d4b509eb0e25af2`
+- Base commit: `74e2e1399a1766ce331687491ed9d836780c5578`
 - 更新: `rake evidence:update`
 
 ## ホーム（未ログイン）

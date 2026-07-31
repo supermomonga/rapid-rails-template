@@ -21,8 +21,14 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "boring_avatars"
     assert_includes plan.gems, "annotaterb"
     assert_includes plan.gems, "lexxy"
+    assert_includes plan.gems, "active_storage_db"
     assert_includes plan.steps, "install_action_text"
+    assert_includes plan.steps, "install_active_storage_db"
+    assert_includes plan.steps, "configure_database"
+    assert_includes plan.steps, "configure_active_storage_db"
     assert_includes plan.steps, "configure_lexxy"
+    assert_operator plan.steps.index("install_action_text"), :<, plan.steps.index("install_active_storage_db")
+    assert_operator plan.steps.index("install_active_storage_db"), :<, plan.steps.index("configure_lexxy")
     assert_includes plan.steps, "install_daisyui"
     assert_operator plan.steps.index("install_action_text"), :<, plan.steps.index("configure_lexxy")
     assert_operator plan.steps.index("configure_lexxy"), :<, plan.steps.index("install_daisyui")
@@ -96,6 +102,10 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/views/pages/about.html.erb"
     assert_includes plan.artifacts, "app/views/faqs/index.html.erb"
     assert_includes plan.artifacts, "app/views/admin/footer_settings/edit.html.erb"
+    assert_includes plan.artifacts, "config/storage.yml"
+    assert_includes plan.artifacts, "config/initializers/active_storage_db.rb"
+    assert_includes plan.artifacts, "db/storage_migrate/*_create_active_storage_db_files.active_storage_db.rb"
+    assert_includes plan.artifacts, "test/models/active_storage_db_test.rb"
   end
 
   def test_api_disabled_plan_omits_api_steps_and_artifacts

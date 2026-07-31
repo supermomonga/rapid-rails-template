@@ -22,7 +22,7 @@
 | ページネーション | `pagy` | ページネーションの標準実装とする |
 | active link | `active_link_to` | 現在ページに応じたリンク表示に使用する |
 | 認可 | `action_policy` | authorization policyの標準実装とする |
-| Rich text | Action Text、Active Storage、`lexxy ~> 0.9.21` | 固定ページとFAQの本文および管理editorとして常設する |
+| Rich text | Action Text、Active Storage、`active_storage_db`、`lexxy ~> 0.9.21` | 固定ページとFAQの本文および管理editorとして常設し、添付本体は専用SQLite databaseへ保存する |
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
 | Profile名生成 | `haikunator` | `screen_name`または`display_name`を選択した場合だけUser作成時の既定値生成に使用する |
 | 既定アバター生成 | `boring_avatars ~> 0.1.0` | `avatar`を選択した場合だけUser IDから決定的なSVGを生成する |
@@ -82,7 +82,9 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 
 ### Action Text、固定ページ、FAQ、footer設定
 
-Action Text、Active Storage、Lexxyは選択式にせず、すべての生成アプリケーションへ導入します。Action Textの公式install generatorでmigrationと添付表示partialを生成し、Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
+Action Text、Active Storage、Active Storage DB、Lexxyは選択式にせず、すべての生成アプリケーションへ導入します。Action Textの公式install generatorでActive Storageのmetadata／attachment migrationと添付表示partialを生成し、`active_storage_db`の公式migration taskでファイル本体用migrationを生成して`db/storage_migrate`へ分離します。Active Storage DB engineを`/active_storage_db`へmountし、development、test、productionのActive Storage serviceをすべて`:db`に設定します。Active Storageのblob metadataとattachmentはprimary database、ファイル本体は専用storage SQLite databaseへ保存し、Disk serviceへ暗黙に切り替えません。
+
+Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
 
 公開固定ページは`/about`、`/corp`、`/manual`、`/terms`、`/privacy`、`/transaction-law`とし、routeごとの固定slugを共通の`PagesController#show`へ渡します。`Page`のslugはこの6値へ限定し、titleとともにseedで冪等作成します。管理者は本文だけを更新でき、固定ページの作成、削除、slug、titleの変更は提供しません。存在しない固定recordや未知slugを別ページへ戻すfallbackは設けません。
 
@@ -199,7 +201,7 @@ production:
   message_retention: 1.day
 ```
 
-productionの`config/database.yml`には、primary databaseとは別のSQLite cable databaseと`db/cable_migrate`を定義します。Action Cableを使わない構成では、Turbo DriveとTurbo Framesは利用できますが、Action Cableに依存するTurbo Streamsのbroadcast機能は利用できません。
+productionの`config/database.yml`には、常設のstorage databaseに加え、Action Cableを使用する場合だけprimaryとは別のSQLite cable databaseと`db/cable_migrate`を定義します。Action Cableを使わない構成では、Turbo DriveとTurbo Framesは利用できますが、Action Cableに依存するTurbo Streamsのbroadcast機能は利用できません。
 
 ## デプロイ方法
 
@@ -259,11 +261,12 @@ productionのSQLite databaseは、次の環境変数で`/data`配下へ配置し
 | database | 環境変数 | 既定の配置例 | 条件 |
 | --- | --- | --- | --- |
 | primary | `DATABASE_PATH` | `/data/production.sqlite3` | 常に必要 |
+| storage | `STORAGE_DATABASE_PATH` | `/data/production_storage.sqlite3` | 常に必要 |
 | queue | `QUEUE_DATABASE_PATH` | `/data/production_queue.sqlite3` | Solid Queue使用時 |
 | cache | `CACHE_DATABASE_PATH` | `/data/production_cache.sqlite3` | Solid Cache使用時 |
 | cable | `CABLE_DATABASE_PATH` | `/data/production_cable.sqlite3` | Action Cable使用時 |
 
-SQLite共通設定は`transaction_mode: immediate`、`timeout: 20000`とし、connection poolは`DATABASE_POOL_SIZE`、未指定時は`RAILS_MAX_THREADS`を使用します。queueには`db/queue_migrate`、cableには`db/cable_migrate`を`migrations_paths`として設定します。
+SQLite共通設定は`transaction_mode: immediate`、`timeout: 20000`とし、connection poolは`DATABASE_POOL_SIZE`、未指定時は`RAILS_MAX_THREADS`を使用します。storageには`db/storage_migrate`、queueには`db/queue_migrate`、cableには`db/cable_migrate`を`migrations_paths`として設定します。`deployment == none`でも複数database構成を維持し、productionのprimaryを`storage/production.sqlite3`、storageを`storage/production_storage.sqlite3`へ配置します。
 
 `bin/docker-entrypoint`は必要なdirectoryを作成した後、`bundle exec rails db:prepare`を一度実行します。Rails 8.1の`db:prepare`は現在のenvironmentに定義された全databaseを初期化・migrateするため、tableの有無を独自に調べるrunnerやdatabase別の非公開処理は追加しません。失敗時はコンテナを起動せず終了します。
 
@@ -272,6 +275,7 @@ SQLite共通設定は`transaction_mode: immediate`、`timeout: 20000`とし、co
 Litestreamはproduction SQLite databaseをS3互換storageへreplicateします。`litestream.yml`には選択済みdatabaseだけを含めます。
 
 - primaryは常にreplication対象とする。
+- Active Storageのstorageは常にreplication対象とする。
 - Solid Queue使用時だけqueueを追加する。
 - Action Cable使用時だけcableを追加する。
 
@@ -280,6 +284,7 @@ Litestreamはproduction SQLite databaseをS3互換storageへreplicateします�
 | 用途 | 環境変数 |
 | --- | --- |
 | primary replica | `LITESTREAM_REPLICA_URL` |
+| storage replica | `LITESTREAM_STORAGE_REPLICA_URL` |
 | queue replica | `LITESTREAM_QUEUE_REPLICA_URL` |
 | cable replica | `LITESTREAM_CABLE_REPLICA_URL` |
 | access key | `LITESTREAM_ACCESS_KEY_ID` |
@@ -295,8 +300,8 @@ Litestreamの設定または認証情報が不足した場合、replicationな�
 - persistent volume mount: `/data`
 - container command: Dockerfileの既定commandを使用
 - 必須secret: `RAILS_MASTER_KEY`、Litestreamのaccess keyとsecret key
-- 必須database path: `DATABASE_PATH`と、選択に応じた`QUEUE_DATABASE_PATH`／`CACHE_DATABASE_PATH`／`CABLE_DATABASE_PATH`
-- 必須replica URL: primaryと、選択に応じたqueue／cableのLitestream URL
+- 必須database path: `DATABASE_PATH`、`STORAGE_DATABASE_PATH`と、選択に応じた`QUEUE_DATABASE_PATH`／`CACHE_DATABASE_PATH`／`CABLE_DATABASE_PATH`
+- 必須replica URL: primary、storageと、選択に応じたqueue／cableのLitestream URL
 - 任意の調整値: `WEB_CONCURRENCY`、`RAILS_MAX_THREADS`、`DATABASE_POOL_SIZE`、`JOB_CONCURRENCY`
 
 環境変数の実値や秘密情報を生成先リポジトリへ保存しません。

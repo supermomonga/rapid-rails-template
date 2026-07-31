@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "authentication": "siwe",
-  "source_fingerprint": "62d0bcfcbb4c1ece1df9dc481f4b0e230f27f1b5c1a37b5610c5517dd4c56915",
-  "base_commit": "ac0d8da0b24e395d21ccbed8c201d1bbc2a2b522",
+  "source_fingerprint": "f58356a2f435c1caa0881fc92d2d8b79623bd2c73a0220cc7d4b509eb0e25af2",
+  "base_commit": "74e2e1399a1766ce331687491ed9d836780c5578",
   "viewports": {
     "desktop": {
       "width": 1400,
@@ -118,7 +118,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "desktop",
       "path": "api-credential-secret--desktop.png",
-      "sha256": "d5e67002c0258fb93e680e067063c2c51f4bfae8245918c7eb7c9213d123dd42",
+      "sha256": "2f98577400776c6670bce2f50681ec6ea992baad99847e85460375b0b0af3353",
       "pixel_width": 1400,
       "pixel_height": 954
     },
@@ -127,7 +127,7 @@
       "title": "APIキー詳細",
       "viewport": "desktop",
       "path": "api-credential-show--desktop.png",
-      "sha256": "09d234901cc05f587782426c245a6d6b601947317b578c3b3827fea36492e1ab",
+      "sha256": "e6d469b0799e06f656a75bcd7a98102e5944cf1085d6c16388b16d68b568481f",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -145,7 +145,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "desktop",
       "path": "api-credentials-populated--desktop.png",
-      "sha256": "c94d0b7a66fe55828736bf257e67057e08974d024e1803fff49bfda08e21ac22",
+      "sha256": "9ec6e8a2a132a1748e8dbdae2fe72a98cec265525fa5aff2b72d5560099cf273",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -298,7 +298,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "mobile",
       "path": "api-credential-secret--mobile.png",
-      "sha256": "8babbefaf7e4572137cbae7b1067851533aba391a98b585343fcd8cda36c7da6",
+      "sha256": "9d20cbff6ff044fa5078bee0cbef36fb5c3921ad8820d2ecce5a2558629ae255",
       "pixel_width": 390,
       "pixel_height": 1567
     },
@@ -307,7 +307,7 @@
       "title": "APIキー詳細",
       "viewport": "mobile",
       "path": "api-credential-show--mobile.png",
-      "sha256": "12859fbcb6e85d0db4f41ec59bfdbbed69e9a0f1ce4c78586b1748e8109cd8ca",
+      "sha256": "92c30eb8206adb01108d865eeb794fa07c1bb9389b0712c482720efa0eed4fc1",
       "pixel_width": 390,
       "pixel_height": 1401
     },
@@ -325,7 +325,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "mobile",
       "path": "api-credentials-populated--mobile.png",
-      "sha256": "7da4c0e7c5c6de7cb9afc386232a285046689d96583a0b9c9220fed335dee88c",
+      "sha256": "9fc50a357b7480a418afe7bf0679c3d547fb5ce4a5f9ed8691f8e8dc7d07bdc0",
       "pixel_width": 390,
       "pixel_height": 1317
     },

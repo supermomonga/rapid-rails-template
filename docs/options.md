@@ -211,7 +211,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 `dokploy`を選択した場合は`Procfile.prod`へPumaのwebプロセスを定義し、`active_job == solid_queue`の場合だけworkerプロセスも追加します。コンテナの既定commandがLitestream経由でForemanを起動し、Foremanが`Procfile.prod`のプロセスを管理します。
 
-primary SQLite databaseは常にLitestreamのreplication対象とし、queueとcableは対応する機能を選択した場合だけ追加します。必要なdatabase path、replica URL、S3互換storageの認証情報が不足した場合は実行を失敗させます。
+primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLitestreamのreplication対象とし、queueとcableは対応する機能を選択した場合だけ追加します。`STORAGE_DATABASE_PATH`と`LITESTREAM_STORAGE_REPLICA_URL`を含む必要なdatabase path、replica URL、S3互換storageの認証情報が不足した場合は実行を失敗させます。
 
 ## テスト要件
 
@@ -219,7 +219,8 @@ primary SQLite databaseは常にLitestreamのreplication対象とし、queueとc
 - CLI引数で指定した項目を再質問せず、未指定の適用可能な項目だけを質問すること。
 - `profile_features`をGumの複数選択で収集し、選択なしを有効な回答として扱うこと。
 - `--profile-features`のカンマ区切り値を正規化し、空値でProfile関連生成物をすべて省略すること。
-- Active StorageはAction Textとともに常設し、`avatar`選択時だけBoring Avatars、Profile添付、User ID由来の既定アバター、header trigger、画像削除routeを生成すること。
+- Active Storageと`active_storage_db`はAction Textとともに常設し、全環境でファイル本体を専用storage SQLite databaseへ保存すること。
+- `avatar`選択時だけBoring Avatars、Profile添付、User ID由来の既定アバター、header trigger、画像削除routeを生成すること。
 - 設定済み画像がBoring Avatarより優先され、削除後は同じUser ID由来のBoring Avatarへ戻ること。
 - すべての適用可能な項目をCLI引数で指定した場合、標準入力を読まずに実行すること。
 - 表示条件が満たされない質問を行わないこと。
@@ -238,4 +239,4 @@ primary SQLite databaseは常にLitestreamのreplication対象とし、queueとc
 - `deployment == dokploy`で`Dockerfile.prod`、`Procfile.prod`、entrypoint、Litestream設定を生成し、Rails標準Docker、Kamal、Thrusterを生成しないこと。
 - `deployment == none`でDocker、Kamal、Thruster、Procfile、Litestream、`foreman`を生成・追加しないこと。
 - `deployment == dokploy`かつ`active_job == solid_queue`の場合だけ`Procfile.prod`へworkerを追加すること。
-- `deployment == dokploy`でprimaryを常にreplicateし、queueとcableを選択に応じて追加すること。
+- `deployment == dokploy`でprimaryとActive Storageのstorageを常にreplicateし、queueとcableを選択に応じて追加すること。

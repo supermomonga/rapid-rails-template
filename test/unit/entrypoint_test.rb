@@ -224,6 +224,28 @@ class EntrypointTest < Minitest::Test
     assert_includes error.string, "不明なオプションです: --action-text"
   end
 
+  def test_rejects_maintenance_tasks_without_solid_queue_before_runner_initialization
+    error = StringIO.new
+    arguments = RapidRailsTemplate::Configuration::DEFAULTS.merge(
+      "maintenance_tasks" => "enable",
+      "active_job" => "skip"
+    ).map do |id, value|
+      serialized = value.is_a?(Array) ? value.join(",") : value
+      "--#{id.tr('_', '-')}=#{serialized}"
+    end
+
+    status = RapidRailsTemplate::Entrypoint.run(
+      ["--app-id=sample", "--app-name=Sample App", *arguments, "sample"],
+      output: StringIO.new,
+      error:,
+      runner_class: UnexpectedRunner,
+      prompt: UnexpectedPrompt
+    )
+
+    assert_equal 1, status
+    assert_includes error.string, "Maintenance Tasks使用時はSolid Queueが必要です"
+  end
+
   def test_non_applicable_option_can_be_omitted_without_reading_input
     answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |id, _| id == "web_push" }
     arguments = answers.map do |id, value|

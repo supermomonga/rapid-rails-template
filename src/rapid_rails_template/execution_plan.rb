@@ -56,6 +56,7 @@ module RapidRailsTemplate
       result << "boring_avatars" if configuration["profile_features"].include?("avatar")
       result << "web-push" if configuration["web_push"] == "use"
       result << "solid_queue" if configuration["active_job"] == "solid_queue"
+      result << "maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
       result << "solid_cache" if configuration["solid_cache"] == "use"
       result << "solid_cable" if configuration["action_cable"] == "solid_cable"
       result << "foreman" if configuration["deployment"] == "dokploy"
@@ -73,6 +74,7 @@ module RapidRailsTemplate
       result << "configure_web_push" if configuration["web_push"] == "use"
       result << "configure_default_views"
       result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
+      result << "install_maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
       result << "install_solid_cache" if configuration["solid_cache"] == "use"
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
       result << "configure_database"
@@ -265,6 +267,23 @@ module RapidRailsTemplate
           test/controllers/push_subscriptions_controller_test.rb
           test/jobs/push_notification_job_test.rb
           test/services/push_notifier_test.rb
+        ])
+      end
+      if configuration["maintenance_tasks"] == "enable"
+        result.concat(%w[
+          config/initializers/maintenance_tasks.rb
+          app/controllers/admin/maintenance_tasks_controller.rb
+          app/policies/maintenance_task_policy.rb
+          app/views/layouts/maintenance_tasks/admin.html.erb
+          app/assets/stylesheets/maintenance_tasks.css
+          app/javascript/controllers/maintenance_tasks_refresh_controller.js
+          config/locales/maintenance_tasks.ja.yml
+          config/locales/maintenance_tasks.en.yml
+          db/migrate/*_maintenance_tasks.rb
+          docs/maintenance_tasks.md
+          test/policies/maintenance_task_policy_test.rb
+          test/controllers/admin/maintenance_tasks_controller_test.rb
+          test/support/maintenance_tasks/safe_test_task.rb
         ])
       end
       result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"

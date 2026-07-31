@@ -38,6 +38,7 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --pwa=skip \
   --web-push=skip \
   --active-job=skip \
+  --maintenance-tasks=disable \
   --solid-cache=use \
   --account-authentication=devise \
   --profile-features=screen_name,display_name,avatar \

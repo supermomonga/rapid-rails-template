@@ -106,6 +106,42 @@ class QuestionnaireTest < Minitest::Test
     refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("ジョブ管理") }
   end
 
+  def test_asks_maintenance_tasks_with_enable_preselected_when_solid_queue_is_selected
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.merge(
+      "active_job" => "solid_queue"
+    ).reject { |key, _| key == "maintenance_tasks" }
+    prompt = RecordingPrompt.new(answers: ["enable"])
+
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all(initial_answers)
+
+    assert_equal "enable", answers["maintenance_tasks"]
+    assert_equal [
+      %w[enable disable],
+      { header: "管理者向け運用タスクを使用しますか？", selected: ["enable"] }
+    ], prompt.choose_calls.fetch(0)
+  end
+
+  def test_asks_maintenance_tasks_when_web_push_requires_solid_queue
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.merge(
+      "pwa" => "use",
+      "web_push" => "use"
+    ).reject { |key, _| %w[active_job maintenance_tasks].include?(key) }
+    prompt = RecordingPrompt.new(answers: ["enable"])
+
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all(initial_answers)
+
+    refute answers.key?("active_job")
+    assert_equal "enable", answers["maintenance_tasks"]
+  end
+
+  def test_skips_maintenance_tasks_without_solid_queue
+    prompt = RecordingPrompt.new
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
+
+    refute answers.key?("maintenance_tasks")
+    refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("運用タスク") }
+  end
+
   def test_asks_only_applicable_options_missing_from_initial_answers
     initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |key, _| key == "mail" }
     prompt = RecordingPrompt.new(answers: ["skip"])

@@ -230,6 +230,16 @@ plugin :solid_queue if ENV.fetch("RAILS_ENV", "development") == "development"
 
 productionではPuma pluginを有効化せず、`bin/jobs`をworkerプロセスとして起動します。`deployment == dokploy`の場合だけ`Procfile.prod`へworkerを定義し、Webプロセスと同じコンテナ内でForemanから起動します。`deployment == none`でも`bin/jobs`自体は生成しますが、起動方法をこのテンプレートでは設定しません。
 
+## Maintenance Tasks
+
+`maintenance_tasks=enable`かつ`active_job=solid_queue`の場合だけ、Shopify `maintenance_tasks` 2.17.0を導入します。公式`maintenance_tasks:install` generatorが提供するmigrationをそのまま使用し、`maintenance_tasks_runs`で実行履歴、status、cursor、arguments、metadata、job ID、error class/message/backtraceを管理します。同じ情報を保持する独自modelやaudit tableは追加しません。
+
+engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksController`を`MaintenanceTasks.parent_controller`へ設定します。parent controllerは既存`Admin::BaseController`を継承し、全engine actionを`MaintenanceTaskPolicy#manage?`で認可します。Deviseでは`current_user`、Wallet SIWEでは`Current.user`を既存Action Policy contextから利用し、controller内でroleを直接判定しません。
+
+engine Viewは2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。公式Bulma 1.0.4 stylesheetはengine画面だけでintegrity付きで読み込み、補助styleと3秒ごとの`data-refresh`更新だけをhost assetへ移します。CSPはself、公式CDN、request nonceへ限定し、無効化や`unsafe-inline`は使用しません。
+
+Maintenance Taskは既存Solid Queue workerで実行します。Dokployでは既存`worker: bin/jobs --mode async`を共有し、専用workerを追加しません。`deployment=none`ではproduction worker processを生成せず、利用者がSolid Queue workerの起動と監視を別途構成します。
+
 ## Action CableとSolid Cable
 
 Action Cableを使用する場合だけ`solid_cable`を導入し、production adapterをSolid Cableにします。

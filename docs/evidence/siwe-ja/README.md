@@ -1,7 +1,7 @@
 # Wallet SIWE / ja エビデンス
 
-- Source fingerprint: `dd85e34ad50d54f118686cf3175a6dbd39866ba33be4c357cc15cacab6dcd237`
-- Base commit: `03be25194be10fa5205392a264cba559c2bd3003`
+- Source fingerprint: `ac663b19ba0a2aaab143930311662431288855cb4d8b6e0b0e9ef24b86865523`
+- Base commit: `1335ced76302e0f1b2370591d39783553dbd072d`
 - Locale: `ja`
 - 更新: `rake evidence:update`
 
@@ -185,6 +185,16 @@
 
 ![ユーザー管理 (mobile)](admin-users--mobile.png)
 
+## 運用タスク
+
+### Desktop
+
+![運用タスク (desktop)](admin-maintenance-tasks--desktop.png)
+
+### Mobile
+
+![運用タスク (mobile)](admin-maintenance-tasks--mobile.png)
+
 ## 固定ページ編集
 
 ### Desktop
@@ -220,6 +230,12 @@
 ### Mobile
 
 ![モバイルメニュー（未ログイン） (mobile)](navigation-guest-open--mobile.png)
+
+## 運用タスクのモバイルメニュー
+
+### Mobile
+
+![運用タスクのモバイルメニュー (mobile)](admin-maintenance-tasks-navigation-open--mobile.png)
 
 ## モバイルメニュー（ログイン済み）
 

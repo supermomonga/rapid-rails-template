@@ -2,8 +2,8 @@
   "schema_version": 2,
   "authentication": "siwe",
   "locale": "en",
-  "source_fingerprint": "dd85e34ad50d54f118686cf3175a6dbd39866ba33be4c357cc15cacab6dcd237",
-  "base_commit": "03be25194be10fa5205392a264cba559c2bd3003",
+  "source_fingerprint": "ac663b19ba0a2aaab143930311662431288855cb4d8b6e0b0e9ef24b86865523",
+  "base_commit": "1335ced76302e0f1b2370591d39783553dbd072d",
   "viewports": {
     "desktop": {
       "width": 1400,
@@ -137,7 +137,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "desktop",
       "path": "api-credential-secret--desktop.png",
-      "sha256": "c3f085db3d62bfbf36a84c0918ccf9172de7b5226725514f4a9f6b5b39ebf3ad",
+      "sha256": "beffbca5ae4a97fa6d3dfe5e72650f651a64b0fc64b30d2db716a66c84e33a41",
       "pixel_width": 1400,
       "pixel_height": 954
     },
@@ -146,7 +146,7 @@
       "title": "APIキー詳細",
       "viewport": "desktop",
       "path": "api-credential-show--desktop.png",
-      "sha256": "fb7760b730530ff420004ba3fa2be4b3bd0d6cba5d2c81af07b17f1dbc7cda6e",
+      "sha256": "9127805b26af9b9a1167a2c04acef1b6836d3eed68799c5acaf810c311634e5b",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -164,7 +164,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "desktop",
       "path": "api-credentials-populated--desktop.png",
-      "sha256": "78866e6a9e631d5810fd2f5529aa46345fb17edcb40247f60dccf64b3a3aaecf",
+      "sha256": "53f3cc335b59ae19de6df83466bfe1cf771d9e4664d7efa05fccf439a359fca3",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -173,7 +173,16 @@
       "title": "ユーザー管理",
       "viewport": "desktop",
       "path": "admin-users--desktop.png",
-      "sha256": "ce331a1085d363888b5232beed7516ba325fc11554ba5e94ea0dfcfc3c1ace9e",
+      "sha256": "0b7fb783bf553d61e70e5c56ca95ae7c0b50aa6c6250fe76622d49918b2947a6",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "admin-maintenance-tasks",
+      "title": "運用タスク",
+      "viewport": "desktop",
+      "path": "admin-maintenance-tasks--desktop.png",
+      "sha256": "f628957d079f28253fae3acf42c4631f94c9eb12d288148843b5757e04982501",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -182,7 +191,7 @@
       "title": "固定ページ編集",
       "viewport": "desktop",
       "path": "admin-page-edit--desktop.png",
-      "sha256": "bd974d8f6e067498d115028a6d5825101e600fa22a59acad81f5bf15e9119731",
+      "sha256": "7ccff26b933936ab1b76a1c99bb622d92b9304d1683ab0522e702a62a3360421",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -191,7 +200,7 @@
       "title": "FAQ編集",
       "viewport": "desktop",
       "path": "admin-faq-edit--desktop.png",
-      "sha256": "350f0b88398a9526c73b2eba21ce5cf05cea8fda3d2cc9592ce5b65fad19c0da",
+      "sha256": "9df73be07bdb4cbe079a3f53c129ea14bd8d6c8fa69f2612b38b180c8b0c9fca",
       "pixel_width": 1400,
       "pixel_height": 1086
     },
@@ -200,7 +209,7 @@
       "title": "External links",
       "viewport": "desktop",
       "path": "admin-footer-setting--desktop.png",
-      "sha256": "ed3600955977fea6351c74b6467c9b35d3d2f8ec42ead3971486a4253b31418f",
+      "sha256": "0b18c4a548615576f64a3c350598612d2a0054f27ade1ab39474bbee27c34260",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -335,7 +344,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "mobile",
       "path": "api-credential-secret--mobile.png",
-      "sha256": "3689319e42a56e366a911e845bfec7b6a6e9ea613dbc0a40343263bd767e326e",
+      "sha256": "2783b176856df76eb363c64d59b1e9ad3c063da61db0e0c3a8c4b6dec68a69fe",
       "pixel_width": 390,
       "pixel_height": 1624
     },
@@ -344,7 +353,7 @@
       "title": "APIキー詳細",
       "viewport": "mobile",
       "path": "api-credential-show--mobile.png",
-      "sha256": "ce2e57f149a5c7654b75bfda09827176f5bbb7908cd0b17636201f25879462ef",
+      "sha256": "f52bf7f7a29b396ce2504b503d3fd39efe36289ef6f17a6e5935fce3796d95d3",
       "pixel_width": 390,
       "pixel_height": 1438
     },
@@ -362,7 +371,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "mobile",
       "path": "api-credentials-populated--mobile.png",
-      "sha256": "6be425a13474101e6db3e55f60c17f5582c6df75b6557d456bd7e44f9d6f2e84",
+      "sha256": "20634ba5387d4adcfd64612e3030192bfc6ee2719c9767fe19ae36d197d8b592",
       "pixel_width": 390,
       "pixel_height": 1329
     },
@@ -371,36 +380,54 @@
       "title": "ユーザー管理",
       "viewport": "mobile",
       "path": "admin-users--mobile.png",
-      "sha256": "af03e7f2a4e7fabb67a104ef7456d26375a1ce2a26a31f0c238303d85e7b098e",
+      "sha256": "f8906aeb07c40f28b1d76834c478fe3e0cee2485a98b1ea98582ef8a08d9f46e",
       "pixel_width": 390,
-      "pixel_height": 1874
+      "pixel_height": 1911
+    },
+    {
+      "id": "admin-maintenance-tasks",
+      "title": "運用タスク",
+      "viewport": "mobile",
+      "path": "admin-maintenance-tasks--mobile.png",
+      "sha256": "8bb429c5da07088945d494184ace3259ee6e19774fe64af322d37ea54a6b146f",
+      "pixel_width": 390,
+      "pixel_height": 934
+    },
+    {
+      "id": "admin-maintenance-tasks-navigation-open",
+      "title": "運用タスクのモバイルメニュー",
+      "viewport": "mobile",
+      "path": "admin-maintenance-tasks-navigation-open--mobile.png",
+      "sha256": "4f052a1d38567d755b2fc9cd3f5c002cece5f07b7d6e215eb89c9501c26b8b2b",
+      "pixel_width": 390,
+      "pixel_height": 934
     },
     {
       "id": "admin-page-edit",
       "title": "固定ページ編集",
       "viewport": "mobile",
       "path": "admin-page-edit--mobile.png",
-      "sha256": "1a447d2cf5e366e338af2fdfc86c82ff667734ab0c0d420da24b561d8f44cb7d",
+      "sha256": "d159c467f1d5683253743696f67c4486ebff85a58b97572ab480a7524398c2c2",
       "pixel_width": 390,
-      "pixel_height": 1390
+      "pixel_height": 1427
     },
     {
       "id": "admin-faq-edit",
       "title": "FAQ編集",
       "viewport": "mobile",
       "path": "admin-faq-edit--mobile.png",
-      "sha256": "3c43b28dbbcb08699c4fe6b6ec6ade6613c63136e01f7cd8566918210bf4d866",
+      "sha256": "8b88c39dbe20875f04e140abcea67233507649fa0c281e317c77fe3c75d89259",
       "pixel_width": 390,
-      "pixel_height": 1651
+      "pixel_height": 1688
     },
     {
       "id": "admin-footer-setting",
       "title": "External links",
       "viewport": "mobile",
       "path": "admin-footer-setting--mobile.png",
-      "sha256": "b2bf374d1516b3749ddb7af09d6f8d328d2bf346d53e16fb47d899604cb7211a",
+      "sha256": "1ecb26bac07c875d4a5671088f118ccdd510a7b99b58385aea00312db3ef36ae",
       "pixel_width": 390,
-      "pixel_height": 1317
+      "pixel_height": 1354
     },
     {
       "id": "navigation-authenticated-open",

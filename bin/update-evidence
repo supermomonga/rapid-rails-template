@@ -15,6 +15,7 @@ COMMON_OPTIONS = [
   "--pwa=use",
   "--web-push=use",
   "--active-job=solid_queue",
+  "--maintenance-tasks=enable",
   "--solid-cache=use",
   "--profile-features=screen_name,display_name,avatar",
   "--api=enable",

@@ -9,6 +9,8 @@ class ConfigurationTest < Minitest::Test
     assert_equal "skip", configuration["pwa"]
     assert_equal "skip", configuration["web_push"]
     assert_equal "skip", configuration["active_job"]
+    assert_equal "disable", configuration["maintenance_tasks"]
+    assert_equal "Solid Queueを使用しないため", configuration.reasons["maintenance_tasks"]
     assert_equal "use", configuration["solid_cache"]
     assert_equal "devise", configuration["account_authentication"]
     assert_equal %w[screen_name display_name avatar], configuration["profile_features"]
@@ -30,6 +32,7 @@ class ConfigurationTest < Minitest::Test
     configuration = RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "use")
 
     assert_equal "solid_queue", configuration["active_job"]
+    assert_equal "enable", configuration["maintenance_tasks"]
     assert_equal "Web Pushの非同期送信に必要なため", configuration.reasons["active_job"]
 
     assert_raises(RapidRailsTemplate::InvalidConfiguration) do
@@ -38,6 +41,23 @@ class ConfigurationTest < Minitest::Test
     assert_raises(RapidRailsTemplate::InvalidConfiguration) do
       RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "use", "active_job" => "skip")
     end
+  end
+
+  def test_maintenance_tasks_requires_solid_queue
+    configuration = RapidRailsTemplate::Configuration.build(
+      "active_job" => "solid_queue",
+      "maintenance_tasks" => "enable"
+    )
+
+    assert_equal "enable", configuration["maintenance_tasks"]
+
+    error = assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build(
+        "active_job" => "skip",
+        "maintenance_tasks" => "enable"
+      )
+    end
+    assert_equal "Maintenance Tasks使用時はSolid Queueが必要です", error.message
   end
 
   def test_mail_auto_is_disabled_for_wallet_siwe

@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication profile_features api action_cable mail deployment default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job maintenance_tasks solid_cache account_authentication profile_features api action_cable mail deployment default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -47,6 +47,7 @@ gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_n
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
 gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
 gem "solid_queue" if VALUES.fetch("active_job") == "solid_queue"
+gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
 gem "solid_cable" if VALUES.fetch("action_cable") == "solid_cable"
 gem "foreman", require: false if VALUES.fetch("deployment") == "dokploy"
@@ -103,6 +104,33 @@ def configure_devise_registration_route
   raise "#{path}のdevise_for(:users)が想定外の構造です: #{actual}" unless actual == "devise_for :users"
 
   replacement = 'devise_for :users, controllers: { registrations: "users/registrations" }'
+  File.binwrite(
+    path,
+    source.byteslice(0, call.location.start_offset) + replacement + source.byteslice(call.location.end_offset..)
+  )
+end
+
+def configure_maintenance_tasks_route
+  require "prism"
+  path = "config/routes.rb"
+  source = File.binread(path)
+  result = Prism.parse(source)
+  raise "#{path}をRubyとして解析できません: #{result.errors.map(&:message).join(', ')}" unless result.success?
+
+  calls = []
+  queue = [result.value]
+  until queue.empty?
+    node = queue.shift
+    if node.is_a?(Prism::CallNode) && node.name == :mount
+      actual = source.byteslice(node.location.start_offset, node.location.length)
+      calls << node if actual == 'mount MaintenanceTasks::Engine, at: "/maintenance_tasks"'
+    end
+    queue.concat(node.compact_child_nodes)
+  end
+  raise "#{path}のMaintenance Tasks mountが一意ではありません" unless calls.one?
+
+  call = calls.first
+  replacement = 'mount MaintenanceTasks::Engine, at: "/admin/maintenance_tasks", as: :admin_maintenance_tasks'
   File.binwrite(
     path,
     source.byteslice(0, call.location.start_offset) + replacement + source.byteslice(call.location.end_offset..)
@@ -4120,6 +4148,7 @@ def configure_default_views
   devise = VALUES.fetch("account_authentication") == "devise"
   pwa_enabled = VALUES.fetch("pwa") == "use"
   web_push_enabled = VALUES.fetch("web_push") == "use"
+  maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
   profile_features = VALUES.fetch("profile_features")
   profile_enabled = profile_features.any?
@@ -4234,10 +4263,27 @@ def configure_default_views
         <% end %>
       </li>
   ERB
+  if maintenance_tasks_enabled
+    admin_navigation_items += <<~ERB
+      <li>
+        <%= link_to admin_maintenance_tasks_path, class: ("menu-active" if controller_path.start_with?("maintenance_tasks/")), aria: { current: ("page" if controller_path.start_with?("maintenance_tasks/")) } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766m-3.704 3.796-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 2.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 2.437 1.745-2.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
+          </svg>
+          <%= t("navigation.maintenance_tasks") %>
+        <% end %>
+      </li>
+    ERB
+  end
   account_navigation_for_layout = account_navigation_items.lines.map { |line| "                #{line}" }.join
   account_navigation_for_dropdown = account_navigation_items.lines.map { |line| "          #{line}" }.join
   admin_navigation_for_layout = admin_navigation_items.lines.map { |line| "                #{line}" }.join
   signed_in_condition = devise ? "user_signed_in?" : "authenticated?"
+  admin_controller_condition = if maintenance_tasks_enabled
+    'controller_path.start_with?("admin/") || controller_path.start_with?("maintenance_tasks/")'
+  else
+    'controller_path.start_with?("admin/")'
+  end
   profile_owner = devise ? "current_user.profile" : "Current.user.profile"
   logout_path = devise ? "destroy_user_session_path" : "session_path"
   guest_desktop_navigation = if devise
@@ -4483,7 +4529,7 @@ def configure_default_views
   create_file "app/views/shared/_admin_navigation.html.erb", admin_navigation_items, force: true
   create_file "app/views/layouts/admin.html.erb", <<~ERB, force: true
     <% content_for :content do %>
-      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="admin">
+      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="admin"#{maintenance_tasks_enabled ? ' data-maintenance-tasks-shell="<%= controller_path.start_with?("maintenance_tasks/") %>"' : ""}>
         <aside class="h-fit">
           <nav aria-label="<%= t('navigation.admin_menu') %>">
             <ul class="menu w-full rounded-box bg-base-100">
@@ -4491,7 +4537,7 @@ def configure_default_views
     #{admin_navigation_for_layout}          </ul>
           </nav>
         </aside>
-        <div class="min-w-0"><%= yield %></div>
+        <div class="min-w-0"><%= content_for?(:admin_content) ? yield(:admin_content) : yield %></div>
       </div>
     <% end %>
     <%= render template: "layouts/application" %>
@@ -4507,7 +4553,7 @@ def configure_default_views
           <div class="navbar-end">
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
-    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if controller_path.start_with?("admin/") %>
+    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if #{admin_controller_condition} %>
                 <li class="menu-title"><span><%= t("navigation.admin") %></span></li>
                 <%= render "shared/admin_navigation" %>
               <% else %>
@@ -4818,6 +4864,34 @@ def configure_default_views
     RUBY
   end
   profile_page_assertions = profile_page_assertions.lines.map { |line| "      #{line}" }.join
+  maintenance_route_test = if maintenance_tasks_enabled
+    <<~RUBY
+
+        test "mounts Maintenance Tasks only below the admin namespace" do
+          assert_respond_to Rails.application.routes.url_helpers, :admin_maintenance_tasks_path
+          assert_equal "/admin/maintenance_tasks", admin_maintenance_tasks_path
+          assert Rails.application.routes.recognize_path("/admin/maintenance_tasks", method: :get)
+          assert ActiveRecord::Base.connection.data_source_exists?("maintenance_tasks_runs")
+          assert_raises(ActionController::RoutingError) do
+            Rails.application.routes.recognize_path("/maintenance_tasks", method: :get)
+          end
+        end
+    RUBY
+  else
+    <<~RUBY
+
+        test "does not expose Maintenance Tasks when the feature is disabled" do
+          assert_not_respond_to Rails.application.routes.url_helpers, :admin_maintenance_tasks_path
+          assert_not ActiveRecord::Base.connection.data_source_exists?("maintenance_tasks_runs")
+          assert_raises(ActionController::RoutingError) do
+            Rails.application.routes.recognize_path("/admin/maintenance_tasks", method: :get)
+          end
+          assert_raises(ActionController::RoutingError) do
+            Rails.application.routes.recognize_path("/maintenance_tasks", method: :get)
+          end
+        end
+    RUBY
+  end
 
   default_pages_test = if devise
     <<~RUBY
@@ -4901,6 +4975,7 @@ def configure_default_views
           assert_select '.card .fieldset', minimum: 1
           assert_select '.card-actions .btn.btn-error', count: 1
         end
+    #{maintenance_route_test}
       end
     RUBY
   else
@@ -4938,6 +5013,7 @@ def configure_default_views
           assert_redirected_to new_session_url
           assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path("/session/edit", method: :get) }
         end
+    #{maintenance_route_test}
       end
     RUBY
   end
@@ -5954,6 +6030,409 @@ def install_solid_components
   generate "solid_cable:install" if VALUES.fetch("action_cable") == "solid_cable"
 end
 
+def install_maintenance_tasks
+  devise = VALUES.fetch("account_authentication") == "devise"
+  identifier_type = devise ? "email" : "wallet_address"
+  identifier_expression = devise ? "authorization_user.email" : "authorization_user.wallet_address"
+  production_worker = if VALUES.fetch("deployment") == "dokploy"
+    "Dokployでは既存の`worker: bin/jobs --mode async`がMaintenance Taskも処理します。専用workerは追加しません。"
+  else
+    "このテンプレートはproduction worker processを設定しません。利用環境に合わせてSolid Queue workerの起動と監視を別途構成してください。"
+  end
+  authentication_route_bridge = if devise
+    ""
+  else
+    <<~RUBY
+      def new_session_path
+        Rails.application.routes.url_helpers.new_session_path
+      end
+
+    RUBY
+  end
+
+  generate "maintenance_tasks:install"
+  configure_maintenance_tasks_route
+
+  create_file "config/initializers/maintenance_tasks.rb", <<~RUBY, force: true
+    MaintenanceTasks.parent_controller = "Admin::MaintenanceTasksController"
+    MaintenanceTasks.metadata = lambda do
+      {
+        "triggered_by_type" => "#{identifier_type}",
+        "triggered_by_identifier" => #{identifier_expression}
+      }
+    end
+
+    Rails.application.config.content_security_policy_nonce_generator = ->(_request) { SecureRandom.base64(16) }
+    Rails.application.config.content_security_policy_nonce_directives = %w[script-src-elem style-src-elem]
+  RUBY
+
+  create_file "app/policies/maintenance_task_policy.rb", <<~RUBY, force: true
+    class MaintenanceTaskPolicy < ApplicationPolicy
+      def manage?
+        admin?
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/maintenance_tasks_controller.rb", <<~RUBY, force: true
+    module Admin
+      class MaintenanceTasksController < BaseController
+        include Rails.application.routes.url_helpers
+        helper Rails.application.routes.url_helpers
+
+        layout "maintenance_tasks/admin"
+
+        before_action :authorize_maintenance_tasks!
+        after_action :configure_maintenance_tasks_content_security_policy
+
+    #{authentication_route_bridge.lines.map { |line| "    #{line}" }.join}    private
+          def authorize_maintenance_tasks!
+            authorize! :maintenance_task, to: :manage?
+          end
+
+          def configure_maintenance_tasks_content_security_policy
+            request.content_security_policy.style_src_elem(
+              :self,
+              MaintenanceTasks::ApplicationController::BULMA_CDN
+            )
+            request.content_security_policy.script_src_elem(:self)
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/views/layouts/maintenance_tasks/admin.html.erb", <<~ERB, force: true
+    <% content_for :title, (content_for(:page_title).presence || t("maintenance_tasks.title")) %>
+    <% content_for :head do %>
+      <% unless request.xhr? %>
+        <%= stylesheet_link_tag "https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css", media: :all, integrity: "sha256-Z/om3xyp6V2PKtx8BPobFfo9JCV0cOvBDMaLmquRS+4=", crossorigin: "anonymous" %>
+        <%= stylesheet_link_tag "maintenance_tasks", "data-turbo-track": "reload" %>
+      <% end %>
+    <% end %>
+    <% content_for :admin_content do %>
+      <div data-controller="maintenance-tasks-refresh" data-maintenance-tasks-root>
+        <%= yield %>
+      </div>
+    <% end %>
+    <%= render template: "layouts/admin" %>
+  ERB
+
+  create_file "app/assets/stylesheets/maintenance_tasks.css", <<~CSS, force: true
+    [data-maintenance-tasks-shell="true"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    @media (min-width: 961px) {
+      [data-maintenance-tasks-shell="true"] {
+        grid-template-columns: 220px minmax(0, 1fr);
+      }
+    }
+
+    [data-maintenance-tasks-root] {
+      min-width: 0;
+    }
+
+    [data-maintenance-tasks-root] .ruby-comment { color: #6a737d; }
+    [data-maintenance-tasks-root] .ruby-const { color: #e36209; }
+    [data-maintenance-tasks-root] .ruby-embexpr-beg,
+    [data-maintenance-tasks-root] .ruby-embexpr-end,
+    [data-maintenance-tasks-root] .ruby-period { color: #24292e; }
+    [data-maintenance-tasks-root] .ruby-ident,
+    [data-maintenance-tasks-root] .ruby-symbeg { color: #6f42c1; }
+    [data-maintenance-tasks-root] .ruby-ivar,
+    [data-maintenance-tasks-root] .ruby-cvar,
+    [data-maintenance-tasks-root] .ruby-gvar,
+    [data-maintenance-tasks-root] .ruby-int,
+    [data-maintenance-tasks-root] .ruby-imaginary,
+    [data-maintenance-tasks-root] .ruby-float,
+    [data-maintenance-tasks-root] .ruby-rational { color: #005cc5; }
+    [data-maintenance-tasks-root] .ruby-kw { color: #d73a49; }
+    [data-maintenance-tasks-root] .ruby-label,
+    [data-maintenance-tasks-root] .ruby-tstring-beg,
+    [data-maintenance-tasks-root] .ruby-tstring-content,
+    [data-maintenance-tasks-root] .ruby-tstring-end { color: #032f62; }
+    [data-maintenance-tasks-root] .select,
+    [data-maintenance-tasks-root] select { width: 100%; }
+    [data-maintenance-tasks-root] summary { cursor: pointer; }
+    [data-maintenance-tasks-root] input[type="datetime-local"],
+    [data-maintenance-tasks-root] input[type="date"],
+    [data-maintenance-tasks-root] input[type="time"] { width: fit-content; }
+    [data-maintenance-tasks-root] details > summary { list-style: none; }
+    [data-maintenance-tasks-root] summary::-webkit-details-marker { display: none; }
+    [data-maintenance-tasks-root] summary::before {
+      content: "► ";
+      position: absolute;
+      font-size: 16px;
+    }
+    [data-maintenance-tasks-root] details[open] summary::before { content: "▼ "; }
+    [data-maintenance-tasks-root] .box {
+      box-shadow: 0 0 6px 0 #0000001a, 0 2px 4px -1px #0000001a;
+    }
+    [data-maintenance-tasks-root] .label.is-required::after {
+      content: " (required)";
+      color: #ff6685;
+      font-size: 12px;
+    }
+
+    [data-maintenance-tasks-root] .grid.is-col-min-20 {
+      grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+    }
+    [data-maintenance-tasks-root] .grid.is-col-min-20 > .cell {
+      min-width: 0;
+      width: auto;
+    }
+
+    @media (max-width: 960px) {
+      [data-maintenance-tasks-root] .title.is-flex { flex-wrap: wrap; }
+      [data-maintenance-tasks-root] .title.is-flex > a {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      [data-maintenance-tasks-root] .title.is-flex > .tag {
+        margin-inline: 0 !important;
+      }
+    }
+  CSS
+
+  create_file "app/javascript/controllers/maintenance_tasks_refresh_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      connect() {
+        this.scheduleRefresh()
+      }
+
+      disconnect() {
+        window.clearTimeout(this.timeout)
+        this.abortController?.abort()
+      }
+
+      scheduleRefresh() {
+        window.clearTimeout(this.timeout)
+        const target = this.element.querySelector("[data-refresh]")
+        if (!target?.dataset.refresh) return
+
+        this.timeout = window.setTimeout(() => this.refresh(target), 3000)
+      }
+
+      async refresh(target) {
+        this.abortController = new AbortController()
+        this.element.style.cursor = "wait"
+
+        try {
+          const response = await fetch(window.location.href, {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            credentials: "same-origin",
+            signal: this.abortController.signal
+          })
+          if (!response.ok) throw new Error(`Maintenance Tasks refresh failed: ${response.status}`)
+
+          const document = new DOMParser().parseFromString(await response.text(), "text/html")
+          const replacement = document.querySelector("[data-maintenance-tasks-root] [data-refresh]")
+          if (replacement) target.replaceWith(replacement)
+        } catch (error) {
+          if (error.name !== "AbortError") console.error(error)
+        } finally {
+          this.element.style.cursor = ""
+          this.abortController = null
+          this.scheduleRefresh()
+        }
+      }
+    }
+  JAVASCRIPT
+
+  create_locale_pair(
+    "maintenance_tasks",
+    ja: {
+      "navigation" => { "maintenance_tasks" => "運用タスク" },
+      "maintenance_tasks" => { "title" => "運用タスク" }
+    },
+    en: {
+      "navigation" => { "maintenance_tasks" => "Maintenance tasks" },
+      "maintenance_tasks" => { "title" => "Maintenance tasks" }
+    }
+  )
+
+  append_to_file "README.md", <<~MARKDOWN
+
+    ## Maintenance Tasks
+
+    管理者向け運用タスクの追加方法と安全な運用ルールは[Maintenance Tasks運用ガイド](docs/maintenance_tasks.md)を参照してください。
+  MARKDOWN
+  create_file "docs/maintenance_tasks.md", <<~MARKDOWN, force: true
+    # Maintenance Tasks運用ガイド
+
+    Maintenance Tasksは`/admin/maintenance_tasks`で管理者だけが利用できます。guestはログイン画面へ移動し、ログイン済みの一般Userは403 Forbiddenになります。
+
+    ## Taskの追加
+
+    `bin/rails generate maintenance_tasks:task NAME`を実行し、`app/tasks/maintenance/`へ生成されたTaskへ、再実行可能で小さな単位の処理を実装してください。ブラウザから任意のRubyコードを入力・実行する機能はありません。
+
+    実行履歴、status、cursor、job ID、arguments、metadata、error class/message/backtraceは`maintenance_tasks_runs`へGem標準形式で保存されます。実行者はRun metadataの`triggered_by_type`と`triggered_by_identifier`へ実行時点の#{identifier_type}をスナップショットとして保存します。User recordとの関連は持たないため、User削除後も履歴は維持されます。
+
+    ## Worker
+
+    Maintenance TaskはSolid Queueへenqueueされ、同期実行へ切り替わりません。#{production_worker}
+
+    ## 秘密情報
+
+    arguments、metadata、例外message、backtraceは永続化され、管理画面へ表示されます。password、token、秘密鍵、API credentialなどの秘密情報をargumentやmetadataへ渡さず、例外messageにも含めないでください。
+  MARKDOWN
+
+  create_file "test/support/maintenance_tasks/safe_test_task.rb", <<~RUBY, force: true
+    module Maintenance
+      class SafeTestTask < MaintenanceTasks::Task
+        no_collection
+
+        def process
+          nil
+        end
+      end
+    end
+  RUBY
+  append_to_file "test/test_helper.rb", <<~RUBY
+
+    require_relative "support/maintenance_tasks/safe_test_task"
+  RUBY
+
+  create_file "test/policies/maintenance_task_policy_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class MaintenanceTaskPolicyTest < ActiveSupport::TestCase
+      test "allows admins and denies regular users" do
+        admin = users(:one)
+        regular = users(:two)
+        admin.grant_role!(:admin)
+
+        assert MaintenanceTaskPolicy.new(:maintenance_task, user: admin).apply(:manage?)
+        assert_not MaintenanceTaskPolicy.new(:maintenance_task, user: regular).apply(:manage?)
+      end
+    end
+  RUBY
+
+  controller_test_support = if devise
+    <<~RUBY
+        include ActiveJob::TestHelper
+        include Devise::Test::IntegrationHelpers
+
+        setup do
+          @admin = User.create!(email: "maintenance-admin@example.com", password: "password123", password_confirmation: "password123")
+          @regular = User.create!(email: "maintenance-regular@example.com", password: "password123", password_confirmation: "password123")
+          @admin.grant_role!(:admin)
+        end
+
+        private
+          def sign_in_as(user, _key = nil)
+            sign_in user
+          end
+    RUBY
+  else
+    <<~RUBY
+        require "eth"
+
+        include ActiveJob::TestHelper
+
+        setup do
+          @admin, @admin_key = create_wallet_user
+          @regular, @regular_key = create_wallet_user
+          @admin.grant_role!(:admin)
+        end
+
+        private
+          def create_wallet_user
+            key = Eth::Key.new
+            [User.create!(wallet_address: key.address.to_s), key]
+          end
+
+          def sign_in_as(_user, key)
+            get session_nonce_url
+            nonce = response.parsed_body.fetch("nonce")
+            message = Siwe::Message.new(
+              domain: "www.example.com",
+              address: key.address.to_s,
+              uri: "http://www.example.com",
+              chain_id: 1,
+              nonce: nonce,
+              issued_at: Time.current.iso8601,
+              statement: Rails.configuration.x.application_identity.siwe_statement
+            ).prepare_message
+            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            assert_response :success
+          end
+    RUBY
+  end
+
+  create_file "test/controllers/admin/maintenance_tasks_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+    require "cgi"
+
+    class Admin::MaintenanceTasksControllerTest < ActionDispatch::IntegrationTest
+      TASK_NAME = "Maintenance::SafeTestTask"
+      TASK_PATH = "/admin/maintenance_tasks/tasks/\#{CGI.escapeURIComponent(TASK_NAME)}"
+      RUNS_PATH = "\#{TASK_PATH}/runs"
+
+    #{controller_test_support}
+      test "requires authentication" do
+        get admin_maintenance_tasks_url
+
+        assert_redirected_to #{devise ? "new_user_session_url" : "Rails.application.routes.url_helpers.new_session_path"}
+      end
+
+      test "denies every engine operation to regular users" do
+        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+
+        get admin_maintenance_tasks_url
+        assert_response :forbidden
+        get TASK_PATH
+        assert_response :forbidden
+        post RUNS_PATH
+        assert_response :forbidden
+        %w[pause cancel resume].each do |action|
+          post "\#{RUNS_PATH}/0/\#{action}"
+          assert_response :forbidden
+        end
+        assert_empty MaintenanceTasks::Run.all
+      end
+
+      test "renders the task list and details for admins" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        get admin_maintenance_tasks_url
+        assert_response :success
+        assert_select "[data-maintenance-tasks-root]", count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_maintenance_tasks_path,
+          text: I18n.t("navigation.maintenance_tasks"), count: 1
+
+        get TASK_PATH
+        assert_response :success
+        assert_select "[data-maintenance-tasks-root]", count: 1
+      end
+
+      test "enqueues and executes a task while preserving standard run history" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        assert_enqueued_with(job: MaintenanceTasks::TaskJob) do
+          post RUNS_PATH
+        end
+        assert_response :redirect
+
+        run = MaintenanceTasks::Run.order(:id).last
+        assert_predicate run.job_id, :present?
+        assert_equal "enqueued", run.status
+        assert_equal "#{identifier_type}", run.metadata.fetch("triggered_by_type")
+        assert_equal @admin.#{devise ? "email" : "wallet_address"}, run.metadata.fetch("triggered_by_identifier")
+
+        perform_enqueued_jobs
+
+        assert_equal "succeeded", run.reload.status
+        assert_predicate run.started_at, :present?
+        assert_predicate run.ended_at, :present?
+        assert_equal 1, MaintenanceTasks::Run.where(task_name: TASK_NAME).count
+      end
+    end
+  RUBY
+end
+
 def configure_common_files
   require "playwright"
   playwright_version = Playwright::COMPATIBLE_PLAYWRIGHT_VERSION.strip
@@ -5985,6 +6464,7 @@ end
 def configure_evidence_capture
   authentication = VALUES.fetch("account_authentication") == "devise" ? "devise" : "siwe"
   web_push = VALUES.fetch("web_push") == "use"
+  maintenance_tasks = VALUES.fetch("maintenance_tasks") == "enable"
   runner = <<~'RUBY'
     # frozen_string_literal: true
 
@@ -6000,6 +6480,7 @@ def configure_evidence_capture
       AUTHENTICATION = __AUTHENTICATION__
       LOCALE = I18n.default_locale.to_s
       WEB_PUSH = __WEB_PUSH__
+      MAINTENANCE_TASKS = __MAINTENANCE_TASKS__
       require "eth" if AUTHENTICATION == "siwe"
       VIEWPORTS = {
         "desktop" => { "width" => 1400, "height" => 900 },
@@ -6022,6 +6503,7 @@ def configure_evidence_capture
           authenticate
           prepare_authenticated_data
           verify_admin_layout_geometry if viewport_name == "desktop"
+          verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
           capture_authenticated_pages(viewport_name)
           Capybara.reset_sessions!
         end
@@ -6187,6 +6669,21 @@ def configure_evidence_capture
           capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, translate("api_credentials.title"), viewport)
           capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
           assert_admin_navigation_active(translate("navigation.users"))
+          if MAINTENANCE_TASKS
+            visit admin_maintenance_tasks_path
+            assert_equal 200, page.status_code
+            assert_selector "[data-maintenance-tasks-root]", count: 1
+            assert_admin_navigation_active(translate("navigation.maintenance_tasks"))
+            capture_current_page("admin-maintenance-tasks", "運用タスク", viewport)
+            if viewport == "mobile"
+              find("header details.dropdown > summary", visible: :visible).click
+              capture_current_page(
+                "admin-maintenance-tasks-navigation-open",
+                "運用タスクのモバイルメニュー",
+                viewport
+              )
+            end
+          end
           capture_page(
             "admin-page-edit",
             "固定ページ編集",
@@ -6491,6 +6988,51 @@ def configure_evidence_capture
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
+        def verify_maintenance_tasks_geometry
+          [320, 390, 640, 960, 961].each do |width|
+            page.current_window.resize_to(width, 900)
+            visit admin_maintenance_tasks_path
+            assert_equal 200, page.status_code
+            assert_selector "[data-maintenance-tasks-root]", count: 1
+            assert_admin_navigation_active(translate("navigation.maintenance_tasks"))
+
+            geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const shell = document.querySelector('[data-maintenance-tasks-shell="true"]')
+                  const sidebar = shell.querySelector(":scope > aside").getBoundingClientRect()
+                  const content = shell.querySelector(":scope > div").getBoundingClientRect()
+                  return {
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    rootWidth: document.querySelector("[data-maintenance-tasks-root]").getBoundingClientRect().width,
+                    sidebarTop: sidebar.top,
+                    sidebarBottom: sidebar.bottom,
+                    sidebarRight: sidebar.right,
+                    contentTop: content.top,
+                    contentLeft: content.left
+                  }
+                }
+              JAVASCRIPT
+            end
+            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+              "Maintenance Tasks horizontal overflow at #{width}px"
+            assert_operator geometry.fetch("rootWidth"), :>, 0,
+              "Maintenance Tasks content should be visible at #{width}px"
+            if width < 961
+              assert_operator geometry.fetch("contentTop"), :>=, geometry.fetch("sidebarBottom"),
+                "Maintenance Tasks admin shell should use one column at #{width}px"
+            else
+              assert_in_delta geometry.fetch("sidebarTop"), geometry.fetch("contentTop"), 0.5
+              assert_operator geometry.fetch("contentLeft"), :>=, geometry.fetch("sidebarRight"),
+                "Maintenance Tasks admin shell should use two columns at #{width}px"
+            end
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
         def with_deterministic_secure_random
           singleton_class = SecureRandom.singleton_class
           original_method = SecureRandom.method(:urlsafe_base64)
@@ -6507,14 +7049,22 @@ def configure_evidence_capture
           path = @output_directory.join(filename)
           page.driver.with_playwright_page do |playwright_page|
             playwright_page.emulate_media(reducedMotion: "reduce")
-            playwright_page.add_style_tag(content: <<~CSS)
-              *, *::before, *::after {
-                animation: none !important;
-                caret-color: transparent !important;
-                scroll-behavior: auto !important;
-                transition: none !important;
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const style = document.createElement("style")
+                const nonce = document.querySelector('meta[name="csp-nonce"]')?.content
+                if (nonce) style.nonce = nonce
+                style.textContent = `
+                  *, *::before, *::after {
+                    animation: none !important;
+                    caret-color: transparent !important;
+                    scroll-behavior: auto !important;
+                    transition: none !important;
+                  }
+                `
+                document.head.append(style)
               }
-            CSS
+            JAVASCRIPT
             playwright_page.evaluate("() => document.fonts.ready")
             playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")
           end
@@ -6524,6 +7074,7 @@ def configure_evidence_capture
   RUBY
   runner = runner.sub("__AUTHENTICATION__", authentication.inspect)
   runner = runner.sub("__WEB_PUSH__", web_push.inspect)
+  runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)
   create_file "test/support/evidence_capture.rb", runner, force: true
   create_file "lib/tasks/evidence.rake", <<~'RAKE', force: true
     # frozen_string_literal: true
@@ -6744,6 +7295,7 @@ after_bundle do
   configure_web_push if VALUES.fetch("web_push") == "use"
   configure_default_views
   install_solid_components
+  install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"
   configure_database
   configure_active_storage_db
   configure_dokploy if VALUES.fetch("deployment") == "dokploy"

@@ -281,6 +281,58 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes solid, 'plugin :solid_queue if ENV.fetch(\\"RAILS_ENV\\", \\"development\\") == \\"development\\"'
   end
 
+  def test_installs_maintenance_tasks_through_the_official_generator_and_admin_boundary
+    maintenance = source_between("def install_maintenance_tasks", "def configure_common_files")
+    route = source_between("def configure_maintenance_tasks_route", "def run_checked")
+    controller = generated_file_source("app/controllers/admin/maintenance_tasks_controller.rb")
+    policy = generated_file_source("app/policies/maintenance_task_policy.rb")
+    initializer = generated_file_source("config/initializers/maintenance_tasks.rb")
+    layout = generated_file_source("app/views/layouts/maintenance_tasks/admin.html.erb")
+    stylesheet = generated_file_source("app/assets/stylesheets/maintenance_tasks.css")
+    refresh = generated_file_source("app/javascript/controllers/maintenance_tasks_refresh_controller.js")
+    controller_test = generated_file_source("test/controllers/admin/maintenance_tasks_controller_test.rb")
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+
+    assert_includes @source, 'gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"'
+    assert_includes maintenance, 'generate "maintenance_tasks:install"'
+    assert_includes route, "Prism.parse(source)"
+    assert_includes route, 'actual == \'mount MaintenanceTasks::Engine, at: "/maintenance_tasks"\''
+    assert_includes route, 'mount MaintenanceTasks::Engine, at: "/admin/maintenance_tasks", as: :admin_maintenance_tasks'
+    assert_includes initializer, 'MaintenanceTasks.parent_controller = "Admin::MaintenanceTasksController"'
+    assert_includes initializer, '"triggered_by_type"'
+    assert_includes initializer, '"triggered_by_identifier"'
+    assert_includes initializer, "SecureRandom.base64(16)"
+    assert_includes initializer, "%w[script-src-elem style-src-elem]"
+    assert_includes controller, "class MaintenanceTasksController < BaseController"
+    assert_includes controller, "include Rails.application.routes.url_helpers"
+    assert_includes controller, "helper Rails.application.routes.url_helpers"
+    assert_includes controller, "authorize! :maintenance_task, to: :manage?"
+    refute_includes controller, "has_role?"
+    assert_includes policy, "def manage?"
+    assert_includes policy, "admin?"
+    assert_includes layout, 'render template: "layouts/admin"'
+    assert_includes layout, 'data-controller="maintenance-tasks-refresh"'
+    assert_includes layout, "bulma@1.0.4/css/bulma.min.css"
+    assert_includes stylesheet, "[data-maintenance-tasks-root]"
+    assert_includes stylesheet, '[data-maintenance-tasks-shell="true"]'
+    assert_includes stylesheet, "grid-template-columns: 220px minmax(0, 1fr)"
+    assert_includes stylesheet, "repeat(auto-fit, minmax(min(20rem, 100%), 1fr))"
+    assert_includes refresh, 'this.element.querySelector("[data-refresh]")'
+    assert_includes refresh, "window.setTimeout"
+    assert_includes refresh, "this.abortController?.abort()"
+    assert_includes maintenance, 'create_file "docs/maintenance_tasks.md"'
+    assert_includes controller_test, "assert_enqueued_with(job: MaintenanceTasks::TaskJob)"
+    assert_includes controller_test, 'assert_equal "succeeded", run.reload.status'
+    assert_includes maintenance, "no_collection"
+    assert_includes maintenance, "def process"
+    refute_match(/create_file "app\/tasks\/maintenance\//, maintenance)
+    refute_includes maintenance, '.keep'
+    assert_operator after_bundle.index("install_solid_components"), :<,
+      after_bundle.index('install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"')
+    assert_operator after_bundle.index('install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"'), :<,
+      after_bundle.index("configure_database")
+  end
+
   def test_generates_web_push_client_state_reconciliation_and_notification_page
     client = generated_file_source("app/javascript/controllers/push_subscription_controller.js")
     notifications_view = generated_file_source("app/views/notifications/show.html.erb")
@@ -766,6 +818,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'translate("navigation.admin_menu")'
     assert_includes evidence, 'runner = runner.sub("__AUTHENTICATION__", authentication.inspect)'
     assert_includes evidence, 'runner = runner.sub("__WEB_PUSH__", web_push.inspect)'
+    assert_includes evidence, 'runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)'
+    assert_includes evidence, '"admin-maintenance-tasks"'
+    assert_includes evidence, '"admin-maintenance-tasks-navigation-open"'
+    assert_includes evidence, "def verify_maintenance_tasks_geometry"
+    assert_includes evidence, "[320, 390, 640, 960, 961].each"
+    assert_includes evidence, 'visit admin_maintenance_tasks_path'
+    assert_includes evidence, 'meta[name="csp-nonce"]'
     refute_includes evidence, "runner.sub!"
     assert_includes @source, "configure_common_files\n  configure_evidence_capture"
   end
@@ -851,13 +910,14 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "admin_pages_path"
     refute_includes account_navigation, "admin_faqs_path"
     refute_includes account_navigation, "edit_admin_footer_setting_path"
-    assert_equal 4, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 4, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 5, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 5, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes admin_navigation, '"menu-active" if controller_path.in?(%w[admin/users admin/user_roles])'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/pages"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/faqs"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/footer_settings"'
-    assert_includes header, '<% if controller_path.start_with?("admin/") %>'
+    assert_includes admin_navigation, '"menu-active" if controller_path.start_with?("maintenance_tasks/")'
+    assert_includes @source, 'controller_path.start_with?("admin/") || controller_path.start_with?("maintenance_tasks/")'
     assert_includes header, 't("navigation.admin")'
     refute_includes @source, '<li class="menu-title"><span>管理</span></li>'.b
     assert_includes header, 'data: { turbo_method: :delete }'

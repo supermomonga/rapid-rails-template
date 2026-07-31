@@ -131,6 +131,43 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "app/views/api_credentials/index.html.erb"
   end
 
+  def test_maintenance_tasks_enabled_plan_uses_existing_solid_queue_worker
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build(
+        "active_job" => "solid_queue",
+        "maintenance_tasks" => "enable",
+        "deployment" => "dokploy"
+      ),
+      app_id: "sample", app_name: "Sample App"
+    )
+
+    assert_includes plan.gems, "maintenance_tasks"
+    assert_includes plan.steps, "install_maintenance_tasks"
+    assert_operator plan.steps.index("install_solid_queue"), :<, plan.steps.index("install_maintenance_tasks")
+    assert_includes plan.artifacts, "config/initializers/maintenance_tasks.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/maintenance_tasks_controller.rb"
+    assert_includes plan.artifacts, "app/policies/maintenance_task_policy.rb"
+    assert_includes plan.artifacts, "db/migrate/*_maintenance_tasks.rb"
+    assert_equal %w[web worker], plan.processes
+    assert_equal 1, plan.processes.count("worker")
+  end
+
+  def test_maintenance_tasks_disabled_plan_omits_related_gem_step_and_artifacts
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build(
+        "active_job" => "solid_queue",
+        "maintenance_tasks" => "disable"
+      ),
+      app_id: "sample", app_name: "Sample App"
+    )
+
+    refute_includes plan.gems, "maintenance_tasks"
+    refute_includes plan.steps, "install_maintenance_tasks"
+    refute_includes plan.artifacts, "config/initializers/maintenance_tasks.rb"
+    refute_includes plan.artifacts, "app/controllers/admin/maintenance_tasks_controller.rb"
+    refute_includes plan.artifacts, "db/migrate/*_maintenance_tasks.rb"
+  end
+
   def test_empty_profile_features_omit_profile_steps_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("profile_features" => []),

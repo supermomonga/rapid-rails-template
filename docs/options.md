@@ -144,6 +144,18 @@ Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push�
 
 `solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentではPuma pluginを有効化し、productionではPumaから起動しません。`deployment == dokploy`の場合は`Procfile.prod`のworkerプロセスで`bin/jobs --mode async`を実行し、`deployment == none`の場合はproductionでの起動方法を設定しません。
 
+## `maintenance_tasks`
+
+- CLI引数: `--maintenance-tasks=enable|disable`
+- 既定値: 適用可能な場合は`enable`
+- 選択肢: `enable`、`disable`
+- 表示条件: `web_push == use`または`active_job == solid_queue`
+- 影響する処理: Shopify Maintenance Tasks、標準Run migration、`/admin/maintenance_tasks`の管理画面、管理者用navigation
+
+Maintenance TasksはActive Jobを介して実行するため、実効値が`active_job == solid_queue`の場合だけ利用できます。Solid Queueを使用しない場合は質問せず`disable`へ正規化し、確認画面へ理由を表示します。CLIで`--maintenance-tasks=enable`とSolid Queueを使用しない設定を同時に明示した場合は、`rails new`開始前に矛盾として拒否します。同期実行やinline adapterへの切替は行いません。
+
+`enable`では`maintenance_tasks` 2.17.0の公式install generatorを実行し、Gem標準のRun modelとmigrationでstatus、cursor、error、job ID、arguments、metadataを管理します。engineは`/admin/maintenance_tasks`だけへmountし、既存のadmin認証、Action Policy、admin layoutを再利用します。実taskやplaceholderは生成しません。
+
 ## `account_authentication`
 
 - CLI引数: `--account-authentication=devise|wallet_siwe`
@@ -262,10 +274,13 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - PWAを使わない場合、Web Pushを質問せず`web-push` gemを追加しないこと。
 - `pwa=skip + web_push=use`と`web_push=use + active_job=skip`の明示矛盾を変更開始前に拒否すること。
 - Web Push使用時はActive Jobを質問せず、未指定値を理由付きでSolid Queueへ正規化すること。
+- Solid Queue使用時だけMaintenance Tasksを質問し、適用可能な場合は`enable`を既定値とすること。
+- Solid Queueを使わない場合はMaintenance Tasksを`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
 - PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
 - Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。
 - DeviseとWallet SIWEの両方で購読APIと共通設定UIを認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。
 - Solid Queueを使わない場合、queue database、Puma plugin、production workerを生成しないこと。
+- Maintenance Tasksを使わない場合、Gem、migration、initializer、controller、route、navigationを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。
 - `deployment == dokploy`で`Dockerfile.prod`、`Procfile.prod`、entrypoint、Litestream設定を生成し、Rails標準Docker、Kamal、Thrusterを生成しないこと。
 - `deployment == none`でDocker、Kamal、Thruster、Procfile、Litestream、`foreman`を生成・追加しないこと。

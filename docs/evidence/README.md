@@ -6,6 +6,6 @@ Devise版とWallet SIWE版の生成アプリを、ja/enそれぞれでCapybara�
 - [Devise / en](devise-en/README.md)
 - [Wallet SIWE / ja](siwe-ja/README.md)
 - [Wallet SIWE / en](siwe-en/README.md)
-- Source fingerprint: `dd85e34ad50d54f118686cf3175a6dbd39866ba33be4c357cc15cacab6dcd237`
+- Source fingerprint: `ac663b19ba0a2aaab143930311662431288855cb4d8b6e0b0e9ef24b86865523`
 - 更新: `rake evidence:update`
 - 検証: `rake evidence:verify`

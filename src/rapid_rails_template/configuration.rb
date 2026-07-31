@@ -8,6 +8,7 @@ module RapidRailsTemplate
       "pwa" => %w[use skip],
       "web_push" => %w[use skip],
       "active_job" => %w[solid_queue skip],
+      "maintenance_tasks" => %w[enable disable],
       "solid_cache" => %w[use skip],
       "account_authentication" => %w[devise wallet_siwe],
       "profile_features" => PROFILE_FEATURES,
@@ -22,6 +23,7 @@ module RapidRailsTemplate
       "pwa" => "skip",
       "web_push" => "skip",
       "active_job" => "skip",
+      "maintenance_tasks" => "disable",
       "solid_cache" => "use",
       "account_authentication" => "devise",
       "profile_features" => PROFILE_FEATURES,
@@ -41,7 +43,12 @@ module RapidRailsTemplate
     def initialize(answers)
       provided_answers = answers.transform_keys(&:to_s)
       validate_explicit_dependencies!(provided_answers)
-      @answers = DEFAULTS.merge(provided_answers).transform_values do |value|
+      resolved_defaults = DEFAULTS.dup
+      if !provided_answers.key?("maintenance_tasks") &&
+          (provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue")
+        resolved_defaults["maintenance_tasks"] = "enable"
+      end
+      @answers = resolved_defaults.merge(provided_answers).transform_values do |value|
         value.is_a?(Array) ? value.dup.freeze : value
       end.freeze
       @values = @answers.dup
@@ -89,6 +96,11 @@ module RapidRailsTemplate
         @reasons["active_job"] = "Web Pushの非同期送信に必要なため"
       end
 
+      unless @values["active_job"] == "solid_queue"
+        @values["maintenance_tasks"] = "disable"
+        @reasons["maintenance_tasks"] = "Solid Queueを使用しないため"
+      end
+
       return unless @values["mail"] == "auto"
 
       @values["mail"] = @values["account_authentication"] == "devise" ? "use" : "skip"
@@ -99,9 +111,14 @@ module RapidRailsTemplate
       if provided_answers["pwa"] == "skip" && provided_answers["web_push"] == "use"
         raise InvalidConfiguration, "PWA無効時にWeb Pushは使用できません"
       end
-      return unless provided_answers["web_push"] == "use" && provided_answers["active_job"] == "skip"
 
-      raise InvalidConfiguration, "Web Push使用時にActive Jobを無効化できません"
+      if provided_answers["web_push"] == "use" && provided_answers["active_job"] == "skip"
+        raise InvalidConfiguration, "Web Push使用時にActive Jobを無効化できません"
+      end
+      return unless provided_answers["maintenance_tasks"] == "enable"
+      return if provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue"
+
+      raise InvalidConfiguration, "Maintenance Tasks使用時はSolid Queueが必要です"
     end
   end
 end

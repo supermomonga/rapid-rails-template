@@ -7,7 +7,7 @@ module RapidRailsTemplate
     QUESTIONS = [
       Question.new(:pwa, "PWAを使用しますか？", %w[use skip], "skip", nil, false),
       Question.new(:web_push, "PWAでWeb Pushを使用しますか？", %w[use skip], "skip", ->(a) { a["pwa"] == "use" }, false),
-      Question.new(:active_job, "ジョブ管理を使用しますか？", %w[solid_queue skip], "skip", nil, false),
+      Question.new(:active_job, "ジョブ管理を使用しますか？", %w[solid_queue skip], "skip", ->(a) { a["web_push"] != "use" }, false),
       Question.new(:solid_cache, "Solid Cacheを使用しますか？", %w[use skip], "use", nil, false),
       Question.new(:account_authentication, "アカウント管理方法を選択してください。", %w[devise wallet_siwe], "devise", nil, false),
       Question.new(:profile_features, "プロフィール機能を選択してください。", Configuration::PROFILE_FEATURES, Configuration::PROFILE_FEATURES, nil, true),

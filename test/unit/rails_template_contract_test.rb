@@ -73,6 +73,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
       "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
       "app/views/accounts/edit.html.erb" => %w[card card-body card-title list list-row badge btn],
+      "app/views/notifications/show.html.erb" => %w[card card-body card-title card-actions toggle btn alert],
       "app/views/admin/users/index.html.erb" => %w[card card-body table badge btn join join-item],
       "app/views/pages/_page.html.erb" => %w[card card-body],
       "app/views/faqs/index.html.erb" => %w[collapse collapse-arrow collapse-title collapse-content alert],
@@ -181,6 +182,109 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'email: one@example.com'
     assert_includes @source, 'email: two@example.com'
     assert_includes @source, 'Devise::Encryptor.digest(User, "password123")'
+  end
+
+  def test_generates_the_pwa_manifest_routes_registration_and_push_handlers
+    pwa = source_between("def configure_pwa", "def configure_web_push")
+    worker = generated_file_source("app/views/pwa/service-worker.js")
+    controller = generated_file_source("app/javascript/controllers/pwa_controller.js")
+    layout = generated_file_source("app/views/layouts/application.html.erb")
+
+    assert_includes pwa, 'route \'get "manifest" => "rails/pwa#manifest", as: :pwa_manifest\''
+    assert_includes pwa, 'route \'get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker\''
+    assert_includes pwa, 'display: "standalone"'
+    assert_includes pwa, 'theme_color: "#3ea8ff"'
+    assert_includes pwa, 'src: "/icon.png"'
+    assert_includes pwa, 'theme_color: "#3ea8ff"'
+    defaults = source_between("def configure_default_views", "def configure_web_push")
+    assert_includes defaults, '<meta name="theme-color" content="#3ea8ff">'
+    assert_includes defaults, 'tag.link rel: "manifest", href: pwa_manifest_path(format: :json)'
+    assert_includes defaults, '#{pwa_head.lines.map'
+    assert_includes defaults, 'body_data_attributes = body_controllers.empty? ? "" : %( data-controller="#{body_controllers.join(\' \')}")'
+    assert_includes controller, 'navigator.serviceWorker.register("/service-worker", { scope: "/" })'
+    assert_includes worker, 'self.addEventListener("push"'
+    assert_includes worker, 'self.registration.showNotification(payload.title, options)'
+    assert_includes worker, 'self.addEventListener("notificationclick"'
+    assert_includes worker, 'candidate.origin === self.location.origin'
+    assert_includes worker, 'self.clients.openWindow(targetUrl.href)'
+  end
+
+  def test_generates_authenticated_web_push_storage_delivery_and_endpoints
+    web_push = source_between("def configure_web_push", "def install_solid_components")
+    model = generated_file_source("app/models/push_subscription.rb")
+    migration = web_push[/create_file migration\.first, <<~RUBY, force: true\n(?<body>.*?)^  RUBY$/m, :body]
+    vapid = generated_file_source("app/services/vapid_configuration.rb")
+    job = generated_file_source("app/jobs/push_notification_job.rb")
+    notifier = generated_file_source("app/services/push_notifier.rb")
+    controller = generated_file_source("app/controllers/push_subscriptions_controller.rb")
+
+    assert_equal 'gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"', @source.lines.grep(/gem "web-push"/).first.strip
+    assert_includes web_push, 'VAPID_SUBJECT = "https://localhost"'
+    assert_includes web_push, 'append_to_file ".gitignore", "\\n/mise.local.toml\\n"'
+    assert_includes web_push, 'environment "config.action_controller.cache_store = :memory_store", env: "test"'
+    assert_includes migration, 'foreign_key: { on_delete: :cascade }'
+    assert_includes migration, 'add_index :push_subscriptions, :browser_id, unique: true'
+    assert_includes migration, 'add_index :push_subscriptions, :endpoint, unique: true'
+    assert_includes model, 'browser_subscription = lock.find_by(browser_id:'
+    assert_includes model, 'endpoint_subscription = lock.find_by(endpoint:'
+    assert_includes model, 'subscription.update!(attributes.merge(user:))'
+    assert_includes web_push, 'has_many :push_subscriptions, dependent: :destroy'
+    assert_includes vapid, 'ENV.fetch("VAPID_PUBLIC_KEY")'
+    assert_includes vapid, 'VAPID_SUBJECT must use mailto or https'
+    assert_includes job, 'PushSubscription.find_by(id: subscription_id, user_id: expected_user_id)'
+    assert_includes job, 'retry_on WebPush::TooManyRequests, WebPush::PushServiceError'
+    assert_includes job, 'wait: :polynomially_longer, attempts: 5'
+    assert_includes job, 'rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription'
+    %w[open_timeout read_timeout ssl_timeout].each { |timeout| assert_includes job, "#{timeout}: 5" }
+    assert_includes notifier, 'path.start_with?("/") && !path.start_with?("//")'
+    assert_includes notifier, 'PushNotificationJob.perform_later(subscription.id, user.id, payload, ttl.to_i)'
+    assert_includes controller, 'rate_limit to: 5, within: 1.minute, only: :test'
+    assert_includes controller, 'head :accepted'
+    assert_includes controller, 'status: :service_unavailable'
+    assert_includes web_push, 'resource :push_subscription, only: %i[create destroy]'
+    assert_includes web_push, 'resource :notification, only: :show'
+    assert_includes controller, 'data: { path: notification_path }'
+    assert_includes web_push, 'params.expect(push_subscription: %i[browser_id endpoint p256dh auth])'
+  end
+
+  def test_solid_queue_uses_the_test_adapter_only_in_test_environment
+    solid = source_between("def install_solid_components", "def configure_common_files")
+
+    assert_includes solid, 'environment "config.active_job.queue_adapter = :solid_queue"'
+    assert_includes solid, 'environment "config.active_job.queue_adapter = :test", env: "test"'
+    assert_includes solid, 'plugin :solid_queue if ENV.fetch(\\"RAILS_ENV\\", \\"development\\") == \\"development\\"'
+  end
+
+  def test_generates_web_push_client_state_reconciliation_and_notification_page
+    client = generated_file_source("app/javascript/controllers/push_subscription_controller.js")
+    notifications_view = generated_file_source("app/views/notifications/show.html.erb")
+    notifications_controller = generated_file_source("app/controllers/notifications_controller.rb")
+    evidence = source_between("def configure_evidence_capture", "def configure_annotaterb")
+    defaults = source_between("def configure_default_views", "def configure_web_push")
+    devise = source_between("def configure_devise_views", "def configure_default_views")
+
+    assert_includes client, 'if (permission === "default") permission = await Notification.requestPermission()'
+    assert_includes client, 'if (!this.#sameApplicationServerKey(subscription, publicKey))'
+    assert_includes client, 'await subscription.unsubscribe()'
+    assert_includes client, 'await this.#deleteServerSubscription()'
+    assert_includes client, 'await this.#save(subscription)'
+    assert_includes client, 'crypto.randomUUID()'
+    assert_includes client, 'typeof window.Notification !== "undefined"'
+    assert_includes client, 'Boolean(navigator.serviceWorker)'
+    assert_includes notifications_view, '<h1 class="mt-2 text-2xl font-bold leading-[1.5]">通知</h1>'.b
+    assert_includes notifications_view, 'data-action="change->push-subscription#toggle"'
+    assert_includes notifications_view, 'data-action="click->push-subscription#sendTest"'
+    assert_includes notifications_view, 'aria-live="polite"'
+    assert_includes notifications_controller, 'layout "account"'
+    assert_includes defaults, 'link_to notification_path'
+    assert_includes defaults, 'controller_path == "notifications"'
+    refute_includes defaults, 'web_push_section'
+    refute_includes devise, 'accounts/push_notifications'
+    assert_includes defaults, 'body_controllers << "push-subscription" if web_push_enabled'
+    assert_includes evidence, 'set_evidence_web_push_mode("rotated")'
+    assert_includes evidence, 'set_evidence_web_push_mode("default")'
+    assert_includes evidence, 'set_evidence_web_push_mode("denied")'
+    assert_includes evidence, 'set_evidence_web_push_mode("unsupported")'
   end
 
   def test_generates_fixed_multi_role_storage_and_action_policy_authorization
@@ -611,6 +715,15 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"admin-page-edit"'
     assert_includes evidence, '"admin-faq-edit"'
     assert_includes evidence, '"admin-footer-setting"'
+    assert_includes evidence, '"web-push-enabled"'
+    assert_includes evidence, "def install_web_push_stub"
+    assert_includes evidence, 'Object.defineProperty(window, "Notification"'
+    assert_includes evidence, 'Object.defineProperty(navigator, "serviceWorker"'
+    assert_includes evidence, 'async requestPermission()'
+    assert_includes evidence, 'permissionRequests += 1'
+    assert_includes evidence, 'find(\'[data-push-subscription-target="testButton"]\').click'
+    assert_includes evidence, 'csrf.content = "evidence-csrf-token"'
+    assert_includes evidence, 'vapid_key = WebPush.generate_key'
     assert_includes evidence, 'assert_selector "lexxy-editor"'
     assert_includes evidence, "def verify_footer_geometry"
     assert_includes evidence, '320 => "row"'
@@ -626,6 +739,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'assert_no_selector \'[data-layout="admin"] nav[aria-label="アカウントメニュー"]\''
     assert_includes evidence, 'assert_no_selector \'[data-layout="account"] nav[aria-label="管理メニュー"]\''
     assert_includes evidence, 'runner = runner.sub("__AUTHENTICATION__", authentication.inspect)'
+    assert_includes evidence, 'runner = runner.sub("__WEB_PUSH__", web_push.inspect)'
     refute_includes evidence, "runner.sub!"
     assert_includes @source, "configure_common_files\n  configure_evidence_capture"
   end
@@ -697,12 +811,14 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 4, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 4, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, "profile_path"
     assert_includes account_navigation, "マイページ".b
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
+    assert_includes account_navigation, 'link_to notification_path'
+    assert_includes account_navigation, "通知".b
     refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
     refute_includes account_navigation, 'allowed_to?(:index?, User)'
     refute_includes account_navigation, 'admin_users_path'

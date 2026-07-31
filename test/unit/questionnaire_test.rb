@@ -77,6 +77,15 @@ class QuestionnaireTest < Minitest::Test
     ], prompt.choose_calls.fetch(0)
   end
 
+  def test_skips_active_job_question_when_web_push_is_enabled
+    prompt = RecordingPrompt.new(answers: ["use", "use"])
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
+
+    assert_equal "use", answers["web_push"]
+    refute answers.key?("active_job")
+    refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("ジョブ管理") }
+  end
+
   def test_asks_only_applicable_options_missing_from_initial_answers
     initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |key, _| key == "mail" }
     prompt = RecordingPrompt.new(answers: ["skip"])

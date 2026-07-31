@@ -200,7 +200,6 @@ class ExecutionPlanTest < Minitest::Test
     configuration = RapidRailsTemplate::Configuration.build(
       "pwa" => "use",
       "web_push" => "use",
-      "active_job" => "solid_queue",
       "solid_cache" => "use",
       "action_cable" => "solid_cable",
       "deployment" => "dokploy"
@@ -211,7 +210,31 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "solid_queue"
     assert_includes plan.gems, "solid_cache"
     assert_includes plan.gems, "solid_cable"
+    assert_equal "solid_queue", configuration["active_job"]
+    assert_equal "Web Pushの非同期送信に必要なため", configuration.reasons.fetch("active_job")
+    assert_operator plan.steps.index("configure_pwa"), :<, plan.steps.index("configure_web_push")
+    assert_operator plan.steps.index("configure_web_push"), :<, plan.steps.index("configure_default_views")
     assert_equal %w[web worker], plan.processes
     assert_includes plan.artifacts, "mise.local.toml"
+    assert_includes plan.artifacts, "app/views/pwa/manifest.json.erb"
+    assert_includes plan.artifacts, "app/views/pwa/service-worker.js"
+    assert_includes plan.artifacts, "app/models/push_subscription.rb"
+    assert_includes plan.artifacts, "app/jobs/push_notification_job.rb"
+    assert_includes plan.artifacts, "app/services/push_notifier.rb"
+    assert_includes plan.artifacts, "app/controllers/notifications_controller.rb"
+    assert_includes plan.artifacts, "app/views/notifications/show.html.erb"
+  end
+
+  def test_pwa_without_web_push_only_generates_pwa_foundation
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "skip"),
+      app_name: "sample"
+    )
+
+    assert_includes plan.steps, "configure_pwa"
+    refute_includes plan.steps, "configure_web_push"
+    assert_includes plan.artifacts, "app/views/pwa/manifest.json.erb"
+    refute_includes plan.artifacts, "app/models/push_subscription.rb"
+    refute_includes plan.gems, "web-push"
   end
 end

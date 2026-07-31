@@ -66,8 +66,9 @@ module RapidRailsTemplate
       result << "configure_content_management"
       result << "configure_profile" if configuration["profile_features"].any?
       result << "configure_api" if configuration["api"] == "enable"
-      result << "configure_default_views"
+      result << "configure_pwa" if configuration["pwa"] == "use"
       result << "configure_web_push" if configuration["web_push"] == "use"
+      result << "configure_default_views"
       result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
       result << "install_solid_cache" if configuration["solid_cache"] == "use"
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
@@ -216,6 +217,30 @@ module RapidRailsTemplate
         result << "app/javascript/controllers/siwe_sign_in_controller.js"
         result << "app/views/accounts/edit.html.erb"
         result << "config/locales/ja.yml"
+      end
+      if configuration["pwa"] == "use"
+        result.concat(%w[
+          app/views/pwa/manifest.json.erb
+          app/views/pwa/service-worker.js
+          app/javascript/controllers/pwa_controller.js
+        ])
+      end
+      if configuration["web_push"] == "use"
+        result.concat(%w[
+          app/models/push_subscription.rb
+          app/controllers/push_subscriptions_controller.rb
+          app/controllers/notifications_controller.rb
+          app/jobs/push_notification_job.rb
+          app/services/push_notifier.rb
+          app/services/vapid_configuration.rb
+          app/javascript/controllers/push_subscription_controller.js
+          app/views/notifications/show.html.erb
+          config/locales/web_push.ja.yml
+          test/models/push_subscription_test.rb
+          test/controllers/push_subscriptions_controller_test.rb
+          test/jobs/push_notification_job_test.rb
+          test/services/push_notifier_test.rb
+        ])
       end
       result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"
       result << "mise.local.toml" if configuration["web_push"] == "use"

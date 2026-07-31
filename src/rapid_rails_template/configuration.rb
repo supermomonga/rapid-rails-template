@@ -37,7 +37,9 @@ module RapidRailsTemplate
     end
 
     def initialize(answers)
-      @answers = DEFAULTS.merge(answers.transform_keys(&:to_s)).transform_values do |value|
+      provided_answers = answers.transform_keys(&:to_s)
+      validate_explicit_dependencies!(provided_answers)
+      @answers = DEFAULTS.merge(provided_answers).transform_values do |value|
         value.is_a?(Array) ? value.dup.freeze : value
       end.freeze
       @values = @answers.dup
@@ -80,10 +82,24 @@ module RapidRailsTemplate
         @reasons["web_push"] = "PWAを使用しないため"
       end
 
+      if @values["web_push"] == "use"
+        @values["active_job"] = "solid_queue"
+        @reasons["active_job"] = "Web Pushの非同期送信に必要なため"
+      end
+
       return unless @values["mail"] == "auto"
 
       @values["mail"] = @values["account_authentication"] == "devise" ? "use" : "skip"
       @reasons["mail"] = "認証方式が#{@values['account_authentication']}のため"
+    end
+
+    def validate_explicit_dependencies!(provided_answers)
+      if provided_answers["pwa"] == "skip" && provided_answers["web_push"] == "use"
+        raise InvalidConfiguration, "PWA無効時にWeb Pushは使用できません"
+      end
+      return unless provided_answers["web_push"] == "use" && provided_answers["active_job"] == "skip"
+
+      raise InvalidConfiguration, "Web Push使用時にActive Jobを無効化できません"
     end
   end
 end

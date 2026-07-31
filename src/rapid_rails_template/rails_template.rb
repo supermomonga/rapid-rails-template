@@ -43,7 +43,7 @@ gem "devise" if VALUES.fetch("account_authentication") == "devise"
 gem "siwe-rb", "~> 0.2.0" if VALUES.fetch("account_authentication") == "wallet_siwe"
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
-gem "web-push" if VALUES.fetch("web_push") == "use"
+gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
 gem "solid_queue" if VALUES.fetch("active_job") == "solid_queue"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
 gem "solid_cable" if VALUES.fetch("action_cable") == "solid_cable"
@@ -757,7 +757,8 @@ def install_wallet_siwe
       end
     end
   RUBY
-  account_navigation_count = 2 + (VALUES.fetch("profile_features").any? ? 1 : 0) + (VALUES.fetch("api") == "enable" ? 1 : 0)
+  account_navigation_count = 2 + (VALUES.fetch("profile_features").any? ? 1 : 0) +
+    (VALUES.fetch("api") == "enable" ? 1 : 0) + (VALUES.fetch("web_push") == "use" ? 1 : 0)
   create_file "test/fixtures/users.yml", <<~YAML, force: true
     one:
       wallet_address: 0x1111111111111111111111111111111111111111
@@ -3744,13 +3745,15 @@ end
 def configure_default_views
   devise = VALUES.fetch("account_authentication") == "devise"
   app_name = PLAN.fetch("app_name")
+  pwa_enabled = VALUES.fetch("pwa") == "use"
+  web_push_enabled = VALUES.fetch("web_push") == "use"
   api_enabled = VALUES.fetch("api") == "enable"
   profile_features = VALUES.fetch("profile_features")
   profile_enabled = profile_features.any?
   avatar_enabled = profile_features.include?("avatar")
   screen_name_enabled = profile_features.include?("screen_name")
   display_name_enabled = profile_features.include?("display_name")
-  account_navigation_count = 2 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0)
+  account_navigation_count = 2 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) + (web_push_enabled ? 1 : 0)
   account_page_description = if profile_enabled
     "プロフィールとアプリケーションの状態を確認できます。"
   else
@@ -3800,6 +3803,18 @@ def configure_default_views
       <% end %>
     </li>
   ERB
+  if web_push_enabled
+    account_navigation_items += <<~ERB
+      <li>
+        <%= link_to notification_path, class: ("menu-active" if controller_path == "notifications"), aria: { current: ("page" if controller_path == "notifications") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+          </svg>
+          通知
+        <% end %>
+      </li>
+    ERB
+  end
   if api_enabled
     account_navigation_items += <<~ERB
       <li>
@@ -3932,6 +3947,26 @@ def configure_default_views
     'controller_path == "sessions" ? "authentication" : "application"'
   end
   wallet_script = devise ? "" : "    <script src=\"/vendor/web3-4.16.0.min.js\" defer></script>\n"
+  pwa_head = if pwa_enabled
+    <<~ERB
+      <meta name="theme-color" content="#3ea8ff">
+      <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
+    ERB
+  else
+    ""
+  end
+  body_controllers = []
+  body_controllers << "pwa" if pwa_enabled
+  body_controllers << "push-subscription" if web_push_enabled
+  body_data_attributes = body_controllers.empty? ? "" : %( data-controller="#{body_controllers.join(' ')}")
+  if web_push_enabled
+    body_data_attributes += <<~ERB.chomp
+       data-push-subscription-authenticated-value="<%= #{signed_in_condition} %>"
+       data-push-subscription-public-key-url-value="<%= vapid_public_key_push_subscription_path %>"
+       data-push-subscription-subscription-url-value="<%= push_subscription_path %>"
+       data-push-subscription-test-url-value="<%= test_push_subscription_path %>"
+    ERB
+  end
 
   inject_into_class "app/controllers/application_controller.rb", "ApplicationController", <<~RUBY
       layout :application_layout
@@ -3996,13 +4031,13 @@ def configure_default_views
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <%= csrf_meta_tags %>
         <%= csp_meta_tag %>
-        <%= yield :head %>
+    #{pwa_head.lines.map { |line| "    #{line}" }.join}        <%= yield :head %>
         <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag "lexxy", "data-turbo-track": "reload" %>
     #{wallet_script}    <%= javascript_importmap_tags %>
       </head>
-      <body class="min-h-screen bg-base-100 text-base-content antialiased" data-layout="application">
+      <body class="min-h-screen bg-base-100 text-base-content antialiased" data-layout="application"#{body_data_attributes}>
         <div class="flex min-h-screen flex-col">
           <%= render "shared/header" %>
           <main class="flex-1 bg-base-200">
@@ -4505,21 +4540,980 @@ def configure_default_views
   create_file "test/integration/default_pages_test.rb", default_pages_test, force: true
 end
 
+def configure_pwa
+  app_name = PLAN.fetch("app_name")
+  route 'get "manifest" => "rails/pwa#manifest", as: :pwa_manifest'
+  route 'get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker'
+
+  create_file "app/views/pwa/manifest.json.erb", JSON.pretty_generate(
+    name: app_name,
+    short_name: app_name,
+    icons: [
+      { src: "/icon.png", type: "image/png", sizes: "512x512" },
+      { src: "/icon.png", type: "image/png", sizes: "512x512", purpose: "maskable" }
+    ],
+    start_url: "/",
+    display: "standalone",
+    scope: "/",
+    description: "#{app_name}.",
+    theme_color: "#3ea8ff",
+    background_color: "#ffffff"
+  ) + "\n", force: true
+
+  create_file "app/views/pwa/service-worker.js", <<~JAVASCRIPT, force: true
+    self.addEventListener("push", (event) => {
+      if (!event.data) return
+
+      try {
+        const payload = event.data.json()
+        const options = payload.options || {}
+        event.waitUntil(self.registration.showNotification(payload.title, options))
+      } catch (error) {
+        console.error("Invalid Web Push payload", error)
+      }
+    })
+
+    self.addEventListener("notificationclick", (event) => {
+      event.notification.close()
+
+      let targetUrl = new URL("/", self.location.origin)
+      try {
+        const candidate = new URL(event.notification.data?.path || "/", self.location.origin)
+        if (candidate.origin === self.location.origin) targetUrl = candidate
+      } catch (error) {
+        console.error("Invalid notification path", error)
+      }
+
+      event.waitUntil(
+        self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
+          const exactClient = clients.find((client) => client.url === targetUrl.href)
+          if (exactClient) return exactClient.focus()
+
+          const sameOriginClient = clients.find((client) => new URL(client.url).origin === self.location.origin)
+          if (sameOriginClient && "navigate" in sameOriginClient) {
+            const navigatedClient = await sameOriginClient.navigate(targetUrl.href)
+            return navigatedClient?.focus()
+          }
+
+          return self.clients.openWindow(targetUrl.href)
+        })
+      )
+    })
+  JAVASCRIPT
+
+  create_file "app/javascript/controllers/pwa_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      connect() {
+        this.registerServiceWorker()
+      }
+
+      async registerServiceWorker() {
+        if (!("serviceWorker" in navigator)) {
+          console.error("Service Worker is not supported by this browser")
+          return
+        }
+
+        try {
+          await navigator.serviceWorker.register("/service-worker", { scope: "/" })
+        } catch (error) {
+          console.error("Service Worker registration failed", error)
+        }
+      }
+    }
+  JAVASCRIPT
+end
+
 def configure_web_push
+  devise = VALUES.fetch("account_authentication") == "devise"
+  authentication_callback = devise ? "  before_action :authenticate_user!\n" : ""
+  account_user = devise ? "current_user" : "Current.user"
+
   require "web-push"
+  environment "config.action_controller.cache_store = :memory_store", env: "test"
   key = WebPush.generate_key
   create_file "mise.local.toml", <<~TOML, force: true
     [env]
     VAPID_PUBLIC_KEY = #{key.public_key.inspect}
     VAPID_PRIVATE_KEY = #{key.private_key.inspect}
+    VAPID_SUBJECT = "https://localhost"
   TOML
   append_to_file ".gitignore", "\n/mise.local.toml\n" unless File.read(".gitignore").lines.map(&:strip).include?("/mise.local.toml")
+
+  generate "model", "PushSubscription", "user:references", "browser_id:string", "endpoint:text", "p256dh:string", "auth:string"
+  migration = Dir.glob("db/migrate/*_create_push_subscriptions.rb")
+  raise "CreatePushSubscriptions migrationが一意ではありません" unless migration.one?
+
+  create_file migration.first, <<~RUBY, force: true
+    class CreatePushSubscriptions < ActiveRecord::Migration[8.1]
+      def change
+        create_table :push_subscriptions do |t|
+          t.references :user, null: false, foreign_key: { on_delete: :cascade }
+          t.string :browser_id, null: false
+          t.text :endpoint, null: false
+          t.string :p256dh, null: false
+          t.string :auth, null: false
+          t.timestamps
+        end
+
+        add_index :push_subscriptions, :browser_id, unique: true
+        add_index :push_subscriptions, :endpoint, unique: true
+      end
+    end
+  RUBY
+
+  create_file "app/models/push_subscription.rb", <<~RUBY, force: true
+    class PushSubscription < ApplicationRecord
+      belongs_to :user
+
+      validates :browser_id, :endpoint, :p256dh, :auth, presence: true
+      validates :browser_id, :endpoint, uniqueness: true
+      validates :endpoint, format: { with: %r{\\Ahttps://[^\\s]+\\z} }
+
+      def self.register!(user:, attributes:)
+        transaction do
+          browser_subscription = lock.find_by(browser_id: attributes.fetch(:browser_id))
+          endpoint_subscription = lock.find_by(endpoint: attributes.fetch(:endpoint))
+          subscription = endpoint_subscription || browser_subscription || new
+
+          browser_subscription.destroy! if browser_subscription && browser_subscription != subscription
+          subscription.update!(attributes.merge(user:))
+          subscription
+        end
+      end
+    end
+  RUBY
+  inject_into_class "app/models/user.rb", "User", "  has_many :push_subscriptions, dependent: :destroy\n\n"
+
+  create_file "app/services/vapid_configuration.rb", <<~RUBY, force: true
+    require "uri"
+
+    class VapidConfiguration
+      Error = Class.new(StandardError)
+
+      attr_reader :public_key, :private_key, :subject
+
+      def self.fetch!
+        new(
+          public_key: ENV.fetch("VAPID_PUBLIC_KEY"),
+          private_key: ENV.fetch("VAPID_PRIVATE_KEY"),
+          subject: ENV.fetch("VAPID_SUBJECT")
+        )
+      rescue KeyError => error
+        raise Error, "Web Push environment is incomplete: \#{error.key}"
+      end
+
+      def initialize(public_key:, private_key:, subject:)
+        @public_key = public_key.presence || raise(Error, "VAPID_PUBLIC_KEY is blank")
+        @private_key = private_key.presence || raise(Error, "VAPID_PRIVATE_KEY is blank")
+        @subject = subject.presence || raise(Error, "VAPID_SUBJECT is blank")
+        uri = URI.parse(@subject)
+        raise Error, "VAPID_SUBJECT must use mailto or https" unless %w[mailto https].include?(uri.scheme)
+      rescue URI::InvalidURIError => error
+        raise Error, "VAPID_SUBJECT is invalid: \#{error.message}"
+      end
+
+      def to_h
+        { subject:, public_key:, private_key: }
+      end
+    end
+  RUBY
+
+  create_file "app/jobs/push_notification_job.rb", <<~RUBY, force: true
+    class PushNotificationJob < ApplicationJob
+      queue_as :default
+
+      retry_on WebPush::TooManyRequests, WebPush::PushServiceError,
+        Net::OpenTimeout, Net::ReadTimeout, Timeout::Error,
+        wait: :polynomially_longer, attempts: 5
+
+      def perform(subscription_id, expected_user_id, payload, ttl)
+        subscription = PushSubscription.find_by(id: subscription_id, user_id: expected_user_id)
+        return unless subscription
+
+        WebPush.payload_send(
+          endpoint: subscription.endpoint,
+          message: JSON.generate(payload),
+          p256dh: subscription.p256dh,
+          auth: subscription.auth,
+          vapid: VapidConfiguration.fetch!.to_h,
+          ttl:,
+          open_timeout: 5,
+          read_timeout: 5,
+          ssl_timeout: 5
+        )
+      rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription
+        subscription&.destroy!
+      end
+    end
+  RUBY
+
+  create_file "app/services/push_notifier.rb", <<~RUBY, force: true
+    class PushNotifier
+      DEFAULT_TTL = 86_400
+
+      def self.deliver_later(user:, title:, body:, path:, tag: nil, icon: "/icon.png", ttl: DEFAULT_TTL)
+        raise ArgumentError, "user must be persisted" unless user&.persisted?
+        raise ArgumentError, "title is required" if title.blank?
+        raise ArgumentError, "body is required" if body.blank?
+        raise ArgumentError, "path must be a same-origin absolute path" unless path.start_with?("/") && !path.start_with?("//")
+        raise ArgumentError, "ttl must be positive" unless ttl.to_i.positive?
+
+        VapidConfiguration.fetch!
+        options = { body:, icon:, data: { path: } }
+        options[:tag] = tag if tag.present?
+        payload = { title:, options: }
+
+        user.push_subscriptions.find_each do |subscription|
+          PushNotificationJob.perform_later(subscription.id, user.id, payload, ttl.to_i)
+        end
+      end
+    end
+  RUBY
+
+  route <<~RUBY
+    resource :push_subscription, only: %i[create destroy] do
+      get :vapid_public_key
+      post :test
+    end
+    resource :notification, only: :show
+  RUBY
+
+  create_file "app/controllers/notifications_controller.rb", <<~RUBY, force: true
+    class NotificationsController < ApplicationController
+      layout "account"
+    #{authentication_callback}end
+  RUBY
+
+  create_file "app/controllers/push_subscriptions_controller.rb", <<~RUBY, force: true
+    class PushSubscriptionsController < ApplicationController
+    #{authentication_callback}  rate_limit to: 5, within: 1.minute, only: :test
+
+      def vapid_public_key
+        response.set_header("Cache-Control", "no-store")
+        render json: { public_key: VapidConfiguration.fetch!.public_key }
+      rescue VapidConfiguration::Error
+        render json: { error: I18n.t("web_push.errors.configuration", locale: :ja) }, status: :service_unavailable
+      end
+
+      def create
+        PushSubscription.register!(user: account_user, attributes: subscription_params.to_h.symbolize_keys)
+        head :no_content
+      rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
+        head :unprocessable_content
+      end
+
+      def destroy
+        account_user.push_subscriptions.find_by(browser_id: browser_id_param)&.destroy!
+        head :no_content
+      end
+
+      def test
+        subscription = account_user.push_subscriptions.find_by(browser_id: browser_id_param)
+        return head :not_found unless subscription
+
+        VapidConfiguration.fetch!
+        payload = {
+          title: I18n.t("web_push.test.title", locale: :ja),
+          options: {
+            body: I18n.t("web_push.test.body", locale: :ja),
+            icon: "/icon.png",
+            tag: "web-push-test",
+            data: { path: notification_path }
+          }
+        }
+        PushNotificationJob.perform_later(subscription.id, account_user.id, payload, PushNotifier::DEFAULT_TTL)
+        head :accepted
+      rescue VapidConfiguration::Error
+        render json: { error: I18n.t("web_push.errors.configuration", locale: :ja) }, status: :service_unavailable
+      end
+
+      private
+        def account_user
+          #{account_user}
+        end
+
+        def subscription_params
+          params.expect(push_subscription: %i[browser_id endpoint p256dh auth])
+        end
+
+        def browser_id_param
+          params.expect(push_subscription: [:browser_id]).fetch(:browser_id)
+        end
+    end
+  RUBY
+
+  create_file "app/javascript/controllers/push_subscription_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["toggle", "testButton", "status"]
+      static values = {
+        authenticated: Boolean,
+        publicKeyUrl: String,
+        subscriptionUrl: String,
+        testUrl: String
+      }
+
+      connect() {
+        if (!this.authenticatedValue) return
+        if (!this.#supported()) {
+          this.#render("unsupported", "このブラウザはWeb Pushに対応していません。")
+          return
+        }
+
+        this.browserId = this.#browserId()
+        this.#reconcile().catch((error) => this.#fail(error))
+      }
+
+      async toggle(event) {
+        this.#setBusy(true)
+        try {
+          if (event.target.checked) {
+            await this.#enable()
+          } else {
+            await this.#disable()
+          }
+        } catch (error) {
+          this.#fail(error)
+        } finally {
+          this.#setBusy(false)
+        }
+      }
+
+      async sendTest() {
+        this.#setBusy(true)
+        try {
+          const response = await this.#request(this.testUrlValue, "POST", {
+            push_subscription: { browser_id: this.browserId }
+          })
+          if (response.status !== 202) throw new Error("テスト通知を送信できませんでした。")
+          this.#render("success", "テスト通知を送信しました。")
+        } catch (error) {
+          this.#fail(error)
+        } finally {
+          this.#setBusy(false)
+        }
+      }
+
+      async #reconcile() {
+        if (Notification.permission === "denied") {
+          this.#render("denied", "通知がブロックされています。ブラウザの設定から許可してください。")
+          return
+        }
+
+        const registration = await this.#registration()
+        const subscription = await registration.pushManager.getSubscription()
+        if (!subscription) {
+          this.#render("off", "このブラウザでは通知が無効です。")
+          return
+        }
+
+        const publicKey = await this.#publicKey()
+        if (!this.#sameApplicationServerKey(subscription, publicKey)) {
+          const unsubscribed = await subscription.unsubscribe()
+          if (!unsubscribed) throw new Error("古いWeb Push購読を解除できませんでした。")
+          await this.#deleteServerSubscription()
+          const replacement = await this.#subscribe(registration, publicKey)
+          await this.#save(replacement)
+          this.#render("on", "VAPID鍵の変更に合わせて通知を再登録しました。")
+          return
+        }
+
+        await this.#save(subscription)
+        this.#render("on", "このブラウザでは通知が有効です。")
+      }
+
+      async #enable() {
+        let permission = Notification.permission
+        if (permission === "default") permission = await Notification.requestPermission()
+        if (permission !== "granted") {
+          this.#render("denied", "通知が許可されていません。ブラウザの設定を確認してください。")
+          return
+        }
+
+        const registration = await this.#registration()
+        const publicKey = await this.#publicKey()
+        let subscription = await registration.pushManager.getSubscription()
+        if (subscription && !this.#sameApplicationServerKey(subscription, publicKey)) {
+          const unsubscribed = await subscription.unsubscribe()
+          if (!unsubscribed) throw new Error("古いWeb Push購読を解除できませんでした。")
+          await this.#deleteServerSubscription()
+          subscription = null
+        }
+
+        subscription ||= await this.#subscribe(registration, publicKey)
+        try {
+          await this.#save(subscription)
+        } catch (error) {
+          await subscription.unsubscribe()
+          await this.#deleteServerSubscription()
+          throw error
+        }
+        this.#render("on", "このブラウザの通知を有効にしました。")
+      }
+
+      async #disable() {
+        const registration = await this.#registration()
+        const subscription = await registration.pushManager.getSubscription()
+        if (subscription) {
+          const unsubscribed = await subscription.unsubscribe()
+          if (!unsubscribed) throw new Error("Web Push購読を解除できませんでした。")
+        }
+        await this.#deleteServerSubscription()
+        this.#render("off", "このブラウザの通知を無効にしました。")
+      }
+
+      async #registration() {
+        return navigator.serviceWorker.register("/service-worker", { scope: "/" })
+      }
+
+      async #publicKey() {
+        const response = await fetch(this.publicKeyUrlValue, {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin"
+        })
+        if (!response.ok) throw new Error(await this.#responseError(response, "VAPID公開鍵を取得できませんでした。"))
+        const payload = await response.json()
+        return this.#decodeBase64Url(payload.public_key)
+      }
+
+      async #subscribe(registration, publicKey) {
+        return registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: publicKey
+        })
+      }
+
+      async #save(subscription) {
+        const payload = subscription.toJSON()
+        const response = await this.#request(this.subscriptionUrlValue, "POST", {
+          push_subscription: {
+            browser_id: this.browserId,
+            endpoint: payload.endpoint,
+            p256dh: payload.keys?.p256dh,
+            auth: payload.keys?.auth
+          }
+        })
+        if (response.status !== 204) throw new Error("Web Push購読を保存できませんでした。")
+      }
+
+      async #deleteServerSubscription() {
+        const response = await this.#request(this.subscriptionUrlValue, "DELETE", {
+          push_subscription: { browser_id: this.browserId }
+        })
+        if (response.status !== 204) throw new Error("Web Push購読を削除できませんでした。")
+      }
+
+      async #request(url, method, body) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+        if (!csrfToken) throw new Error("CSRF tokenが見つかりません。")
+        const response = await fetch(url, {
+          method,
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(body)
+        })
+        if (!response.ok) throw new Error(await this.#responseError(response, "Web Pushリクエストに失敗しました。"))
+        return response
+      }
+
+      async #responseError(response, fallback) {
+        try {
+          const payload = await response.json()
+          return payload.error || fallback
+        } catch (error) {
+          console.error("Web Push error response was not JSON", error)
+          return fallback
+        }
+      }
+
+      #browserId() {
+        const storageKey = "rapid-rails-push-browser-id"
+        let browserId = localStorage.getItem(storageKey)
+        if (!browserId) {
+          browserId = crypto.randomUUID()
+          localStorage.setItem(storageKey, browserId)
+        }
+        return browserId
+      }
+
+      #supported() {
+        return typeof window.Notification !== "undefined" &&
+          Boolean(navigator.serviceWorker) &&
+          typeof window.PushManager !== "undefined" &&
+          typeof crypto.randomUUID === "function"
+      }
+
+      #sameApplicationServerKey(subscription, expected) {
+        const actualKey = subscription.options?.applicationServerKey
+        if (!actualKey) return false
+        const actual = new Uint8Array(actualKey)
+        return actual.length === expected.length && actual.every((value, index) => value === expected[index])
+      }
+
+      #decodeBase64Url(value) {
+        const padding = "=".repeat((4 - value.length % 4) % 4)
+        const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/")
+        return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
+      }
+
+      #setBusy(busy) {
+        if (this.hasToggleTarget) this.toggleTarget.disabled = busy
+        if (this.hasTestButtonTarget) this.testButtonTarget.disabled = busy || !this.testButtonTarget.dataset.subscribed
+      }
+
+      #render(state, message) {
+        const subscribed = state === "on" || state === "success"
+        if (this.hasToggleTarget) {
+          this.toggleTarget.checked = subscribed
+          this.toggleTarget.disabled = state === "unsupported" || state === "denied"
+        }
+        if (this.hasTestButtonTarget) {
+          this.testButtonTarget.dataset.subscribed = subscribed ? "true" : ""
+          this.testButtonTarget.disabled = !subscribed
+        }
+        if (this.hasStatusTarget) {
+          this.statusTarget.classList.remove("hidden", "alert-info", "alert-success", "alert-warning", "alert-error")
+          const alertClass = state === "success" || state === "on" ? "alert-success" :
+            state === "denied" || state === "unsupported" ? "alert-warning" :
+              state === "error" ? "alert-error" : "alert-info"
+          this.statusTarget.classList.add(alertClass)
+          this.statusTarget.textContent = message
+        }
+      }
+
+      #fail(error) {
+        console.error("Web Push operation failed", error)
+        this.#render("error", error.message || "Web Pushの処理に失敗しました。")
+      }
+    }
+  JAVASCRIPT
+
+  create_file "app/views/notifications/show.html.erb", <<~ERB, force: true
+    <% content_for :title, "通知 | Rapid Rails" %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Notifications</p>
+        <h1 class="mt-2 text-2xl font-bold leading-[1.5]">通知</h1>
+        <p class="mt-2 text-sm text-neutral">このブラウザで受け取る通知を管理します。</p>
+      </header>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 class="card-title text-base leading-[1.5]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                </svg>
+                Web Push通知
+              </h2>
+              <p class="mt-2 text-sm text-neutral">アプリからの更新を、このブラウザへ通知します。</p>
+            </div>
+            <label class="flex cursor-pointer items-center gap-3">
+              <span class="text-sm font-semibold">通知を受け取る</span>
+              <input type="checkbox" class="toggle" data-push-subscription-target="toggle" data-action="change->push-subscription#toggle" aria-label="このブラウザのWeb Push通知を切り替える">
+            </label>
+          </div>
+          <div class="card-actions">
+            <button type="button" class="btn" data-push-subscription-target="testButton" data-action="click->push-subscription#sendTest" disabled>テスト通知を送信</button>
+          </div>
+          <div class="alert alert-info hidden" role="status" aria-live="polite" data-push-subscription-target="status"></div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "test/fixtures/push_subscriptions.yml", "# Push subscriptions are created explicitly by tests.\n", force: true
+
+  create_file "test/models/push_subscription_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class PushSubscriptionTest < ActiveSupport::TestCase
+      test "registers one subscription per browser and transfers ownership" do
+        subscription = PushSubscription.register!(
+          user: users(:one),
+          attributes: subscription_attributes
+        )
+
+        assert_no_difference("PushSubscription.count") do
+          replacement = PushSubscription.register!(
+            user: users(:two),
+            attributes: subscription_attributes(endpoint: "https://push.example.com/replacement")
+          )
+          assert_equal subscription.id, replacement.id
+          assert_equal users(:two), replacement.user
+          assert_equal "https://push.example.com/replacement", replacement.endpoint
+        end
+      end
+
+      test "reconciles browser and endpoint records without duplicates" do
+        first = PushSubscription.create!(user: users(:one), **subscription_attributes)
+        endpoint_owner = PushSubscription.create!(
+          user: users(:two),
+          **subscription_attributes(browser_id: "other-browser", endpoint: "https://push.example.com/shared")
+        )
+
+        assert_difference("PushSubscription.count", -1) do
+          registered = PushSubscription.register!(
+            user: users(:one),
+            attributes: subscription_attributes(endpoint: endpoint_owner.endpoint)
+          )
+          assert_equal endpoint_owner.id, registered.id
+          assert_equal first.browser_id, registered.browser_id
+          assert_equal users(:one), registered.user
+        end
+      end
+
+      test "validates the complete HTTPS subscription and follows user lifecycle" do
+        subscription = PushSubscription.new(user: users(:one), **subscription_attributes(endpoint: "http://example.com"))
+        assert_not subscription.valid?
+
+        subscription.update!(endpoint: "https://push.example.com/lifecycle")
+        users(:one).destroy!
+        assert_not PushSubscription.exists?(subscription.id)
+      end
+
+      private
+        def subscription_attributes(browser_id: "browser-one", endpoint: "https://push.example.com/one")
+          { browser_id:, endpoint:, p256dh: "p256dh-key", auth: "auth-key" }
+        end
+    end
+  RUBY
+
+  create_file "test/jobs/push_notification_job_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class PushNotificationJobTest < ActiveJob::TestCase
+      setup do
+        @subscription = PushSubscription.create!(
+          user: users(:one),
+          browser_id: "job-browser",
+          endpoint: "https://push.example.com/job",
+          p256dh: "p256dh-key",
+          auth: "auth-key"
+        )
+      end
+
+      test "sends the structured payload with VAPID and bounded timeouts" do
+        captured = nil
+        with_vapid_env do
+          with_payload_send(->(**options) { captured = options }) do
+            PushNotificationJob.perform_now(@subscription.id, users(:one).id, payload, 600)
+          end
+        end
+
+        assert_equal @subscription.endpoint, captured.fetch(:endpoint)
+        assert_equal payload.deep_stringify_keys, JSON.parse(captured.fetch(:message))
+        assert_equal 600, captured.fetch(:ttl)
+        assert_equal 5, captured.fetch(:open_timeout)
+        assert_equal 5, captured.fetch(:read_timeout)
+        assert_equal 5, captured.fetch(:ssl_timeout)
+        assert_equal "https://example.com", captured.dig(:vapid, :subject)
+      end
+
+      test "does not deliver after subscription ownership changes" do
+        called = false
+        with_payload_send(->(**) { called = true }) do
+          PushNotificationJob.perform_now(@subscription.id, users(:two).id, payload, 600)
+        end
+
+        assert_not called
+      end
+
+      test "removes expired subscriptions" do
+        response = Struct.new(:body).new("")
+        error = WebPush::ExpiredSubscription.new(response, "push.example.com")
+
+        with_vapid_env do
+          with_payload_send(->(**) { raise error }) do
+            assert_difference("PushSubscription.count", -1) do
+              PushNotificationJob.perform_now(@subscription.id, users(:one).id, payload, 600)
+            end
+          end
+        end
+      end
+
+      private
+        def with_payload_send(replacement)
+          singleton_class = WebPush.singleton_class
+          original_method = WebPush.method(:payload_send)
+          singleton_class.define_method(:payload_send, replacement)
+          yield
+        ensure
+          singleton_class.define_method(:payload_send, original_method)
+        end
+
+        def payload
+          { title: "Title", options: { body: "Body", data: { path: "/account" } } }
+        end
+
+        def with_vapid_env
+          original = %w[VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT].index_with { |name| ENV[name] }
+          ENV.update(
+            "VAPID_PUBLIC_KEY" => "public",
+            "VAPID_PRIVATE_KEY" => "private",
+            "VAPID_SUBJECT" => "https://example.com"
+          )
+          yield
+        ensure
+          original.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
+        end
+    end
+  RUBY
+
+  create_file "test/services/push_notifier_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class PushNotifierTest < ActiveSupport::TestCase
+      include ActiveJob::TestHelper
+
+      setup do
+        2.times do |index|
+          PushSubscription.create!(
+            user: users(:one),
+            browser_id: "notifier-browser-\#{index}",
+            endpoint: "https://push.example.com/notifier-\#{index}",
+            p256dh: "p256dh-\#{index}",
+            auth: "auth-\#{index}"
+          )
+        end
+      end
+
+      test "enqueues one independently owned job per subscription" do
+        with_test_queue_adapter do
+          with_vapid_env do
+            assert_enqueued_jobs 2, only: PushNotificationJob do
+              PushNotifier.deliver_later(
+                user: users(:one),
+                title: "Title",
+                body: "Body",
+                path: "/account",
+                tag: "account"
+              )
+            end
+          end
+        end
+      end
+
+      test "rejects cross-origin paths and missing configuration" do
+        with_vapid_env do
+          assert_raises(ArgumentError) do
+            PushNotifier.deliver_later(user: users(:one), title: "Title", body: "Body", path: "//example.com")
+          end
+        end
+
+        %w[VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT].each { |name| ENV.delete(name) }
+        assert_raises(VapidConfiguration::Error) do
+          PushNotifier.deliver_later(user: users(:one), title: "Title", body: "Body", path: "/account")
+        end
+      end
+
+      private
+        def with_test_queue_adapter
+          original_adapter = ActiveJob::Base.queue_adapter
+          ActiveJob::Base.queue_adapter = :test
+          clear_enqueued_jobs
+          yield
+        ensure
+          ActiveJob::Base.queue_adapter = original_adapter
+        end
+
+        def with_vapid_env
+          original = %w[VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT].index_with { |name| ENV[name] }
+          ENV.update(
+            "VAPID_PUBLIC_KEY" => "public",
+            "VAPID_PRIVATE_KEY" => "private",
+            "VAPID_SUBJECT" => "https://example.com"
+          )
+          yield
+        ensure
+          original.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
+        end
+    end
+  RUBY
+
+  controller_test_support = if devise
+    <<~RUBY
+        include Devise::Test::IntegrationHelpers
+        include ActiveJob::TestHelper
+
+        setup do
+          @user = users(:one)
+          sign_in @user
+          Rails.cache.clear
+          configure_vapid
+        end
+    RUBY
+  else
+    <<~RUBY
+        require "eth"
+        include ActiveJob::TestHelper
+
+        setup do
+          @user = users(:one)
+          Rails.cache.clear
+          get session_nonce_url
+          nonce = response.parsed_body.fetch("nonce")
+          key = Eth::Key.new(priv: "1".rjust(64, "0"))
+          @user.update!(wallet_address: key.address.to_s)
+          message = Siwe::Message.new(
+            domain: "www.example.com",
+            address: key.address.to_s,
+            uri: "http://www.example.com",
+            chain_id: 1,
+            nonce:,
+            issued_at: Time.current.iso8601,
+            statement: "Sign in to www.example.com"
+          ).prepare_message
+          post session_url, params: { message:, signature: key.personal_sign(message) }, as: :json
+          assert_response :success
+          configure_vapid
+        end
+    RUBY
+  end
+  create_file "test/controllers/push_subscriptions_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class PushSubscriptionsControllerTest < ActionDispatch::IntegrationTest
+    #{controller_test_support}
+      teardown do
+        @original_vapid.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
+      end
+
+      test "requires authentication" do
+        #{devise ? "sign_out @user" : "delete session_url"}
+        get vapid_public_key_push_subscription_url
+
+        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+        get notification_url
+        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+      end
+
+      test "renders the dedicated notification settings page" do
+        get notification_url
+
+        assert_response :success
+        assert_select "h1", text: "通知", count: 1
+        assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', notification_path, count: 1
+        assert_select '[data-push-subscription-target="toggle"]', count: 1
+        assert_select '[data-push-subscription-target="testButton"]', count: 1
+      end
+
+      test "registers synchronizes and removes the current browser" do
+        assert_difference("PushSubscription.count", 1) do
+          post push_subscription_url, params: subscription_payload, as: :json
+        end
+        assert_response :no_content
+        assert_equal @user, PushSubscription.find_by!(browser_id: "controller-browser").user
+
+        assert_difference("PushSubscription.count", -1) do
+          delete push_subscription_url,
+            params: { push_subscription: { browser_id: "controller-browser" } },
+            as: :json
+        end
+        assert_response :no_content
+      end
+
+      test "returns the public key without caching and reports missing configuration" do
+        get vapid_public_key_push_subscription_url
+        assert_response :success
+        assert_equal({ "public_key" => "public" }, response.parsed_body)
+        assert_equal "no-store", response.headers.fetch("Cache-Control")
+
+        ENV.delete("VAPID_PRIVATE_KEY")
+        get vapid_public_key_push_subscription_url
+        assert_response :service_unavailable
+      end
+
+      test "enqueues a test notification only for the requested browser" do
+        post push_subscription_url, params: subscription_payload, as: :json
+
+        with_test_queue_adapter do
+          assert_enqueued_jobs 1, only: PushNotificationJob do
+            post test_push_subscription_url,
+              params: { push_subscription: { browser_id: "controller-browser" } },
+              as: :json
+          end
+        end
+        assert_response :accepted
+
+        post test_push_subscription_url,
+          params: { push_subscription: { browser_id: "missing" } },
+          as: :json
+        assert_response :not_found
+      end
+
+      test "rate limits test notifications after five requests per minute" do
+        post push_subscription_url, params: subscription_payload, as: :json
+
+        5.times do
+          post test_push_subscription_url,
+            params: { push_subscription: { browser_id: "controller-browser" } },
+            as: :json
+          assert_response :accepted
+        end
+
+        post test_push_subscription_url,
+          params: { push_subscription: { browser_id: "controller-browser" } },
+          as: :json
+        assert_response :too_many_requests
+      end
+
+      private
+        def with_test_queue_adapter
+          original_adapter = ActiveJob::Base.queue_adapter
+          ActiveJob::Base.queue_adapter = :test
+          clear_enqueued_jobs
+          yield
+        ensure
+          ActiveJob::Base.queue_adapter = original_adapter
+        end
+
+        def subscription_payload
+          {
+            push_subscription: {
+              browser_id: "controller-browser",
+              endpoint: "https://push.example.com/controller",
+              p256dh: "p256dh-key",
+              auth: "auth-key"
+            }
+          }
+        end
+
+        def configure_vapid
+          @original_vapid = %w[VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT].index_with { |name| ENV[name] }
+          ENV.update(
+            "VAPID_PUBLIC_KEY" => "public",
+            "VAPID_PRIVATE_KEY" => "private",
+            "VAPID_SUBJECT" => "https://example.com"
+          )
+        end
+    end
+  RUBY
+
+  create_file "config/locales/web_push.ja.yml", <<~YAML, force: true
+    ja:
+      web_push:
+        errors:
+          configuration: Web Pushのサーバー設定が完了していません。
+        test:
+          title: テスト通知
+          body: Web Pushは正常に設定されています。
+  YAML
 end
 
 def install_solid_components
   if VALUES.fetch("active_job") == "solid_queue"
     generate "solid_queue:install"
     environment "config.active_job.queue_adapter = :solid_queue"
+    environment "config.active_job.queue_adapter = :test", env: "test"
     append_to_file "config/puma.rb", "\nplugin :solid_queue if ENV.fetch(\"RAILS_ENV\", \"development\") == \"development\"\n"
   end
   generate "solid_cache:install" if VALUES.fetch("solid_cache") == "use"
@@ -4556,6 +5550,7 @@ end
 
 def configure_evidence_capture
   authentication = VALUES.fetch("account_authentication") == "devise" ? "devise" : "siwe"
+  web_push = VALUES.fetch("web_push") == "use"
   runner = <<~'RUBY'
     # frozen_string_literal: true
 
@@ -4569,6 +5564,7 @@ def configure_evidence_capture
       self.use_transactional_tests = false
 
       AUTHENTICATION = __AUTHENTICATION__
+      WEB_PUSH = __WEB_PUSH__
       require "eth" if AUTHENTICATION == "siwe"
       VIEWPORTS = {
         "desktop" => { "width" => 1400, "height" => 900 },
@@ -4584,6 +5580,7 @@ def configure_evidence_capture
         @captures = []
         VIEWPORTS.each do |viewport_name, viewport|
           page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
+          install_web_push_stub if WEB_PUSH
           prepare_guest_data
           verify_footer_geometry if viewport_name == "desktop"
           capture_guest_pages(viewport_name)
@@ -4731,6 +5728,8 @@ def configure_evidence_capture
           capture_page("profile-edit", "プロフィール編集", edit_profile_path, "プロフィール編集", viewport)
           account_settings_path = devise? ? edit_user_registration_path : edit_account_path
           capture_page("account-settings", "アカウント設定", account_settings_path, "アカウント設定", viewport)
+          capture_page("notifications", "通知", notification_path, "通知", viewport)
+          capture_enabled_web_push(viewport) if WEB_PUSH
 
           @user.api_credentials.destroy_all
           capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, "APIキーの管理", viewport)
@@ -4786,6 +5785,173 @@ def configure_evidence_capture
           assert_equal 200, page.status_code
           assert_selector "h1", text: heading
           capture_current_page(identifier, title, viewport)
+        end
+
+        def capture_enabled_web_push(viewport)
+          install_evidence_csrf_token
+          toggle = find('[data-push-subscription-target="toggle"]')
+          assert_not toggle.checked?
+          toggle.click
+          assert_selector '[data-push-subscription-target="status"].alert-success', text: "このブラウザの通知を有効にしました。"
+          assert_selector '[data-push-subscription-target="testButton"]:not([disabled])', text: "テスト通知を送信"
+          capture_current_page("web-push-enabled", "Web Push（購読済み・テスト通知可能）", viewport)
+
+          find('[data-push-subscription-target="testButton"]').click
+          assert_selector '[data-push-subscription-target="status"].alert-success', text: "テスト通知を送信しました。"
+
+          set_evidence_web_push_mode("rotated")
+          visit notification_path
+          install_evidence_csrf_token
+          assert_selector '[data-push-subscription-target="status"].alert-success',
+            text: "VAPID鍵の変更に合わせて通知を再登録しました。"
+          assert_equal({ "subscribeCount" => 1, "unsubscribeCount" => 1, "subscribed" => true,
+                         "permissionRequests" => 0 }, evidence_web_push_stats)
+
+          find('[data-push-subscription-target="toggle"]').click
+          assert_selector '[data-push-subscription-target="status"].alert-info',
+            text: "このブラウザの通知を無効にしました。"
+          assert_equal false, evidence_web_push_stats.fetch("subscribed")
+
+          set_evidence_web_push_mode("default")
+          visit notification_path
+          install_evidence_csrf_token
+          find('[data-push-subscription-target="toggle"]').click
+          assert_selector '[data-push-subscription-target="status"].alert-success',
+            text: "このブラウザの通知を有効にしました。"
+          assert_equal 1, evidence_web_push_stats.fetch("permissionRequests")
+
+          set_evidence_web_push_mode("denied")
+          visit notification_path
+          assert_selector '[data-push-subscription-target="status"].alert-warning',
+            text: "通知がブロックされています。ブラウザの設定から許可してください。"
+          assert find('[data-push-subscription-target="toggle"]').disabled?
+
+          set_evidence_web_push_mode("unsupported")
+          visit notification_path
+          assert_selector '[data-push-subscription-target="status"].alert-warning',
+            text: "このブラウザはWeb Pushに対応していません。"
+          assert find('[data-push-subscription-target="toggle"]').disabled?
+        ensure
+          page.execute_script('localStorage.removeItem("evidence-web-push-mode")')
+        end
+
+        def install_evidence_csrf_token
+          page.execute_script(<<~JAVASCRIPT)
+            if (!document.querySelector('meta[name="csrf-token"]')) {
+              const csrf = document.createElement("meta")
+              csrf.name = "csrf-token"
+              csrf.content = "evidence-csrf-token"
+              document.head.appendChild(csrf)
+            }
+          JAVASCRIPT
+        end
+
+        def set_evidence_web_push_mode(mode)
+          page.execute_script("localStorage.setItem('evidence-web-push-mode', #{mode.to_json})")
+        end
+
+        def evidence_web_push_stats
+          page.evaluate_script("window.__evidencePush.stats()")
+        end
+
+        def install_web_push_stub
+          page.driver.with_playwright_page do |playwright_page|
+            playwright_page.add_init_script(script: <<~JAVASCRIPT)
+              (() => {
+                const installCsrfToken = () => {
+                  if (!document.head) return false
+                  if (!document.querySelector('meta[name="csrf-token"]')) {
+                    const csrf = document.createElement("meta")
+                    csrf.name = "csrf-token"
+                    csrf.content = "evidence-csrf-token"
+                    document.head.appendChild(csrf)
+                  }
+                  return true
+                }
+                if (!installCsrfToken()) {
+                  const csrfObserver = new MutationObserver(() => {
+                    if (installCsrfToken()) csrfObserver.disconnect()
+                  })
+                  csrfObserver.observe(document, { childList: true, subtree: true })
+                }
+
+                let mode = "granted"
+                try {
+                  mode = localStorage.getItem("evidence-web-push-mode") || mode
+                } catch (error) {
+                  console.debug("Web Push evidence mode is unavailable for this origin", error)
+                }
+
+                if (mode === "unsupported") {
+                  Object.defineProperty(window, "Notification", { configurable: true, value: undefined })
+                  Object.defineProperty(window, "PushManager", { configurable: true, value: undefined })
+                  Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: undefined })
+                  return
+                }
+
+                let subscription = null
+                let subscribeCount = 0
+                let unsubscribeCount = 0
+                let permissionRequests = 0
+                const buildSubscription = (applicationServerKey) => {
+                  const current = {
+                    endpoint: `https://push.example.com/evidence-${window.innerWidth}`,
+                    options: { applicationServerKey },
+                    async unsubscribe() {
+                      unsubscribeCount += 1
+                      if (subscription === current) subscription = null
+                      return true
+                    },
+                    toJSON() {
+                      return {
+                        endpoint: this.endpoint,
+                        keys: { p256dh: "evidence-p256dh", auth: "evidence-auth" }
+                      }
+                    }
+                  }
+                  return current
+                }
+
+                if (mode === "rotated") subscription = buildSubscription(new Uint8Array([0]))
+
+                const pushManager = {
+                  async getSubscription() {
+                    return subscription
+                  },
+                  async subscribe({ applicationServerKey }) {
+                    subscribeCount += 1
+                    subscription = buildSubscription(applicationServerKey)
+                    return subscription
+                  }
+                }
+                const registration = { pushManager }
+                const notification = {
+                  permission: mode === "denied" ? "denied" : mode === "default" ? "default" : "granted",
+                  async requestPermission() {
+                    permissionRequests += 1
+                    this.permission = "granted"
+                    return this.permission
+                  }
+                }
+
+                window.__evidencePush = {
+                  stats() {
+                    return { subscribeCount, unsubscribeCount, subscribed: Boolean(subscription), permissionRequests }
+                  }
+                }
+
+                Object.defineProperty(window, "Notification", {
+                  configurable: true,
+                  value: notification
+                })
+                Object.defineProperty(window, "PushManager", { configurable: true, value: class PushManager {} })
+                Object.defineProperty(navigator, "serviceWorker", {
+                  configurable: true,
+                  value: { register: async () => registration }
+                })
+              })()
+            JAVASCRIPT
+          end
         end
 
         def assert_admin_navigation_active(label)
@@ -4916,6 +6082,7 @@ def configure_evidence_capture
     end
   RUBY
   runner = runner.sub("__AUTHENTICATION__", authentication.inspect)
+  runner = runner.sub("__WEB_PUSH__", web_push.inspect)
   create_file "test/support/evidence_capture.rb", runner, force: true
   create_file "lib/tasks/evidence.rake", <<~'RAKE', force: true
     # frozen_string_literal: true
@@ -4938,12 +6105,23 @@ def configure_evidence_capture
           system({ "RAILS_ENV" => "test" }, rails, "db:test:purge", "db:test:prepare")
         end
         capture_error = nil
+        web_push_environment = if defined?(PushSubscription)
+          require "web-push"
+          vapid_key = WebPush.generate_key
+          {
+            "VAPID_PUBLIC_KEY" => vapid_key.public_key,
+            "VAPID_PRIVATE_KEY" => vapid_key.private_key,
+            "VAPID_SUBJECT" => "https://localhost"
+          }
+        else
+          {}
+        end
 
         begin
           raise "test databaseの再構築に失敗しました" unless rebuild_test_database.call
 
           system(
-            { "RAILS_ENV" => "test", "EVIDENCE_OUTPUT_DIR" => output_directory.to_s },
+            { "RAILS_ENV" => "test", "EVIDENCE_OUTPUT_DIR" => output_directory.to_s }.merge(web_push_environment),
             RbConfig.ruby,
             "-Itest",
             Rails.root.join("test/support/evidence_capture.rb").to_s
@@ -5120,8 +6298,9 @@ after_bundle do
   configure_content_management
   configure_profile if VALUES.fetch("profile_features").any?
   configure_api if VALUES.fetch("api") == "enable"
-  configure_default_views
+  configure_pwa if VALUES.fetch("pwa") == "use"
   configure_web_push if VALUES.fetch("web_push") == "use"
+  configure_default_views
   install_solid_components
   configure_database
   configure_active_storage_db

@@ -4,6 +4,6 @@ Devise版とWallet SIWE版の生成アプリを、CapybaraとPlaywrightで撮影
 
 - [Devise](devise/README.md)
 - [Wallet SIWE](siwe/README.md)
-- Source fingerprint: `f58356a2f435c1caa0881fc92d2d8b79623bd2c73a0220cc7d4b509eb0e25af2`
+- Source fingerprint: `f94561ca63c796d6b5634ae82c330201df9e538d2459c34413f3eae762d13a16`
 - 更新: `rake evidence:update`
 - 検証: `rake evidence:verify`

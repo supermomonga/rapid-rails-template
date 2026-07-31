@@ -11,9 +11,9 @@ SAMPLE = File.join(ROOT, "sample")
 DESTINATION = File.join(ROOT, "docs/evidence")
 COMMON_OPTIONS = %w[
   --name=sample
-  --pwa=skip
-  --web-push=skip
-  --active-job=skip
+  --pwa=use
+  --web-push=use
+  --active-job=solid_queue
   --solid-cache=use
   --profile-features=screen_name,display_name,avatar
   --api=enable
@@ -45,6 +45,8 @@ begin
     FileUtils.rm_rf(SAMPLE)
     options = COMMON_OPTIONS + ["--account-authentication=#{authentication}", SAMPLE]
     run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *options)
+    run!(File.join(SAMPLE, "bin/rails"), "test", chdir: SAMPLE)
+    run!(File.join(SAMPLE, "bin/rubocop"), chdir: SAMPLE)
 
     playwright = File.join(SAMPLE, "node_modules/.bin/playwright")
     raise "Playwright CLIが生成されていません: #{playwright}" unless File.executable?(playwright)

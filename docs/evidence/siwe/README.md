@@ -1,7 +1,7 @@
 # Wallet SIWE エビデンス
 
-- Source fingerprint: `f58356a2f435c1caa0881fc92d2d8b79623bd2c73a0220cc7d4b509eb0e25af2`
-- Base commit: `74e2e1399a1766ce331687491ed9d836780c5578`
+- Source fingerprint: `f94561ca63c796d6b5634ae82c330201df9e538d2459c34413f3eae762d13a16`
+- Base commit: `28ccd80f8267be48f5f8ebf1bc9feb22e786347b`
 - 更新: `rake evidence:update`
 
 ## ホーム（未ログイン）
@@ -93,6 +93,26 @@
 ### Mobile
 
 ![アカウント設定 (mobile)](account-settings--mobile.png)
+
+## 通知
+
+### Desktop
+
+![通知 (desktop)](notifications--desktop.png)
+
+### Mobile
+
+![通知 (mobile)](notifications--mobile.png)
+
+## Web Push（購読済み・テスト通知可能）
+
+### Desktop
+
+![Web Push（購読済み・テスト通知可能） (desktop)](web-push-enabled--desktop.png)
+
+### Mobile
+
+![Web Push（購読済み・テスト通知可能） (mobile)](web-push-enabled--mobile.png)
 
 ## APIキー一覧（空）
 

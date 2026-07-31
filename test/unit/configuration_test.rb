@@ -25,6 +25,20 @@ class ConfigurationTest < Minitest::Test
     assert_equal "PWAを使用しないため", configuration.reasons["web_push"]
   end
 
+  def test_web_push_requires_pwa_and_normalizes_active_job_to_solid_queue
+    configuration = RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "use")
+
+    assert_equal "solid_queue", configuration["active_job"]
+    assert_equal "Web Pushの非同期送信に必要なため", configuration.reasons["active_job"]
+
+    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("pwa" => "skip", "web_push" => "use")
+    end
+    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "use", "active_job" => "skip")
+    end
+  end
+
   def test_mail_auto_is_disabled_for_wallet_siwe
     configuration = RapidRailsTemplate::Configuration.build("account_authentication" => "wallet_siwe")
 

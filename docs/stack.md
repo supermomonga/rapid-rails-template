@@ -62,7 +62,7 @@ Viewはcomponent-firstで構築します。daisyUIに意図が一致するcompon
 
 Rails 8.1.3の`bin/rails app:templates:copy`で取得した標準ERB templateを基準に、`generate scaffold`用の6 Viewと`generate controller NAME ACTION`用のViewをdaisyUI向けに上書きします。生成アプリケーションの`lib/templates/erb/scaffold`と`lib/templates/erb/controller`へ変更したtemplateだけを配置し、mailerやRuby generator templateの未変更copyは配置しません。scaffoldの一覧は`table table-sm table-pin-rows`を`overflow-x-auto`で囲み、詳細・編集画面は`card`、属性表示は`list`、formは属性型に対応する`input`、`textarea`、`file-input`、`checkbox`を使用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。
 
-account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目だけを表示します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
+account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`、Web Push使用時の通知には`bell`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目だけを表示します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
 
@@ -121,6 +121,41 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 `boring_avatars`は`avatar`選択時だけRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。theme色はserver-side generatorが要求する16進色の定数として一元化し、CSS themeとの一致を契約テストで保証します。
 
+### PWAとWeb Push
+
+`pwa=use`ではRails 8.1標準のPWA controllerを利用し、`/manifest.json`と`/service-worker`を明示的にrouteへ接続します。manifestはアプリ名、`/icon.png`、scopeとstart URL `/`、`standalone`表示、theme色`#3ea8ff`を持ちます。Service Workerの`push` handlerは`{ title, options }`を表示し、`notificationclick` handlerはpayloadの`options.data.path`を同一origin内へ制限した上で、既存windowのfocus・navigateまたは新規windowのopenを行います。
+
+`web_push=use`では`web-push ~> 3.1`とSolid Queueを導入します。`PushSubscription`はUser、安定したbrowser ID、endpoint、`p256dh`、`auth`を保持し、browser IDとendpointをそれぞれ一意にします。登録時は両キーの既存recordをlockし、同一ブラウザの別accountログインや同一endpointの再登録を現在のUserへ移します。User削除時はassociationとdatabase外部キーの両方で購読を削除します。
+
+VAPID設定は`VapidConfiguration`だけが`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`を読み、欠落、空値、不正なsubjectを明示的に失敗させます。開発用の生成鍵はgit管理外の`mise.local.toml`へ保存します。本番では3変数すべてが必須です。鍵を変更した場合、Stimulus controllerがapplication server keyの差異を検出して旧購読を解除し、現在の鍵で再購読します。旧鍵との二重運用は行いません。
+
+アプリケーションからの送信入口は次の1つです。
+
+```ruby
+PushNotifier.deliver_later(
+  user:,
+  title:,
+  body:,
+  path:,
+  tag: nil,
+  icon: "/icon.png",
+  ttl: 86_400
+)
+```
+
+`path`は`/`から始まる同一origin内pathだけを受け付けます。各購読へ個別の`PushNotificationJob`をenqueueし、job実行時にもenqueue時のUser IDと現在の所有者を照合します。Web Push接続・読取・SSL timeoutは5秒です。失効・不正購読は削除し、rate limit、Push service、一時的network errorだけを最大5回再試行します。認証失敗、payload過大、VAPID設定不備は再試行せず失敗として表面化させます。
+
+認証済みHTTP APIは次のinterfaceを提供します。全endpointを通常の認証とCSRFで保護し、購読secretはresponseやlogへ返しません。
+
+| Method・path | Response・制約 |
+| --- | --- |
+| `GET /push_subscription/vapid_public_key` | `200 { public_key }`。設定不足は`503` |
+| `POST /push_subscription` | browser ID、endpoint、`p256dh`、`auth`を登録・再割当てして`204` |
+| `DELETE /push_subscription` | 現在のUser範囲でbrowser IDを冪等削除して`204` |
+| `POST /push_subscription/test` | 現在のUserとbrowser IDに一致する購読へ固定通知をenqueueして`202`。未登録は`404`、設定不足は`503`、5回/分超過は`429` |
+
+DeviseとWallet SIWEで共通の認証必須`/notification`ページを生成し、account navigationの独立項目「通知」から開きます。アカウント設定画面へWeb Push UIは埋め込みません。通知ページはdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
+
 ### Roleと認可
 
 認証方式にかかわらず、生成アプリケーションには固定roleを複数付与できる`UserRole`とAction Policyのpolicy基盤を常に生成します。初期roleは`admin`だけとし、一般Userはroleを持ちません。`UserRole`は`user_id`と文字列`role`を持ち、組み合わせの一意制約、外部キー、`NOT NULL`、許可roleのdatabase check constraintで不変条件を保証します。role定義はコードとmigrationで管理し、管理画面からrole種別そのものを追加・編集しません。
@@ -177,7 +212,7 @@ https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2
 
 ## Solid Queue
 
-ジョブ管理を使用する場合だけ`solid_queue`を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、`solid_queue:install`が生成するschemaとmigration pathを使用します。
+ジョブ管理を使用する場合だけ`solid_queue`を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、`solid_queue:install`が生成するschemaとmigration pathを使用します。test環境だけはActive Storageを含むenqueue処理とjob assertionを外部worker・queue DBから分離するため、Rails標準の`test` adapterへ明示的に上書きします。
 
 developmentではPumaからSolid Queueを起動します。
 
@@ -300,6 +335,7 @@ Litestreamの設定または認証情報が不足した場合、replicationな�
 - persistent volume mount: `/data`
 - container command: Dockerfileの既定commandを使用
 - 必須secret: `RAILS_MASTER_KEY`、Litestreamのaccess keyとsecret key
+- Web Push使用時の必須環境変数: `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`
 - 必須database path: `DATABASE_PATH`、`STORAGE_DATABASE_PATH`と、選択に応じた`QUEUE_DATABASE_PATH`／`CACHE_DATABASE_PATH`／`CABLE_DATABASE_PATH`
 - 必須replica URL: primary、storageと、選択に応じたqueue／cableのLitestream URL
 - 任意の調整値: `WEB_CONCURRENCY`、`RAILS_MAX_THREADS`、`DATABASE_POOL_SIZE`、`JOB_CONCURRENCY`

@@ -63,7 +63,7 @@
 1. アプリ名
 2. PWAを使うか
 3. PWAでWeb Pushを使うか
-4. ジョブ管理を使うか
+4. ジョブ管理を使うか（Web Pushを使わない場合）
 5. Solid Cacheを使うか
 6. アカウント管理方法
 7. API機能を有効にするか
@@ -94,7 +94,9 @@
 - 表示条件: 常に表示する
 - 影響する処理: PWA manifest、service worker、関連routeの有効化と無効時のstub取扱い
 
-Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`skip`時もstubは残します。存在しないgenerator optionや曖昧な文字列編集では処理しません。
+Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`use`時はRails標準の`Rails::PwaController`へmanifestとService Workerのrouteを接続し、アプリ名、標準icon、theme色、`standalone`表示を持つmanifestを決定的に生成します。application layoutへmanifest linkとtheme-colorを追加し、bodyへ接続したStimulus controllerが`/service-worker`をscope `/`で登録します。Service WorkerはWeb PushのJSON payloadを表示し、notification click時は同一originの既存windowを対象pathへ遷移させてfocusします。
+
+`skip`時もRails標準stubは残しますが、route、manifest link、theme-color、Service Worker登録controllerは有効化しません。存在しないgenerator optionや曖昧な文字列編集では処理しません。
 
 ## `web_push`
 
@@ -103,9 +105,11 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 - 選択肢: `use`、`skip`
 - 既定値: `skip`
 - 表示条件: `pwa == use`
-- 影響する処理: `use`の場合だけ`web-push` gemを追加し、Web Push設定stepを実行する
+- 影響する処理: `use`の場合だけ`web-push ~> 3.1`、購読model、認証済みHTTP API、送信service/job、独立した通知設定ページを生成する
 
-`pwa == skip`の場合は質問せず、値を`skip`へ正規化します。`use`の場合はVAPID鍵を自動生成し、git管理外の`mise.local.toml`の`[env]`へ`VAPID_PUBLIC_KEY`と`VAPID_PRIVATE_KEY`として保存します。
+`pwa == skip`の場合は質問せず、値を`skip`へ正規化します。ただしCLIで`--pwa=skip --web-push=use`を明示した場合は、矛盾を生成開始前に拒否します。`use`の場合はVAPID鍵を自動生成し、git管理外の`mise.local.toml`の`[env]`へ`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、開発用`VAPID_SUBJECT=https://localhost`として保存します。
+
+Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push選択時はActive Job質問を省略し、未指定値を理由付きで`solid_queue`へ正規化します。CLIで`--web-push=use --active-job=skip`を明示した場合は拒否し、同期送信や別adapterへのフォールバックは追加しません。
 
 ## `active_job`
 
@@ -113,10 +117,10 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 - 質問文: ジョブ管理を使用しますか？
 - 選択肢: `solid_queue`、`skip`
 - 既定値: `skip`
-- 表示条件: 常に表示する
+- 表示条件: `web_push != use`
 - 影響する処理: `solid_queue` gemとinstall generator、SQLite queue database、Active Job adapter、development用Puma plugin、production worker
 
-`solid_queue`の場合、`config.active_job.queue_adapter = :solid_queue`を設定します。developmentではPuma pluginを有効化し、productionではPumaから起動しません。`deployment == dokploy`の場合は`Procfile.prod`のworkerプロセスで`bin/jobs --mode async`を実行し、`deployment == none`の場合はproductionでの起動方法を設定しません。
+`solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentではPuma pluginを有効化し、productionではPumaから起動しません。`deployment == dokploy`の場合は`Procfile.prod`のworkerプロセスで`bin/jobs --mode async`を実行し、`deployment == none`の場合はproductionでの起動方法を設定しません。
 
 ## `account_authentication`
 
@@ -234,6 +238,11 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - 承認後に質問が行われず、確定済み設定と実行計画が変化しないこと。
 - `mail == auto`がDeviseでは`use`、SIWE wallet認証では`skip`へ正規化されること。
 - PWAを使わない場合、Web Pushを質問せず`web-push` gemを追加しないこと。
+- `pwa=skip + web_push=use`と`web_push=use + active_job=skip`の明示矛盾を変更開始前に拒否すること。
+- Web Push使用時はActive Jobを質問せず、未指定値を理由付きでSolid Queueへ正規化すること。
+- PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
+- Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。
+- DeviseとWallet SIWEの両方で購読APIと共通設定UIを認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。
 - Solid Queueを使わない場合、queue database、Puma plugin、production workerを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。
 - `deployment == dokploy`で`Dockerfile.prod`、`Procfile.prod`、entrypoint、Litestream設定を生成し、Rails標準Docker、Kamal、Thrusterを生成しないこと。

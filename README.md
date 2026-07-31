@@ -43,7 +43,6 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --api=enable \
   --action-cable=skip \
   --mail=auto \
-  --action-text=use \
   --deployment=dokploy \
   APP_PATH
 mise run generate-sampleapp

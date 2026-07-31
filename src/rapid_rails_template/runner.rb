@@ -7,6 +7,8 @@ require "tempfile"
 
 module RapidRailsTemplate
   class Runner
+    RAILS_LAUNCHER = 'load Gem.activate_bin_path("railties", "rails", ">= 8.1", "< 8.2")'
+
     def initialize(app_path:, plan:, template_payload:, output: $stdout, error: $stderr, process_runner: Open3)
       @app_path = app_path
       @plan = plan
@@ -42,8 +44,18 @@ module RapidRailsTemplate
     end
 
     def rails_command(template_path)
-      rails = Gem.bin_path("railties", "rails", ">= 8.1", "< 8.2")
-      [RbConfig.ruby, rails, "new", app_path, *plan.generator_options, "--template", template_path]
+      [
+        RbConfig.ruby,
+        "-rrubygems",
+        "-e",
+        RAILS_LAUNCHER,
+        "--",
+        "new",
+        app_path,
+        *plan.generator_options,
+        "--template",
+        template_path
+      ]
     end
 
     def stream_process(environment, command)

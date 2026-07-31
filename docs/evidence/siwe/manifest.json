@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "authentication": "siwe",
-  "source_fingerprint": "1702a790c1445cafe1347d526281e59b1cb9e4eff1662aff39e4d9ca4c3a2ef4",
-  "base_commit": "ea8a041fc86c52cf9a5fbbcc8c22ca5be723b336",
+  "source_fingerprint": "62d0bcfcbb4c1ece1df9dc481f4b0e230f27f1b5c1a37b5610c5517dd4c56915",
+  "base_commit": "ac0d8da0b24e395d21ccbed8c201d1bbc2a2b522",
   "viewports": {
     "desktop": {
       "width": 1400,
@@ -19,16 +19,34 @@
       "title": "ホーム（未ログイン）",
       "viewport": "desktop",
       "path": "home-guest--desktop.png",
-      "sha256": "4e55f4afedd0236f6f4ce578e8831554c91b2e6b0f9151df4dcb397f5292d39c",
+      "sha256": "9f452e23ed95d220141f08c682a64ad13dc1d25a1647980ee8c083bde6c21511",
       "pixel_width": 1400,
-      "pixel_height": 901
+      "pixel_height": 994
+    },
+    {
+      "id": "about",
+      "title": "アプリについて",
+      "viewport": "desktop",
+      "path": "about--desktop.png",
+      "sha256": "b739752aedec7a946c9b482bc2d6de7d1851b8fb2460d22df3b05f9af15cbb0a",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "faq",
+      "title": "よくある質問",
+      "viewport": "desktop",
+      "path": "faq--desktop.png",
+      "sha256": "8a4afb23f5c958a662a3bb77e0389b6fe39a55efedd12bccb771ceed2c87729b",
+      "pixel_width": 1400,
+      "pixel_height": 900
     },
     {
       "id": "login",
       "title": "ウォレットでログイン",
       "viewport": "desktop",
       "path": "login--desktop.png",
-      "sha256": "ceac52b4dbf0b16cd286299b38a788a8a4ba5238831e67c55905855c39afebd2",
+      "sha256": "c3183a6970df1a812f81148b25aa8c0a44917fa9b95666e0d59f1785a1a7d30d",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -37,16 +55,16 @@
       "title": "ホーム（ログイン済み）",
       "viewport": "desktop",
       "path": "home-authenticated--desktop.png",
-      "sha256": "26d30455a12fe599143707c64ee8db1b21a9279da9e9802c1a3952b8992e6de1",
+      "sha256": "0471b6d74bdc3c6b3ce062c1fd89606527226ebde178e1504d520d55d929f736",
       "pixel_width": 1400,
-      "pixel_height": 901
+      "pixel_height": 994
     },
     {
       "id": "account",
       "title": "マイページ",
       "viewport": "desktop",
       "path": "account--desktop.png",
-      "sha256": "443d1113a23da3770266fd3b75d886588f9db5c739cdf79063b8ac61031fdec9",
+      "sha256": "db3b2ccc9462564801bb25116151b132437d9dbd91ad720e763d7049f10fb8be",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -55,7 +73,7 @@
       "title": "プロフィール",
       "viewport": "desktop",
       "path": "profile--desktop.png",
-      "sha256": "74f90601528fde33dcd4fd610fb97ce7076c10ba78ac9072989557758b95d924",
+      "sha256": "cabdbba8022ce1466aa72f04213eaf5b73357ee8ed8f4a13d7abc645c8c149d3",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -64,7 +82,7 @@
       "title": "プロフィール編集",
       "viewport": "desktop",
       "path": "profile-edit--desktop.png",
-      "sha256": "88ffab4a30717124db423012fcb9798868a3b5d0a7a51aa3385b9bf0c396c78b",
+      "sha256": "7a9bfe53d163cdea823d7982fbe828032b7df70c6432101584851a28c9e97b67",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -73,7 +91,7 @@
       "title": "アカウント設定",
       "viewport": "desktop",
       "path": "account-settings--desktop.png",
-      "sha256": "f8464a0ebee0a8696c3829081d5de24eece73e463c914b9e209ba5a6ce8c1ef8",
+      "sha256": "35f9f3973775cd974a5c536dc5b61b9a0411e0c3bfef22c326a28871777d8946",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -82,7 +100,7 @@
       "title": "APIキー一覧（空）",
       "viewport": "desktop",
       "path": "api-credentials-empty--desktop.png",
-      "sha256": "4d6ac5d49252e8560918ec6aab792254824c183e57e3090c436ff3ca857614f9",
+      "sha256": "5f7b137a8b9203596f1e8e872f105ab48d14265dfcf49e7b754964fa94600dcf",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -91,7 +109,7 @@
       "title": "APIキー作成",
       "viewport": "desktop",
       "path": "api-credential-new--desktop.png",
-      "sha256": "5d12fe1ed69f2a5aa28f90efaea17ca353a94e3e67cc51cac3ae18719c523c55",
+      "sha256": "0bb6b3f5522d9a60920622758f03baa1837633e548987861c5ec852ecbba8c37",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -100,16 +118,16 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "desktop",
       "path": "api-credential-secret--desktop.png",
-      "sha256": "1f0e3cd865400a873920be7937163b716e3bfec0678ea2bbc9b62041788efeb4",
+      "sha256": "d5e67002c0258fb93e680e067063c2c51f4bfae8245918c7eb7c9213d123dd42",
       "pixel_width": 1400,
-      "pixel_height": 900
+      "pixel_height": 954
     },
     {
       "id": "api-credential-show",
       "title": "APIキー詳細",
       "viewport": "desktop",
       "path": "api-credential-show--desktop.png",
-      "sha256": "264f64db1208a8e65c9c9a569ee42a8aa4a251739bd5b36b7af0ac840e4a6e67",
+      "sha256": "09d234901cc05f587782426c245a6d6b601947317b578c3b3827fea36492e1ab",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -118,7 +136,7 @@
       "title": "APIキー編集",
       "viewport": "desktop",
       "path": "api-credential-edit--desktop.png",
-      "sha256": "0c7db33678dca5de21549f05ea75e2f77d044d9e9d4e6ac18bf06396ca8c4817",
+      "sha256": "e2d708ff7f1ca582954d4a7250790c00883510e51a6763940aaa1a96c24c5925",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -127,7 +145,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "desktop",
       "path": "api-credentials-populated--desktop.png",
-      "sha256": "da009199827bfa2719575ee38fd3facc3ce9c643475a67b1e50f125b9bdf756d",
+      "sha256": "c94d0b7a66fe55828736bf257e67057e08974d024e1803fff49bfda08e21ac22",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -136,7 +154,34 @@
       "title": "ユーザー管理",
       "viewport": "desktop",
       "path": "admin-users--desktop.png",
-      "sha256": "2a90069bf3219ad5c85244fbd05f22b133c86e795d1be5f055d313ed965e0bc0",
+      "sha256": "7d43f2dedf16d9f88a74ff64aa620151da44dd1f9afe1de4f57ac69995390189",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "admin-page-edit",
+      "title": "固定ページ編集",
+      "viewport": "desktop",
+      "path": "admin-page-edit--desktop.png",
+      "sha256": "79a4e9c26434e6e4876aeac0c08025a7641397043058964b10a76d45bf45f6ee",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "admin-faq-edit",
+      "title": "FAQ編集",
+      "viewport": "desktop",
+      "path": "admin-faq-edit--desktop.png",
+      "sha256": "9562c10d1a7254ccde70799146d3cf0a675df559c8808a2f170a508e76107e2c",
+      "pixel_width": 1400,
+      "pixel_height": 1086
+    },
+    {
+      "id": "admin-footer-setting",
+      "title": "外部リンク設定",
+      "viewport": "desktop",
+      "path": "admin-footer-setting--desktop.png",
+      "sha256": "fb8002781f19300dc6300b8e6fdc659e57aceed79606b8e2babe3bb4465a51d1",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -145,144 +190,189 @@
       "title": "ホーム（未ログイン）",
       "viewport": "mobile",
       "path": "home-guest--mobile.png",
-      "sha256": "05d79117685af23b5d17fd7094a4d76763e3314de56f87eda483d456621a27d1",
+      "sha256": "930ba8828864516dd69408456d557ffca01b3f001cc857b5725c74378fde4cd3",
       "pixel_width": 390,
-      "pixel_height": 1210
+      "pixel_height": 1678
+    },
+    {
+      "id": "about",
+      "title": "アプリについて",
+      "viewport": "mobile",
+      "path": "about--mobile.png",
+      "sha256": "0044a2849a26d591a6ad8fc65f5026b75eb8c59579f01df2dfcc8f699fb31d98",
+      "pixel_width": 390,
+      "pixel_height": 949
+    },
+    {
+      "id": "faq",
+      "title": "よくある質問",
+      "viewport": "mobile",
+      "path": "faq--mobile.png",
+      "sha256": "a1a5406357e861c02aae1d4db9b84cb8661bab15e5fb55b31d84100f2c3eaf8f",
+      "pixel_width": 390,
+      "pixel_height": 918
     },
     {
       "id": "login",
       "title": "ウォレットでログイン",
       "viewport": "mobile",
       "path": "login--mobile.png",
-      "sha256": "1c3a04029c2fa2fd2af789ee0af16d6736b025ed46cafc793c67fc8f9b3dbc55",
+      "sha256": "555aa7fc5b355b212fe2f676e02d7ed9b9b3c96335f977a99c099025604bf4d3",
       "pixel_width": 390,
-      "pixel_height": 844
+      "pixel_height": 1046
     },
     {
       "id": "navigation-guest-open",
       "title": "モバイルメニュー（未ログイン）",
       "viewport": "mobile",
       "path": "navigation-guest-open--mobile.png",
-      "sha256": "ec9124905cb3a99840230356d0fc0ea4d6a7035006eb834634e68914955b7f00",
+      "sha256": "df746477061b02fdcf54c5773a32cae601f1c0bca2aff8a211a23a5fa959b937",
       "pixel_width": 390,
-      "pixel_height": 1210
+      "pixel_height": 1678
     },
     {
       "id": "home-authenticated",
       "title": "ホーム（ログイン済み）",
       "viewport": "mobile",
       "path": "home-authenticated--mobile.png",
-      "sha256": "cb15ef3e0bbbcbfb917ef3652ecd2ef92ad5831690eb34b0101f389f3525cb70",
+      "sha256": "7ca41194325f594bc5c28e220ab757e0428b68b1acd1d674d4a07220c53a8ecf",
       "pixel_width": 390,
-      "pixel_height": 1210
+      "pixel_height": 1678
     },
     {
       "id": "account",
       "title": "マイページ",
       "viewport": "mobile",
       "path": "account--mobile.png",
-      "sha256": "364d5771647e37f54790bc2c688a3f5758d924a7f6a883d2df8b2699d1d7167c",
+      "sha256": "f611fd153f4135b885e966e4465df255a5cd2cc6699440f2aebb45332a290b89",
       "pixel_width": 390,
-      "pixel_height": 844
+      "pixel_height": 1214
     },
     {
       "id": "profile",
       "title": "プロフィール",
       "viewport": "mobile",
       "path": "profile--mobile.png",
-      "sha256": "05aaf7243fde7f5b43154282ef5258f9b16d4edb9572274c54180da3dc76b5da",
+      "sha256": "c2a90253bfa2d66f0374bb30e80a3609498c6bdaa7eff6c68dd77e409bbf6329",
       "pixel_width": 390,
-      "pixel_height": 874
+      "pixel_height": 1304
     },
     {
       "id": "profile-edit",
       "title": "プロフィール編集",
       "viewport": "mobile",
       "path": "profile-edit--mobile.png",
-      "sha256": "425936ba17bf81f753962f7a7fbd0ca031d4a5308cbeb6b31ddb847b65decc0d",
+      "sha256": "9f7d83ea9019489bf43509e2b0f97d9fe7415b4cace5abb0c48d07537c8eb89e",
       "pixel_width": 390,
-      "pixel_height": 988
+      "pixel_height": 1418
     },
     {
       "id": "account-settings",
       "title": "アカウント設定",
       "viewport": "mobile",
       "path": "account-settings--mobile.png",
-      "sha256": "dec0cedd804efc584b9145bcb5ad510415519576d11b15076116846708cb35c7",
+      "sha256": "29e9aecf8edfc82c97917ce9f52e8aa22b4bcdfda8d9b6ede955b9cfe35a8573",
       "pixel_width": 390,
-      "pixel_height": 952
+      "pixel_height": 1382
     },
     {
       "id": "api-credentials-empty",
       "title": "APIキー一覧（空）",
       "viewport": "mobile",
       "path": "api-credentials-empty--mobile.png",
-      "sha256": "7c427dd121a1431779507d3e5ee8ed578e0350d7c75335c551e00247a77a95e3",
+      "sha256": "ee5825c6f55671669a606a5097b3a11494fe8bd500944e959c38f5267825c13e",
       "pixel_width": 390,
-      "pixel_height": 844
+      "pixel_height": 1188
     },
     {
       "id": "api-credential-new",
       "title": "APIキー作成",
       "viewport": "mobile",
       "path": "api-credential-new--mobile.png",
-      "sha256": "e231f8cadbe5dbb0a28b4ae2711cf0d8cee14fd8f7efa92c0dbbf60197e001c9",
+      "sha256": "741008874936f8cabcb4249cddc7e1a3ff5edf8cb6b23149147fffad9c78f3dc",
       "pixel_width": 390,
-      "pixel_height": 844
+      "pixel_height": 1259
     },
     {
       "id": "api-credential-secret",
       "title": "APIキー詳細（初回secret）",
       "viewport": "mobile",
       "path": "api-credential-secret--mobile.png",
-      "sha256": "92f43e968efaf2386b64a0c4365bf52954cc68670ec09d8c2b6764b9ed66ccb9",
+      "sha256": "8babbefaf7e4572137cbae7b1067851533aba391a98b585343fcd8cda36c7da6",
       "pixel_width": 390,
-      "pixel_height": 1136
+      "pixel_height": 1567
     },
     {
       "id": "api-credential-show",
       "title": "APIキー詳細",
       "viewport": "mobile",
       "path": "api-credential-show--mobile.png",
-      "sha256": "697ecaa8f581048bbe0da14a34fddce687c41abc183ba42567a4e03b8b7b9ec9",
+      "sha256": "12859fbcb6e85d0db4f41ec59bfdbbed69e9a0f1ce4c78586b1748e8109cd8ca",
       "pixel_width": 390,
-      "pixel_height": 970
+      "pixel_height": 1401
     },
     {
       "id": "api-credential-edit",
       "title": "APIキー編集",
       "viewport": "mobile",
       "path": "api-credential-edit--mobile.png",
-      "sha256": "aee6dc9f6fe2292abdf94e5a45635f0ad400b5052005cc457c9230059f8c2a7c",
+      "sha256": "7dc7b71fb75632db3ab6761ecc52c8eab4fd5ee4d9edec0ee0f473fa052b042a",
       "pixel_width": 390,
-      "pixel_height": 844
+      "pixel_height": 1259
     },
     {
       "id": "api-credentials-populated",
       "title": "APIキー一覧（登録済み）",
       "viewport": "mobile",
       "path": "api-credentials-populated--mobile.png",
-      "sha256": "c0d6fb7a67a42772c3a3ba6476e3ae0eb5ad9eed595bf79b68838dca40dbc40e",
+      "sha256": "7da4c0e7c5c6de7cb9afc386232a285046689d96583a0b9c9220fed335dee88c",
       "pixel_width": 390,
-      "pixel_height": 886
+      "pixel_height": 1317
     },
     {
       "id": "admin-users",
       "title": "ユーザー管理",
       "viewport": "mobile",
       "path": "admin-users--mobile.png",
-      "sha256": "07536ab254896512ce577da1a9f713e768ef36f6e79f44eff9dbb8ec3e5e5f33",
+      "sha256": "f7f6a56d14037e123bb3bac2012b0646494702dc5479b7af273eb54a8cfe081d",
       "pixel_width": 390,
-      "pixel_height": 1192
+      "pixel_height": 1874
+    },
+    {
+      "id": "admin-page-edit",
+      "title": "固定ページ編集",
+      "viewport": "mobile",
+      "path": "admin-page-edit--mobile.png",
+      "sha256": "bc7f1efaf802b252c9e397f30b3d499b864cf99bdf0e818aa6ab3fca902ae490",
+      "pixel_width": 390,
+      "pixel_height": 1390
+    },
+    {
+      "id": "admin-faq-edit",
+      "title": "FAQ編集",
+      "viewport": "mobile",
+      "path": "admin-faq-edit--mobile.png",
+      "sha256": "f22f27c21fd6950febec8e411df41eb2620f910ab4a8367dc74219e5c7020b65",
+      "pixel_width": 390,
+      "pixel_height": 1651
+    },
+    {
+      "id": "admin-footer-setting",
+      "title": "外部リンク設定",
+      "viewport": "mobile",
+      "path": "admin-footer-setting--mobile.png",
+      "sha256": "14fce992dcb983512a64cee6f2762684909a837b73c16289b3001c103e9cc11c",
+      "pixel_width": 390,
+      "pixel_height": 1317
     },
     {
       "id": "navigation-authenticated-open",
       "title": "モバイルメニュー（ログイン済み）",
       "viewport": "mobile",
       "path": "navigation-authenticated-open--mobile.png",
-      "sha256": "9a4dbe050aad1b4b2a8d9e3e529b62310aecb75b152775994abd1614759215f8",
+      "sha256": "73c0304fa4c06d219e6bac07ae1b1b7c087e712e1ffd56bf5627e18fa06622a0",
       "pixel_width": 390,
-      "pixel_height": 1210
+      "pixel_height": 1678
     }
   ]
 }

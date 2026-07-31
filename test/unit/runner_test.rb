@@ -15,7 +15,7 @@ class RunnerTest < Minitest::Test
     end
   end
 
-  def test_rails_command_resolves_supported_railties_executable_and_preserves_path_as_one_argument
+  def test_rails_command_activates_supported_railties_and_preserves_path_as_one_argument
     app_path = "/tmp/path with spaces & metacharacters"
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build({}),
@@ -25,9 +25,12 @@ class RunnerTest < Minitest::Test
     command = runner.send(:rails_command, "/tmp/template.rb")
 
     assert_equal RbConfig.ruby, command.fetch(0)
-    assert_equal "new", command.fetch(2)
-    assert_equal app_path, command.fetch(3)
-    assert_equal "--name=custom app & service", command.fetch(4)
+    assert_equal %w[-rrubygems -e], command[1, 2]
+    assert_equal RapidRailsTemplate::Runner::RAILS_LAUNCHER, command.fetch(3)
+    assert_equal "--", command.fetch(4)
+    assert_equal "new", command.fetch(5)
+    assert_equal app_path, command.fetch(6)
+    assert_equal "--name=custom app & service", command.fetch(7)
     assert_equal "/tmp/template.rb", command.last
   end
 

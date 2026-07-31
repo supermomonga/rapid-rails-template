@@ -30,7 +30,6 @@ exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
   "--api=enable",
   "--action-cable=skip",
   "--mail=auto",
-  "--action-text=use",
   "--deployment=dokploy",
   sample
 '''
@@ -56,7 +55,6 @@ exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
   "--api=enable",
   "--action-cable=skip",
   "--mail=auto",
-  "--action-text=use",
   "--deployment=dokploy",
   sample
 '''

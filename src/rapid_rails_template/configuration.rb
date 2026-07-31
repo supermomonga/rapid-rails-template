@@ -14,7 +14,6 @@ module RapidRailsTemplate
       "api" => %w[enable disable],
       "action_cable" => %w[solid_cable skip],
       "mail" => %w[auto use skip],
-      "action_text" => %w[use skip],
       "deployment" => %w[dokploy none]
     }.freeze
 
@@ -28,7 +27,6 @@ module RapidRailsTemplate
       "api" => "enable",
       "action_cable" => "skip",
       "mail" => "auto",
-      "action_text" => "use",
       "deployment" => "dokploy"
     }.freeze
 

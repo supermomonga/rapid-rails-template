@@ -19,7 +19,6 @@ COMMON_OPTIONS = %w[
   --api=enable
   --action-cable=skip
   --mail=auto
-  --action-text=use
   --deployment=dokploy
 ].freeze
 VARIANTS = {

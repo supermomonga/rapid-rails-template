@@ -1,7 +1,7 @@
 # Wallet SIWE エビデンス
 
-- Source fingerprint: `1702a790c1445cafe1347d526281e59b1cb9e4eff1662aff39e4d9ca4c3a2ef4`
-- Base commit: `ea8a041fc86c52cf9a5fbbcc8c22ca5be723b336`
+- Source fingerprint: `62d0bcfcbb4c1ece1df9dc481f4b0e230f27f1b5c1a37b5610c5517dd4c56915`
+- Base commit: `ac0d8da0b24e395d21ccbed8c201d1bbc2a2b522`
 - 更新: `rake evidence:update`
 
 ## ホーム（未ログイン）
@@ -13,6 +13,26 @@
 ### Mobile
 
 ![ホーム（未ログイン） (mobile)](home-guest--mobile.png)
+
+## アプリについて
+
+### Desktop
+
+![アプリについて (desktop)](about--desktop.png)
+
+### Mobile
+
+![アプリについて (mobile)](about--mobile.png)
+
+## よくある質問
+
+### Desktop
+
+![よくある質問 (desktop)](faq--desktop.png)
+
+### Mobile
+
+![よくある質問 (mobile)](faq--mobile.png)
 
 ## ウォレットでログイン
 
@@ -143,6 +163,36 @@
 ### Mobile
 
 ![ユーザー管理 (mobile)](admin-users--mobile.png)
+
+## 固定ページ編集
+
+### Desktop
+
+![固定ページ編集 (desktop)](admin-page-edit--desktop.png)
+
+### Mobile
+
+![固定ページ編集 (mobile)](admin-page-edit--mobile.png)
+
+## FAQ編集
+
+### Desktop
+
+![FAQ編集 (desktop)](admin-faq-edit--desktop.png)
+
+### Mobile
+
+![FAQ編集 (mobile)](admin-faq-edit--mobile.png)
+
+## 外部リンク設定
+
+### Desktop
+
+![外部リンク設定 (desktop)](admin-footer-setting--desktop.png)
+
+### Mobile
+
+![外部リンク設定 (mobile)](admin-footer-setting--mobile.png)
 
 ## モバイルメニュー（未ログイン）
 

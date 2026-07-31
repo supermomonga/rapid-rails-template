@@ -46,7 +46,7 @@ module RapidRailsTemplate
     private
 
     def build_gems
-      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
       result << "devise" if configuration["account_authentication"] == "devise"
       result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
@@ -60,10 +60,10 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems]
+      result = %w[declare_gems install_action_text configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
       result << "configure_roles"
-      result << "install_active_storage" if configuration["profile_features"].include?("avatar")
+      result << "configure_content_management"
       result << "configure_profile" if configuration["profile_features"].any?
       result << "configure_api" if configuration["api"] == "enable"
       result << "configure_default_views"
@@ -95,6 +95,33 @@ module RapidRailsTemplate
         app/controllers/admin/users_controller.rb
         app/controllers/admin/user_roles_controller.rb
         app/views/admin/users/index.html.erb
+        app/models/page.rb
+        app/models/faq.rb
+        app/models/footer_setting.rb
+        app/policies/page_policy.rb
+        app/policies/faq_policy.rb
+        app/policies/footer_setting_policy.rb
+        app/controllers/pages_controller.rb
+        app/controllers/faqs_controller.rb
+        app/controllers/admin/pages_controller.rb
+        app/controllers/admin/faqs_controller.rb
+        app/controllers/admin/footer_settings_controller.rb
+        app/views/pages/about.html.erb
+        app/views/pages/corp.html.erb
+        app/views/pages/manual.html.erb
+        app/views/pages/terms.html.erb
+        app/views/pages/privacy.html.erb
+        app/views/pages/transaction-law.html.erb
+        app/views/faqs/index.html.erb
+        app/views/admin/pages/index.html.erb
+        app/views/admin/pages/edit.html.erb
+        app/views/admin/faqs/index.html.erb
+        app/views/admin/faqs/new.html.erb
+        app/views/admin/faqs/edit.html.erb
+        app/views/admin/faqs/_form.html.erb
+        app/views/admin/footer_settings/edit.html.erb
+        app/views/layouts/action_text/contents/_content.html.erb
+        config/locales/content_management.ja.yml
         lib/tasks/roles.rake
         db/seeds.local.rb.example
         config/locales/roles.ja.yml
@@ -103,6 +130,15 @@ module RapidRailsTemplate
         test/policies/user_policy_test.rb
         test/controllers/admin/users_controller_test.rb
         test/controllers/admin/user_roles_controller_test.rb
+        test/models/page_test.rb
+        test/models/faq_test.rb
+        test/models/footer_setting_test.rb
+        test/policies/content_management_policy_test.rb
+        test/controllers/pages_controller_test.rb
+        test/controllers/faqs_controller_test.rb
+        test/controllers/admin/pages_controller_test.rb
+        test/controllers/admin/faqs_controller_test.rb
+        test/controllers/admin/footer_settings_controller_test.rb
         test/tasks/roles_task_test.rb
         app/assets/tailwind/application.css
         lib/templates/erb/scaffold/index.html.erb.tt
@@ -117,7 +153,9 @@ module RapidRailsTemplate
         app/views/layouts/application.html.erb
         app/views/layouts/authentication.html.erb
         app/views/layouts/account.html.erb
+        app/views/layouts/admin.html.erb
         app/views/shared/_header.html.erb
+        app/views/shared/_admin_navigation.html.erb
         app/views/shared/_flash.html.erb
         app/views/shared/_footer.html.erb
         app/views/home/index.html.erb

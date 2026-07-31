@@ -22,6 +22,7 @@
 | ページネーション | `pagy` | ページネーションの標準実装とする |
 | active link | `active_link_to` | 現在ページに応じたリンク表示に使用する |
 | 認可 | `action_policy` | authorization policyの標準実装とする |
+| Rich text | Action Text、Active Storage、`lexxy ~> 0.9.21` | 固定ページとFAQの本文および管理editorとして常設する |
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
 | Profile名生成 | `haikunator` | `screen_name`または`display_name`を選択した場合だけUser作成時の既定値生成に使用する |
 | 既定アバター生成 | `boring_avatars ~> 0.1.0` | `avatar`を選択した場合だけUser IDから決定的なSVGを生成する |
@@ -55,19 +56,19 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 
 ### 標準View構成
 
-生成アプリケーションには、共通application layout、認証用sub-layout、account用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。全Viewは`data-theme="rapid-rails"`配下でdaisyUI componentとsemantic colorを使用します。
+生成アプリケーションには、共通application layout、認証用sub-layout、account用sub-layout、admin用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。全Viewは`data-theme="rapid-rails"`配下でdaisyUI componentとsemantic colorを使用します。
 
-Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`、guest向けdesktopの`button`群、guest向けmobileと認証後の`dropdown` + `menu dropdown-content`、footerは内側幅をheaderと共有する`footer`、homeの導入部は`hero`、情報ブロックは`card`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`file-input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
+Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`、guest向けdesktopの`button`群、guest向けmobileと認証後の`dropdown` + `menu dropdown-content`、footerは内側幅をheaderと共有する`footer`と`footer-title`、homeの導入部は`hero`、情報ブロックは`card`、FAQはnativeの`details`を使う`collapse`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`file-input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
 
 Rails 8.1.3の`bin/rails app:templates:copy`で取得した標準ERB templateを基準に、`generate scaffold`用の6 Viewと`generate controller NAME ACTION`用のViewをdaisyUI向けに上書きします。生成アプリケーションの`lib/templates/erb/scaffold`と`lib/templates/erb/controller`へ変更したtemplateだけを配置し、mailerやRuby generator templateの未変更copyは配置しません。scaffoldの一覧は`table table-sm table-pin-rows`を`overflow-x-auto`で囲み、詳細・編集画面は`card`、属性表示は`list`、formは属性型に対応する`input`、`textarea`、`file-input`、`checkbox`を使用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。
 
-account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownも同じ項目群を使用します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
+account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目だけを表示します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
 
 - `/`は認証方式にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
-- `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。`avatar`選択時だけBoring AvatarsとActive Storageを導入する。
+- `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。Active StorageはAction Textとともに常設し、`avatar`選択時だけBoring AvatarsとProfileの添付画像機能を追加する。
 - 画像未設定時はUser IDの文字列表現から`marble` variantのBoring Avatarを生成し、themeのprimary、secondary、success、warning、errorに対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
@@ -75,8 +76,19 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。
 - Wallet SIWEではsessionの`new`、`create`、`destroy`だけを公開し、login Viewをtheme化する。署名UIはStimulus controllerとして生成し、Turbo遷移ごとのconnect/disconnect lifecycleへ従う。accountは`show`をプロフィール、`edit`をwallet addressとアカウント削除UIを持つアカウント設定とし、`destroy`でUserと従属Sessionを削除する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
-- headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。account sub-layoutの外側gridも同じ`max-w-6xl`と水平paddingを使い、header・account・footerの左右content boundaryを一致させる。
+- headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。accountとadminのsub-layoutは同じ`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`の2ペインgridを共有し、header・account・admin・footerの左右content boundaryを一致させる。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
+- account sub-layoutの左ペインにはユーザー向けmenuだけを表示し、管理項目を混在させない。admin sub-layoutの左ペインには見出し「管理画面」と、ユーザー管理、固定ページ管理、FAQ管理、外部リンク設定の管理menuだけを表示し、account項目を混在させない。現在のControllerに対応するlinkは`menu-active`と`aria-current="page"`で示す。
 - `640px`以下をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱う。desktopとmobileの両方で1columnへ縮退できることを必須とする。44pxのtouch targetを満たすためにcomponent itemへ一律の`min-h-*`を追加せず、必要な場合はdaisyUIの公式size modifierまたはtheme tokenでcomponent全体として調整する。
+
+### Action Text、固定ページ、FAQ、footer設定
+
+Action Text、Active Storage、Lexxyは選択式にせず、すべての生成アプリケーションへ導入します。Action Textの公式install generatorでmigrationと添付表示partialを生成し、Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
+
+公開固定ページは`/about`、`/corp`、`/manual`、`/terms`、`/privacy`、`/transaction-law`とし、routeごとの固定slugを共通の`PagesController#show`へ渡します。`Page`のslugはこの6値へ限定し、titleとともにseedで冪等作成します。管理者は本文だけを更新でき、固定ページの作成、削除、slug、titleの変更は提供しません。存在しない固定recordや未知slugを別ページへ戻すfallbackは設けません。
+
+`Faq`は質問、表示順、公開状態、Action Text回答を持ちます。新規recordは非公開とし、公開画面`/faq`は公開済みrecordだけを表示順とIDの昇順で表示します。管理画面はCRUD、公開切替、表示順変更を提供します。
+
+footerはロゴやbrand用asideを持たず、About、Guides、Links、Legalの4列を`footer`、`footer-title`、`link link-hover`で構成します。内部linkは固定routeを使用します。`FooterSetting`は固定keyのsingletonとしてseedし、XとGitHubの任意HTTPS URLを管理します。URLはhostを必須とし、userinfoとHTTPを拒否します。各linkは未設定なら非表示とし、両方未設定ならLinks列も表示しません。
 
 ### API認証とApiCredential
 
@@ -98,6 +110,7 @@ active_link_to
 action_policy
 sentry-ruby
 sentry-rails
+lexxy
 ```
 
 SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジトリへ埋め込みません。設定方法は実装フェーズで別途定義します。

@@ -69,8 +69,7 @@
 7. API機能を有効にするか
 8. Action Cableを使うか
 9. メール機能
-10. Action Textを使うか
-11. デプロイ方法
+10. デプロイ方法
 
 この順序で適用可能な質問をすべて完了するまで、実行予定の確認へ進みません。表示条件を満たさない質問は利用者へ表示せず、全質問完了後の正規化で仕様どおりの値を設定します。
 
@@ -139,7 +138,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 - 選択肢: `screen_name`、`display_name`、`avatar`の複数選択
 - 既定値: 3機能すべて
 - 表示条件: 常に表示する
-- 影響する処理: Profile model・1対1 User association・プロフィール表示／編集画面・headerの認証後メニュー・Active Storage
+- 影響する処理: Profile model・1対1 User association・プロフィール表示／編集画面・headerの認証後メニュー
 
 対話UIは`Gum.choose(..., no_limit: true)`を使用し、3項目を選択済みとして表示します。何も選択しない回答は有効です。CLIではカンマ区切りで指定し、`--profile-features=`を何も選択しない回答として扱います。未知の値、重複値、空要素を含む値は生成開始前に拒否します。
 
@@ -147,7 +146,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 `screen_name`を選択した場合はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`を選択した場合もUser作成時にHaikunator由来の値を自動生成し、必須かつ一意な公開表示名として扱います。両方を選択した場合は、先に一意な`screen_name`を生成し、その値をCamelCaseへ変換した同一由来の値を`display_name`に設定します。databaseには各選択済みcolumnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
 
-`avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`とActive Storageを導入し、Profileへ`has_one_attached :avatar`を追加します。画像未設定時はUser IDの文字列表現をseedとして、`marble` variantとRapid Rails theme palette（`#3ea8ff`、`#0f83fd`、`#10b981`、`#f59e0b`、`#f43f5e`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
+`avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`とProfileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。画像未設定時はUser IDの文字列表現をseedとして、`marble` variantとRapid Rails theme palette（`#3ea8ff`、`#0f83fd`、`#10b981`、`#f59e0b`、`#f43f5e`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
 認証後のheader menu triggerは、設定済み画像またはBoring Avatarとし、クリックとhoverの両方で展開します。プロフィール詳細も同じ共通helperを使用します。`avatar`を選択しない場合はHeroiconsの`bars-3`と`MENU` textをtriggerにします。展開内容は、選択済みなら`display_name`と`screen_name`、account navigationと同じ項目群、ログアウトの順です。
 
@@ -197,17 +196,6 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 `auto`は`account_authentication == devise`の場合に`use`、それ以外の場合に`skip`へ正規化します。`skip`の場合は`rails new`へ`--skip-action-mailer --skip-action-mailbox`を渡します。確認画面には`auto`ではなく、正規化後の実効値と理由を表示します。
 
-## `action_text`
-
-- CLI引数: `--action-text=use|skip`
-- 質問文: Action Textを使用しますか？
-- 選択肢: `use`、`skip`
-- 既定値: `use`
-- 表示条件: 常に表示する
-- 影響する処理: Action Textのgenerator option
-
-`skip`の場合は`rails new`へ`--skip-action-text`を渡します。
-
 ## `deployment`
 
 - CLI引数: `--deployment=dokploy|none`
@@ -231,7 +219,7 @@ primary SQLite databaseは常にLitestreamのreplication対象とし、queueとc
 - CLI引数で指定した項目を再質問せず、未指定の適用可能な項目だけを質問すること。
 - `profile_features`をGumの複数選択で収集し、選択なしを有効な回答として扱うこと。
 - `--profile-features`のカンマ区切り値を正規化し、空値でProfile関連生成物をすべて省略すること。
-- `avatar`選択時だけBoring AvatarsとActive Storageを導入し、User ID由来の既定アバター、header trigger、画像削除routeを生成すること。
+- Active StorageはAction Textとともに常設し、`avatar`選択時だけBoring Avatars、Profile添付、User ID由来の既定アバター、header trigger、画像削除routeを生成すること。
 - 設定済み画像がBoring Avatarより優先され、削除後は同じUser ID由来のBoring Avatarへ戻ること。
 - すべての適用可能な項目をCLI引数で指定した場合、標準入力を読まずに実行すること。
 - 表示条件が満たされない質問を行わないこと。

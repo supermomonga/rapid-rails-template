@@ -15,6 +15,7 @@ class ConfigurationTest < Minitest::Test
     assert_equal "enable", configuration["api"]
     assert_equal "skip", configuration["action_cable"]
     assert_equal "use", configuration["mail"]
+    refute_includes configuration.answers, "action_text"
   end
 
   def test_non_applicable_web_push_is_explicitly_normalized

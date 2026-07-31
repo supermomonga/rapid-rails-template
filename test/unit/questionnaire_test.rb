@@ -59,6 +59,7 @@ class QuestionnaireTest < Minitest::Test
     answers = RapidRailsTemplate::Questionnaire.new(prompt:, output:).ask_all
 
     refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("Web Push") }
+    refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("Action Text") }
     refute answers.key?("web_push")
     assert_equal "skip", answers["pwa"]
   end

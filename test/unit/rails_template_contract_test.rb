@@ -66,13 +66,21 @@ class RailsTemplateContractTest < Minitest::Test
     component_expectations = {
       "app/views/layouts/authentication.html.erb" => %w[hero hero-content card card-body],
       "app/views/layouts/account.html.erb" => %w[menu menu-title],
+      "app/views/layouts/admin.html.erb" => %w[menu menu-title],
       "app/views/shared/_header.html.erb" => %w[navbar dropdown menu btn],
       "app/views/shared/_flash.html.erb" => %w[alert],
-      "app/views/shared/_footer.html.erb" => %w[footer],
+      "app/views/shared/_footer.html.erb" => %w[footer footer-vertical footer-title link link-hover],
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
       "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
       "app/views/accounts/edit.html.erb" => %w[card card-body card-title list list-row badge btn],
       "app/views/admin/users/index.html.erb" => %w[card card-body table badge btn join join-item],
+      "app/views/pages/_page.html.erb" => %w[card card-body],
+      "app/views/faqs/index.html.erb" => %w[collapse collapse-arrow collapse-title collapse-content alert],
+      "app/views/admin/pages/index.html.erb" => %w[card card-body table btn],
+      "app/views/admin/pages/edit.html.erb" => %w[card card-body btn],
+      "app/views/admin/faqs/index.html.erb" => %w[card card-body table badge btn],
+      "app/views/admin/faqs/_form.html.erb" => %w[alert fieldset fieldset-legend input checkbox btn],
+      "app/views/admin/footer_settings/edit.html.erb" => %w[card card-body alert fieldset fieldset-legend input btn],
       "app/views/api_credentials/_form.html.erb" => %w[alert fieldset fieldset-legend input btn],
       "app/views/api_credentials/index.html.erb" => %w[card card-body table join join-item input alert btn],
       "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card card-body card-title btn],
@@ -103,7 +111,7 @@ class RailsTemplateContractTest < Minitest::Test
     end
     avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
     views += profile_configuration.sub(avatar_helper, "")
-    %w[navbar menu dropdown avatar hero card fieldset input file-input checkbox btn alert footer badge divider list table].each do |component|
+    %w[navbar menu dropdown avatar hero card fieldset input file-input checkbox btn alert footer badge divider list table collapse].each do |component|
       assert class_attributes(views).any? { |classes| classes.include?(component) }, component
     end
     %w[bg-base-100 bg-base-200 border-base-300 text-base-content btn-primary].each { |utility| assert_includes views, utility }
@@ -357,7 +365,7 @@ class RailsTemplateContractTest < Minitest::Test
     profile_configuration = source_between("def configure_profile", "def configure_api")
 
     assert_includes @source, 'configure_profile if VALUES.fetch("profile_features").any?'
-    assert_includes @source, 'rails_command "active_storage:install" if VALUES.fetch("profile_features").include?("avatar")'
+    refute_includes @source, 'rails_command "active_storage:install"'
     assert_includes @source, 't.references :user, null: false, foreign_key: true, index: { unique: true }'
     assert_includes @source, 'has_one :profile, dependent: :destroy'
     assert_includes @source, 'after_create :create_profile!'
@@ -394,6 +402,57 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes avatar_helper_test, "normalize_boring_avatar_ids"
     refute_includes profile_configuration, "boring_avatar_seed"
     assert_includes @source, 'assert_equal user.profile.screen_name.camelize, user.profile.display_name'
+  end
+
+  def test_installs_action_text_and_configures_lexxy_before_daisyui
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+    content = generated_file_source("app/views/layouts/action_text/contents/_content.html.erb")
+    application_layout = generated_file_source("app/views/layouts/application.html.erb")
+
+    assert_includes @source, 'gem "lexxy", "~> 0.9.21"'
+    assert_includes @source, 'generate "action_text:install"'
+    assert_includes @source, 'pin "lexxy", to: "lexxy.js"'
+    assert_includes @source, 'pin "@rails/activestorage", to: "activestorage.esm.js"'
+    assert_includes @source, 'import "lexxy"'
+    assert_includes application_layout, 'stylesheet_link_tag "lexxy"'
+    assert_class_tokens content, "lexxy-content"
+    assert_operator after_bundle.index("install_action_text"), :<, after_bundle.index("configure_lexxy")
+    assert_operator after_bundle.index("configure_lexxy"), :<, after_bundle.index("install_daisyui")
+  end
+
+  def test_generates_fixed_pages_faqs_footer_settings_and_admin_management
+    page_model = generated_file_source("app/models/page.rb")
+    faq_model = generated_file_source("app/models/faq.rb")
+    footer_setting_model = generated_file_source("app/models/footer_setting.rb")
+    pages_controller = generated_file_source("app/controllers/pages_controller.rb")
+    admin_pages_controller = generated_file_source("app/controllers/admin/pages_controller.rb")
+    admin_faqs_controller = generated_file_source("app/controllers/admin/faqs_controller.rb")
+    footer = generated_file_source("app/views/shared/_footer.html.erb")
+    faq_index = generated_file_source("app/views/faqs/index.html.erb")
+
+    assert_includes page_model, "has_rich_text :content, store_if_blank: false"
+    assert_includes @source, '"transaction-law" => "特商法表記"'.b
+    assert_includes faq_model, "has_rich_text :answer"
+    assert_includes faq_model, "where(published: true).order(:position, :id)"
+    assert_includes footer_setting_model, "uri.is_a?(URI::HTTPS)"
+    assert_includes footer_setting_model, "uri.host.present?"
+    assert_includes footer_setting_model, "uri.userinfo.nil?"
+    assert_includes pages_controller, "TEMPLATES.fetch(@page.slug)"
+    assert_includes admin_pages_controller, "params.expect(page: [:content])"
+    refute_includes admin_pages_controller, "params.expect(page: [:content, :slug])"
+    assert_includes admin_faqs_controller, "authorize!"
+    assert_includes admin_faqs_controller, "params.expect(faq: [:question, :answer, :position, :published])"
+    assert_includes admin_faqs_controller, 'I18n.t("admin.faqs.update.notice", locale: :ja)'
+    assert_includes @source, 'get "/transaction-law", to: "pages#show"'
+    assert_includes @source, 'resource :footer_setting, path: "footer-setting", only: %i[edit update]'
+    assert_class_tokens faq_index, "collapse", "collapse-arrow"
+    assert_includes faq_index, "faq.answer"
+    assert_class_tokens footer, "footer", "footer-vertical", "sm:footer-horizontal"
+    assert_equal 4, class_attributes(footer).count { |classes| classes.include?("footer-title") }
+    assert_equal 9, footer.scan('class: "link link-hover"').size
+    assert_includes footer, "external_links_configured"
+    assert_includes footer, 'target: "_blank", rel: "noopener noreferrer"'
+    refute_includes footer, "<aside"
   end
 
   def test_boring_avatar_palette_matches_the_rapid_rails_theme
@@ -498,6 +557,25 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, "def with_deterministic_secure_random"
     assert_includes evidence, "singleton_class.define_method(:urlsafe_base64, original_method)"
     assert_includes evidence, '"navigation-authenticated-open"'
+    assert_includes evidence, '"about"'
+    assert_includes evidence, '"faq"'
+    assert_includes evidence, '"admin-page-edit"'
+    assert_includes evidence, '"admin-faq-edit"'
+    assert_includes evidence, '"admin-footer-setting"'
+    assert_includes evidence, 'assert_selector "lexxy-editor"'
+    assert_includes evidence, "def verify_footer_geometry"
+    assert_includes evidence, '320 => "row"'
+    assert_includes evidence, '640 => "column"'
+    assert_includes evidence, 'assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")'
+    assert_includes evidence, "def verify_admin_layout_geometry"
+    assert_includes evidence, "[320, 640, 960, 961].each"
+    assert_includes evidence, 'visit admin_pages_path'
+    assert_includes evidence, '"admin layout should use one column at #{width}px"'
+    assert_includes evidence, '"admin layout should use two columns at #{width}px"'
+    assert_includes evidence, "def assert_admin_navigation_active"
+    assert_includes evidence, "def assert_account_navigation_scope"
+    assert_includes evidence, 'assert_no_selector \'[data-layout="admin"] nav[aria-label="アカウントメニュー"]\''
+    assert_includes evidence, 'assert_no_selector \'[data-layout="account"] nav[aria-label="管理メニュー"]\''
     assert_includes evidence, 'runner = runner.sub("__AUTHENTICATION__", authentication.inspect)'
     refute_includes evidence, "runner.sub!"
     assert_includes @source, "configure_common_files\n  configure_evidence_capture"
@@ -523,13 +601,18 @@ class RailsTemplateContractTest < Minitest::Test
     header = generated_file_source("app/views/shared/_header.html.erb")
     footer = generated_file_source("app/views/shared/_footer.html.erb")
     account_layout = generated_file_source("app/views/layouts/account.html.erb")
+    admin_layout = generated_file_source("app/views/layouts/admin.html.erb")
+    admin_navigation = source_between(
+      "  admin_navigation_items = <<~ERB",
+      "  account_navigation_for_layout = account_navigation_items.lines"
+    )
     authentication_layout = generated_file_source("app/views/layouts/authentication.html.erb")
     home = generated_file_source("app/views/home/index.html.erb")
     shared_links = generated_file_source("app/views/devise/shared/_links.html.erb")
     login = generated_file_source("app/views/devise/sessions/new.html.erb")
     account_navigation = source_between(
       "  account_navigation_items = <<~ERB",
-      "  account_navigation_for_layout = account_navigation_items.lines"
+      "  admin_navigation_items = <<~ERB"
     )
 
     assert_class_tokens header, "navbar", "mx-auto", "w-full", "max-w-6xl", "px-5"
@@ -542,26 +625,50 @@ class RailsTemplateContractTest < Minitest::Test
     refute_nil mobile_menu_classes
     refute mobile_menu_classes.any? { |token| token.match?(/\Ap(?:[trblxy])?-/) }, mobile_menu_classes.inspect
     assert_class_tokens footer, "footer", "mx-auto", "w-full", "max-w-6xl", "px-5"
+    assert_class_tokens footer, "footer", "footer-vertical", "sm:footer-horizontal"
+    assert_equal 4, class_attributes(footer).count { |classes| classes.include?("footer-title") }
+    assert_includes footer, 'class: "link link-hover"'
+    refute_includes footer, "<aside"
     refute_includes footer, "Rails 8.1 / Tailwind CSS 4 / daisyUI 5"
 
     assert_class_tokens account_layout, "menu"
     assert_class_tokens account_layout, "menu-title"
     assert_class_tokens account_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
     refute_includes account_layout, "max-w-5xl"
+    assert_class_tokens admin_layout, "menu"
+    assert_class_tokens admin_layout, "menu-title"
+    assert_class_tokens admin_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
+    assert_includes admin_layout, 'data-layout="admin"'
+    assert_includes admin_layout, 'min-[961px]:grid-cols-[220px_minmax(0,1fr)]'
+    assert_includes admin_layout, 'nav aria-label="管理メニュー"'.b
+    assert_includes admin_layout, '<li class="menu-title"><span>管理画面</span></li>'.b
+    assert_includes @source, 'layout "admin"'
     assert_includes account_navigation, '"menu-active" if current_page?'
     refute_includes account_navigation, '"bg-base-content text-base-100" if current_page?'
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 4, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 4, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, "profile_path"
     assert_includes account_navigation, "マイページ".b
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
-    assert_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
-    assert_includes account_navigation, 'allowed_to?(:index?, User)'
-    assert_includes account_navigation, 'admin_users_path'
+    refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
+    refute_includes account_navigation, 'allowed_to?(:index?, User)'
+    refute_includes account_navigation, 'admin_users_path'
+    refute_includes account_navigation, "admin_pages_path"
+    refute_includes account_navigation, "admin_faqs_path"
+    refute_includes account_navigation, "edit_admin_footer_setting_path"
+    assert_equal 4, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 4, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_includes admin_navigation, '"menu-active" if controller_path.in?(%w[admin/users admin/user_roles])'
+    assert_includes admin_navigation, '"menu-active" if controller_path == "admin/pages"'
+    assert_includes admin_navigation, '"menu-active" if controller_path == "admin/faqs"'
+    assert_includes admin_navigation, '"menu-active" if controller_path == "admin/footer_settings"'
+    assert_includes header, '<% if controller_path.start_with?("admin/") %>'
+    assert_includes header, '<li class="menu-title"><span>管理画面</span></li>'.b
+    refute_includes @source, '<li class="menu-title"><span>管理</span></li>'.b
     assert_includes header, 'data: { turbo_method: :delete }'
     assert_includes @source, 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'
     assert_includes @source, '<span>MENU</span>'

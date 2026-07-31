@@ -53,21 +53,23 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 ### Railsアプリケーション生成
 
-アプリ名、固定構成、回答からgenerator optionを構築します。Application Template payloadと正規化済み設定を権限制限された一時ファイルへ展開し、設定パスを`RAPID_RAILS_TEMPLATE_CONFIG`環境変数、application nameを`--name`、template pathを`--template`として`rails new`を起動します。SQLite、Importmap、Tailwind CSSなどの初期構成と、メール、Action Text、RuboCop、Solid系機能、デプロイ方法のskip optionはこの時点で確定済みです。
+アプリ名、固定構成、回答からgenerator optionを構築します。Application Template payloadと正規化済み設定を権限制限された一時ファイルへ展開し、設定パスを`RAPID_RAILS_TEMPLATE_CONFIG`環境変数、application nameを`--name`、template pathを`--template`として`rails new`を起動します。SQLite、Importmap、Tailwind CSSなどの初期構成と、メール、RuboCop、Solid系機能、デプロイ方法のskip optionはこの時点で確定済みです。Action Textは固定構成のためskip optionを持ちません。
 
 `rails new`はshell文字列として実行せず、実行ファイルと各optionを分離した引数配列で起動します。Application Templateは回答を再質問しません。
 
 ### `pre_bundle`
 
-Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。
+Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。Action Textのeditorとして`lexxy ~> 0.9.21`を固定で宣言します。
 
 `screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。`avatar`が選択されている場合だけ`boring_avatars ~> 0.1.0`をRails binding付きで宣言し、画像未設定時のSVG生成に使用します。
 
 ### `post_bundle`
 
-AnnotateRbの公式install generatorで設定とmigration hookを生成します。認証Userを生成した直後にAction Policyのinstall generator、`UserRole`、policy、管理画面、初期admin付与task、local seed読込口を生成し、Deviseの`current_user`またはWallet SIWEの`Current.user`を共通のauthorization contextへ接続します。認証、role、選択済みProfile feature、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。続けて`bin/annotaterb`を生成し、`bin/annotaterb models`でmodel、fixture、test、factory、serializerの初期annotationを確定します。`avatar`選択時だけ`active_storage:install`を実行し、User IDをseedにする共通avatar helperと設定済み画像の削除routeを生成します。seed保存用migrationは作成しません。生成直後のdevelopmentとtestにpending migrationを残しません。
+最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。この処理はdaisyUI用`package.json`の生成前に行い、Importmap構成を維持します。続けてLexxyとActive StorageをImportmapへ登録し、LexxyのJavaScript、stylesheet、描画用`.lexxy-content` partialを設定します。
 
-依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。続けてRails 8.1.3の標準templateを基準とするscaffold 6 Viewとcontroller Viewの上書きtemplateを`lib/templates/erb`へ配置し、以後の`bin/rails generate scaffold`と`bin/rails generate controller`がdaisyUI componentを使用するようにします。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account layout、標準ページ、adminユーザー管理画面を生成し、Tailwind CSSをbuildします。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
+AnnotateRbの公式install generatorで設定とmigration hookを生成します。認証Userを生成した直後にAction Policyのinstall generator、`UserRole`、policy、管理画面、初期admin付与task、local seed読込口を生成し、Deviseの`current_user`またはWallet SIWEの`Current.user`を共通のauthorization contextへ接続します。認証、role、固定ページ、FAQ、footer設定、選択済みProfile feature、API、Solid系generatorがすべてのmigrationを生成し、database構成が確定した後に`bin/rails db:prepare`を実行します。続けて`bin/annotaterb`を生成し、`bin/annotaterb models`でmodel、fixture、test、factory、serializerの初期annotationを確定します。`avatar`選択時は常設済みActive Storageを利用し、User IDをseedにする共通avatar helperと設定済み画像の削除routeを生成します。seed保存用migrationは作成しません。生成直後のdevelopmentとtestにpending migrationを残しません。
+
+依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。続けてRails 8.1.3の標準templateを基準とするscaffold 6 Viewとcontroller Viewの上書きtemplateを`lib/templates/erb`へ配置し、以後の`bin/rails generate scaffold`と`bin/rails generate controller`がdaisyUI componentを使用するようにします。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account・admin layout、標準ページ、固定ページ、FAQ、footer、各管理画面を生成し、Tailwind CSSをbuildします。accountとadmin layoutは共通のresponsive 2ペイン寸法を使用しますが、account左ペインと非admin時のheader dropdownにはaccount項目だけ、admin左ペインとadmin時のheader dropdownには見出し「管理画面」と管理項目だけを配置し、2種類のmenuを結合しません。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
 
 ### `verify`
 

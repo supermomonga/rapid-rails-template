@@ -20,17 +20,23 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "haikunator"
     assert_includes plan.gems, "boring_avatars"
     assert_includes plan.gems, "annotaterb"
+    assert_includes plan.gems, "lexxy"
+    assert_includes plan.steps, "install_action_text"
+    assert_includes plan.steps, "configure_lexxy"
     assert_includes plan.steps, "install_daisyui"
+    assert_operator plan.steps.index("install_action_text"), :<, plan.steps.index("configure_lexxy")
+    assert_operator plan.steps.index("configure_lexxy"), :<, plan.steps.index("install_daisyui")
     assert_includes plan.steps, "configure_generator_view_templates"
     assert_operator plan.steps.index("install_daisyui"), :<, plan.steps.index("configure_generator_view_templates")
     assert_operator plan.steps.index("configure_generator_view_templates"), :<, plan.steps.index("configure_default_views")
     assert_includes plan.steps, "configure_api"
-    assert_includes plan.steps, "install_active_storage"
     assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "configure_default_views"
     assert_includes plan.steps, "configure_evidence_capture"
     assert_includes plan.steps, "configure_roles"
+    assert_includes plan.steps, "configure_content_management"
     assert_operator plan.steps.index("install_devise"), :<, plan.steps.index("configure_roles")
+    assert_operator plan.steps.index("configure_roles"), :<, plan.steps.index("configure_content_management")
     assert_includes plan.steps, "install_annotaterb"
     assert_operator plan.steps.index("install_annotaterb"), :<, plan.steps.index("prepare_database")
     assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("verify")
@@ -64,6 +70,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "lib/templates/erb/controller/view.html.erb.tt"
     assert_includes plan.artifacts, "app/views/layouts/authentication.html.erb"
     assert_includes plan.artifacts, "app/views/layouts/account.html.erb"
+    assert_includes plan.artifacts, "app/views/layouts/admin.html.erb"
+    assert_includes plan.artifacts, "app/views/shared/_admin_navigation.html.erb"
     assert_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     assert_includes plan.artifacts, "app/views/accounts/show.html.erb"
     assert_includes plan.artifacts, "app/models/profile.rb"
@@ -75,6 +83,19 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/controllers/api/api_controller.rb"
     assert_includes plan.artifacts, "app/javascript/controllers/clipboard_controller.js"
     assert_includes plan.artifacts, "app/views/api_credentials/index.html.erb"
+    assert_includes plan.artifacts, "app/models/page.rb"
+    assert_includes plan.artifacts, "app/models/faq.rb"
+    assert_includes plan.artifacts, "app/models/footer_setting.rb"
+    assert_includes plan.artifacts, "app/controllers/pages_controller.rb"
+    assert_includes plan.artifacts, "app/controllers/faqs_controller.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/pages_controller.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/faqs_controller.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/footer_settings_controller.rb"
+    assert_includes plan.artifacts, "app/views/layouts/action_text/contents/_content.html.erb"
+    assert_includes plan.artifacts, "config/locales/content_management.ja.yml"
+    assert_includes plan.artifacts, "app/views/pages/about.html.erb"
+    assert_includes plan.artifacts, "app/views/faqs/index.html.erb"
+    assert_includes plan.artifacts, "app/views/admin/footer_settings/edit.html.erb"
   end
 
   def test_api_disabled_plan_omits_api_steps_and_artifacts
@@ -90,13 +111,13 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "app/views/api_credentials/index.html.erb"
   end
 
-  def test_empty_profile_features_omit_profile_and_active_storage_steps_and_artifacts
+  def test_empty_profile_features_omit_profile_steps_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("profile_features" => []),
       app_name: "sample"
     )
 
-    refute_includes plan.steps, "install_active_storage"
+    assert_includes plan.steps, "install_action_text"
     refute_includes plan.steps, "configure_profile"
     refute_includes plan.gems, "haikunator"
     refute_includes plan.gems, "boring_avatars"
@@ -107,14 +128,14 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
   end
 
-  def test_profile_without_avatar_does_not_install_active_storage
+  def test_profile_without_avatar_uses_the_shared_action_text_active_storage_install
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name display_name]),
       app_name: "sample"
     )
 
     assert_includes plan.steps, "configure_profile"
-    refute_includes plan.steps, "install_active_storage"
+    assert_includes plan.steps, "install_action_text"
     refute_includes plan.gems, "boring_avatars"
     refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
   end
@@ -157,12 +178,12 @@ class ExecutionPlanTest < Minitest::Test
   end
 
   def test_generator_options_disable_solid_bundle_and_selected_frameworks
-    configuration = RapidRailsTemplate::Configuration.build("mail" => "skip", "action_text" => "skip")
+    configuration = RapidRailsTemplate::Configuration.build("mail" => "skip")
     options = RapidRailsTemplate::GeneratorOptions.build(configuration)
 
     assert_includes options, "--skip-solid"
     assert_includes options, "--skip-action-mailer"
-    assert_includes options, "--skip-action-text"
+    refute_includes options, "--skip-action-text"
   end
 
   def test_all_feature_plan_contains_conditional_databases_and_processes

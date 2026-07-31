@@ -61,7 +61,6 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 - `--css=tailwind`
 - `--skip-rubocop`
 - `--skip-action-mailer`と`--skip-action-mailbox`
-- `--skip-action-text`
 - `--skip-docker`、`--skip-kamal`、`--skip-thruster`
 - Rails標準のSolid Queue/Cableを条件付きにするためのSolid系オプション
 

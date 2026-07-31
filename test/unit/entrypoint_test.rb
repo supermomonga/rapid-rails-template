@@ -186,6 +186,20 @@ class EntrypointTest < Minitest::Test
     assert_includes error.string, "不明なオプションです: --defaults"
   end
 
+  def test_removed_action_text_option_is_rejected
+    error = StringIO.new
+
+    status = RapidRailsTemplate::Entrypoint.run(
+      ["--action-text=use", "sample"],
+      error:,
+      runner_class: RecordingRunner,
+      prompt: UnexpectedPrompt
+    )
+
+    assert_equal 1, status
+    assert_includes error.string, "不明なオプションです: --action-text"
+  end
+
   def test_non_applicable_option_can_be_omitted_without_reading_input
     answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |id, _| id == "web_push" }
     arguments = answers.map do |id, value|

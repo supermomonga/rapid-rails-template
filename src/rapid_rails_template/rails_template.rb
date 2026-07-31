@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication profile_features api action_cable mail action_text deployment].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication profile_features api action_cable mail deployment].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -19,6 +19,7 @@ gem "active_link_to"
 gem "action_policy"
 gem "sentry-ruby"
 gem "sentry-rails"
+gem "lexxy", "~> 0.9.21"
 gem "prism"
 
 gem_group :development do
@@ -107,6 +108,33 @@ end
 
 def run_checked(command)
   raise "コマンドが失敗しました: #{command}" unless run(command)
+end
+
+def install_action_text
+  generate "action_text:install"
+end
+
+def configure_lexxy
+  importmap_path = "config/importmap.rb"
+  importmap = File.binread(importmap_path)
+  raise "#{importmap_path}には既にLexxyが登録されています" if importmap.include?('pin "lexxy"')
+  raise "#{importmap_path}には既にActive Storageが登録されています" if importmap.include?('pin "@rails/activestorage"')
+
+  append_to_file importmap_path, <<~RUBY
+    pin "lexxy", to: "lexxy.js"
+    pin "@rails/activestorage", to: "activestorage.esm.js"
+  RUBY
+
+  application_javascript_path = "app/javascript/application.js"
+  application_javascript = File.binread(application_javascript_path)
+  raise "#{application_javascript_path}には既にLexxy importがあります" if application_javascript.lines.any? { |line| line.strip == 'import "lexxy"' }
+
+  append_to_file application_javascript_path, "\nimport \"lexxy\"\n"
+  create_file "app/views/layouts/action_text/contents/_content.html.erb", <<~ERB, force: true
+    <div class="lexxy-content">
+      <%= yield -%>
+    </div>
+  ERB
 end
 
 def install_daisyui
@@ -711,6 +739,13 @@ def configure_roles
   authorization_user = devise ? "current_user" : "Current.user"
 
   generate "action_policy:install"
+  inject_into_class "app/policies/application_policy.rb", "ApplicationPolicy", <<~RUBY
+      private
+        def admin?
+          user&.has_role?(:admin) || false
+        end
+
+  RUBY
   generate "model", "UserRole", "user:references", "role:string"
   migration = Dir.glob("db/migrate/*_create_user_roles.rb")
   raise "CreateUserRoles migrationが一意ではありません" unless migration.one?
@@ -826,18 +861,13 @@ def configure_roles
       relation_scope do |relation|
         admin? ? relation : relation.none
       end
-
-      private
-        def admin?
-          user&.has_role?(:admin) || false
-        end
     end
   RUBY
 
   create_file "app/controllers/admin/base_controller.rb", <<~RUBY, force: true
     module Admin
       class BaseController < ApplicationController
-        layout "application"
+        layout "admin"
     #{authentication_callback}  end
     end
   RUBY
@@ -904,7 +934,7 @@ def configure_roles
 
   create_file "app/views/admin/users/index.html.erb", <<~ERB, force: true
     <% content_for :title, "ユーザー管理 | Rapid Rails" %>
-    <div class="mx-auto w-full max-w-6xl space-y-6 px-5 py-10 md:py-14">
+    <div class="space-y-6">
       <header>
         <p class="text-sm font-semibold text-primary">Administration</p>
         <h1 class="mt-1 text-2xl font-bold leading-[1.5]">ユーザー管理</h1>
@@ -1232,6 +1262,12 @@ def configure_roles
           get admin_users_url
         end
         assert_response :success
+        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
+        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"] li.menu-title', text: "管理画面", count: 1
+        assert_select '[data-layout="admin"] nav[aria-label="アカウントメニュー"]', count: 0
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_users_path, text: "ユーザー管理", count: 1
+        assert_select 'header li.menu-title', text: "管理画面", count: 1
+        assert_select 'header a[href=?]', account_path, count: 0
         assert_select "table.table.table-sm.table-pin-rows"
         assert_select ".badge", text: "管理者", minimum: 1
         assert_select ".join", count: 0
@@ -1367,6 +1403,1075 @@ def configure_roles
       end
     RUBY
   end
+end
+
+def configure_content_management
+  devise = VALUES.fetch("account_authentication") == "devise"
+  app_name = PLAN.fetch("app_name")
+  page_titles = {
+    "about" => "#{app_name}について",
+    "corp" => "運営会社",
+    "manual" => "使い方",
+    "terms" => "利用規約",
+    "privacy" => "プライバシーポリシー",
+    "transaction-law" => "特商法表記"
+  }.freeze
+  page_title_entries = page_titles.map { |slug, title| "    #{slug.inspect} => #{title.inspect}" }.join(",\n")
+  public_page_access = devise ? "" : "  allow_unauthenticated_access only: :show\n\n"
+  public_faq_access = devise ? "" : "  allow_unauthenticated_access only: :index\n\n"
+
+  generate "model", "Page", "slug:string", "title:string"
+  generate "model", "Faq", "question:string", "position:integer", "published:boolean"
+  generate "model", "FooterSetting", "key:string", "x_url:string", "github_url:string"
+
+  page_migration = Dir.glob("db/migrate/*_create_pages.rb")
+  faq_migration = Dir.glob("db/migrate/*_create_faqs.rb")
+  footer_setting_migration = Dir.glob("db/migrate/*_create_footer_settings.rb")
+  raise "CreatePages migrationが一意ではありません" unless page_migration.one?
+  raise "CreateFaqs migrationが一意ではありません" unless faq_migration.one?
+  raise "CreateFooterSettings migrationが一意ではありません" unless footer_setting_migration.one?
+
+  create_file page_migration.first, <<~RUBY, force: true
+    class CreatePages < ActiveRecord::Migration[8.1]
+      def change
+        create_table :pages do |t|
+          t.string :slug, null: false
+          t.string :title, null: false
+          t.timestamps
+        end
+
+        add_index :pages, :slug, unique: true
+        add_check_constraint :pages,
+          "slug IN ('about', 'corp', 'manual', 'terms', 'privacy', 'transaction-law')",
+          name: "pages_slug_check"
+      end
+    end
+  RUBY
+
+  create_file faq_migration.first, <<~RUBY, force: true
+    class CreateFaqs < ActiveRecord::Migration[8.1]
+      def change
+        create_table :faqs do |t|
+          t.string :question, null: false
+          t.integer :position, null: false, default: 0
+          t.boolean :published, null: false, default: false
+          t.timestamps
+        end
+
+        add_index :faqs, [:published, :position, :id]
+        add_check_constraint :faqs, "position >= 0", name: "faqs_position_check"
+      end
+    end
+  RUBY
+
+  create_file footer_setting_migration.first, <<~RUBY, force: true
+    class CreateFooterSettings < ActiveRecord::Migration[8.1]
+      def change
+        create_table :footer_settings do |t|
+          t.string :key, null: false, default: "default"
+          t.string :x_url
+          t.string :github_url
+          t.timestamps
+        end
+
+        add_index :footer_settings, :key, unique: true
+        add_check_constraint :footer_settings, "key = 'default'", name: "footer_settings_key_check"
+      end
+    end
+  RUBY
+
+  create_file "app/models/page.rb", <<~RUBY, force: true
+    class Page < ApplicationRecord
+      TITLES = {
+    #{page_title_entries}
+      }.freeze
+
+      has_rich_text :content, store_if_blank: false
+
+      validates :slug, presence: true, inclusion: { in: TITLES.keys }, uniqueness: true
+      validates :title, presence: true
+      validate :title_matches_slug
+
+      def to_param
+        slug
+      end
+
+      private
+        def title_matches_slug
+          return unless TITLES.key?(slug)
+          return if title == TITLES.fetch(slug)
+
+          errors.add(:title, :invalid)
+        end
+    end
+  RUBY
+
+  create_file "app/models/faq.rb", <<~RUBY, force: true
+    class Faq < ApplicationRecord
+      has_rich_text :answer
+
+      scope :published_in_display_order, -> {
+        where(published: true).order(:position, :id).with_rich_text_answer_and_embeds
+      }
+
+      validates :question, presence: true
+      validates :answer, presence: true
+      validates :position, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
+    end
+  RUBY
+
+  create_file "app/models/footer_setting.rb", <<~RUBY, force: true
+    require "uri"
+
+    class FooterSetting < ApplicationRecord
+      DEFAULT_KEY = "default"
+      URL_ATTRIBUTES = %i[x_url github_url].freeze
+
+      normalizes :x_url, :github_url, with: ->(value) { value&.strip.presence }
+
+      validates :key, inclusion: { in: [DEFAULT_KEY] }, uniqueness: true
+      validate :external_urls_are_https
+
+      def self.default_record
+        find_by!(key: DEFAULT_KEY)
+      end
+
+      private
+        def external_urls_are_https
+          URL_ATTRIBUTES.each do |attribute|
+            value = public_send(attribute)
+            next if value.blank?
+
+            uri = URI.parse(value)
+            next if uri.is_a?(URI::HTTPS) && uri.host.present? && uri.userinfo.nil?
+
+            errors.add(attribute, "はuserinfoを含まないHTTPS URLを指定してください")
+          rescue URI::InvalidURIError
+            errors.add(attribute, "はuserinfoを含まないHTTPS URLを指定してください")
+          end
+        end
+    end
+  RUBY
+
+  create_file "app/policies/page_policy.rb", <<~RUBY, force: true
+    class PagePolicy < ApplicationPolicy
+      def index?
+        admin?
+      end
+
+      def update?
+        admin?
+      end
+    end
+  RUBY
+
+  create_file "app/policies/faq_policy.rb", <<~RUBY, force: true
+    class FaqPolicy < ApplicationPolicy
+      def index?
+        admin?
+      end
+
+      def create?
+        admin?
+      end
+
+      def update?
+        admin?
+      end
+
+      def destroy?
+        admin?
+      end
+    end
+  RUBY
+
+  create_file "app/policies/footer_setting_policy.rb", <<~RUBY, force: true
+    class FooterSettingPolicy < ApplicationPolicy
+      def edit?
+        admin?
+      end
+
+      def update?
+        admin?
+      end
+    end
+  RUBY
+
+  inject_into_class "app/controllers/application_controller.rb", "ApplicationController", <<~RUBY
+      helper_method :footer_setting
+
+      private
+        def footer_setting
+          @footer_setting ||= FooterSetting.default_record
+        end
+
+  RUBY
+
+  create_file "app/controllers/pages_controller.rb", <<~RUBY, force: true
+    class PagesController < ApplicationController
+      TEMPLATES = {
+        "about" => "pages/about",
+        "corp" => "pages/corp",
+        "manual" => "pages/manual",
+        "terms" => "pages/terms",
+        "privacy" => "pages/privacy",
+        "transaction-law" => "pages/transaction-law"
+      }.freeze
+
+    #{public_page_access}  def show
+        @page = Page.find_by!(slug: params.expect(:slug))
+        render template: TEMPLATES.fetch(@page.slug)
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/faqs_controller.rb", <<~RUBY, force: true
+    class FaqsController < ApplicationController
+    #{public_faq_access}  def index
+        @faqs = Faq.published_in_display_order
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/pages_controller.rb", <<~RUBY, force: true
+    module Admin
+      class PagesController < BaseController
+        before_action :set_page, only: %i[edit update]
+
+        def index
+          authorize! Page, to: :index?
+          @pages = Page.order(:id)
+        end
+
+        def edit
+          authorize! @page, to: :update?
+        end
+
+        def update
+          authorize! @page, to: :update?
+          if @page.update(page_params)
+            redirect_to admin_pages_path,
+              notice: I18n.t("admin.pages.update.notice", locale: :ja),
+              status: :see_other
+          else
+            render :edit, status: :unprocessable_content
+          end
+        end
+
+        private
+          def set_page
+            @page = Page.find_by!(slug: params.expect(:slug))
+          end
+
+          def page_params
+            params.expect(page: [:content])
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/faqs_controller.rb", <<~RUBY, force: true
+    module Admin
+      class FaqsController < BaseController
+        before_action :set_faq, only: %i[edit update destroy]
+
+        def index
+          authorize! Faq, to: :index?
+          @faqs = Faq.order(:position, :id).with_rich_text_answer
+        end
+
+        def new
+          @faq = Faq.new
+          authorize! @faq, to: :create?
+        end
+
+        def create
+          @faq = Faq.new(faq_params)
+          authorize! @faq, to: :create?
+          if @faq.save
+            redirect_to admin_faqs_path,
+              notice: I18n.t("admin.faqs.create.notice", locale: :ja),
+              status: :see_other
+          else
+            render :new, status: :unprocessable_content
+          end
+        end
+
+        def edit
+          authorize! @faq, to: :update?
+        end
+
+        def update
+          authorize! @faq, to: :update?
+          if @faq.update(faq_params)
+            redirect_to admin_faqs_path,
+              notice: I18n.t("admin.faqs.update.notice", locale: :ja),
+              status: :see_other
+          else
+            render :edit, status: :unprocessable_content
+          end
+        end
+
+        def destroy
+          authorize! @faq, to: :destroy?
+          @faq.destroy!
+          redirect_to admin_faqs_path,
+            notice: I18n.t("admin.faqs.destroy.notice", locale: :ja),
+            status: :see_other
+        end
+
+        private
+          def set_faq
+            @faq = Faq.find(params.expect(:id))
+          end
+
+          def faq_params
+            params.expect(faq: [:question, :answer, :position, :published])
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/footer_settings_controller.rb", <<~RUBY, force: true
+    module Admin
+      class FooterSettingsController < BaseController
+        before_action :set_footer_setting
+
+        def edit
+          authorize! @footer_setting, to: :edit?
+        end
+
+        def update
+          authorize! @footer_setting, to: :update?
+          if @footer_setting.update(footer_setting_params)
+            redirect_to edit_admin_footer_setting_path,
+              notice: I18n.t("admin.footer_settings.update.notice", locale: :ja),
+              status: :see_other
+          else
+            render :edit, status: :unprocessable_content
+          end
+        end
+
+        private
+          def set_footer_setting
+            @footer_setting = FooterSetting.default_record
+          end
+
+          def footer_setting_params
+            params.expect(footer_setting: [:x_url, :github_url])
+          end
+      end
+    end
+  RUBY
+
+  route <<~RUBY
+    get "/about", to: "pages#show", defaults: { slug: "about" }, as: :about
+    get "/corp", to: "pages#show", defaults: { slug: "corp" }, as: :corp
+    get "/manual", to: "pages#show", defaults: { slug: "manual" }, as: :manual
+    get "/terms", to: "pages#show", defaults: { slug: "terms" }, as: :terms
+    get "/privacy", to: "pages#show", defaults: { slug: "privacy" }, as: :privacy
+    get "/transaction-law", to: "pages#show", defaults: { slug: "transaction-law" }, as: :transaction_law
+    get "/faq", to: "faqs#index", as: :faq
+
+    namespace :admin do
+      resources :pages, param: :slug, only: %i[index edit update]
+      resources :faqs, except: :show
+      resource :footer_setting, path: "footer-setting", only: %i[edit update]
+    end
+  RUBY
+
+  append_to_file "db/seeds.rb", <<~RUBY
+
+    Page::TITLES.each do |slug, title|
+      page = Page.find_or_initialize_by(slug: slug)
+      page.title = title
+      page.save!
+    end
+    FooterSetting.find_or_create_by!(key: FooterSetting::DEFAULT_KEY)
+  RUBY
+  create_file "config/locales/content_management.ja.yml", <<~YAML, force: true
+    ja:
+      admin:
+        pages:
+          update:
+            notice: 固定ページを更新しました
+        faqs:
+          create:
+            notice: FAQを作成しました
+          update:
+            notice: FAQを更新しました
+          destroy:
+            notice: FAQを削除しました
+        footer_settings:
+          update:
+            notice: 外部リンクを更新しました
+  YAML
+
+  create_file "test/fixtures/pages.yml", <<~YAML, force: true
+    about:
+      slug: about
+      title: #{page_titles.fetch("about").inspect}
+    corp:
+      slug: corp
+      title: #{page_titles.fetch("corp").inspect}
+    manual:
+      slug: manual
+      title: #{page_titles.fetch("manual").inspect}
+    terms:
+      slug: terms
+      title: #{page_titles.fetch("terms").inspect}
+    privacy:
+      slug: privacy
+      title: #{page_titles.fetch("privacy").inspect}
+    transaction_law:
+      slug: transaction-law
+      title: #{page_titles.fetch("transaction-law").inspect}
+  YAML
+  create_file "test/fixtures/faqs.yml", "# FAQs are created explicitly by tests.\n", force: true
+  create_file "test/fixtures/footer_settings.yml", <<~YAML, force: true
+    default:
+      key: default
+  YAML
+
+  create_file "app/views/pages/_page.html.erb", <<~ERB, force: true
+    <% content_for :title, [@page.title, #{app_name.inspect}].join(" | ") %>
+    <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
+      <header>
+        <p class="text-sm font-semibold text-primary"><%= section %></p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @page.title %></h1>
+      </header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body"><%= @page.content %></div>
+      </section>
+    </div>
+  ERB
+  create_file "app/views/pages/about.html.erb", "<%= render \"pages/page\", section: \"About\" %>\n", force: true
+  create_file "app/views/pages/corp.html.erb", "<%= render \"pages/page\", section: \"Company\" %>\n", force: true
+  create_file "app/views/pages/manual.html.erb", "<%= render \"pages/page\", section: \"Guides\" %>\n", force: true
+  create_file "app/views/pages/terms.html.erb", "<%= render \"pages/page\", section: \"Legal\" %>\n", force: true
+  create_file "app/views/pages/privacy.html.erb", "<%= render \"pages/page\", section: \"Legal\" %>\n", force: true
+  create_file "app/views/pages/transaction-law.html.erb", "<%= render \"pages/page\", section: \"Legal\" %>\n", force: true
+
+  create_file "app/views/faqs/index.html.erb", <<~ERB, force: true
+    <% content_for :title, ["よくある質問", #{app_name.inspect}].join(" | ") %>
+    <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
+      <header>
+        <p class="text-sm font-semibold text-primary">Guides</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">よくある質問</h1>
+      </header>
+      <% if @faqs.any? %>
+        <div class="space-y-3">
+          <% @faqs.each do |faq| %>
+            <details class="collapse collapse-arrow border border-base-300 bg-base-100">
+              <summary class="collapse-title font-semibold"><%= faq.question %></summary>
+              <div class="collapse-content"><%= faq.answer %></div>
+            </details>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="alert"><span>現在、公開中のよくある質問はありません。</span></div>
+      <% end %>
+    </div>
+  ERB
+
+  create_file "app/views/admin/pages/index.html.erb", <<~ERB, force: true
+    <% content_for :title, ["固定ページ管理", #{app_name.inspect}].join(" | ") %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Administration</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">固定ページ管理</h1>
+      </header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <div class="overflow-x-auto">
+            <table class="table">
+              <thead><tr><th scope="col">ページ</th><th scope="col">URL</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
+              <tbody>
+                <% @pages.each do |page| %>
+                  <tr>
+                    <td><%= page.title %></td>
+                    <td><code>/<%= page.slug %></code></td>
+                    <td class="text-right"><%= link_to "編集", edit_admin_page_path(page), class: "btn btn-rapid" %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/admin/pages/edit.html.erb", <<~ERB, force: true
+    <% content_for :title, [@page.title, "固定ページ管理", #{app_name.inspect}].join(" | ") %>
+    <div class="max-w-[820px] space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Administration</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @page.title %></h1>
+        <p class="mt-2 text-sm text-neutral">固定ページの本文を編集します。</p>
+      </header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <%= form_with model: [:admin, @page], class: "space-y-5" do |form| %>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend"><%= form.label :content, "本文" %></legend>
+              <%= form.rich_text_area :content %>
+            </fieldset>
+            <div class="card-actions justify-end">
+              <%= link_to "戻る", admin_pages_path, class: "btn btn-ghost btn-rapid" %>
+              <%= form.submit "更新", class: "btn btn-rapid" %>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/admin/faqs/_form.html.erb", <<~ERB, force: true
+    <%= form_with model: [:admin, faq], class: "space-y-5" do |form| %>
+      <% if faq.errors.any? %>
+        <div class="alert alert-error" role="alert">
+          <ul><% faq.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
+        </div>
+      <% end %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :question, "質問" %></legend>
+        <%= form.text_field :question, class: "input input-rapid w-full", required: true %>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :answer, "回答" %></legend>
+        <%= form.rich_text_area :answer %>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :position, "表示順" %></legend>
+        <%= form.number_field :position, class: "input input-rapid w-full", min: 0, required: true %>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">公開設定</legend>
+        <label class="label cursor-pointer justify-start gap-3">
+          <%= form.checkbox :published, class: "checkbox" %>
+          <span>公開する</span>
+        </label>
+      </fieldset>
+      <div class="card-actions justify-end">
+        <%= link_to "戻る", admin_faqs_path, class: "btn btn-ghost btn-rapid" %>
+        <%= form.submit(faq.persisted? ? "更新" : "作成", class: "btn btn-rapid") %>
+      </div>
+    <% end %>
+  ERB
+
+  create_file "app/views/admin/faqs/index.html.erb", <<~ERB, force: true
+    <% content_for :title, ["FAQ管理", #{app_name.inspect}].join(" | ") %>
+    <div class="space-y-6">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="text-sm font-semibold text-primary">Administration</p>
+          <h1 class="mt-1 text-2xl font-bold leading-[1.5]">FAQ管理</h1>
+        </div>
+        <%= link_to "FAQを追加", new_admin_faq_path, class: "btn btn-rapid" %>
+      </header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <% if @faqs.any? %>
+            <div class="overflow-x-auto">
+              <table class="table">
+                <thead><tr><th scope="col">表示順</th><th scope="col">質問</th><th scope="col">状態</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
+                <tbody>
+                  <% @faqs.each do |faq| %>
+                    <tr>
+                      <td><%= faq.position %></td>
+                      <td><%= faq.question %></td>
+                      <td><span class="badge"><%= faq.published? ? "公開" : "非公開" %></span></td>
+                      <td>
+                        <div class="flex justify-end gap-2">
+                          <%= link_to "編集", edit_admin_faq_path(faq), class: "btn btn-rapid" %>
+                          <%= button_to "削除", admin_faq_path(faq), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "FAQを削除しますか？" } %>
+                        </div>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% else %>
+            <div class="alert"><span>FAQはまだ登録されていません。</span></div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
+    <% content_for :title, ["FAQを追加", #{app_name.inspect}].join(" | ") %>
+    <div class="max-w-[820px] space-y-6">
+      <header><p class="text-sm font-semibold text-primary">Administration</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">FAQを追加</h1></header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+    </div>
+  ERB
+
+  create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
+    <% content_for :title, ["FAQを編集", #{app_name.inspect}].join(" | ") %>
+    <div class="max-w-[820px] space-y-6">
+      <header><p class="text-sm font-semibold text-primary">Administration</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">FAQを編集</h1></header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+    </div>
+  ERB
+
+  create_file "app/views/admin/footer_settings/edit.html.erb", <<~ERB, force: true
+    <% content_for :title, ["外部リンク設定", #{app_name.inspect}].join(" | ") %>
+    <div class="max-w-[820px] space-y-6">
+      <header>
+        <p class="text-sm font-semibold text-primary">Administration</p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">外部リンク設定</h1>
+        <p class="mt-2 text-sm text-neutral">空欄のリンクはfooterに表示されません。</p>
+      </header>
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <%= form_with model: [:admin, @footer_setting], url: admin_footer_setting_path, class: "space-y-5" do |form| %>
+            <% if @footer_setting.errors.any? %>
+              <div class="alert alert-error" role="alert">
+                <ul><% @footer_setting.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
+              </div>
+            <% end %>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend"><%= form.label :x_url, "X(Twitter)" %></legend>
+              <%= form.url_field :x_url, class: "input input-rapid w-full", placeholder: "https://example.com/x-account" %>
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend"><%= form.label :github_url, "GitHub" %></legend>
+              <%= form.url_field :github_url, class: "input input-rapid w-full", placeholder: "https://example.com/github-account" %>
+            </fieldset>
+            <div class="card-actions justify-end"><%= form.submit "更新", class: "btn btn-rapid" %></div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  content_authentication_support = if devise
+    <<~RUBY
+      module ContentManagementAuthenticationTestSupport
+        extend ActiveSupport::Concern
+
+        included do
+          include Devise::Test::IntegrationHelpers
+        end
+
+        private
+          def setup_content_management_users
+            @admin = User.create!(
+              email: "content-admin@example.com",
+              password: "password123",
+              password_confirmation: "password123"
+            )
+            @regular = User.create!(
+              email: "content-regular@example.com",
+              password: "password123",
+              password_confirmation: "password123"
+            )
+            @admin.grant_role!(:admin)
+          end
+
+          def sign_in_content_user(user, _key = nil)
+            sign_in user
+          end
+      end
+    RUBY
+  else
+    <<~RUBY
+      require "eth"
+
+      module ContentManagementAuthenticationTestSupport
+        private
+          def setup_content_management_users
+            @admin, @admin_key = create_content_wallet_user
+            @regular, @regular_key = create_content_wallet_user
+            @admin.grant_role!(:admin)
+          end
+
+          def create_content_wallet_user
+            key = Eth::Key.new
+            [User.create!(wallet_address: key.address.to_s), key]
+          end
+
+          def sign_in_content_user(_user, key)
+            get session_nonce_url
+            nonce = response.parsed_body.fetch("nonce")
+            message = Siwe::Message.new(
+              domain: "www.example.com",
+              address: key.address.to_s,
+              uri: "http://www.example.com",
+              chain_id: 1,
+              nonce: nonce,
+              issued_at: Time.current.iso8601,
+              statement: "Sign in to www.example.com"
+            ).prepare_message
+            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            assert_response :success
+          end
+      end
+    RUBY
+  end
+  create_file "test/support/content_management_authentication.rb", content_authentication_support, force: true
+
+  create_file "test/models/page_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class PageTest < ActiveSupport::TestCase
+      test "accepts only fixed slugs and matching titles" do
+        page = pages(:about)
+        page.assign_attributes(slug: "unknown", title: "Unknown")
+        assert_not page.valid?
+
+        page.slug = "about"
+        assert_not page.valid?
+
+        page.title = Page::TITLES.fetch("about")
+        assert page.valid?
+      end
+
+      test "database rejects unknown and duplicate slugs" do
+        now = Time.current
+
+        # These writes intentionally bypass model validations to exercise database constraints.
+        # rubocop:disable Rails/SkipsModelValidations
+        assert_raises(ActiveRecord::StatementInvalid) do
+          Page.insert_all!([{ slug: "unknown", title: "Unknown", created_at: now, updated_at: now }])
+        end
+        assert_raises(ActiveRecord::StatementInvalid) do
+          Page.insert_all!([{ slug: "about", title: Page::TITLES.fetch("about"), created_at: now, updated_at: now }])
+        end
+        # rubocop:enable Rails/SkipsModelValidations
+      end
+
+      test "seeds fixed pages and footer setting idempotently" do
+        load Rails.root.join("db/seeds.rb")
+
+        assert_equal Page::TITLES, Page.order(:id).to_h { |page| [page.slug, page.title] }
+        assert_equal FooterSetting::DEFAULT_KEY, FooterSetting.default_record.key
+        assert_no_difference(["Page.count", "FooterSetting.count"]) { load Rails.root.join("db/seeds.rb") }
+      end
+    end
+  RUBY
+
+  create_file "test/models/faq_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class FaqTest < ActiveSupport::TestCase
+      test "requires question answer and nonnegative position" do
+        faq = Faq.new(position: -1)
+
+        assert_not faq.valid?
+        faq.assign_attributes(question: "質問", answer: "回答", position: 0)
+        assert faq.valid?
+      end
+
+      test "returns only published FAQs in display order" do
+        later = Faq.create!(question: "後", answer: "後の回答", position: 20, published: true)
+        hidden = Faq.create!(question: "非公開", answer: "非公開の回答", position: 0, published: false)
+        earlier = Faq.create!(question: "前", answer: "前の回答", position: 10, published: true)
+
+        assert_equal [earlier, later], Faq.published_in_display_order.to_a
+        assert_not_includes Faq.published_in_display_order, hidden
+      end
+
+      test "database rejects negative positions" do
+        now = Time.current
+
+        # This write intentionally bypasses model validations to exercise the database constraint.
+        # rubocop:disable Rails/SkipsModelValidations
+        assert_raises(ActiveRecord::StatementInvalid) do
+          Faq.insert_all!([{ question: "質問", position: -1, published: false, created_at: now, updated_at: now }])
+        end
+        # rubocop:enable Rails/SkipsModelValidations
+      end
+    end
+  RUBY
+
+  create_file "test/models/footer_setting_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class FooterSettingTest < ActiveSupport::TestCase
+      test "accepts blank or arbitrary HTTPS URLs and normalizes whitespace" do
+        setting = footer_settings(:default)
+        setting.update!(x_url: "  https://social.example/x  ", github_url: "")
+
+        assert_equal "https://social.example/x", setting.x_url
+        assert_nil setting.github_url
+      end
+
+      test "rejects HTTP hostless invalid and userinfo URLs" do
+        setting = footer_settings(:default)
+
+        ["http://example.com/x", "https:///missing-host", "not a url", "https://user@example.com/path"].each do |url|
+          setting.x_url = url
+          assert_not setting.valid?, url
+        end
+      end
+
+      test "database allows only the singleton key" do
+        now = Time.current
+
+        # These writes intentionally bypass model validations to exercise database constraints.
+        # rubocop:disable Rails/SkipsModelValidations
+        assert_raises(ActiveRecord::StatementInvalid) do
+          FooterSetting.insert_all!([{ key: "other", created_at: now, updated_at: now }])
+        end
+        assert_raises(ActiveRecord::StatementInvalid) do
+          FooterSetting.insert_all!([{ key: "default", created_at: now, updated_at: now }])
+        end
+        # rubocop:enable Rails/SkipsModelValidations
+      end
+    end
+  RUBY
+
+  create_file "test/policies/content_management_policy_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class ContentManagementPolicyTest < ActiveSupport::TestCase
+      test "allows admins and denies regular users" do
+        admin = users(:one)
+        regular = users(:two)
+        admin.grant_role!(:admin)
+
+        assert PagePolicy.new(Page, user: admin).apply(:index?)
+        assert PagePolicy.new(pages(:about), user: admin).apply(:update?)
+        assert FaqPolicy.new(Faq, user: admin).apply(:index?)
+        assert FaqPolicy.new(Faq.new, user: admin).apply(:create?)
+        assert FooterSettingPolicy.new(footer_settings(:default), user: admin).apply(:edit?)
+
+        assert_not PagePolicy.new(Page, user: regular).apply(:index?)
+        assert_not PagePolicy.new(pages(:about), user: regular).apply(:update?)
+        assert_not FaqPolicy.new(Faq.new, user: regular).apply(:create?)
+        assert_not FooterSettingPolicy.new(footer_settings(:default), user: regular).apply(:update?)
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/pages_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class PagesControllerTest < ActionDispatch::IntegrationTest
+      test "renders every fixed public page through the explicit template map" do
+        {
+          about_url => ["about", Page::TITLES.fetch("about")],
+          corp_url => ["corp", "運営会社"],
+          manual_url => ["manual", "使い方"],
+          terms_url => ["terms", "利用規約"],
+          privacy_url => ["privacy", "プライバシーポリシー"],
+          transaction_law_url => ["transaction-law", "特商法表記"]
+        }.each do |url, (slug, title)|
+          get url
+
+          assert_response :success
+          assert_select "h1", text: title, count: 1
+          assert_equal "pages/\#{slug}", PagesController::TEMPLATES.fetch(slug)
+        end
+      end
+
+      test "renders Action Text content with Lexxy styles" do
+        pages(:about).update!(content: "<p>管理された本文</p>")
+
+        get about_url
+
+        assert_response :success
+        assert_select ".lexxy-content", text: "管理された本文", count: 1
+      end
+
+      test "hides unset external links and renders configured links safely" do
+        get about_url
+
+        assert_select "footer .footer-title", text: "Links", count: 0
+        assert_select "footer .footer-title", count: 3
+
+        footer_settings(:default).update!(
+          x_url: "https://social.example/x",
+          github_url: "https://code.example/repository"
+        )
+        get about_url
+
+        assert_select "footer .footer-title", text: "Links", count: 1
+        assert_select 'footer a[href="https://social.example/x"][target="_blank"][rel="noopener noreferrer"]', text: "X(Twitter)", count: 1
+        assert_select 'footer a[href="https://code.example/repository"][target="_blank"][rel="noopener noreferrer"]', text: "GitHub", count: 1
+      end
+
+      test "footer uses the generated application name and fixed internal routes" do
+        get about_url
+
+        assert_select 'footer.footer.footer-vertical[class~="sm:footer-horizontal"]'
+        assert_select "footer .footer-title", text: "About", count: 1
+        assert_select "footer a[href=?]", about_path, text: #{("#{app_name}について").inspect}, count: 1
+        assert_select "footer a[href=?]", corp_path, text: "運営会社", count: 1
+        assert_select "footer a[href=?]", manual_path, text: "使い方", count: 1
+        assert_select "footer a[href=?]", faq_path, text: "よくある質問", count: 1
+        assert_select "footer a[href=?]", terms_path, text: "利用規約", count: 1
+        assert_select "footer a[href=?]", privacy_path, text: "プライバシーポリシー", count: 1
+        assert_select "footer a[href=?]", transaction_law_path, text: "特商法表記", count: 1
+        assert_select "footer aside", count: 0
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/faqs_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class FaqsControllerTest < ActionDispatch::IntegrationTest
+      test "renders the empty state" do
+        get faq_url
+
+        assert_response :success
+        assert_select ".alert", text: "現在、公開中のよくある質問はありません。", count: 1
+      end
+
+      test "renders only published FAQs in order using collapse" do
+        Faq.create!(question: "2番目", answer: "回答2", position: 20, published: true)
+        Faq.create!(question: "非公開", answer: "秘密", position: 0, published: false)
+        Faq.create!(question: "1番目", answer: "回答1", position: 10, published: true)
+
+        get faq_url
+
+        assert_response :success
+        assert_equal ["1番目", "2番目"], css_select("details.collapse.collapse-arrow > summary.collapse-title").map { |node| node.text.strip }
+        assert_select ".lexxy-content", text: "秘密", count: 0
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/admin/pages_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+    require_relative "../../support/content_management_authentication"
+
+    class Admin::PagesControllerTest < ActionDispatch::IntegrationTest
+      include ContentManagementAuthenticationTestSupport
+
+      setup { setup_content_management_users }
+
+      test "requires authentication and denies regular users" do
+        get admin_pages_url
+        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+
+        sign_in_content_user(@regular, #{devise ? "nil" : "@regular_key"})
+        get admin_pages_url
+        assert_response :forbidden
+      end
+
+      test "allows an admin to edit only page content with Lexxy" do
+        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+        page = pages(:about)
+
+        get edit_admin_page_url(page)
+        assert_response :success
+        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_pages_path, text: "固定ページ管理", count: 1
+        assert_select "lexxy-editor", count: 1
+
+        patch admin_page_url(page), params: {
+          page: { content: "<p>更新本文</p>", title: "変更不可", slug: "corp" }
+        }
+
+        assert_redirected_to admin_pages_url
+        assert_equal Page::TITLES.fetch("about"), page.reload.title
+        assert_equal "about", page.slug
+        assert_equal "更新本文", page.content.to_plain_text
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/admin/faqs_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+    require_relative "../../support/content_management_authentication"
+
+    class Admin::FaqsControllerTest < ActionDispatch::IntegrationTest
+      include ContentManagementAuthenticationTestSupport
+
+      setup { setup_content_management_users }
+
+      test "allows an admin to create update and destroy a FAQ" do
+        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+
+        get new_admin_faq_url
+        assert_response :success
+        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_faqs_path, text: "FAQ管理", count: 1
+        assert_select "lexxy-editor", count: 1
+
+        assert_difference("Faq.count", 1) do
+          post admin_faqs_url, params: {
+            faq: { question: "質問", answer: "回答", position: 5, published: "1" }
+          }
+        end
+        faq = Faq.order(:id).last
+        assert_redirected_to admin_faqs_url
+        assert faq.published?
+
+        patch admin_faq_url(faq), params: {
+          faq: { question: "更新質問", answer: "更新回答", position: 2, published: "0" }
+        }
+        assert_redirected_to admin_faqs_url
+        assert_equal ["更新質問", 2, false], faq.reload.values_at(:question, :position, :published)
+        assert_equal "更新回答", faq.answer.to_plain_text
+
+        assert_difference("Faq.count", -1) { delete admin_faq_url(faq) }
+        assert_redirected_to admin_faqs_url
+      end
+
+      test "denies regular users" do
+        sign_in_content_user(@regular, #{devise ? "nil" : "@regular_key"})
+
+        get admin_faqs_url
+
+        assert_response :forbidden
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/admin/footer_settings_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+    require_relative "../../support/content_management_authentication"
+
+    class Admin::FooterSettingsControllerTest < ActionDispatch::IntegrationTest
+      include ContentManagementAuthenticationTestSupport
+
+      setup { setup_content_management_users }
+
+      test "allows an admin to update HTTPS links" do
+        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+
+        get edit_admin_footer_setting_url
+        assert_response :success
+        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', edit_admin_footer_setting_path, text: "外部リンク設定", count: 1
+
+        patch admin_footer_setting_url, params: {
+          footer_setting: { x_url: " https://social.example/x ", github_url: "" }
+        }
+
+        assert_redirected_to edit_admin_footer_setting_url
+        assert_equal "https://social.example/x", footer_settings(:default).reload.x_url
+        assert_nil footer_settings(:default).github_url
+      end
+
+      test "renders validation errors for unsafe links" do
+        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+
+        patch admin_footer_setting_url, params: {
+          footer_setting: { x_url: "http://social.example/x", github_url: "https://code.example/repository" }
+        }
+
+        assert_response :unprocessable_content
+        assert_select ".alert.alert-error", count: 1
+        assert_nil footer_settings(:default).reload.github_url
+      end
+
+      test "denies regular users" do
+        sign_in_content_user(@regular, #{devise ? "nil" : "@regular_key"})
+
+        get edit_admin_footer_setting_url
+
+        assert_response :forbidden
+      end
+    end
+  RUBY
 end
 
 def configure_profile
@@ -2550,6 +3655,7 @@ end
 
 def configure_default_views
   devise = VALUES.fetch("account_authentication") == "devise"
+  app_name = PLAN.fetch("app_name")
   api_enabled = VALUES.fetch("api") == "enable"
   profile_features = VALUES.fetch("profile_features")
   profile_enabled = profile_features.any?
@@ -2618,20 +3724,43 @@ def configure_default_views
       </li>
     ERB
   end
-  account_navigation_items += <<~ERB
-    <% if allowed_to?(:index?, User) %>
+  admin_navigation_items = <<~ERB
       <li>
-        <%= link_to admin_users_path, class: ("menu-active" if controller_path.start_with?("admin/")), aria: { current: ("page" if controller_path.start_with?("admin/")) } do %>
+        <%= link_to admin_users_path, class: ("menu-active" if controller_path.in?(%w[admin/users admin/user_roles])), aria: { current: ("page" if controller_path.in?(%w[admin/users admin/user_roles])) } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m6-3c0 7.142-3.75 12-9 13.5C6.75 18.75 3 13.892 3 6.75c3.75 0 7.5-1.5 9-4.5 1.5 3 5.25 4.5 9 4.5Z" />
           </svg>
           ユーザー管理
         <% end %>
       </li>
-    <% end %>
+      <li>
+        <%= link_to admin_pages_path, class: ("menu-active" if controller_path == "admin/pages"), aria: { current: ("page" if controller_path == "admin/pages") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5A3.375 3.375 0 0 0 10.125 2.25H8.25m0 12.75h7.5m-7.5 3h4.5M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-8.25a10.5 10.5 0 0 0-9-10.125Z" />
+          </svg>
+          固定ページ管理
+        <% end %>
+      </li>
+      <li>
+        <%= link_to admin_faqs_path, class: ("menu-active" if controller_path == "admin/faqs"), aria: { current: ("page" if controller_path == "admin/faqs") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 9.75a3.375 3.375 0 1 1 5.775 2.387c-.938.938-1.9 1.424-1.9 2.613M12 18h.008v.008H12V18Zm9-6a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+          FAQ管理
+        <% end %>
+      </li>
+      <li>
+        <%= link_to edit_admin_footer_setting_path, class: ("menu-active" if controller_path == "admin/footer_settings"), aria: { current: ("page" if controller_path == "admin/footer_settings") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+          </svg>
+          外部リンク設定
+        <% end %>
+      </li>
   ERB
   account_navigation_for_layout = account_navigation_items.lines.map { |line| "                #{line}" }.join
   account_navigation_for_dropdown = account_navigation_items.lines.map { |line| "          #{line}" }.join
+  admin_navigation_for_layout = admin_navigation_items.lines.map { |line| "                #{line}" }.join
   signed_in_condition = devise ? "user_signed_in?" : "authenticated?"
   profile_owner = devise ? "current_user.profile" : "Current.user.profile"
   logout_path = devise ? "destroy_user_session_path" : "session_path"
@@ -2782,6 +3911,7 @@ def configure_default_views
         <%= yield :head %>
         <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+        <%= stylesheet_link_tag "lexxy", "data-turbo-track": "reload" %>
     #{wallet_script}    <%= javascript_importmap_tags %>
       </head>
       <body class="min-h-screen bg-base-100 text-base-content antialiased" data-layout="application">
@@ -2828,6 +3958,23 @@ def configure_default_views
     <%= render template: "layouts/application" %>
   ERB
 
+  create_file "app/views/shared/_admin_navigation.html.erb", admin_navigation_items, force: true
+  create_file "app/views/layouts/admin.html.erb", <<~ERB, force: true
+    <% content_for :content do %>
+      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="admin">
+        <aside class="h-fit">
+          <nav aria-label="管理メニュー">
+            <ul class="menu w-full rounded-box bg-base-100">
+              <li class="menu-title"><span>管理画面</span></li>
+    #{admin_navigation_for_layout}          </ul>
+          </nav>
+        </aside>
+        <div class="min-w-0"><%= yield %></div>
+      </div>
+    <% end %>
+    <%= render template: "layouts/application" %>
+  ERB
+
   create_file "app/views/shared/_header.html.erb", <<~ERB, force: true
     <header class="border-b border-base-300 bg-base-100">
       <nav class="navbar mx-auto w-full max-w-6xl px-5" aria-label="メインナビゲーション">
@@ -2838,7 +3985,12 @@ def configure_default_views
           <div class="navbar-end">
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
-    #{profile_identity.lines.map { |line| "            #{line}" }.join}#{account_navigation_for_dropdown}            <li class="border-t border-base-300"><%= link_to "ログアウト", #{logout_path}, data: { turbo_method: :delete } %></li>
+    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if controller_path.start_with?("admin/") %>
+                <li class="menu-title"><span>管理画面</span></li>
+                <%= render "shared/admin_navigation" %>
+              <% else %>
+    #{account_navigation_for_dropdown}            <% end %>
+              <li class="border-t border-base-300"><%= link_to "ログアウト", #{logout_path}, data: { turbo_method: :delete } %></li>
               </ul>
             </details>
           </div>
@@ -2871,9 +4023,36 @@ def configure_default_views
   ERB
 
   create_file "app/views/shared/_footer.html.erb", <<~ERB, force: true
+    <% external_links_configured = footer_setting.x_url.present? || footer_setting.github_url.present? %>
     <div class="border-t border-base-300 bg-base-100">
       <footer class="footer footer-vertical mx-auto w-full max-w-6xl px-5 py-8 text-sm sm:footer-horizontal">
-        <aside><p class="font-semibold text-base-content">Rapid Rails</p></aside>
+        <nav>
+          <h2 class="footer-title leading-[1.5]">About</h2>
+          <%= link_to #{("#{app_name}について").inspect}, about_path, class: "link link-hover" %>
+          <%= link_to "運営会社", corp_path, class: "link link-hover" %>
+        </nav>
+        <nav>
+          <h2 class="footer-title leading-[1.5]">Guides</h2>
+          <%= link_to "使い方", manual_path, class: "link link-hover" %>
+          <%= link_to "よくある質問", faq_path, class: "link link-hover" %>
+        </nav>
+        <% if external_links_configured %>
+          <nav>
+            <h2 class="footer-title leading-[1.5]">Links</h2>
+            <% if footer_setting.x_url.present? %>
+              <%= link_to "X(Twitter)", footer_setting.x_url, class: "link link-hover", target: "_blank", rel: "noopener noreferrer" %>
+            <% end %>
+            <% if footer_setting.github_url.present? %>
+              <%= link_to "GitHub", footer_setting.github_url, class: "link link-hover", target: "_blank", rel: "noopener noreferrer" %>
+            <% end %>
+          </nav>
+        <% end %>
+        <nav>
+          <h2 class="footer-title leading-[1.5]">Legal</h2>
+          <%= link_to "利用規約", terms_path, class: "link link-hover" %>
+          <%= link_to "プライバシーポリシー", privacy_path, class: "link link-hover" %>
+          <%= link_to "特商法表記", transaction_law_path, class: "link link-hover" %>
+        </nav>
       </footer>
     </div>
   ERB
@@ -3157,7 +4336,8 @@ def configure_default_views
           assert_redirected_to new_user_session_url
 
           user = User.create!(email: "sample@example.com", password: "password123", password_confirmation: "password123")
-    #{generated_profile_assertion}#{profile_setup}      sign_in user
+    #{generated_profile_assertion}#{profile_setup}      user.add_role(:admin)
+          sign_in user
           get account_url
           assert_response :success
           assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
@@ -3173,6 +4353,9 @@ def configure_default_views
           assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[class="menu-active"]', count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a[class]', count: 1
           assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a.min-h-11', count: 0
+          assert_select 'nav[aria-label="管理メニュー"]', count: 0
+          assert_select 'header li.menu-title', text: "管理画面", count: 0
+          assert_select 'header a[href=?]', admin_users_path, count: 0
           assert_select '.card > .card-body', count: 1
 
     #{profile_page_assertions}
@@ -3314,9 +4497,11 @@ def configure_evidence_capture
         VIEWPORTS.each do |viewport_name, viewport|
           page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
           prepare_guest_data
+          verify_footer_geometry if viewport_name == "desktop"
           capture_guest_pages(viewport_name)
           authenticate
           prepare_authenticated_data
+          verify_admin_layout_geometry if viewport_name == "desktop"
           capture_authenticated_pages(viewport_name)
           Capybara.reset_sessions!
         end
@@ -3337,6 +4522,28 @@ def configure_evidence_capture
         end
 
         def prepare_guest_data
+          Page.find_by!(slug: "about").update!(
+            content: <<~HTML
+              <p>#{Page::TITLES.fetch("about")}は、Railsアプリケーションをすばやく始めるためのテンプレートです。</p>
+              <p>管理画面から更新したAction Text本文を表示しています。</p>
+            HTML
+          )
+          @evidence_faq = Faq.find_or_initialize_by(question: "サービスはどのように使えますか？")
+          @evidence_faq.update!(
+            answer: "<p>アカウントを作成し、マイページから各機能をご利用ください。</p>",
+            position: 10,
+            published: true
+          )
+          Faq.find_or_initialize_by(question: "公開前の質問").update!(
+            answer: "<p>この回答は公開画面には表示されません。</p>",
+            position: 0,
+            published: false
+          )
+          FooterSetting.default_record.update!(
+            x_url: "https://x.com/example",
+            github_url: "https://github.com/example/example"
+          )
+
           return unless devise?
 
           @user = User.find_or_create_by!(email: "evidence@example.com") do |user|
@@ -3348,6 +4555,9 @@ def configure_evidence_capture
 
         def capture_guest_pages(viewport)
           capture_page("home-guest", "ホーム（未ログイン）", root_path, "迷わず始められる", viewport)
+          capture_page("about", "アプリについて", about_path, Page::TITLES.fetch("about"), viewport)
+          assert_selector ".lexxy-content", text: "管理画面から更新したAction Text本文"
+          capture_faq_page(viewport)
           login_path = devise? ? new_user_session_path : new_session_path
           login_heading = devise? ? "ログイン" : "ウォレットでログイン"
           capture_page("login", login_heading, login_path, login_heading, viewport)
@@ -3428,6 +4638,7 @@ def configure_evidence_capture
         def capture_authenticated_pages(viewport)
           capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, "迷わず始められる", viewport)
           capture_page("account", "マイページ", account_path, "マイページ", viewport)
+          assert_account_navigation_scope
           capture_page("profile", "プロフィール", profile_path, "プロフィール", viewport)
           capture_page("profile-edit", "プロフィール編集", edit_profile_path, "プロフィール編集", viewport)
           account_settings_path = devise? ? edit_user_registration_path : edit_account_path
@@ -3447,6 +4658,33 @@ def configure_evidence_capture
           capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), "APIキーを編集", viewport)
           capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, "APIキーの管理", viewport)
           capture_page("admin-users", "ユーザー管理", admin_users_path, "ユーザー管理", viewport)
+          assert_admin_navigation_active("ユーザー管理")
+          capture_page(
+            "admin-page-edit",
+            "固定ページ編集",
+            edit_admin_page_path(Page.find_by!(slug: "about")),
+            Page::TITLES.fetch("about"),
+            viewport
+          )
+          assert_admin_navigation_active("固定ページ管理")
+          assert_selector "lexxy-editor"
+          capture_page(
+            "admin-faq-edit",
+            "FAQ編集",
+            edit_admin_faq_path(@evidence_faq),
+            "FAQを編集",
+            viewport
+          )
+          assert_admin_navigation_active("FAQ管理")
+          assert_selector "lexxy-editor"
+          capture_page(
+            "admin-footer-setting",
+            "外部リンク設定",
+            edit_admin_footer_setting_path,
+            "外部リンク設定",
+            viewport
+          )
+          assert_admin_navigation_active("外部リンク設定")
 
           return unless viewport == "mobile"
 
@@ -3460,6 +4698,102 @@ def configure_evidence_capture
           assert_equal 200, page.status_code
           assert_selector "h1", text: heading
           capture_current_page(identifier, title, viewport)
+        end
+
+        def assert_admin_navigation_active(label)
+          assert_selector '[data-layout="admin"] nav[aria-label="管理メニュー"]'
+          assert_selector '[data-layout="admin"] nav[aria-label="管理メニュー"] li.menu-title', text: "管理画面", count: 1
+          assert_no_selector '[data-layout="admin"] nav[aria-label="アカウントメニュー"]'
+          assert_selector '[data-layout="admin"] a.menu-active[aria-current="page"]', text: label, count: 1
+          assert_selector 'header li.menu-title', text: "管理画面", count: 1, visible: :all
+          assert_no_selector %(header a[href="\#{account_path}"]), visible: :all
+        end
+
+        def assert_account_navigation_scope
+          assert_selector '[data-layout="account"] nav[aria-label="アカウントメニュー"]'
+          assert_no_selector '[data-layout="account"] nav[aria-label="管理メニュー"]'
+          assert_no_selector 'header li.menu-title', text: "管理画面", visible: :all
+          assert_no_selector %(header a[href="\#{admin_users_path}"]), visible: :all
+        end
+
+        def capture_faq_page(viewport)
+          visit faq_path
+          assert_equal 200, page.status_code
+          assert_selector "h1", text: "よくある質問"
+          find("details.collapse > summary", text: @evidence_faq.question).click
+          assert_selector "details[open] .lexxy-content", text: "アカウントを作成し"
+          assert_no_text "公開前の質問"
+          capture_current_page("faq", "よくある質問", viewport)
+        end
+
+        def verify_footer_geometry
+          {
+            320 => "row",
+            640 => "column",
+            960 => "column",
+            961 => "column"
+          }.each do |width, expected_flow|
+            page.current_window.resize_to(width, 900)
+            visit root_path
+            geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const footer = document.querySelector("footer.footer")
+                  return {
+                    flow: getComputedStyle(footer).gridAutoFlow,
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth
+                  }
+                }
+              JAVASCRIPT
+            end
+
+            assert_equal expected_flow, geometry.fetch("flow"), "footer layout at #{width}px"
+            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+              "horizontal overflow at #{width}px"
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
+        def verify_admin_layout_geometry
+          [320, 640, 960, 961].each do |width|
+            page.current_window.resize_to(width, 900)
+            visit admin_pages_path
+            geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const layout = document.querySelector('[data-layout="admin"]')
+                  const sidebar = layout.querySelector(':scope > aside').getBoundingClientRect()
+                  const content = layout.querySelector(':scope > div').getBoundingClientRect()
+                  return {
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    sidebarTop: sidebar.top,
+                    sidebarBottom: sidebar.bottom,
+                    sidebarRight: sidebar.right,
+                    contentTop: content.top,
+                    contentLeft: content.left
+                  }
+                }
+              JAVASCRIPT
+            end
+
+            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+              "admin layout horizontal overflow at #{width}px"
+            if width < 961
+              assert_operator geometry.fetch("contentTop"), :>=, geometry.fetch("sidebarBottom"),
+                "admin layout should use one column at #{width}px"
+            else
+              assert_in_delta geometry.fetch("sidebarTop"), geometry.fetch("contentTop"), 0.5
+              assert_operator geometry.fetch("contentLeft"), :>=, geometry.fetch("sidebarRight"),
+                "admin layout should use two columns at #{width}px"
+            end
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
         def with_deterministic_secure_random
@@ -3658,6 +4992,8 @@ def configure_dokploy
 end
 
 after_bundle do
+  install_action_text
+  configure_lexxy
   install_daisyui
   configure_generator_view_templates
   configure_rubocop
@@ -3666,7 +5002,7 @@ after_bundle do
   configure_annotaterb
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
   configure_roles
-  rails_command "active_storage:install" if VALUES.fetch("profile_features").include?("avatar")
+  configure_content_management
   configure_profile if VALUES.fetch("profile_features").any?
   configure_api if VALUES.fetch("api") == "enable"
   configure_default_views

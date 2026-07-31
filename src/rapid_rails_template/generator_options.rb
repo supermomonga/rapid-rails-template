@@ -17,7 +17,6 @@ module RapidRailsTemplate
     def self.build(configuration)
       options = FIXED.dup
       options.concat(%w[--skip-action-mailer --skip-action-mailbox]) if configuration["mail"] == "skip"
-      options << "--skip-action-text" if configuration["action_text"] == "skip"
       options << "--skip-action-cable" if configuration["action_cable"] == "skip"
       options << "--skip-solid" # Solid components are installed individually from the confirmed plan.
       options.freeze

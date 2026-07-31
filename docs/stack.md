@@ -4,7 +4,15 @@
 
 ## ランチャーUI
 
-`bootstrap.rb`の対話UIには`marcoroth/gum-ruby`の`gum` 0.3.2を使用します。gemに同梱された現在のplatform向けGum実行可能ファイルを利用し、アプリ名の入力は`Gum.input`、個別オプションの選択は`Gum.choose`、実行計画の最終確認は`Gum.confirm`で行います。bootstrap自身によるgemの自動install、別versionへの暗黙の切り替え、標準入力を直接読む代替UIは行いません。
+`bootstrap.rb`の対話UIには`marcoroth/gum-ruby`の`gum` 0.3.2を使用します。gemに同梱された現在のplatform向けGum実行可能ファイルを利用し、RailsアプリIDと表示用アプリ名の入力は`Gum.input`、個別オプションの選択は`Gum.choose`、実行計画の最終確認は`Gum.confirm`で行います。bootstrap自身によるgemの自動install、別versionへの暗黙の切り替え、標準入力を直接読む代替UIは行いません。
+
+## Application IdentityとI18n
+
+Rails内部識別子は`--app-id`から`rails new --name`へ渡し、ユーザー向け表示名は`--app-name`から生成アプリのApplication Identityへ保存します。両者を同じ設定値や暗黙の変換で兼用しません。
+
+生成アプリはRails 8.1の`config_for`で`config/application_identity.yml`を読み、検証済みの`ApplicationIdentity`を`Rails.configuration.x.application_identity`へ設定します。developmentは`http://localhost:3000`、testは`http://www.example.com`をcanonical originとし、productionは`APPLICATION_ORIGIN`を必須とします。originの不足時にrequest hostへ切り替える処理は持ちません。同じoriginからroutesとAction Mailerの`default_url_options`、canonical URL、OGP URLを構築します。
+
+I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`config.i18n.default_locale`へ設定します。request境界では`I18n.with_locale`を使用し、locale fallbackを無効化します。Rails validationには`rails-i18n`、Devise選択時は`devise-i18n`を使用し、アプリ固有のView、controller、JavaScript表示文面は生成するlocale fileのja/enペアを正本とします。
 
 ## 固定構成
 
@@ -123,7 +131,7 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 ### PWAとWeb Push
 
-`pwa=use`ではRails 8.1標準のPWA controllerを利用し、`/manifest.json`と`/service-worker`を明示的にrouteへ接続します。manifestはアプリ名、`/icon.png`、scopeとstart URL `/`、`standalone`表示、theme色`#3ea8ff`を持ちます。Service Workerの`push` handlerは`{ title, options }`を表示し、`notificationclick` handlerはpayloadの`options.data.path`を同一origin内へ制限した上で、既存windowのfocus・navigateまたは新規windowのopenを行います。
+`pwa=use`ではRails 8.1標準のPWA controllerを利用し、`/manifest.json`と`/service-worker`を明示的にrouteへ接続します。manifestはApplication Identityの表示用アプリ名と既定locale、`/icon.png`、scopeとstart URL `/`、`standalone`表示、theme色`#3ea8ff`を持ちます。Service Workerの`push` handlerは`{ title, options }`を表示し、`notificationclick` handlerはpayloadの`options.data.path`を同一origin内へ制限した上で、既存windowのfocus・navigateまたは新規windowのopenを行います。
 
 `web_push=use`では`web-push ~> 3.1`とSolid Queueを導入します。`PushSubscription`はUser、安定したbrowser ID、endpoint、`p256dh`、`auth`を保持し、browser IDとendpointをそれぞれ一意にします。登録時は両キーの既存recordをlockし、同一ブラウザの別accountログインや同一endpointの再登録を現在のUserへ移します。User削除時はassociationとdatabase外部キーの両方で購読を削除します。
 

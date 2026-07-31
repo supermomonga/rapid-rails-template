@@ -6,7 +6,12 @@ require "json"
 
 module RapidRailsTemplate
   module Evidence
-    VARIANTS = %w[devise siwe].freeze
+    VARIANTS = {
+      "devise-ja" => { "authentication" => "devise", "locale" => "ja" },
+      "devise-en" => { "authentication" => "devise", "locale" => "en" },
+      "siwe-ja" => { "authentication" => "siwe", "locale" => "ja" },
+      "siwe-en" => { "authentication" => "siwe", "locale" => "en" }
+    }.freeze
     PNG_SIGNATURE = "\x89PNG\r\n\x1A\n".b.freeze
 
     module_function
@@ -25,12 +30,13 @@ module RapidRailsTemplate
       (source_paths + [File.join(root, "bin/update-evidence")]).sort
     end
 
-    def finalize_variant(directory:, authentication:, source_fingerprint:, base_commit:)
+    def finalize_variant(directory:, authentication:, locale:, source_fingerprint:, base_commit:)
       report_path = File.join(directory, "captures.json")
       raise "撮影レポートがありません: #{report_path}" unless File.file?(report_path)
 
       report = JSON.parse(File.read(report_path))
       raise "認証方式が一致しません: #{report.fetch("authentication")}" unless report.fetch("authentication") == authentication
+      raise "localeが一致しません: #{report.fetch("locale")}" unless report.fetch("locale") == locale
 
       captures = report.fetch("captures").map do |capture|
         path = capture.fetch("path")
@@ -51,8 +57,9 @@ module RapidRailsTemplate
 
       validate_capture_set!(directory, captures)
       manifest = {
-        "schema_version" => 1,
+        "schema_version" => 2,
         "authentication" => authentication,
+        "locale" => locale,
         "source_fingerprint" => source_fingerprint,
         "base_commit" => base_commit,
         "viewports" => report.fetch("viewports"),
@@ -66,13 +73,14 @@ module RapidRailsTemplate
 
     def verify(root:, evidence_root: File.join(root, "docs/evidence"))
       expected_fingerprint = fingerprint(root)
-      manifests = VARIANTS.to_h do |variant|
+      manifests = VARIANTS.to_h do |variant, metadata|
         directory = File.join(evidence_root, variant)
         manifest_path = File.join(directory, "manifest.json")
         raise "manifestがありません: #{manifest_path}" unless File.file?(manifest_path)
 
         manifest = JSON.parse(File.read(manifest_path))
-        raise "manifestの認証方式が一致しません: #{variant}" unless manifest.fetch("authentication") == variant
+        raise "manifestの認証方式が一致しません: #{variant}" unless manifest.fetch("authentication") == metadata.fetch("authentication")
+        raise "manifestのlocaleが一致しません: #{variant}" unless manifest.fetch("locale") == metadata.fetch("locale")
         unless manifest.fetch("source_fingerprint") == expected_fingerprint
           raise "#{variant}のエビデンスが古くなっています。rake evidence:updateを実行してください"
         end
@@ -113,12 +121,14 @@ module RapidRailsTemplate
 
     def render_variant_readme(manifest)
       authentication = manifest.fetch("authentication")
-      title = authentication == "devise" ? "Devise" : "Wallet SIWE"
+      locale = manifest.fetch("locale")
+      title = "#{authentication == "devise" ? "Devise" : "Wallet SIWE"} / #{locale}"
       lines = [
         "# #{title} エビデンス",
         "",
         "- Source fingerprint: `#{manifest.fetch("source_fingerprint")}`",
         "- Base commit: `#{manifest.fetch("base_commit")}`",
+        "- Locale: `#{locale}`",
         "- 更新: `rake evidence:update`",
         ""
       ]
@@ -137,14 +147,16 @@ module RapidRailsTemplate
     end
 
     def render_index(manifests)
-      fingerprint = manifests.fetch("devise").fetch("source_fingerprint")
+      fingerprint = manifests.fetch(VARIANTS.keys.first).fetch("source_fingerprint")
       <<~MARKDOWN
         # UIエビデンス
 
-        Devise版とWallet SIWE版の生成アプリを、CapybaraとPlaywrightで撮影したエビデンスです。
+        Devise版とWallet SIWE版の生成アプリを、ja/enそれぞれでCapybaraとPlaywrightにより撮影したエビデンスです。
 
-        - [Devise](devise/README.md)
-        - [Wallet SIWE](siwe/README.md)
+        - [Devise / ja](devise-ja/README.md)
+        - [Devise / en](devise-en/README.md)
+        - [Wallet SIWE / ja](siwe-ja/README.md)
+        - [Wallet SIWE / en](siwe-en/README.md)
         - Source fingerprint: `#{fingerprint}`
         - 更新: `rake evidence:update`
         - 検証: `rake evidence:verify`

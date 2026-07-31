@@ -2,16 +2,17 @@
 
 module RapidRailsTemplate
   class ExecutionPlan
-    attr_reader :app_name, :configuration, :generator_options, :gems, :steps, :artifacts, :processes
+    attr_reader :app_id, :app_name, :configuration, :generator_options, :gems, :steps, :artifacts, :processes
 
-    def self.build(configuration, app_name:)
-      new(configuration, app_name:)
+    def self.build(configuration, app_id:, app_name:)
+      new(configuration, app_id:, app_name:)
     end
 
-    def initialize(configuration, app_name:)
+    def initialize(configuration, app_id:, app_name:)
+      @app_id = app_id
       @app_name = app_name
       @configuration = configuration
-      @generator_options = ["--name=#{app_name}", *GeneratorOptions.build(configuration)].freeze
+      @generator_options = ["--name=#{app_id}", *GeneratorOptions.build(configuration)].freeze
       @gems = build_gems.freeze
       @steps = build_steps.freeze
       @artifacts = build_artifacts.freeze
@@ -21,6 +22,7 @@ module RapidRailsTemplate
 
     def to_h
       {
+        "app_id" => app_id,
         "app_name" => app_name,
         "configuration" => configuration.to_h,
         "generator_options" => generator_options,
@@ -32,7 +34,7 @@ module RapidRailsTemplate
     end
 
     def summary
-      lines = ["\n実行計画", "========", "アプリ名: #{app_name}", "実効値:"]
+      lines = ["\n実行計画", "========", "RailsアプリID: #{app_id}", "表示用アプリ名: #{app_name}", "実効値:"]
       configuration.values.each { |key, value| lines << "  #{key}: #{value}" }
       configuration.reasons.each { |key, reason| lines << "    (#{key}: #{reason})" }
       lines << "rails new options: #{generator_options.join(' ')}"
@@ -46,8 +48,9 @@ module RapidRailsTemplate
     private
 
     def build_gems
-      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
       result << "devise" if configuration["account_authentication"] == "devise"
+      result << "devise-i18n" if configuration["account_authentication"] == "devise"
       result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
       result << "boring_avatars" if configuration["profile_features"].include?("avatar")
@@ -60,7 +63,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems]
+      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
       result << "configure_roles"
       result << "configure_content_management"
@@ -92,6 +95,15 @@ module RapidRailsTemplate
         test/support/evidence_capture.rb
         lib/tasks/evidence.rake
         app/models/user_role.rb
+        lib/application_identity.rb
+        config/application_identity.yml
+        config/initializers/application_identity.rb
+        app/controllers/concerns/localized_request.rb
+        app/helpers/application_helper.rb
+        config/locales/application.ja.yml
+        config/locales/application.en.yml
+        test/lib/application_identity_test.rb
+        test/i18n_locale_test.rb
         app/policies/application_policy.rb
         app/policies/user_policy.rb
         app/controllers/admin/base_controller.rb
@@ -125,9 +137,11 @@ module RapidRailsTemplate
         app/views/admin/footer_settings/edit.html.erb
         app/views/layouts/action_text/contents/_content.html.erb
         config/locales/content_management.ja.yml
+        config/locales/content_management.en.yml
         lib/tasks/roles.rake
         db/seeds.local.rb.example
         config/locales/roles.ja.yml
+        config/locales/roles.en.yml
         test/fixtures/user_roles.yml
         test/models/user_role_test.rb
         test/policies/user_policy_test.rb
@@ -181,6 +195,8 @@ module RapidRailsTemplate
           app/views/api_credentials/new.html.erb
           app/views/api_credentials/edit.html.erb
           app/views/api_credentials/_form.html.erb
+          config/locales/api_credentials.ja.yml
+          config/locales/api_credentials.en.yml
           test/models/api_credential_test.rb
           test/controllers/api/api_credentials_controller_test.rb
           test/controllers/api_credentials_controller_test.rb
@@ -193,7 +209,8 @@ module RapidRailsTemplate
           app/views/profiles/show.html.erb
           app/views/profiles/edit.html.erb
           app/views/profiles/_form.html.erb
-          config/locales/ja.yml
+          config/locales/profiles.ja.yml
+          config/locales/profiles.en.yml
           test/models/profile_test.rb
         ])
       end
@@ -211,18 +228,25 @@ module RapidRailsTemplate
           app/views/devise/registrations/edit.html.erb
           app/views/devise/passwords/new.html.erb
           app/views/devise/passwords/edit.html.erb
+          app/views/devise/mailer/confirmation_instructions.html.erb
+          app/views/devise/mailer/reset_password_instructions.html.erb
+          app/views/devise/mailer/unlock_instructions.html.erb
+          app/views/devise/mailer/email_changed.html.erb
+          app/views/devise/mailer/password_change.html.erb
+          config/locales/devise_views.ja.yml
+          config/locales/devise_views.en.yml
         ])
       else
         result << "app/views/sessions/new.html.erb"
         result << "app/javascript/controllers/siwe_sign_in_controller.js"
         result << "app/views/accounts/edit.html.erb"
-        result << "config/locales/ja.yml"
       end
       if configuration["pwa"] == "use"
         result.concat(%w[
           app/views/pwa/manifest.json.erb
           app/views/pwa/service-worker.js
           app/javascript/controllers/pwa_controller.js
+          test/integration/pwa_identity_test.rb
         ])
       end
       if configuration["web_push"] == "use"
@@ -236,6 +260,7 @@ module RapidRailsTemplate
           app/javascript/controllers/push_subscription_controller.js
           app/views/notifications/show.html.erb
           config/locales/web_push.ja.yml
+          config/locales/web_push.en.yml
           test/models/push_subscription_test.rb
           test/controllers/push_subscriptions_controller_test.rb
           test/jobs/push_notification_job_test.rb

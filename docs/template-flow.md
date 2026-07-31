@@ -5,10 +5,13 @@ Rapid Rails Templateは、単一の`bootstrap.rb`で前段の対話とApplicatio
 ```mermaid
 flowchart TD
     A["bootstrap.rb [OPTIONS] APP_PATHを起動"] --> B["引数・Rails・Rubyを検証"]
-    B --> V{"--nameが指定済みか"}
-    V -->|いいえ| W["Gum.inputでアプリ名を入力"]
-    V -->|はい| C["Gum.chooseで次の適用可能な質問に回答"]
-    W --> C
+    B --> V{"--app-idが指定済みか"}
+    V -->|いいえ| W["Gum.inputでRailsアプリIDを入力"]
+    V -->|はい| X{"--app-nameが指定済みか"}
+    W --> X
+    X -->|いいえ| Y["Gum.inputで表示用アプリ名を入力"]
+    X -->|はい| C["Gum.chooseで次の適用可能な質問に回答"]
+    Y --> C
     C --> D{"未回答の適用可能な質問があるか"}
     D -->|はい| C
     D -->|いいえ| E["Auto・非適用値を正規化して検証"]
@@ -45,7 +48,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 ### 質問と計画
 
-`--name`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でアプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、`profile_features`では全featureを選択済みとして表示し、`no_limit: true`の複数選択を使用します。選択なしと`--profile-features=`はProfile生成を無効にする明示回答です。アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
+`--app-id`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でRailsアプリIDを質問します。続いて`--app-name`が未指定の場合は、確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、`profile_features`では全featureを選択済みとして表示し、`no_limit: true`の複数選択を使用します。選択なしと`--profile-features=`はProfile生成を無効にする明示回答です。RailsアプリID、表示用アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
 
 全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production processを一覧で提示します。
 
@@ -53,7 +56,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 ### Railsアプリケーション生成
 
-アプリ名、固定構成、回答からgenerator optionを構築します。Application Template payloadと正規化済み設定を権限制限された一時ファイルへ展開し、設定パスを`RAPID_RAILS_TEMPLATE_CONFIG`環境変数、application nameを`--name`、template pathを`--template`として`rails new`を起動します。SQLite、Importmap、Tailwind CSSなどの初期構成と、メール、RuboCop、Solid系機能、デプロイ方法のskip optionはこの時点で確定済みです。Action Textは固定構成のためskip optionを持ちません。
+RailsアプリID、表示用アプリ名、固定構成、回答からgenerator optionとApplication Identityを構築します。Application Template payloadと正規化済み設定を権限制限された一時ファイルへ展開し、設定パスを`RAPID_RAILS_TEMPLATE_CONFIG`環境変数、RailsアプリIDをRails標準の`--name`、template pathを`--template`として`rails new`を起動します。表示用アプリ名はRails generatorへ渡さず、Application Templateが生成アプリのidentity設定へ保存します。SQLite、Importmap、Tailwind CSSなどの初期構成と、メール、RuboCop、Solid系機能、デプロイ方法のskip optionはこの時点で確定済みです。Action Textは固定構成のためskip optionを持ちません。
 
 `rails new`はshell文字列として実行せず、実行ファイルと各optionを分離した引数配列で起動します。Application Templateは回答を再質問しません。
 
@@ -67,7 +70,7 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。直後に`active_storage_db`の公式migration taskを実行し、生成されたファイル本体用migrationを`db/storage_migrate`へ移します。migration内容をApplication Templateへ複製しません。これらの処理はdaisyUI用`package.json`の生成前に行い、Importmap構成を維持します。続けてLexxyとActive StorageをImportmapへ登録し、LexxyのJavaScript、stylesheet、描画用`.lexxy-content` partialを設定します。
 
-AnnotateRbの公式install generatorで設定とmigration hookを生成します。認証Userを生成した直後にAction Policyのinstall generator、`UserRole`、policy、管理画面、初期admin付与task、local seed読込口を生成し、Deviseの`current_user`またはWallet SIWEの`Current.user`を共通のauthorization contextへ接続します。認証、role、固定ページ、FAQ、footer設定、選択済みProfile feature、API、PWA、Web Push、Solid系generatorがすべてのmigrationを生成した後、development、test、productionをprimaryとstorageに分けるdatabase設定、全環境の`:db` service、Active Storage DB initializerとengine routeを確定してから`bin/rails db:prepare`を実行します。PWAとWeb Pushはdefault Viewより先に設定し、layoutと両認証方式のaccount設定画面が有効なrouteと共通partialだけを参照する順序を保ちます。続けて`bin/annotaterb`を生成し、`bin/annotaterb models`でmodel、fixture、test、factory、serializerの初期annotationを確定します。`avatar`選択時は常設済みActive Storageを利用し、User IDをseedにする共通avatar helperと設定済み画像の削除routeを生成します。seed保存用migrationは作成しません。生成直後のdevelopmentとtestにpending migrationを残しません。
+AnnotateRbの公式install generatorで設定とmigration hookを生成します。認証生成より前にApplication Identity、ja/en locale、request locale境界、routes/mailer URL設定を生成します。認証Userを生成した直後にAction Policyのinstall generator、`UserRole`、policy、管理画面、初期admin付与task、local seed読込口を生成し、Deviseの`current_user`またはWallet SIWEの`Current.user`を共通のauthorization contextへ接続します。認証、role、固定ページ、FAQ、footer設定、選択済みProfile feature、API、PWA、Web Push、Solid系generatorがすべてのmigrationを生成した後、development、test、productionをprimaryとstorageに分けるdatabase設定、全環境の`:db` service、Active Storage DB initializerとengine routeを確定してから`bin/rails db:prepare`を実行します。PWAとWeb Pushはdefault Viewより先に設定し、layoutと両認証方式のaccount設定画面が有効なrouteと共通partialだけを参照する順序を保ちます。続けて`bin/annotaterb`を生成し、`bin/annotaterb models`でmodel、fixture、test、factory、serializerの初期annotationを確定します。`avatar`選択時は常設済みActive Storageを利用し、User IDをseedにする共通avatar helperと設定済み画像の削除routeを生成します。seed保存用migrationは作成しません。生成直後のdevelopmentとtestにpending migrationを残しません。
 
 依存関係のインストール後、gemが提供するgenerator、Railsのgenerator、`rails_command`、設定APIを実行します。daisyUIはこのフェーズでnpm packageとして導入し、Tailwind CSS 4のinput stylesheetへcustom themeを登録します。続けてRails 8.1.3の標準templateを基準とするscaffold 6 Viewとcontroller Viewの上書きtemplateを`lib/templates/erb`へ配置し、以後の`bin/rails generate scaffold`と`bin/rails generate controller`がdaisyUI componentを使用するようにします。認証方式に応じたViewを展開した後、daisyUIのcomponent、part、modifierを優先してapplication・authentication・account・admin layout、標準ページ、固定ページ、FAQ、footer、各管理画面を生成し、Tailwind CSSをbuildします。accountとadmin layoutは共通のresponsive 2ペイン寸法を使用しますが、account左ペインと非admin時のheader dropdownにはaccount項目だけ、admin左ペインとadmin時のheader dropdownには見出し「管理画面」と管理項目だけを配置し、2種類のmenuを結合しません。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、component itemの高さやpaddingを個別utilityで上書きしません。構造化APIで表現できないRubyコード編集にはPrismを使用します。
 
@@ -75,7 +78,7 @@ AnnotateRbの公式install generatorで設定とmigration hookを生成します
 
 generatorの成果物、必要な設定、コマンドの終了状態を検証します。生成アプリケーションの通常テストには`bin/annotaterb models --frozen`を実行するtestを含め、annotation不足をファイル変更なしで失敗として検出します。既存の`bin/rails test`、`bin/ci`、GitHub Actionsは同じtestを実行します。検証失敗を成功として扱うフォールバックは設けず、失敗した処理と理由を表示します。
 
-通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。リポジトリの`rake evidence:update`はWeb Pushを有効にしたDevise版とWallet SIWE版を同じ固定optionで順番に生成し、各生成アプリのtestとRuboCopを通してから、互換versionのPlaywright CLIとChromiumを使って一時ディレクトリへ撮影します。Notification、Service Worker、PushManagerは外部Push serviceへ接続しない決定的なbrowser stubを使用し、独立した通知設定ページの未購読状態と購読済み・テスト通知可能状態をdesktopとmobileで撮影します。両方の撮影、manifest生成、整合性検証が成功した場合だけ`docs/evidence/`を置換します。
+通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。リポジトリの`rake evidence:update`はWeb Pushを有効にしたDevise/Wallet SIWEとja/enの4組合せを固定optionで順番に生成し、各生成アプリのtestとRuboCopを通してから、互換versionのPlaywright CLIとChromiumを使って一時ディレクトリへ撮影します。Notification、Service Worker、PushManagerは外部Push serviceへ接続しない決定的なbrowser stubを使用し、独立した通知設定ページの未購読状態と購読済み・テスト通知可能状態をdesktopとmobileで撮影します。4組合せの撮影、manifest生成、整合性検証が成功した場合だけ`docs/evidence/`を置換します。
 
 ### 後始末
 

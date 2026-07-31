@@ -51,10 +51,10 @@ docs/evidence/
 ```console
 gem install gum -v 0.3.2
 curl -fsSL BOOTSTRAP_URL -o /tmp/rapid-rails-bootstrap.rb
-ruby /tmp/rapid-rails-bootstrap.rb --name=APP_NAME APP_PATH
+ruby /tmp/rapid-rails-bootstrap.rb --app-id=APP_ID --app-name="My App" APP_PATH
 ```
 
-`--name`を省略した場合は`APP_PATH`のbasenameを初期値としてアプリ名を質問します。アプリ名は生成先とは独立したRailsの`--name`として扱います。
+`--app-id`を省略した場合は`APP_PATH`のbasenameを初期値としてRailsアプリIDを質問し、Rails標準の`--name`へ変換します。`--app-name`を省略した場合は確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。表示用アプリ名はRails generatorへ渡さず、生成アプリのApplication Identityへ保存します。
 
 Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定すると、Rails標準ファイルの生成後まで質問を開始できません。新たな要件には、次のように`rails new`開始前に確定しなければならない項目があります。
 
@@ -107,11 +107,11 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 
 ### `entrypoint`
 
-`bootstrap.rb`の生成先パス、アプリ名、個別設定引数を検証し、環境検証から`runner`の起動までを行います。個別設定引数は質問への事前回答として扱い、`--name`以外の任意な`rails new`引数は受け付けません。
+`bootstrap.rb`の生成先パス、RailsアプリID、表示用アプリ名、個別設定引数を検証し、環境検証から`runner`の起動までを行います。個別設定引数は質問への事前回答として扱い、Railsへ渡す任意の`rails new`引数は受け付けません。
 
 ### `generator_options`
 
-アプリ名、固定構成、正規化済み回答から、順序付きの`rails new`引数配列を構築します。shell展開される文字列は生成せず、確認画面へ同じ内容を表示します。
+RailsアプリID、表示用アプリ名、固定構成、正規化済み回答から、順序付きの`rails new`引数配列とApplication Identity payloadを構築します。RailsアプリIDだけを`--name`へ変換し、shell展開される文字列は生成せず、確認画面へ同じ内容を表示します。
 
 ### `rails_template`
 
@@ -119,7 +119,7 @@ Application Template contextで`configuration.json`を読み込み、schemaと�
 
 ### `questionnaire`
 
-CLI引数の事前回答を受け取り、`rails new`を起動する前に未指定のアプリ名を`Gum.input`、未回答の適用可能な項目を`Gum.choose`で依存順に収集します。アプリ名入力には生成先のbasenameを初期値として表示し、各選択質問は既定値を選択済みとして表示します。実行計画の最終承認には`Gum.confirm`を使用します。表示条件だけを評価し、正規化、実行計画の構築、step実行は行いません。
+CLI引数の事前回答を受け取り、`rails new`を起動する前に未指定のRailsアプリIDと表示用アプリ名を`Gum.input`、未回答の適用可能な項目を`Gum.choose`で依存順に収集します。RailsアプリIDには生成先のbasename、表示用アプリ名には確定済みのRailsアプリIDを初期値として表示し、各選択質問は既定値を選択済みとして表示します。実行計画の最終承認には`Gum.confirm`を使用します。表示条件だけを評価し、正規化、実行計画の構築、step実行は行いません。
 
 ### `configuration`
 
@@ -176,7 +176,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 - 同じ分割ソースから同一内容の`bootstrap.rb`を再生成できること。
 - `bootstrap.rb`と分割ソースの不一致を検出できること。
 - 空白やshell metacharacterを含む生成先パスが、shell展開されず単一引数として渡されること。
-- 空白やshell metacharacterを含むアプリ名が、shell展開されず`--name`の単一引数として渡されること。
+- 空白やshell metacharacterを含む表示用アプリ名がshell展開されずJSON payloadの単一値となり、RailsアプリIDだけが`--name`の単一引数として渡されること。
 - Application Templateへ渡した設定が質問時の正規化済み設定と一致すること。
 - 質問中と確認待ちの状態では、生成先directory、一時ファイル、外部commandの副作用がないこと。
 - すべての適用可能な質問が一度だけ行われ、非適用の質問には仕様どおりの明示値が設定されること。
@@ -185,7 +185,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 - 成功、失敗、割り込みのすべてで一時ファイルが削除されること。
 - Rails 8.1.x／Ruby 4.0.xで一時アプリケーションを生成できること。
 - gum 0.3.2と現在のplatform向けGum実行可能ファイルがない場合、質問開始前に失敗すること。
-- アプリ名入力、対話的な選択、最終確認が`Gum.input`、`Gum.choose`、`Gum.confirm`を通り、キャンセル時に生成を開始しないこと。
+- RailsアプリIDと表示用アプリ名の入力、対話的な選択、最終確認が`Gum.input`、`Gum.choose`、`Gum.confirm`を通り、キャンセル時に生成を開始しないこと。
 - 生成後にpending migrationが残らず、追加の手作業なしでRails testを起動できること。
 - 生成済みschema annotationがAnnotateRbの公式既定と一致し、通常のRails testが`--frozen`で更新忘れを非破壊検出すること。
 - 各選択肢について、選択したstepだけが順序どおり実行されること。

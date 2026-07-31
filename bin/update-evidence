@@ -9,21 +9,24 @@ require_relative "../src/rapid_rails_template/evidence"
 ROOT = File.expand_path("..", __dir__)
 SAMPLE = File.join(ROOT, "sample")
 DESTINATION = File.join(ROOT, "docs/evidence")
-COMMON_OPTIONS = %w[
-  --name=sample
-  --pwa=use
-  --web-push=use
-  --active-job=solid_queue
-  --solid-cache=use
-  --profile-features=screen_name,display_name,avatar
-  --api=enable
-  --action-cable=skip
-  --mail=auto
-  --deployment=dokploy
+COMMON_OPTIONS = [
+  "--app-id=sample",
+  "--app-name=Sample App",
+  "--pwa=use",
+  "--web-push=use",
+  "--active-job=solid_queue",
+  "--solid-cache=use",
+  "--profile-features=screen_name,display_name,avatar",
+  "--api=enable",
+  "--action-cable=skip",
+  "--mail=auto",
+  "--deployment=dokploy"
 ].freeze
 VARIANTS = {
-  "devise" => "devise",
-  "siwe" => "wallet_siwe"
+  "devise-ja" => { authentication: "devise", locale: "ja" },
+  "devise-en" => { authentication: "devise", locale: "en" },
+  "siwe-ja" => { authentication: "wallet_siwe", report_authentication: "siwe", locale: "ja" },
+  "siwe-en" => { authentication: "wallet_siwe", report_authentication: "siwe", locale: "en" }
 }.freeze
 
 def run!(*command, env: {}, chdir: ROOT)
@@ -41,9 +44,13 @@ raise "base commitを取得できません" unless status.success?
 staging_root = Dir.mktmpdir(".evidence-", ROOT)
 begin
   manifests = {}
-  VARIANTS.each do |variant, authentication|
+  VARIANTS.each do |variant, metadata|
     FileUtils.rm_rf(SAMPLE)
-    options = COMMON_OPTIONS + ["--account-authentication=#{authentication}", SAMPLE]
+    options = COMMON_OPTIONS + [
+      "--account-authentication=#{metadata.fetch(:authentication)}",
+      "--default-locale=#{metadata.fetch(:locale)}",
+      SAMPLE
+    ]
     run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *options)
     run!(File.join(SAMPLE, "bin/rails"), "test", chdir: SAMPLE)
     run!(File.join(SAMPLE, "bin/rubocop"), chdir: SAMPLE)
@@ -66,7 +73,8 @@ begin
     )
     manifests[variant] = RapidRailsTemplate::Evidence.finalize_variant(
       directory: output_directory,
-      authentication: variant,
+      authentication: metadata.fetch(:report_authentication, metadata.fetch(:authentication)),
+      locale: metadata.fetch(:locale),
       source_fingerprint: source_fingerprint,
       base_commit: base_commit.strip
     )

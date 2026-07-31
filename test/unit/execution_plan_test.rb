@@ -6,13 +6,16 @@ class ExecutionPlanTest < Minitest::Test
   def test_default_plan_installs_only_selected_solid_component
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build({}),
-      app_name: "sample"
+      app_id: "sample", app_name: "Sample App"
     )
 
-    assert_equal "sample", plan.app_name
-    assert_equal "sample", plan.to_h.fetch("app_name")
+    assert_equal "sample", plan.app_id
+    assert_equal "Sample App", plan.app_name
+    assert_equal "sample", plan.to_h.fetch("app_id")
+    assert_equal "Sample App", plan.to_h.fetch("app_name")
     assert_equal "--name=sample", plan.generator_options.first
-    assert_includes plan.summary, "アプリ名: sample"
+    assert_includes plan.summary, "RailsアプリID: sample"
+    assert_includes plan.summary, "表示用アプリ名: Sample App"
     assert_includes plan.gems, "solid_cache"
     refute_includes plan.gems, "solid_queue"
     refute_includes plan.gems, "solid_cable"
@@ -22,6 +25,9 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "annotaterb"
     assert_includes plan.gems, "lexxy"
     assert_includes plan.gems, "active_storage_db"
+    assert_includes plan.gems, "rails-i18n"
+    assert_includes plan.gems, "devise-i18n"
+    assert_includes plan.steps, "configure_application_identity"
     assert_includes plan.steps, "install_action_text"
     assert_includes plan.steps, "install_active_storage_db"
     assert_includes plan.steps, "configure_database"
@@ -57,6 +63,10 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "test/support/evidence_capture.rb"
     assert_includes plan.artifacts, "lib/tasks/evidence.rake"
     assert_includes plan.artifacts, "app/models/user_role.rb"
+    assert_includes plan.artifacts, "lib/application_identity.rb"
+    assert_includes plan.artifacts, "config/application_identity.yml"
+    assert_includes plan.artifacts, "config/locales/application.ja.yml"
+    assert_includes plan.artifacts, "config/locales/application.en.yml"
     assert_includes plan.artifacts, "app/policies/application_policy.rb"
     assert_includes plan.artifacts, "app/policies/user_policy.rb"
     assert_includes plan.artifacts, "app/controllers/admin/users_controller.rb"
@@ -111,7 +121,7 @@ class ExecutionPlanTest < Minitest::Test
   def test_api_disabled_plan_omits_api_steps_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("api" => "disable"),
-      app_name: "sample"
+      app_id: "sample", app_name: "Sample App"
     )
 
     refute_includes plan.steps, "configure_api"
@@ -124,7 +134,7 @@ class ExecutionPlanTest < Minitest::Test
   def test_empty_profile_features_omit_profile_steps_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("profile_features" => []),
-      app_name: "sample"
+      app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.steps, "install_action_text"
@@ -141,7 +151,7 @@ class ExecutionPlanTest < Minitest::Test
   def test_profile_without_avatar_uses_the_shared_action_text_active_storage_install
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name display_name]),
-      app_name: "sample"
+      app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.steps, "configure_profile"
@@ -153,7 +163,7 @@ class ExecutionPlanTest < Minitest::Test
   def test_avatar_only_profile_does_not_install_haikunator
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("profile_features" => %w[avatar]),
-      app_name: "sample"
+      app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.steps, "configure_profile"
@@ -166,7 +176,7 @@ class ExecutionPlanTest < Minitest::Test
   def test_wallet_plan_uses_siwe_and_not_devise
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("account_authentication" => "wallet_siwe", "deployment" => "none"),
-      app_name: "sample"
+      app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.gems, "siwe-rb"
@@ -176,7 +186,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/views/sessions/new.html.erb"
     assert_includes plan.artifacts, "app/javascript/controllers/siwe_sign_in_controller.js"
     assert_includes plan.artifacts, "app/views/accounts/edit.html.erb"
-    assert_includes plan.artifacts, "config/locales/ja.yml"
+    assert_includes plan.artifacts, "config/locales/application.ja.yml"
+    assert_includes plan.artifacts, "config/locales/application.en.yml"
     assert_equal plan.artifacts.uniq, plan.artifacts
     assert_includes plan.steps, "prepare_database"
     assert_includes plan.steps, "configure_roles"
@@ -204,7 +215,7 @@ class ExecutionPlanTest < Minitest::Test
       "action_cable" => "solid_cable",
       "deployment" => "dokploy"
     )
-    plan = RapidRailsTemplate::ExecutionPlan.build(configuration, app_name: "sample")
+    plan = RapidRailsTemplate::ExecutionPlan.build(configuration, app_id: "sample", app_name: "Sample App")
 
     assert_includes plan.gems, "web-push"
     assert_includes plan.gems, "solid_queue"
@@ -228,7 +239,7 @@ class ExecutionPlanTest < Minitest::Test
   def test_pwa_without_web_push_only_generates_pwa_foundation
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "skip"),
-      app_name: "sample"
+      app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.steps, "configure_pwa"

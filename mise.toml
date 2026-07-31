@@ -2,7 +2,7 @@
 ruby = "4.0.6"
 
 [tasks.evidence-update]
-description = "Devise版とSIWE版のUIエビデンスを再生成する"
+description = "Devise版とSIWE版のja/en UIエビデンスを再生成する"
 run = "rake evidence:update"
 
 [tasks.evidence-verify]
@@ -20,7 +20,9 @@ root = File.realpath(Dir.pwd)
 sample = File.join(root, "sample")
 FileUtils.rm_rf(sample)
 exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
-  "--name=sample",
+  "--app-id=sample",
+  "--app-name=Sample App",
+  "--default-locale=ja",
   "--pwa=skip",
   "--web-push=skip",
   "--active-job=skip",
@@ -45,7 +47,9 @@ root = File.realpath(Dir.pwd)
 sample = File.join(root, "sample")
 FileUtils.rm_rf(sample)
 exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
-  "--name=sample",
+  "--app-id=sample",
+  "--app-name=Sample App",
+  "--default-locale=ja",
   "--pwa=skip",
   "--web-push=skip",
   "--active-job=skip",

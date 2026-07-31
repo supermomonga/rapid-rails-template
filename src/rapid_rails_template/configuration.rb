@@ -14,7 +14,8 @@ module RapidRailsTemplate
       "api" => %w[enable disable],
       "action_cable" => %w[solid_cable skip],
       "mail" => %w[auto use skip],
-      "deployment" => %w[dokploy none]
+      "deployment" => %w[dokploy none],
+      "default_locale" => %w[ja en]
     }.freeze
 
     DEFAULTS = {
@@ -27,7 +28,8 @@ module RapidRailsTemplate
       "api" => "enable",
       "action_cable" => "skip",
       "mail" => "auto",
-      "deployment" => "dokploy"
+      "deployment" => "dokploy",
+      "default_locale" => "ja"
     }.freeze
 
     attr_reader :answers, :values, :reasons

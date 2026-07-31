@@ -17,11 +17,11 @@ class EntrypointTest < Minitest::Test
     end
   end
 
-  class AppNamePrompt
+  class IdentityPrompt
     attr_reader :confirm_calls, :input_calls
 
-    def initialize(app_name:, confirmation:)
-      @app_name = app_name
+    def initialize(input_answers:, confirmation:)
+      @input_answers = input_answers.dup
       @confirmation = confirmation
       @input_calls = []
       @confirm_calls = []
@@ -29,7 +29,7 @@ class EntrypointTest < Minitest::Test
 
     def input(**options)
       @input_calls << options
-      @app_name
+      @input_answers.shift
     end
 
     def choose(*)
@@ -68,7 +68,7 @@ class EntrypointTest < Minitest::Test
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"
     end
-    arguments.unshift("--name=sample")
+    arguments.unshift("--app-id=sample", "--app-name=Sample App")
 
     status = RapidRailsTemplate::Entrypoint.run(
       [*arguments, "sample"],
@@ -80,18 +80,19 @@ class EntrypointTest < Minitest::Test
 
     assert_equal 0, status
     assert_equal "sample", RecordingRunner.arguments.fetch(:app_path)
-    assert_equal "sample", RecordingRunner.arguments.fetch(:plan).app_name
+    assert_equal "sample", RecordingRunner.arguments.fetch(:plan).app_id
+    assert_equal "Sample App", RecordingRunner.arguments.fetch(:plan).app_name
     assert_equal RapidRailsTemplate::Configuration::DEFAULTS,
                  RecordingRunner.arguments.fetch(:plan).configuration.answers
     assert_includes output.string, "実行計画"
   end
 
-  def test_missing_name_asks_with_path_basename_and_requires_confirmation
+  def test_missing_identity_asks_in_order_and_requires_confirmation
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"
     end
-    prompt = AppNamePrompt.new(app_name: "custom app & service", confirmation: true)
+    prompt = IdentityPrompt.new(input_answers: ["custom_app", "  Custom App & Service  "], confirmation: true)
 
     status = RapidRailsTemplate::Entrypoint.run(
       [*arguments, "/tmp/generated-app"],
@@ -102,18 +103,27 @@ class EntrypointTest < Minitest::Test
     )
 
     assert_equal 0, status
-    assert_equal [{ header: "アプリ名を入力してください。", value: "generated-app" }], prompt.input_calls
+    assert_equal [
+      { header: "RailsアプリIDを入力してください。", value: "generated-app" },
+      { header: "表示用アプリ名を入力してください。", value: "custom_app" }
+    ], prompt.input_calls
     assert_equal 1, prompt.confirm_calls.length
     plan = RecordingRunner.arguments.fetch(:plan)
-    assert_equal "custom app & service", plan.app_name
-    assert_includes plan.generator_options, "--name=custom app & service"
+    assert_equal "custom_app", plan.app_id
+    assert_equal "Custom App & Service", plan.app_name
+    assert_includes plan.generator_options, "--name=custom_app"
+    refute_includes plan.generator_options, "Custom App & Service"
   end
 
-  def test_rejects_missing_blank_and_duplicate_name_values
+  def test_rejects_missing_blank_and_duplicate_identity_values
     [
-      ["--name", "sample"],
-      ["--name=", "sample"],
-      ["--name=first", "--name=second", "sample"]
+      ["--app-id", "sample"],
+      ["--app-id=", "sample"],
+      ["--app-id=first", "--app-id=second", "sample"],
+      ["--app-name", "sample"],
+      ["--app-name=", "sample"],
+      ["--app-name=   ", "sample"],
+      ["--app-name=First", "--app-name=Second", "sample"]
     ].each do |arguments|
       error = StringIO.new
 
@@ -125,19 +135,19 @@ class EntrypointTest < Minitest::Test
       )
 
       assert_equal 1, status
-      assert_match(/--name(?:には値が必要|が複数回指定)/, error.string)
+      assert_match(/--app-(?:id|name)(?:には値が必要|が複数回指定)/, error.string)
     end
   end
 
-  def test_cancelled_or_empty_interactive_name_does_not_run
+  def test_cancelled_or_empty_interactive_identity_does_not_run
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"
     end
 
-    [nil, ""].each do |app_name|
+    [[nil], [""], ["sample", nil], ["sample", " \t "]].each do |input_answers|
       error = StringIO.new
-      prompt = AppNamePrompt.new(app_name:, confirmation: true)
+      prompt = IdentityPrompt.new(input_answers:, confirmation: true)
 
       status = RapidRailsTemplate::Entrypoint.run(
         [*arguments, "sample"],
@@ -148,17 +158,17 @@ class EntrypointTest < Minitest::Test
       )
 
       assert_equal 1, status
-      assert_includes error.string, "アプリ名"
+      assert_match(/アプリ(?:ID|名)/, error.string)
       assert_empty prompt.confirm_calls
     end
   end
 
-  def test_rejected_confirmation_after_interactive_name_does_not_run
+  def test_rejected_confirmation_after_interactive_identity_does_not_run
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"
     end
-    prompt = AppNamePrompt.new(app_name: "sample", confirmation: false)
+    prompt = IdentityPrompt.new(input_answers: ["sample", "Sample App"], confirmation: false)
 
     status = RapidRailsTemplate::Entrypoint.run(
       [*arguments, "sample"],
@@ -186,6 +196,20 @@ class EntrypointTest < Minitest::Test
     assert_includes error.string, "不明なオプションです: --defaults"
   end
 
+  def test_removed_name_option_is_rejected
+    error = StringIO.new
+
+    status = RapidRailsTemplate::Entrypoint.run(
+      ["--name=sample", "sample"],
+      error:,
+      runner_class: RecordingRunner,
+      prompt: UnexpectedPrompt
+    )
+
+    assert_equal 1, status
+    assert_includes error.string, "不明なオプションです: --name"
+  end
+
   def test_removed_action_text_option_is_rejected
     error = StringIO.new
 
@@ -206,7 +230,7 @@ class EntrypointTest < Minitest::Test
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"
     end
-    arguments.unshift("--name=sample")
+    arguments.unshift("--app-id=sample", "--app-name=Sample App")
 
     status = RapidRailsTemplate::Entrypoint.run(
       [*arguments, "sample"],
@@ -225,7 +249,7 @@ class EntrypointTest < Minitest::Test
       serialized = value.is_a?(Array) ? "avatar,screen_name" : value
       "--#{id.tr('_', '-')}=#{serialized}"
     end
-    arguments.unshift("--name=sample")
+    arguments.unshift("--app-id=sample", "--app-name=Sample App")
 
     status = RapidRailsTemplate::Entrypoint.run(
       [*arguments, "sample"],
@@ -244,7 +268,7 @@ class EntrypointTest < Minitest::Test
       serialized = id == "profile_features" ? "" : value
       "--#{id.tr('_', '-')}=#{serialized}"
     end
-    arguments.unshift("--name=sample")
+    arguments.unshift("--app-id=sample", "--app-name=Sample App")
 
     status = RapidRailsTemplate::Entrypoint.run(
       [*arguments, "sample"],

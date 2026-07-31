@@ -31,7 +31,7 @@
 
 ## 設計規則
 
-- アプリ名の自由入力には`gum` 0.3.2の`Gum.input`、対話的な選択には`Gum.choose`、最終確認には`Gum.confirm`を使用する。標準入力を直接読む独自UIや代替UIは持たない。
+- RailsアプリIDと表示用アプリ名の自由入力には`gum` 0.3.2の`Gum.input`、対話的な選択には`Gum.choose`、最終確認には`Gum.confirm`を使用する。標準入力を直接読む独自UIや代替UIは持たない。
 - 各質問は仕様上の既定値をGumの選択済み項目として渡し、Gumが返した選択肢だけを回答として扱う。選択をキャンセルした場合は生成を開始せず終了する。
 - 各オプションは、識別子の`_`を`-`に変換したCLI引数`--OPTION=VALUE`で個別に指定できる。
 - CLI引数で指定した回答は再質問せず、未指定の適用可能な項目だけを依存順に質問する。
@@ -46,30 +46,52 @@
 - 外部コマンドの有無や処理失敗を理由に、別の選択肢へ自動的に切り替えない。
 - 対応範囲外のRailsまたはRuby向け選択肢を追加しない。
 
-## アプリ名
+## RailsアプリID
 
-- CLI引数: `--name=NAME`
-- 質問文: アプリ名を入力してください。
+- CLI引数: `--app-id=ID`
+- 質問文: RailsアプリIDを入力してください。
 - 初期値: `APP_PATH`のbasename
-- 表示条件: `--name`が未指定の場合
-- 影響する処理: `rails new`へ単一引数`--name=NAME`として渡す
+- 表示条件: `--app-id`が未指定の場合
+- 影響する処理: `rails new`へ単一引数`--name=ID`として渡す
 
-アプリ名は有限選択の設定値とは分離して扱います。キャンセルまたは空入力は生成開始前に拒否し、Rails固有の正規化と妥当性判定は対象versionのRails 8.1へ委ねます。
+RailsアプリIDは有限選択の設定値とは分離して扱います。キャンセルまたは空入力は生成開始前に拒否し、Rails固有の正規化と妥当性判定は対象versionのRails 8.1へ委ねます。旧`--name`は受け付けず、互換aliasも追加しません。
+
+## 表示用アプリ名
+
+- CLI引数: `--app-name=NAME`
+- 質問文: 表示用アプリ名を入力してください。
+- 初期値: 確定済みのRailsアプリID
+- 表示条件: `--app-name`が未指定の場合
+- 影響する処理: Application Identity、title、header、footer、PWA manifest、OGP、mailer、SIWE、Web Push、固定ページseed
+
+表示用アプリ名はRails generatorへ渡しません。CLI引数と`Gum.input`の結果は前後空白を除去し、空文字、空白のみ、キャンセルを生成開始前に拒否します。内部の空白、Unicode、shell metacharacterは保持し、実行計画とJSON payloadで単一値として扱います。
+
+## 既定locale
+
+- CLI引数: `--default-locale=ja|en`
+- 質問文: 既定localeを選択してください。
+- 既定値: `ja`
+- 表示条件: 常時
+- 影響する処理: `config.i18n.default_locale`、Application Identity、生成locale、request境界、PWA manifest、mailer、SIWE、Web Push、固定ページseed
+
+生成アプリは`ja`と`en`だけをavailable localeとし、選択値を全requestとrequest外処理の既定localeにします。Accept-Language、request parameter、UserやAccountSettingへの保存、locale切替UIは生成しません。locale fallbackは無効にし、別言語や直書き文字列による欠落補完を行いません。
 
 ## 質問順序
 
 質問は次の順序で行います。後続の表示条件と`Auto`判定は、前に確定した回答だけを参照します。
 
-1. アプリ名
-2. PWAを使うか
-3. PWAでWeb Pushを使うか
-4. ジョブ管理を使うか（Web Pushを使わない場合）
-5. Solid Cacheを使うか
-6. アカウント管理方法
-7. API機能を有効にするか
-8. Action Cableを使うか
-9. メール機能
-10. デプロイ方法
+1. RailsアプリID
+2. 表示用アプリ名
+3. PWAを使うか
+4. PWAでWeb Pushを使うか
+5. ジョブ管理を使うか（Web Pushを使わない場合）
+6. Solid Cacheを使うか
+7. アカウント管理方法
+8. API機能を有効にするか
+9. Action Cableを使うか
+10. メール機能
+11. デプロイ方法
+12. 既定locale
 
 この順序で適用可能な質問をすべて完了するまで、実行予定の確認へ進みません。表示条件を満たさない質問は利用者へ表示せず、全質問完了後の正規化で仕様どおりの値を設定します。
 
@@ -79,8 +101,8 @@
 
 1. 未回答、無効値、選択肢間の矛盾を検証する。
 2. `Auto`と非適用項目を実効値へ正規化する。
-3. アプリ名、`rails new`のgenerator option、Gem、step、生成物、production processを確定する。
-4. アプリ名、質問時の回答、実効値、解決理由、実行予定を一覧表示する。
+3. RailsアプリID、表示用アプリ名、`rails new`のgenerator option、Gem、step、生成物、production processを確定する。
+4. RailsアプリID、表示用アプリ名、質問時の回答、実効値、解決理由、実行予定を一覧表示する。
 5. 利用者へ一度だけ最終承認を求める。
 
 最終承認は既定値を拒否とする`Gum.confirm`で行います。承認されなければ副作用なしで終了します。承認後は回答、実効値、実行順序を変更せず、追加質問も行いません。
@@ -94,7 +116,7 @@
 - 表示条件: 常に表示する
 - 影響する処理: PWA manifest、service worker、関連routeの有効化と無効時のstub取扱い
 
-Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`use`時はRails標準の`Rails::PwaController`へmanifestとService Workerのrouteを接続し、アプリ名、標準icon、theme色、`standalone`表示を持つmanifestを決定的に生成します。application layoutへmanifest linkとtheme-colorを追加し、bodyへ接続したStimulus controllerが`/service-worker`をscope `/`で登録します。Service WorkerはWeb PushのJSON payloadを表示し、notification click時は同一originの既存windowを対象pathへ遷移させてfocusします。
+Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`use`時はRails標準の`Rails::PwaController`へmanifestとService Workerのrouteを接続し、Application Identityの表示用アプリ名と既定locale、標準icon、theme色、`standalone`表示を持つmanifestを決定的に生成します。application layoutへmanifest linkとtheme-colorを追加し、bodyへ接続したStimulus controllerが`/service-worker`をscope `/`で登録します。Service WorkerはWeb PushのJSON payloadを表示し、notification click時は同一originの既存windowを対象pathへ遷移させてfocusします。
 
 `skip`時もRails標準stubは残しますが、route、manifest link、theme-color、Service Worker登録controllerは有効化しません。存在しないgenerator optionや曖昧な文字列編集では処理しません。
 

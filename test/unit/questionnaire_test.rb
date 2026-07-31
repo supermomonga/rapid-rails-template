@@ -33,19 +33,39 @@ class QuestionnaireTest < Minitest::Test
     end
   end
 
-  def test_asks_app_name_with_path_basename_as_initial_value
+  def test_asks_app_id_with_path_basename_as_initial_value
     prompt = RecordingPrompt.new(input_answer: "custom_app")
     questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)
 
-    assert_equal "custom_app", questionnaire.ask_app_name("sample")
+    assert_equal "custom_app", questionnaire.ask_app_id("sample")
     assert_equal [
-      { header: "アプリ名を入力してください。", value: "sample" }
+      { header: "RailsアプリIDを入力してください。", value: "sample" }
     ], prompt.input_calls
     assert questionnaire.asked_any?
   end
 
-  def test_rejects_cancelled_or_empty_app_name
+  def test_asks_trimmed_app_name_with_app_id_as_initial_value
+    prompt = RecordingPrompt.new(input_answer: "  Sample App & Service  ")
+    questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)
+
+    assert_equal "Sample App & Service", questionnaire.ask_app_name("sample")
+    assert_equal [
+      { header: "表示用アプリ名を入力してください。", value: "sample" }
+    ], prompt.input_calls
+    assert questionnaire.asked_any?
+  end
+
+  def test_rejects_cancelled_or_empty_app_id
     [nil, ""].each do |answer|
+      prompt = RecordingPrompt.new(input_answer: answer)
+      questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)
+
+      assert_raises(RapidRailsTemplate::PromptError) { questionnaire.ask_app_id("sample") }
+    end
+  end
+
+  def test_rejects_cancelled_or_blank_app_name
+    [nil, "", " \t "].each do |answer|
       prompt = RecordingPrompt.new(input_answer: answer)
       questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)
 

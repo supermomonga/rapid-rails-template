@@ -2,19 +2,21 @@
 
 module RapidRailsTemplate
   class Entrypoint
-    APP_NAME_OPTION = "--name"
+    APP_ID_OPTION = "--app-id"
+    APP_NAME_OPTION = "--app-name"
     CLI_OPTIONS = Configuration::VALID_VALUES.to_h do |id, allowed|
       ["--#{id.tr('_', '-')}", [id, allowed]]
     end.freeze
 
     def self.run(argv, output: $stdout, error: $stderr, runner_class: Runner, prompt: nil)
-      argument_answers, app_name, app_path = parse_arguments(argv)
+      argument_answers, app_id, app_name, app_path = parse_arguments(argv)
 
       Environment.validate!
       questionnaire = Questionnaire.new(prompt: prompt || Environment.gum, output:)
-      app_name ||= questionnaire.ask_app_name(File.basename(app_path))
+      app_id ||= questionnaire.ask_app_id(File.basename(app_path))
+      app_name ||= questionnaire.ask_app_name(app_id)
       configuration = Configuration.build(questionnaire.ask_all(argument_answers))
-      plan = ExecutionPlan.build(configuration, app_name:)
+      plan = ExecutionPlan.build(configuration, app_id:, app_name:)
       if questionnaire.asked_any?
         return 0 unless questionnaire.confirm?(plan.summary)
       else
@@ -29,6 +31,7 @@ module RapidRailsTemplate
 
     def self.parse_arguments(argv)
       answers = {}
+      app_id = nil
       app_name = nil
       paths = []
 
@@ -39,11 +42,20 @@ module RapidRailsTemplate
         end
 
         option, value = argument.split("=", 2)
+        if option == APP_ID_OPTION
+          raise Error, "#{option}が複数回指定されています" unless app_id.nil?
+          raise Error, "#{option}には値が必要です\n#{usage}" if value.nil? || value.empty?
+
+          app_id = value
+          next
+        end
+
         if option == APP_NAME_OPTION
           raise Error, "#{option}が複数回指定されています" unless app_name.nil?
           raise Error, "#{option}には値が必要です\n#{usage}" if value.nil? || value.empty?
 
-          app_name = value
+          app_name = value.strip
+          raise Error, "#{option}には値が必要です\n#{usage}" if app_name.empty?
           next
         end
 
@@ -57,11 +69,11 @@ module RapidRailsTemplate
 
       raise Error, usage unless paths.length == 1
 
-      [answers, app_name, paths.fetch(0)]
+      [answers, app_id, app_name, paths.fetch(0)]
     end
 
     def self.usage
-      options = ["  #{APP_NAME_OPTION}=NAME"]
+      options = ["  #{APP_ID_OPTION}=ID", "  #{APP_NAME_OPTION}=NAME"]
       options.concat(CLI_OPTIONS.map do |option, (_, allowed)|
         separator = option == "--profile-features" ? "," : "|"
         "  #{option}=#{allowed.join(separator)}"

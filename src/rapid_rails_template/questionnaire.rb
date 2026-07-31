@@ -14,7 +14,8 @@ module RapidRailsTemplate
       Question.new(:api, "API機能を有効にしますか？", %w[enable disable], "enable", nil, false),
       Question.new(:action_cable, "Action Cableを使用しますか？", %w[solid_cable skip], "skip", nil, false),
       Question.new(:mail, "メール機能を使用しますか？", %w[auto use skip], "auto", nil, false),
-      Question.new(:deployment, "デプロイ方法を選択してください。", %w[dokploy none], "dokploy", nil, false)
+      Question.new(:deployment, "デプロイ方法を選択してください。", %w[dokploy none], "dokploy", nil, false),
+      Question.new(:default_locale, "既定localeを選択してください。", %w[ja en], "ja", nil, false)
     ].freeze
 
     def initialize(prompt:, output: $stdout)
@@ -23,16 +24,32 @@ module RapidRailsTemplate
       @asked_question_ids = []
     end
 
+    def ask_app_id(default)
+      @asked_question_ids << "app_id"
+      answer = with_prompt_error do
+        @prompt.input(
+          header: "RailsアプリIDを入力してください。",
+          value: default
+        )
+      end
+      raise PromptError, "RailsアプリIDの入力がキャンセルされました" if answer.nil?
+      raise PromptError, "RailsアプリIDを空にすることはできません" if answer.empty?
+
+      answer
+    end
+
     def ask_app_name(default)
       @asked_question_ids << "app_name"
       answer = with_prompt_error do
         @prompt.input(
-          header: "アプリ名を入力してください。",
+          header: "表示用アプリ名を入力してください。",
           value: default
         )
       end
-      raise PromptError, "アプリ名の入力がキャンセルされました" if answer.nil?
-      raise PromptError, "アプリ名を空にすることはできません" if answer.empty?
+      raise PromptError, "表示用アプリ名の入力がキャンセルされました" if answer.nil?
+
+      answer = answer.strip
+      raise PromptError, "表示用アプリ名を空にすることはできません" if answer.empty?
 
       answer
     end

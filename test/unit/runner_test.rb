@@ -19,7 +19,7 @@ class RunnerTest < Minitest::Test
     app_path = "/tmp/path with spaces & metacharacters"
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build({}),
-      app_name: "custom app & service"
+      app_id: "custom_app", app_name: "Custom App & Service"
     )
     runner = RapidRailsTemplate::Runner.new(app_path:, plan:, template_payload: "")
     command = runner.send(:rails_command, "/tmp/template.rb")
@@ -30,14 +30,15 @@ class RunnerTest < Minitest::Test
     assert_equal "--", command.fetch(4)
     assert_equal "new", command.fetch(5)
     assert_equal app_path, command.fetch(6)
-    assert_equal "--name=custom app & service", command.fetch(7)
+    assert_equal "--name=custom_app", command.fetch(7)
+    refute_includes command, "Custom App & Service"
     assert_equal "/tmp/template.rb", command.last
   end
 
   def test_removes_configuration_and_template_tempfiles_after_process_finishes
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build({}),
-      app_name: "example"
+      app_id: "example", app_name: "Example"
     )
     process_runner = FakeProcessRunner.new
     runner = RapidRailsTemplate::Runner.new(

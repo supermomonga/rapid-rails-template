@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication profile_features api action_cable mail deployment].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job solid_cache account_authentication profile_features api action_cable mail deployment default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -22,6 +22,7 @@ gem "sentry-rails"
 gem "lexxy", "~> 0.9.21"
 gem "active_storage_db"
 gem "prism"
+gem "rails-i18n"
 
 gem_group :development do
   gem "annotaterb"
@@ -40,6 +41,7 @@ gem_group :test do
 end
 
 gem "devise" if VALUES.fetch("account_authentication") == "devise"
+gem "devise-i18n" if VALUES.fetch("account_authentication") == "devise"
 gem "siwe-rb", "~> 0.2.0" if VALUES.fetch("account_authentication") == "wallet_siwe"
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
@@ -109,6 +111,268 @@ end
 
 def run_checked(command)
   raise "コマンドが失敗しました: #{command}" unless run(command)
+end
+
+def create_locale_pair(name, ja:, en:)
+  create_file "config/locales/#{name}.ja.yml", YAML.dump({ "ja" => ja }, line_width: -1), force: true
+  create_file "config/locales/#{name}.en.yml", YAML.dump({ "en" => en }, line_width: -1), force: true
+end
+
+def configure_application_identity
+  app_name = PLAN.fetch("app_name")
+  default_locale = VALUES.fetch("default_locale")
+
+  create_file "lib/application_identity.rb", <<~RUBY, force: true
+    require "uri"
+
+    class ApplicationIdentity
+      Error = Class.new(StandardError)
+      AVAILABLE_LOCALES = %i[ja en].freeze
+
+      attr_reader :app_name, :canonical_origin, :default_locale
+
+      def self.build(configuration, environment: ENV)
+        canonical_origin = configuration.canonical_origin
+        if configuration.canonical_origin_env.present?
+          canonical_origin = environment.fetch(configuration.canonical_origin_env) do
+            raise Error, "\#{configuration.canonical_origin_env} is required"
+          end
+        end
+        new(
+          app_name: configuration.app_name,
+          canonical_origin:,
+          default_locale: configuration.default_locale
+        )
+      end
+
+      def initialize(app_name:, canonical_origin:, default_locale:)
+        @app_name = app_name.to_s.strip
+        raise Error, "app_name is required" if @app_name.empty?
+
+        @default_locale = default_locale.to_s.to_sym
+        raise Error, "default_locale must be ja or en" unless AVAILABLE_LOCALES.include?(@default_locale)
+
+        @canonical_origin = validate_origin(canonical_origin)
+        freeze
+      end
+
+      def default_url_options
+        uri = URI.parse(canonical_origin)
+        options = { protocol: uri.scheme, host: uri.host }
+        options[:port] = uri.port unless uri.port == URI::HTTP.default_port || uri.port == URI::HTTPS.default_port
+        options
+      end
+
+      def canonical_url(path)
+        path = path.to_s
+        raise ArgumentError, "path must be a same-origin absolute path" unless path.start_with?("/") && !path.start_with?("//")
+
+        canonical_origin + path
+      end
+
+      def siwe_statement(locale: default_locale)
+        locale = locale.to_s.to_sym
+        raise ArgumentError, "locale must be ja or en" unless AVAILABLE_LOCALES.include?(locale)
+
+        encoded_app_name = URI.encode_uri_component(app_name).gsub("%20", " ")
+        I18n.t("wallet_siwe.statement", locale:, app_name: encoded_app_name)
+      end
+
+      private
+        def validate_origin(value)
+          raise Error, "canonical_origin is required" if value.blank?
+
+          uri = URI.parse(value.to_s)
+          valid = uri.is_a?(URI::HTTP) && uri.host.present? && uri.userinfo.nil? &&
+            uri.path.empty? && uri.query.nil? && uri.fragment.nil?
+          raise Error, "canonical_origin must be an HTTP(S) origin without path, query, fragment, or userinfo" unless valid
+
+          uri.to_s
+        rescue URI::InvalidURIError => error
+          raise Error, "canonical_origin is invalid: \#{error.message}"
+        end
+    end
+  RUBY
+
+  identity = {
+    "shared" => {
+      "app_name" => app_name,
+      "default_locale" => default_locale
+    },
+    "development" => { "canonical_origin" => "http://localhost:3000" },
+    "test" => { "canonical_origin" => "http://www.example.com" },
+    "production" => { "canonical_origin_env" => "APPLICATION_ORIGIN" }
+  }
+  create_file "config/application_identity.yml", YAML.dump(identity, line_width: -1), force: true
+
+  environment <<~RUBY
+    require_relative "../lib/application_identity"
+    config.x.application_identity = ApplicationIdentity.build(config_for(:application_identity))
+    config.i18n.available_locales = ApplicationIdentity::AVAILABLE_LOCALES
+    config.i18n.default_locale = config.x.application_identity.default_locale
+    config.i18n.fallbacks = false
+  RUBY
+  environment "config.i18n.raise_on_missing_translations = true", env: "test"
+
+  create_file "config/initializers/application_identity.rb", <<~RUBY, force: true
+    identity = Rails.configuration.x.application_identity
+    Rails.application.routes.default_url_options = identity.default_url_options
+    if Rails.application.config.respond_to?(:action_mailer)
+      Rails.application.config.action_mailer.default_url_options = identity.default_url_options
+    end
+  RUBY
+
+  create_file "app/controllers/concerns/localized_request.rb", <<~RUBY, force: true
+    module LocalizedRequest
+      extend ActiveSupport::Concern
+
+      included do
+        around_action :use_default_locale
+      end
+
+      private
+        def use_default_locale(&action)
+          I18n.with_locale(I18n.default_locale, &action)
+        end
+    end
+  RUBY
+  inject_into_class "app/controllers/application_controller.rb", "ApplicationController", "  include LocalizedRequest\n\n"
+
+  create_locale_pair(
+    "application",
+    ja: {
+      "meta" => { "description" => "%{app_name}のWebアプリケーションです。" },
+      "navigation" => {
+        "main" => "メインナビゲーション", "account_menu" => "アカウントメニュー", "admin_menu" => "管理メニュー", "open_account_menu" => "アカウントメニューを開く",
+        "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "notifications" => "通知",
+        "api_credentials" => "APIキーの管理", "users" => "ユーザー管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
+        "admin" => "管理画面", "sign_in" => "ログイン", "sign_up" => "アカウント作成", "sign_out" => "ログアウト"
+      },
+      "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営会社", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
+      "home" => {
+        "title" => "ホーム", "badge" => "Railsアプリケーションテンプレート", "heading" => "迷わず始められる、モダンなRails開発環境。",
+        "description" => "Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。",
+        "start_devise" => "無料で始める", "start_wallet" => "ウォレットで始める", "features_link" => "構成を見る", "starter" => "スターターキット", "features_title" => "最初から揃う開発基盤",
+        "features" => { "rails" => { "title" => "Railsネイティブ", "description" => "Generator APIを中心に、安全な初期構成を生成します。" }, "ui" => { "title" => "読みやすいUI", "description" => "daisyUIとsemantic colorで、読みやすい画面を用意します。" }, "production" => { "title" => "本番運用対応", "description" => "SQLiteとLitestreamを前提に、運用経路まで設計します。" } }
+      },
+      "accounts" => {
+        "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "サイドメニューから利用設定を管理できます。", "action_with_profile" => "サイドメニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
+        "edit" => { "title" => "アカウント設定", "information" => "アカウント情報", "wallet_address" => "ウォレットアドレス", "danger_title" => "アカウントの削除", "danger_description" => "この操作は取り消せません。このアカウントのすべてのセッションも削除されます。", "delete" => "アカウントを削除", "confirm" => "本当に削除しますか？" },
+        "destroy" => { "notice" => "アカウントを削除しました", "last_admin" => "最後の管理者はアカウントを削除できません" }
+      },
+      "wallet_siwe" => { "title" => "ウォレットでログイン", "eyebrow" => "Ethereumでログイン", "description" => "EVM互換ウォレットで署名し、アカウントを安全に確認します。", "connect" => "ウォレットを接続", "note" => "署名要求に秘密鍵や送金は必要ありません。", "statement" => "Login to %{app_name}", "errors" => { "wallet_missing" => "EVM互換ウォレットが見つかりません", "nonce" => "nonceを取得できません", "verification" => "署名を検証できません" } },
+      "common" => { "edit" => "編集", "delete" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
+    },
+    en: {
+      "meta" => { "description" => "The web application for %{app_name}." },
+      "navigation" => {
+        "main" => "Main navigation", "account_menu" => "Account menu", "admin_menu" => "Administration menu", "open_account_menu" => "Open account menu",
+        "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "notifications" => "Notifications",
+        "api_credentials" => "API credentials", "users" => "Users", "pages" => "Pages", "faqs" => "FAQs",
+        "admin" => "Administration", "sign_in" => "Sign in", "sign_up" => "Create account", "sign_out" => "Sign out"
+      },
+      "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Company", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
+      "home" => {
+        "title" => "Home", "badge" => "Rails application template", "heading" => "A modern Rails environment without the guesswork.",
+        "description" => "Build on Rails 8.1 defaults with reproducible authentication, UI, testing, and deployment foundations.",
+        "start_devise" => "Get started", "start_wallet" => "Start with a wallet", "features_link" => "View features", "starter" => "Starter kit", "features_title" => "A complete development foundation",
+        "features" => { "rails" => { "title" => "Rails native", "description" => "Generate a safe baseline centered on the Generator API." }, "ui" => { "title" => "Readable UI", "description" => "Start with readable screens built with daisyUI and semantic colors." }, "production" => { "title" => "Production ready", "description" => "Include an operational path designed for SQLite and Litestream." } }
+      },
+      "accounts" => {
+        "show" => { "title" => "Dashboard", "description" => "Review the state of your application.", "description_with_profile" => "Review your profile and application state.", "next_step" => "Next step", "action" => "Manage your preferences from the side menu.", "action_with_profile" => "Manage your profile and preferences from the side menu.", "back_home" => "Back to home" },
+        "edit" => { "title" => "Account settings", "information" => "Account information", "wallet_address" => "Wallet address", "danger_title" => "Delete account", "danger_description" => "This action cannot be undone. All sessions for this account will also be deleted.", "delete" => "Delete account", "confirm" => "Are you sure you want to delete your account?" },
+        "destroy" => { "notice" => "Your account was deleted.", "last_admin" => "The last administrator cannot delete their account." }
+      },
+      "wallet_siwe" => { "title" => "Sign in with your wallet", "eyebrow" => "Sign in with Ethereum", "description" => "Sign with an EVM-compatible wallet to verify your account securely.", "connect" => "Connect wallet", "note" => "The signature request does not require your private key or a transfer.", "statement" => "Sign in to %{app_name}", "errors" => { "wallet_missing" => "No EVM-compatible wallet was found", "nonce" => "Could not obtain a nonce", "verification" => "Could not verify the signature" } },
+      "common" => { "edit" => "Edit", "delete" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
+    }
+  )
+
+  create_file "test/lib/application_identity_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class ApplicationIdentityTest < ActiveSupport::TestCase
+      test "builds URL options and canonical URLs from an explicit origin" do
+        identity = ApplicationIdentity.new(app_name: "Sample App", canonical_origin: "https://example.com:8443", default_locale: :en)
+
+        assert_equal "Sample App", identity.app_name
+        assert_equal :en, identity.default_locale
+        assert_equal({ protocol: "https", host: "example.com", port: 8443 }, identity.default_url_options)
+        assert_equal "https://example.com:8443/account", identity.canonical_url("/account")
+        assert_equal "Sign in to Sample App", identity.siwe_statement
+
+        unicode_identity = ApplicationIdentity.new(app_name: "サンプル & App", canonical_origin: "https://example.com", default_locale: :ja)
+        assert_equal "Login to %E3%82%B5%E3%83%B3%E3%83%97%E3%83%AB %26 App", unicode_identity.siwe_statement
+      end
+
+      test "requires the configured production environment variable" do
+        configuration = ActiveSupport::OrderedOptions.new
+        configuration.app_name = "Sample App"
+        configuration.default_locale = "ja"
+        configuration.canonical_origin_env = "APPLICATION_ORIGIN"
+
+        error = assert_raises(ApplicationIdentity::Error) { ApplicationIdentity.build(configuration, environment: {}) }
+        assert_equal "APPLICATION_ORIGIN is required", error.message
+
+        identity = ApplicationIdentity.build(configuration, environment: { "APPLICATION_ORIGIN" => "https://example.com" })
+        assert_equal "https://example.com", identity.canonical_origin
+      end
+
+      test "rejects origins with credentials or URL components" do
+        %w[ftp://example.com https://user@example.com https://example.com/path https://example.com?query=1 https://example.com#fragment].each do |origin|
+          assert_raises(ApplicationIdentity::Error) do
+            ApplicationIdentity.new(app_name: "Sample App", canonical_origin: origin, default_locale: :ja)
+          end
+        end
+      end
+    end
+
+    class ApplicationIdentityRequestTest < ActionDispatch::IntegrationTest
+      test "renders identity metadata and restores the caller locale after a request" do
+        previous_locale = I18n.default_locale == :ja ? :en : :ja
+        I18n.with_locale(previous_locale) do
+          get root_url
+
+          identity = Rails.configuration.x.application_identity
+          assert_response :success
+          assert_select "html[lang=?]", identity.default_locale.to_s, count: 1
+          assert_select "title", text: /\#{Regexp.escape(identity.app_name)}/, count: 1
+          assert_select 'meta[property="og:site_name"][content=?]', identity.app_name, count: 1
+          assert_select 'link[rel="canonical"][href=?]', identity.canonical_url("/"), count: 1
+          assert_equal previous_locale, I18n.locale
+        end
+      end
+    end
+  RUBY
+
+  create_file "test/i18n_locale_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class I18nLocaleTest < ActiveSupport::TestCase
+      test "every application locale file has a matching ja and en key set" do
+        Rails.root.glob("config/locales/*.ja.yml").each do |ja_path|
+          en_path = Pathname(ja_path.to_s.sub(/\\.ja\\.yml\\z/, ".en.yml"))
+          assert_predicate en_path, :file?, "missing English pair for \#{ja_path.basename}"
+
+          ja_keys = flatten_keys(YAML.safe_load_file(ja_path).fetch("ja"))
+          en_keys = flatten_keys(YAML.safe_load_file(en_path).fetch("en"))
+          assert_equal ja_keys, en_keys, "locale key mismatch for \#{ja_path.basename}"
+        end
+      end
+
+      test "the configured locales load without missing application translations" do
+        assert_equal %i[en ja], I18n.available_locales.sort
+        assert_equal Rails.configuration.x.application_identity.default_locale, I18n.default_locale
+      end
+
+      private
+        def flatten_keys(value, prefix = nil)
+          return [prefix] unless value.is_a?(Hash)
+
+          value.flat_map { |key, child| flatten_keys(child, [prefix, key].compact.join(".")) }.sort
+        end
+    end
+  RUBY
 end
 
 def install_action_text
@@ -554,7 +818,7 @@ end
 def install_devise
   generate "devise:install"
   generate "devise", "User"
-  generate "devise:views", "-v", "sessions", "registrations", "passwords"
+  generate "devise:views", "-v", "sessions", "registrations", "passwords", "mailer"
   create_file "test/fixtures/users.yml", <<~YAML, force: true
     one:
       email: one@example.com
@@ -678,7 +942,10 @@ def install_wallet_siwe
 
         message = Siwe::Message.parse(params.require(:message))
         message.verify!(signature: params.require(:signature), domain: request.host_with_port, nonce: nonce)
-        return head :unauthorized unless message.uri == request.base_url && message.chain_id.to_i.positive?
+        expected_statement = Rails.configuration.x.application_identity.siwe_statement
+        valid_message = message.uri == request.base_url && message.chain_id.to_i.positive? &&
+          message.statement == expected_statement
+        return head :unauthorized unless valid_message
         user = User.find_or_create_by!(wallet_address: message.address.downcase)
         start_new_session_for(user)
         render json: { redirect_url: after_authentication_url }
@@ -693,36 +960,36 @@ def install_wallet_siwe
     end
   RUBY
   create_file "config/initializers/siwe.rb", "require \"siwe\"\n"
-  create_file "config/locales/ja.yml", <<~YAML, force: true
-    ja:
-      accounts:
-        destroy:
-          notice: アカウントを削除しました
-  YAML
 
   create_file "app/javascript/controllers/siwe_sign_in_controller.js", <<~JAVASCRIPT
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
       static targets = ["error"]
+      static values = {
+        statement: String,
+        walletMissing: String,
+        nonceError: String,
+        verificationError: String
+      }
 
       async signIn() {
         this.errorTarget.classList.add("hidden")
         this.errorTarget.textContent = ""
 
         try {
-          if (!window.ethereum) throw new Error("EVM互換ウォレットが見つかりません")
+          if (!window.ethereum) throw new Error(this.walletMissingValue)
           const web3 = new window.Web3(window.ethereum)
           await window.ethereum.request({ method: "eth_requestAccounts" })
           const [address] = await web3.eth.getAccounts()
           const chainId = Number(await web3.eth.getChainId())
           const nonceResponse = await fetch("/session/nonce", { headers: { Accept: "application/json" } })
-          if (!nonceResponse.ok) throw new Error("nonceを取得できません")
+          if (!nonceResponse.ok) throw new Error(this.nonceErrorValue)
           const { nonce } = await nonceResponse.json()
           const domain = window.location.host
           const uri = window.location.origin
           const issuedAt = new Date().toISOString()
-          const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to ${domain}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`
+          const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${this.statementValue}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`
           const signature = await web3.eth.personal.sign(message, address, "")
           const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
           const response = await fetch("/session", {
@@ -730,7 +997,7 @@ def install_wallet_siwe
             headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, Accept: "application/json" },
             body: JSON.stringify({ message, signature })
           })
-          if (!response.ok) throw new Error("署名を検証できません")
+          if (!response.ok) throw new Error(this.verificationErrorValue)
           window.location.assign((await response.json()).redirect_url)
         } catch (exception) {
           this.errorTarget.textContent = exception.message
@@ -782,7 +1049,7 @@ def install_wallet_siwe
           chain_id: 1,
           nonce: nonce,
           issued_at: Time.current.iso8601,
-          statement: 'Sign in to www.example.com'
+          statement: Rails.configuration.x.application_identity.siwe_statement
         ).prepare_message
 
         assert_difference('User.count', 1) do
@@ -793,19 +1060,20 @@ def install_wallet_siwe
         get account_url
         assert_response :success
         assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: #{account_navigation_count}
-        assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: #{account_navigation_count}
-        assert_select 'nav[aria-label="アカウントメニュー"] a[href=?]', root_path, count: 0
+        account_menu = I18n.t("navigation.account_menu")
+        assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
+        assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
+        assert_select 'nav[aria-label=?] a[href=?]', account_menu, root_path, count: 0
         assert_select '.badge', text: 'ID', count: 0
 
         get edit_account_url
         assert_response :success
-        assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', edit_account_path, count: 1
+        assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', account_menu, edit_account_path, count: 1
         assert_select '.list .badge', text: 'ID', count: 1
         assert_select '.list p.font-semibold', text: key.address.to_s.downcase, count: 1
         assert_select '.card-actions form[action=?][method="post"]', account_path, count: 1 do
           assert_select 'input[name="_method"][value="delete"]', count: 1
-          assert_select 'button.btn.btn-error[data-turbo-confirm]', text: 'アカウントを削除', count: 1
+          assert_select 'button.btn.btn-error[data-turbo-confirm]', text: I18n.t("accounts.edit.delete"), count: 1
         end
 
         assert_difference(['User.count', 'Session.count'], -1) do
@@ -813,7 +1081,7 @@ def install_wallet_siwe
         end
         assert_redirected_to root_url
         follow_redirect!
-        assert_select '.alert.alert-success', text: 'アカウントを削除しました', count: 1
+        assert_select '.alert.alert-success', text: I18n.t("accounts.destroy.notice"), count: 1
       end
     end
   RUBY
@@ -822,7 +1090,7 @@ end
 def configure_roles
   devise = VALUES.fetch("account_authentication") == "devise"
   identifier_attribute = devise ? "email" : "wallet_address"
-  identifier_label = devise ? "メールアドレス" : "Wallet address"
+  identifier_key = devise ? "email" : "wallet_address"
   identifier_environment = devise ? "ADMIN_EMAIL" : "ADMIN_WALLET_ADDRESS"
   authentication_callback = devise ? "    before_action :authenticate_user!\n" : ""
   authorization_user = devise ? "current_user" : "Current.user"
@@ -870,7 +1138,7 @@ def configure_roles
         def ensure_admin_remains
           return if self.class.admin.where.not(id: id).exists?
 
-          errors.add(:base, I18n.t("roles.errors.last_admin", locale: :ja))
+          errors.add(:base, I18n.t("roles.errors.last_admin"))
           throw :abort
         end
     end
@@ -981,7 +1249,7 @@ def configure_roles
         def create
           authorize! @user, to: :manage_roles?
           @user.grant_role!(role_param)
-          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.create.notice", locale: :ja), status: :see_other
+          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.create.notice"), status: :see_other
         rescue KeyError, ActiveRecord::RecordInvalid
           head :unprocessable_content
         end
@@ -989,12 +1257,12 @@ def configure_roles
         def destroy
           authorize! @user, to: :manage_roles?
           if @user == authorization_user
-            redirect_to admin_users_path, alert: I18n.t("admin.user_roles.destroy.self_forbidden", locale: :ja), status: :see_other
+            redirect_to admin_users_path, alert: I18n.t("admin.user_roles.destroy.self_forbidden"), status: :see_other
             return
           end
 
           @user.revoke_role!(role_param)
-          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.destroy.notice", locale: :ja), status: :see_other
+          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.destroy.notice"), status: :see_other
         rescue KeyError
           head :unprocessable_content
         rescue ActiveRecord::RecordNotDestroyed => error
@@ -1022,12 +1290,12 @@ def configure_roles
   RUBY
 
   create_file "app/views/admin/users/index.html.erb", <<~ERB, force: true
-    <% content_for :title, "ユーザー管理 | Rapid Rails" %>
+    <% content_for :title, t("admin.users.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Administration</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">ユーザー管理</h1>
-        <p class="mt-2 text-sm text-neutral">固定roleをユーザーへ付与または解除します。</p>
+        <p class="text-sm font-semibold text-primary"><%= t("admin.users.eyebrow") %></p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("admin.users.title") %></h1>
+        <p class="mt-2 text-sm text-neutral"><%= t("admin.users.description") %></p>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -1037,9 +1305,9 @@ def configure_roles
               <thead>
                 <tr>
                   <th scope="col">ID</th>
-                  <th scope="col">#{identifier_label}</th>
-                  <th scope="col">Role</th>
-                  <th scope="col"><span class="sr-only">操作</span></th>
+                  <th scope="col"><%= t("admin.users.identifier.#{identifier_key}") %></th>
+                  <th scope="col"><%= t("admin.users.role") %></th>
+                  <th scope="col"><span class="sr-only"><%= t("common.actions") %></span></th>
                 </tr>
               </thead>
               <tbody>
@@ -1049,20 +1317,20 @@ def configure_roles
                     <td class="break-all"><%= user.#{identifier_attribute} %></td>
                     <td>
                       <% if user.has_role?(:admin) %>
-                        <span class="badge">管理者</span>
+                        <span class="badge"><%= t("admin.users.admin") %></span>
                       <% else %>
-                        <span class="text-sm text-neutral">なし</span>
+                        <span class="text-sm text-neutral"><%= t("common.none") %></span>
                       <% end %>
                     </td>
                     <td class="text-right">
                       <% if user.has_role?(:admin) %>
                         <% if user == authorization_user %>
-                          <button type="button" class="btn btn-disabled btn-rapid" disabled>自分自身は解除不可</button>
+                          <button type="button" class="btn btn-disabled btn-rapid" disabled><%= t("admin.users.self_forbidden") %></button>
                         <% else %>
-                          <%= button_to "管理者を解除", admin_user_role_path(user, "admin"), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "管理者roleを解除しますか？" } %>
+                          <%= button_to t("admin.users.revoke"), admin_user_role_path(user, "admin"), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("admin.users.revoke_confirm") } %>
                         <% end %>
                       <% else %>
-                        <%= button_to "管理者にする", admin_user_roles_path(user), params: { role: "admin" }, class: "btn btn-rapid" %>
+                        <%= button_to t("admin.users.grant"), admin_user_roles_path(user), params: { role: "admin" }, class: "btn btn-rapid" %>
                       <% end %>
                     </td>
                   </tr>
@@ -1074,18 +1342,18 @@ def configure_roles
       </section>
 
       <% if @pagy.last > 1 %>
-        <nav aria-label="ユーザー一覧のページング">
+        <nav aria-label="<%= t("admin.users.pagination") %>">
           <div class="join">
             <% if (previous_url = @pagy.page_url(:previous)) %>
-              <%= link_to "前へ", previous_url, class: "btn join-item" %>
+              <%= link_to t("common.previous"), previous_url, class: "btn join-item" %>
             <% else %>
-              <span class="btn btn-disabled join-item" role="link" aria-disabled="true">前へ</span>
+              <span class="btn btn-disabled join-item" role="link" aria-disabled="true"><%= t("common.previous") %></span>
             <% end %>
             <span class="btn btn-active join-item" aria-current="page"><%= @pagy.page %> / <%= @pagy.last %></span>
             <% if (next_url = @pagy.page_url(:next)) %>
-              <%= link_to "次へ", next_url, class: "btn join-item" %>
+              <%= link_to t("common.next"), next_url, class: "btn join-item" %>
             <% else %>
-              <span class="btn btn-disabled join-item" role="link" aria-disabled="true">次へ</span>
+              <span class="btn btn-disabled join-item" role="link" aria-disabled="true"><%= t("common.next") %></span>
             <% end %>
           </div>
         </nav>
@@ -1118,22 +1386,24 @@ def configure_roles
   RUBY
   append_to_file ".gitignore", "\n/db/seeds.local.rb\n" unless File.read(".gitignore").lines.map(&:strip).include?("/db/seeds.local.rb")
 
-  create_file "config/locales/roles.ja.yml", <<~YAML, force: true
-    ja:
-      roles:
-        errors:
-          last_admin: 最後の管理者roleは解除できません
-      admin:
-        user_roles:
-          create:
-            notice: 管理者roleを付与しました
-          destroy:
-            notice: 管理者roleを解除しました
-            self_forbidden: 自分自身の管理者roleは解除できません
-      accounts:
-        destroy:
-          last_admin: 最後の管理者はアカウントを削除できません
-  YAML
+  create_locale_pair("roles",
+    ja: {
+      "roles" => { "errors" => { "last_admin" => "最後の管理者roleは解除できません" } },
+      "admin" => {
+        "users" => { "eyebrow" => "管理", "title" => "ユーザー管理", "description" => "固定roleをユーザーへ付与または解除します。", "identifier" => { "email" => "メールアドレス", "wallet_address" => "ウォレットアドレス" }, "role" => "Role", "admin" => "管理者", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "管理者roleを解除しますか？", "grant" => "管理者にする", "pagination" => "ユーザー一覧のページング" },
+        "user_roles" => { "create" => { "notice" => "管理者roleを付与しました" }, "destroy" => { "notice" => "管理者roleを解除しました", "self_forbidden" => "自分自身の管理者roleは解除できません" } }
+      },
+      "accounts" => { "destroy" => { "last_admin" => "最後の管理者はアカウントを削除できません" } }
+    },
+    en: {
+      "roles" => { "errors" => { "last_admin" => "The final administrator role cannot be revoked" } },
+      "admin" => {
+        "users" => { "eyebrow" => "Administration", "title" => "User management", "description" => "Grant or revoke the fixed role for each user.", "identifier" => { "email" => "Email address", "wallet_address" => "Wallet address" }, "role" => "Role", "admin" => "Administrator", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role?", "grant" => "Make administrator", "pagination" => "User list pagination" },
+        "user_roles" => { "create" => { "notice" => "Administrator role granted" }, "destroy" => { "notice" => "Administrator role revoked", "self_forbidden" => "You cannot revoke your own administrator role" } }
+      },
+      "accounts" => { "destroy" => { "last_admin" => "The final administrator cannot delete their account" } }
+    }
+  )
 
   create_file "test/fixtures/user_roles.yml", "# Role assignments are created explicitly by tests.\n", force: true
 
@@ -1288,7 +1558,7 @@ def configure_roles
               chain_id: 1,
               nonce: nonce,
               issued_at: Time.current.iso8601,
-              statement: "Sign in to www.example.com"
+              statement: Rails.configuration.x.application_identity.siwe_statement
             ).prepare_message
             post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
             assert_response :success
@@ -1351,14 +1621,14 @@ def configure_roles
           get admin_users_url
         end
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
-        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"] li.menu-title', text: "管理画面", count: 1
-        assert_select '[data-layout="admin"] nav[aria-label="アカウントメニュー"]', count: 0
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_users_path, text: "ユーザー管理", count: 1
-        assert_select 'header li.menu-title', text: "管理画面", count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?] li.menu-title', I18n.t("navigation.admin_menu"), text: I18n.t("navigation.admin"), count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.account_menu"), count: 0
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_users_path, text: I18n.t("navigation.users"), count: 1
+        assert_select 'header li.menu-title', text: I18n.t("navigation.admin"), count: 1
         assert_select 'header a[href=?]', account_path, count: 0
         assert_select "table.table.table-sm.table-pin-rows"
-        assert_select ".badge", text: "管理者", minimum: 1
+        assert_select ".badge", text: I18n.t("admin.users.admin"), minimum: 1
         assert_select ".join", count: 0
       end
 
@@ -1370,7 +1640,7 @@ def configure_roles
         get admin_users_url
 
         assert_response :success
-        assert_select 'nav[aria-label="ユーザー一覧のページング"] .join', count: 1
+        assert_select 'nav[aria-label=?] .join', I18n.t("admin.users.pagination"), count: 1
         assert_select '.join .join-item', count: 3
       end
     end
@@ -1482,7 +1752,7 @@ def configure_roles
         class RegistrationsController < Devise::RegistrationsController
           def destroy
             if resource.last_admin?
-              redirect_to edit_user_registration_path, alert: I18n.t("accounts.destroy.last_admin", locale: :ja), status: :see_other
+              redirect_to edit_user_registration_path, alert: I18n.t("accounts.destroy.last_admin"), status: :see_other
               return
             end
 
@@ -1496,16 +1766,15 @@ end
 
 def configure_content_management
   devise = VALUES.fetch("account_authentication") == "devise"
-  app_name = PLAN.fetch("app_name")
-  page_titles = {
-    "about" => "#{app_name}について",
-    "corp" => "運営会社",
-    "manual" => "使い方",
-    "terms" => "利用規約",
-    "privacy" => "プライバシーポリシー",
-    "transaction-law" => "特商法表記"
+  page_title_keys = {
+    "about" => "content_management.pages.about",
+    "corp" => "content_management.pages.corp",
+    "manual" => "content_management.pages.manual",
+    "terms" => "content_management.pages.terms",
+    "privacy" => "content_management.pages.privacy",
+    "transaction-law" => "content_management.pages.transaction_law"
   }.freeze
-  page_title_entries = page_titles.map { |slug, title| "    #{slug.inspect} => #{title.inspect}" }.join(",\n")
+  page_title_entries = page_title_keys.map { |slug, key| "    #{slug.inspect} => #{key.inspect}" }.join(",\n")
   public_page_access = devise ? "" : "  allow_unauthenticated_access only: :show\n\n"
   public_faq_access = devise ? "" : "  allow_unauthenticated_access only: :index\n\n"
 
@@ -1571,9 +1840,16 @@ def configure_content_management
 
   create_file "app/models/page.rb", <<~RUBY, force: true
     class Page < ApplicationRecord
-      TITLES = {
+      TITLE_KEYS = {
     #{page_title_entries}
       }.freeze
+      TITLES = TITLE_KEYS.transform_values do |key|
+        I18n.t(
+          key,
+          locale: I18n.default_locale,
+          app_name: Rails.configuration.x.application_identity.app_name
+        )
+      end.freeze
 
       has_rich_text :content, store_if_blank: false
 
@@ -1634,9 +1910,9 @@ def configure_content_management
             uri = URI.parse(value)
             next if uri.is_a?(URI::HTTPS) && uri.host.present? && uri.userinfo.nil?
 
-            errors.add(attribute, "はuserinfoを含まないHTTPS URLを指定してください")
+            errors.add(attribute, :invalid_https_url)
           rescue URI::InvalidURIError
-            errors.add(attribute, "はuserinfoを含まないHTTPS URLを指定してください")
+            errors.add(attribute, :invalid_https_url)
           end
         end
     end
@@ -1740,7 +2016,7 @@ def configure_content_management
           authorize! @page, to: :update?
           if @page.update(page_params)
             redirect_to admin_pages_path,
-              notice: I18n.t("admin.pages.update.notice", locale: :ja),
+              notice: I18n.t("admin.pages.update.notice"),
               status: :see_other
           else
             render :edit, status: :unprocessable_content
@@ -1779,7 +2055,7 @@ def configure_content_management
           authorize! @faq, to: :create?
           if @faq.save
             redirect_to admin_faqs_path,
-              notice: I18n.t("admin.faqs.create.notice", locale: :ja),
+              notice: I18n.t("admin.faqs.create.notice"),
               status: :see_other
           else
             render :new, status: :unprocessable_content
@@ -1794,7 +2070,7 @@ def configure_content_management
           authorize! @faq, to: :update?
           if @faq.update(faq_params)
             redirect_to admin_faqs_path,
-              notice: I18n.t("admin.faqs.update.notice", locale: :ja),
+              notice: I18n.t("admin.faqs.update.notice"),
               status: :see_other
           else
             render :edit, status: :unprocessable_content
@@ -1805,7 +2081,7 @@ def configure_content_management
           authorize! @faq, to: :destroy?
           @faq.destroy!
           redirect_to admin_faqs_path,
-            notice: I18n.t("admin.faqs.destroy.notice", locale: :ja),
+            notice: I18n.t("admin.faqs.destroy.notice"),
             status: :see_other
         end
 
@@ -1834,7 +2110,7 @@ def configure_content_management
           authorize! @footer_setting, to: :update?
           if @footer_setting.update(footer_setting_params)
             redirect_to edit_admin_footer_setting_path,
-              notice: I18n.t("admin.footer_settings.update.notice", locale: :ja),
+              notice: I18n.t("admin.footer_settings.update.notice"),
               status: :see_other
           else
             render :edit, status: :unprocessable_content
@@ -1878,43 +2154,67 @@ def configure_content_management
     end
     FooterSetting.find_or_create_by!(key: FooterSetting::DEFAULT_KEY)
   RUBY
-  create_file "config/locales/content_management.ja.yml", <<~YAML, force: true
-    ja:
-      admin:
-        pages:
-          update:
-            notice: 固定ページを更新しました
-        faqs:
-          create:
-            notice: FAQを作成しました
-          update:
-            notice: FAQを更新しました
-          destroy:
-            notice: FAQを削除しました
-        footer_settings:
-          update:
-            notice: 外部リンクを更新しました
-  YAML
+  create_locale_pair(
+    "content_management",
+    ja: {
+      "content_management" => {
+        "pages" => { "about" => "%{app_name}について", "corp" => "運営会社", "manual" => "使い方", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
+        "sections" => { "about" => "概要", "company" => "会社情報", "guides" => "ガイド", "legal" => "法的情報" },
+        "faqs" => { "title" => "よくある質問", "empty" => "現在、公開中のよくある質問はありません。" },
+        "admin" => {
+          "eyebrow" => "管理画面",
+          "pages" => { "title" => "固定ページ管理", "page" => "ページ", "url" => "URL", "actions" => "操作", "body" => "本文", "edit_description" => "固定ページの本文を編集します。" },
+          "faqs" => { "title" => "FAQ管理", "add" => "FAQを追加", "edit" => "FAQを編集", "question" => "質問", "answer" => "回答", "position" => "表示順", "publication" => "公開設定", "publish" => "公開する", "status" => "状態", "published" => "公開", "unpublished" => "非公開", "empty" => "FAQはまだ登録されていません。", "confirm" => "FAQを削除しますか？" },
+          "footer_settings" => { "title" => "外部リンク設定", "description" => "空欄のリンクはfooterに表示されません。" }
+        }
+      },
+      "admin" => {
+        "pages" => { "update" => { "notice" => "固定ページを更新しました" } },
+        "faqs" => { "create" => { "notice" => "FAQを作成しました" }, "update" => { "notice" => "FAQを更新しました" }, "destroy" => { "notice" => "FAQを削除しました" } },
+        "footer_settings" => { "update" => { "notice" => "外部リンクを更新しました" } }
+      },
+      "errors" => { "messages" => { "invalid_https_url" => "はuserinfoを含まないHTTPS URLを指定してください" } }
+    },
+    en: {
+      "content_management" => {
+        "pages" => { "about" => "About %{app_name}", "corp" => "Company", "manual" => "Guides", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
+        "sections" => { "about" => "About", "company" => "Company", "guides" => "Guides", "legal" => "Legal" },
+        "faqs" => { "title" => "Frequently asked questions", "empty" => "There are no published frequently asked questions." },
+        "admin" => {
+          "eyebrow" => "Administration",
+          "pages" => { "title" => "Manage pages", "page" => "Page", "url" => "URL", "actions" => "Actions", "body" => "Body", "edit_description" => "Edit the body of this page." },
+          "faqs" => { "title" => "Manage FAQs", "add" => "Add FAQ", "edit" => "Edit FAQ", "question" => "Question", "answer" => "Answer", "position" => "Position", "publication" => "Publication", "publish" => "Publish", "status" => "Status", "published" => "Published", "unpublished" => "Unpublished", "empty" => "No FAQs have been created.", "confirm" => "Delete this FAQ?" },
+          "footer_settings" => { "title" => "External links", "description" => "Blank links are not displayed in the footer." }
+        }
+      },
+      "admin" => {
+        "pages" => { "update" => { "notice" => "The page was updated." } },
+        "faqs" => { "create" => { "notice" => "The FAQ was created." }, "update" => { "notice" => "The FAQ was updated." }, "destroy" => { "notice" => "The FAQ was deleted." } },
+        "footer_settings" => { "update" => { "notice" => "The external links were updated." } }
+      },
+      "errors" => { "messages" => { "invalid_https_url" => "must be an HTTPS URL without userinfo" } }
+    }
+  )
 
   create_file "test/fixtures/pages.yml", <<~YAML, force: true
     about:
       slug: about
-      title: #{page_titles.fetch("about").inspect}
+      title: <%= Page::TITLES.fetch("about") %>
     corp:
       slug: corp
-      title: #{page_titles.fetch("corp").inspect}
+      title: <%= Page::TITLES.fetch("corp") %>
     manual:
       slug: manual
-      title: #{page_titles.fetch("manual").inspect}
+      title: <%= Page::TITLES.fetch("manual") %>
     terms:
       slug: terms
-      title: #{page_titles.fetch("terms").inspect}
+      title: <%= Page::TITLES.fetch("terms") %>
     privacy:
       slug: privacy
-      title: #{page_titles.fetch("privacy").inspect}
+      title: <%= Page::TITLES.fetch("privacy") %>
     transaction_law:
       slug: transaction-law
-      title: #{page_titles.fetch("transaction-law").inspect}
+      title: <%= Page::TITLES.fetch("transaction-law") %>
   YAML
   create_file "test/fixtures/faqs.yml", "# FAQs are created explicitly by tests.\n", force: true
   create_file "test/fixtures/footer_settings.yml", <<~YAML, force: true
@@ -1923,7 +2223,7 @@ def configure_content_management
   YAML
 
   create_file "app/views/pages/_page.html.erb", <<~ERB, force: true
-    <% content_for :title, [@page.title, #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, @page.title %>
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header>
         <p class="text-sm font-semibold text-primary"><%= section %></p>
@@ -1934,19 +2234,19 @@ def configure_content_management
       </section>
     </div>
   ERB
-  create_file "app/views/pages/about.html.erb", "<%= render \"pages/page\", section: \"About\" %>\n", force: true
-  create_file "app/views/pages/corp.html.erb", "<%= render \"pages/page\", section: \"Company\" %>\n", force: true
-  create_file "app/views/pages/manual.html.erb", "<%= render \"pages/page\", section: \"Guides\" %>\n", force: true
-  create_file "app/views/pages/terms.html.erb", "<%= render \"pages/page\", section: \"Legal\" %>\n", force: true
-  create_file "app/views/pages/privacy.html.erb", "<%= render \"pages/page\", section: \"Legal\" %>\n", force: true
-  create_file "app/views/pages/transaction-law.html.erb", "<%= render \"pages/page\", section: \"Legal\" %>\n", force: true
+  create_file "app/views/pages/about.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.about\") %>\n", force: true
+  create_file "app/views/pages/corp.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.company\") %>\n", force: true
+  create_file "app/views/pages/manual.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.guides\") %>\n", force: true
+  create_file "app/views/pages/terms.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.legal\") %>\n", force: true
+  create_file "app/views/pages/privacy.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.legal\") %>\n", force: true
+  create_file "app/views/pages/transaction-law.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.legal\") %>\n", force: true
 
   create_file "app/views/faqs/index.html.erb", <<~ERB, force: true
-    <% content_for :title, ["よくある質問", #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, t("content_management.faqs.title") %>
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header>
-        <p class="text-sm font-semibold text-primary">Guides</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">よくある質問</h1>
+        <p class="text-sm font-semibold text-primary"><%= t("content_management.sections.guides") %></p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.faqs.title") %></h1>
       </header>
       <% if @faqs.any? %>
         <div class="space-y-3">
@@ -1958,29 +2258,29 @@ def configure_content_management
           <% end %>
         </div>
       <% else %>
-        <div class="alert"><span>現在、公開中のよくある質問はありません。</span></div>
+        <div class="alert"><span><%= t("content_management.faqs.empty") %></span></div>
       <% end %>
     </div>
   ERB
 
   create_file "app/views/admin/pages/index.html.erb", <<~ERB, force: true
-    <% content_for :title, ["固定ページ管理", #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, t("content_management.admin.pages.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Administration</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">固定ページ管理</h1>
+        <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.pages.title") %></h1>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table">
-              <thead><tr><th scope="col">ページ</th><th scope="col">URL</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
+              <thead><tr><th scope="col"><%= t("content_management.admin.pages.page") %></th><th scope="col"><%= t("content_management.admin.pages.url") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
               <tbody>
                 <% @pages.each do |page| %>
                   <tr>
                     <td><%= page.title %></td>
                     <td><code>/<%= page.slug %></code></td>
-                    <td class="text-right"><%= link_to "編集", edit_admin_page_path(page), class: "btn btn-rapid" %></td>
+                    <td class="text-right"><%= link_to t("common.edit"), edit_admin_page_path(page), class: "btn btn-rapid" %></td>
                   </tr>
                 <% end %>
               </tbody>
@@ -1992,23 +2292,23 @@ def configure_content_management
   ERB
 
   create_file "app/views/admin/pages/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, [@page.title, "固定ページ管理", #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, @page.title %>
     <div class="max-w-[820px] space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Administration</p>
+        <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
         <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @page.title %></h1>
-        <p class="mt-2 text-sm text-neutral">固定ページの本文を編集します。</p>
+        <p class="mt-2 text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
           <%= form_with model: [:admin, @page], class: "space-y-5" do |form| %>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= form.label :content, "本文" %></legend>
+              <legend class="fieldset-legend"><%= form.label :content, t("content_management.admin.pages.body") %></legend>
               <%= form.rich_text_area :content %>
             </fieldset>
             <div class="card-actions justify-end">
-              <%= link_to "戻る", admin_pages_path, class: "btn btn-ghost btn-rapid" %>
-              <%= form.submit "更新", class: "btn btn-rapid" %>
+              <%= link_to t("common.back"), admin_pages_path, class: "btn btn-ghost btn-rapid" %>
+              <%= form.submit t("common.update"), class: "btn btn-rapid" %>
             </div>
           <% end %>
         </div>
@@ -2024,57 +2324,57 @@ def configure_content_management
         </div>
       <% end %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :question, "質問" %></legend>
+        <legend class="fieldset-legend"><%= form.label :question, t("content_management.admin.faqs.question") %></legend>
         <%= form.text_field :question, class: "input input-rapid w-full", required: true %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :answer, "回答" %></legend>
+        <legend class="fieldset-legend"><%= form.label :answer, t("content_management.admin.faqs.answer") %></legend>
         <%= form.rich_text_area :answer %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :position, "表示順" %></legend>
+        <legend class="fieldset-legend"><%= form.label :position, t("content_management.admin.faqs.position") %></legend>
         <%= form.number_field :position, class: "input input-rapid w-full", min: 0, required: true %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend">公開設定</legend>
+        <legend class="fieldset-legend"><%= t("content_management.admin.faqs.publication") %></legend>
         <label class="label cursor-pointer justify-start gap-3">
           <%= form.checkbox :published, class: "checkbox" %>
-          <span>公開する</span>
+          <span><%= t("content_management.admin.faqs.publish") %></span>
         </label>
       </fieldset>
       <div class="card-actions justify-end">
-        <%= link_to "戻る", admin_faqs_path, class: "btn btn-ghost btn-rapid" %>
-        <%= form.submit(faq.persisted? ? "更新" : "作成", class: "btn btn-rapid") %>
+        <%= link_to t("common.back"), admin_faqs_path, class: "btn btn-ghost btn-rapid" %>
+        <%= form.submit(faq.persisted? ? t("common.update") : t("common.create"), class: "btn btn-rapid") %>
       </div>
     <% end %>
   ERB
 
   create_file "app/views/admin/faqs/index.html.erb", <<~ERB, force: true
-    <% content_for :title, ["FAQ管理", #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, t("content_management.admin.faqs.title") %>
     <div class="space-y-6">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p class="text-sm font-semibold text-primary">Administration</p>
-          <h1 class="mt-1 text-2xl font-bold leading-[1.5]">FAQ管理</h1>
+          <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
+          <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.faqs.title") %></h1>
         </div>
-        <%= link_to "FAQを追加", new_admin_faq_path, class: "btn btn-rapid" %>
+        <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: "btn btn-rapid" %>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
           <% if @faqs.any? %>
             <div class="overflow-x-auto">
               <table class="table">
-                <thead><tr><th scope="col">表示順</th><th scope="col">質問</th><th scope="col">状態</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
+                <thead><tr><th scope="col"><%= t("content_management.admin.faqs.position") %></th><th scope="col"><%= t("content_management.admin.faqs.question") %></th><th scope="col"><%= t("content_management.admin.faqs.status") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
                 <tbody>
                   <% @faqs.each do |faq| %>
                     <tr>
                       <td><%= faq.position %></td>
                       <td><%= faq.question %></td>
-                      <td><span class="badge"><%= faq.published? ? "公開" : "非公開" %></span></td>
+                      <td><span class="badge"><%= faq.published? ? t("content_management.admin.faqs.published") : t("content_management.admin.faqs.unpublished") %></span></td>
                       <td>
                         <div class="flex justify-end gap-2">
-                          <%= link_to "編集", edit_admin_faq_path(faq), class: "btn btn-rapid" %>
-                          <%= button_to "削除", admin_faq_path(faq), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "FAQを削除しますか？" } %>
+                          <%= link_to t("common.edit"), edit_admin_faq_path(faq), class: "btn btn-rapid" %>
+                          <%= button_to t("common.delete"), admin_faq_path(faq), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("content_management.admin.faqs.confirm") } %>
                         </div>
                       </td>
                     </tr>
@@ -2083,7 +2383,7 @@ def configure_content_management
               </table>
             </div>
           <% else %>
-            <div class="alert"><span>FAQはまだ登録されていません。</span></div>
+            <div class="alert"><span><%= t("content_management.admin.faqs.empty") %></span></div>
           <% end %>
         </div>
       </section>
@@ -2091,28 +2391,28 @@ def configure_content_management
   ERB
 
   create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
-    <% content_for :title, ["FAQを追加", #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, t("content_management.admin.faqs.add") %>
     <div class="max-w-[820px] space-y-6">
-      <header><p class="text-sm font-semibold text-primary">Administration</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">FAQを追加</h1></header>
+      <header><p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.faqs.add") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, ["FAQを編集", #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, t("content_management.admin.faqs.edit") %>
     <div class="max-w-[820px] space-y-6">
-      <header><p class="text-sm font-semibold text-primary">Administration</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">FAQを編集</h1></header>
+      <header><p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.faqs.edit") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/footer_settings/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, ["外部リンク設定", #{app_name.inspect}].join(" | ") %>
+    <% content_for :title, t("content_management.admin.footer_settings.title") %>
     <div class="max-w-[820px] space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Administration</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">外部リンク設定</h1>
-        <p class="mt-2 text-sm text-neutral">空欄のリンクはfooterに表示されません。</p>
+        <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.footer_settings.title") %></h1>
+        <p class="mt-2 text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
@@ -2130,7 +2430,7 @@ def configure_content_management
               <legend class="fieldset-legend"><%= form.label :github_url, "GitHub" %></legend>
               <%= form.url_field :github_url, class: "input input-rapid w-full", placeholder: "https://example.com/github-account" %>
             </fieldset>
-            <div class="card-actions justify-end"><%= form.submit "更新", class: "btn btn-rapid" %></div>
+            <div class="card-actions justify-end"><%= form.submit t("common.update"), class: "btn btn-rapid" %></div>
           <% end %>
         </div>
       </section>
@@ -2193,7 +2493,7 @@ def configure_content_management
               chain_id: 1,
               nonce: nonce,
               issued_at: Time.current.iso8601,
-              statement: "Sign in to www.example.com"
+              statement: Rails.configuration.x.application_identity.siwe_statement
             ).prepare_message
             post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
             assert_response :success
@@ -2344,11 +2644,11 @@ def configure_content_management
       test "renders every fixed public page through the explicit template map" do
         {
           about_url => ["about", Page::TITLES.fetch("about")],
-          corp_url => ["corp", "運営会社"],
-          manual_url => ["manual", "使い方"],
-          terms_url => ["terms", "利用規約"],
-          privacy_url => ["privacy", "プライバシーポリシー"],
-          transaction_law_url => ["transaction-law", "特商法表記"]
+          corp_url => ["corp", Page::TITLES.fetch("corp")],
+          manual_url => ["manual", Page::TITLES.fetch("manual")],
+          terms_url => ["terms", Page::TITLES.fetch("terms")],
+          privacy_url => ["privacy", Page::TITLES.fetch("privacy")],
+          transaction_law_url => ["transaction-law", Page::TITLES.fetch("transaction-law")]
         }.each do |url, (slug, title)|
           get url
 
@@ -2370,7 +2670,7 @@ def configure_content_management
       test "hides unset external links and renders configured links safely" do
         get about_url
 
-        assert_select "footer .footer-title", text: "Links", count: 0
+        assert_select "footer .footer-title", text: I18n.t("footer.links_section"), count: 0
         assert_select "footer .footer-title", count: 3
 
         footer_settings(:default).update!(
@@ -2379,7 +2679,7 @@ def configure_content_management
         )
         get about_url
 
-        assert_select "footer .footer-title", text: "Links", count: 1
+        assert_select "footer .footer-title", text: I18n.t("footer.links_section"), count: 1
         assert_select 'footer a[href="https://social.example/x"][target="_blank"][rel="noopener noreferrer"]', text: "X(Twitter)", count: 1
         assert_select 'footer a[href="https://code.example/repository"][target="_blank"][rel="noopener noreferrer"]', text: "GitHub", count: 1
       end
@@ -2388,14 +2688,14 @@ def configure_content_management
         get about_url
 
         assert_select 'footer.footer.footer-vertical[class~="sm:footer-horizontal"]'
-        assert_select "footer .footer-title", text: "About", count: 1
-        assert_select "footer a[href=?]", about_path, text: #{("#{app_name}について").inspect}, count: 1
-        assert_select "footer a[href=?]", corp_path, text: "運営会社", count: 1
-        assert_select "footer a[href=?]", manual_path, text: "使い方", count: 1
-        assert_select "footer a[href=?]", faq_path, text: "よくある質問", count: 1
-        assert_select "footer a[href=?]", terms_path, text: "利用規約", count: 1
-        assert_select "footer a[href=?]", privacy_path, text: "プライバシーポリシー", count: 1
-        assert_select "footer a[href=?]", transaction_law_path, text: "特商法表記", count: 1
+        assert_select "footer .footer-title", text: I18n.t("footer.about_section"), count: 1
+        assert_select "footer a[href=?]", about_path, text: I18n.t("footer.about", app_name: Rails.configuration.x.application_identity.app_name), count: 1
+        assert_select "footer a[href=?]", corp_path, text: I18n.t("footer.company"), count: 1
+        assert_select "footer a[href=?]", manual_path, text: I18n.t("footer.manual"), count: 1
+        assert_select "footer a[href=?]", faq_path, text: I18n.t("footer.faq"), count: 1
+        assert_select "footer a[href=?]", terms_path, text: I18n.t("footer.terms"), count: 1
+        assert_select "footer a[href=?]", privacy_path, text: I18n.t("footer.privacy"), count: 1
+        assert_select "footer a[href=?]", transaction_law_path, text: I18n.t("footer.transaction_law"), count: 1
         assert_select "footer aside", count: 0
       end
     end
@@ -2409,7 +2709,7 @@ def configure_content_management
         get faq_url
 
         assert_response :success
-        assert_select ".alert", text: "現在、公開中のよくある質問はありません。", count: 1
+        assert_select ".alert", text: I18n.t("content_management.faqs.empty"), count: 1
       end
 
       test "renders only published FAQs in order using collapse" do
@@ -2450,8 +2750,8 @@ def configure_content_management
 
         get edit_admin_page_url(page)
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_pages_path, text: "固定ページ管理", count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_pages_path, text: I18n.t("navigation.pages"), count: 1
         assert_select "lexxy-editor", count: 1
 
         patch admin_page_url(page), params: {
@@ -2480,8 +2780,8 @@ def configure_content_management
 
         get new_admin_faq_url
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_faqs_path, text: "FAQ管理", count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_faqs_path, text: I18n.t("navigation.faqs"), count: 1
         assert_select "lexxy-editor", count: 1
 
         assert_difference("Faq.count", 1) do
@@ -2528,8 +2828,8 @@ def configure_content_management
 
         get edit_admin_footer_setting_url
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label="管理メニュー"]', count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', edit_admin_footer_setting_path, text: "外部リンク設定", count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', edit_admin_footer_setting_path, text: I18n.t("content_management.admin.footer_settings.title"), count: 1
 
         patch admin_footer_setting_url, params: {
           footer_setting: { x_url: " https://social.example/x ", github_url: "" }
@@ -2680,7 +2980,7 @@ def configure_profile
 
         def destroy_avatar
           #{profile_owner}.profile.avatar.purge if #{profile_owner}.profile.avatar.attached?
-          redirect_to profile_path, notice: I18n.t("profiles.avatar.destroy.notice", locale: :ja), status: :see_other
+          redirect_to profile_path, notice: I18n.t("profiles.avatar.destroy.notice"), status: :see_other
         end
     RUBY
   else
@@ -2701,7 +3001,7 @@ def configure_profile
       def update
         @profile = #{profile_owner}.profile
         if @profile.update(profile_params)
-          redirect_to profile_path, notice: I18n.t("profiles.update.notice", locale: :ja), status: :see_other
+          redirect_to profile_path, notice: I18n.t("profiles.update.notice"), status: :see_other
         else
           render :edit, status: :unprocessable_content
         end
@@ -2717,14 +3017,25 @@ def configure_profile
   route "resource :profile, only: %i[show edit update]"
   route 'delete "profile/avatar", to: "profiles#destroy_avatar", as: :profile_avatar' if avatar_enabled
 
-  locale_path = "config/locales/ja.yml"
-  locale = File.exist?(locale_path) ? YAML.safe_load_file(locale_path) : {}
-  locale["ja"] ||= {}
-  locale["ja"]["profiles"] = { "update" => { "notice" => "プロフィールを更新しました" } }
-  if avatar_enabled
-    locale["ja"]["profiles"]["avatar"] = { "destroy" => { "notice" => "アバター画像を削除しました" } }
-  end
-  create_file locale_path, YAML.dump(locale, line_width: -1), force: true
+  profile_locale_ja = {
+    "profiles" => {
+      "title" => "プロフィール", "edit_title" => "プロフィール編集", "eyebrow" => "プロフィール", "edit" => "プロフィールを編集",
+      "screen_name_hint" => "小文字の英数字とアンダースコアが使えます。", "current_avatar" => "現在のアバター", "avatar_label" => "アバター",
+      "avatar_delete_title" => "アバター画像の削除", "avatar_delete_description" => "設定済みの画像を削除し、IDから生成したアバターへ戻します。", "avatar_delete" => "設定済み画像を削除", "avatar_delete_confirm" => "設定済みのアバター画像を削除しますか？",
+      "update" => { "notice" => "プロフィールを更新しました" }, "avatar" => { "destroy" => { "notice" => "アバター画像を削除しました" } }
+    },
+    "activerecord" => { "attributes" => { "profile" => { "screen_name" => "スクリーンネーム", "display_name" => "表示名", "avatar" => "アバター画像" } } }
+  }
+  profile_locale_en = {
+    "profiles" => {
+      "title" => "Profile", "edit_title" => "Edit profile", "eyebrow" => "Profile", "edit" => "Edit profile",
+      "screen_name_hint" => "Use lowercase letters, numbers, and underscores.", "current_avatar" => "Current avatar", "avatar_label" => "Avatar",
+      "avatar_delete_title" => "Delete avatar image", "avatar_delete_description" => "Delete the uploaded image and return to the avatar generated from your ID.", "avatar_delete" => "Delete uploaded image", "avatar_delete_confirm" => "Delete the uploaded avatar image?",
+      "update" => { "notice" => "Your profile was updated." }, "avatar" => { "destroy" => { "notice" => "Your avatar image was deleted." } }
+    },
+    "activerecord" => { "attributes" => { "profile" => { "screen_name" => "Screen name", "display_name" => "Display name", "avatar" => "Avatar image" } } }
+  }
+  create_locale_pair("profiles", ja: profile_locale_ja, en: profile_locale_en)
 
   if avatar_enabled
     create_file "app/helpers/avatar_helper.rb", <<~RUBY, force: true
@@ -2817,7 +3128,7 @@ def configure_profile
         profile.screen_name = "Invalid-Name"
 
         assert_not profile.valid?
-        assert_includes profile.errors[:screen_name], "is invalid"
+        assert profile.errors.of_kind?(:screen_name, :invalid)
       end
 
       test "screen_name is required and unique" do
@@ -2825,12 +3136,12 @@ def configure_profile
         profile.screen_name = nil
 
         assert_not profile.valid?
-        assert_includes profile.errors[:screen_name], "can't be blank"
+        assert profile.errors.of_kind?(:screen_name, :blank)
 
         profile.screen_name = profiles(:one).screen_name
 
         assert_not profile.valid?
-        assert_includes profile.errors[:screen_name], "has already been taken"
+        assert profile.errors.of_kind?(:screen_name, :taken)
       end
     RUBY
   end
@@ -2841,12 +3152,12 @@ def configure_profile
         profile.display_name = nil
 
         assert_not profile.valid?
-        assert_includes profile.errors[:display_name], "can't be blank"
+        assert profile.errors.of_kind?(:display_name, :blank)
 
         profile.display_name = profiles(:one).display_name
 
         assert_not profile.valid?
-        assert_includes profile.errors[:display_name], "has already been taken"
+        assert profile.errors.of_kind?(:display_name, :taken)
       end
     RUBY
   end
@@ -2899,16 +3210,16 @@ def configure_profile
   if features.include?("screen_name")
     form_fields << <<~ERB
       <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :screen_name, "スクリーンネーム" %></legend>
+        <legend class="fieldset-legend"><%= form.label :screen_name %></legend>
         <%= form.text_field :screen_name, class: "input input-rapid w-full", pattern: "[a-z0-9_]+", autocomplete: "username", required: true %>
-        <p class="label">小文字の英数字とアンダースコアが使えます。</p>
+        <p class="label"><%= t("profiles.screen_name_hint") %></p>
       </fieldset>
     ERB
   end
   if features.include?("display_name")
     form_fields << <<~ERB
       <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :display_name, "表示名" %></legend>
+        <legend class="fieldset-legend"><%= form.label :display_name %></legend>
         <%= form.text_field :display_name, class: "input input-rapid w-full", autocomplete: "name", required: true %>
       </fieldset>
     ERB
@@ -2916,7 +3227,7 @@ def configure_profile
   if avatar_enabled
     form_fields << <<~ERB
       <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :avatar, "アバター画像" %></legend>
+        <legend class="fieldset-legend"><%= form.label :avatar %></legend>
         <%= form.file_field :avatar, class: "file-input w-full", accept: "image/*" %>
       </fieldset>
     ERB
@@ -2935,8 +3246,8 @@ def configure_profile
       <% end %>
 
     #{form_fields}  <div class="card-actions justify-end">
-        <%= link_to "キャンセル", profile_path, class: "btn btn-ghost btn-rapid" %>
-        <%= form.submit "保存", class: "btn btn-primary btn-rapid" %>
+        <%= link_to t("common.cancel"), profile_path, class: "btn btn-ghost btn-rapid" %>
+        <%= form.submit t("common.save"), class: "btn btn-primary btn-rapid" %>
       </div>
     <% end %>
   ERB
@@ -2945,10 +3256,10 @@ def configure_profile
   if avatar_enabled
     profile_rows << <<~ERB
       <li class="list-row">
-        <span class="text-sm text-neutral">アバター</span>
+        <span class="text-sm text-neutral"><%= t("profiles.avatar_label") %></span>
         <div class="avatar">
           <div class="w-16 rounded-full">
-            <%= profile_avatar(@profile, size: 64, alt: "現在のアバター") %>
+            <%= profile_avatar(@profile, size: 64, alt: t("profiles.current_avatar")) %>
           </div>
         </div>
       </li>
@@ -2957,16 +3268,16 @@ def configure_profile
   if features.include?("display_name")
     profile_rows << <<~ERB
       <li class="list-row">
-        <span class="text-sm text-neutral">表示名</span>
-        <strong><%= @profile.display_name.presence || "未設定" %></strong>
+        <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:display_name) %></span>
+        <strong><%= @profile.display_name.presence || t("common.not_set") %></strong>
       </li>
     ERB
   end
   if features.include?("screen_name")
     profile_rows << <<~ERB
       <li class="list-row">
-        <span class="text-sm text-neutral">スクリーンネーム</span>
-        <strong><%= @profile.screen_name.present? ? "@\#{@profile.screen_name}" : "未設定" %></strong>
+        <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:screen_name) %></span>
+        <strong><%= @profile.screen_name.present? ? "@\#{@profile.screen_name}" : t("common.not_set") %></strong>
       </li>
     ERB
   end
@@ -2977,10 +3288,10 @@ def configure_profile
       <% if @profile.avatar.attached? %>
         <section class="card card-border border-error bg-base-100 shadow-none">
           <div class="card-body">
-            <h2 class="card-title text-base leading-[1.5]">アバター画像の削除</h2>
-            <p class="text-sm text-neutral">設定済みの画像を削除し、IDから生成したアバターへ戻します。</p>
+            <h2 class="card-title text-base leading-[1.5]"><%= t("profiles.avatar_delete_title") %></h2>
+            <p class="text-sm text-neutral"><%= t("profiles.avatar_delete_description") %></p>
             <div class="card-actions justify-start">
-              <%= button_to "設定済み画像を削除", profile_avatar_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "設定済みのアバター画像を削除しますか？" } %>
+              <%= button_to t("profiles.avatar_delete"), profile_avatar_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("profiles.avatar_delete_confirm") } %>
             </div>
           </div>
         </section>
@@ -2990,11 +3301,11 @@ def configure_profile
     ""
   end
   create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
-    <% content_for :title, "プロフィール | Rapid Rails" %>
+    <% content_for :title, t("profiles.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Profile</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">プロフィール</h1>
+        <p class="text-sm font-semibold text-primary"><%= t("profiles.eyebrow") %></p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("profiles.title") %></h1>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -3002,7 +3313,7 @@ def configure_profile
           <ul class="list">
     #{profile_rows}      </ul>
           <div class="card-actions justify-end">
-            <%= link_to "プロフィールを編集", edit_profile_path, class: "btn btn-primary btn-outline btn-rapid" %>
+            <%= link_to t("profiles.edit"), edit_profile_path, class: "btn btn-primary btn-outline btn-rapid" %>
           </div>
         </div>
       </section>
@@ -3010,11 +3321,11 @@ def configure_profile
   ERB
 
   create_file "app/views/profiles/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, "プロフィール編集 | Rapid Rails" %>
+    <% content_for :title, t("profiles.edit_title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Profile</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">プロフィール編集</h1>
+        <p class="text-sm font-semibold text-primary"><%= t("profiles.eyebrow") %></p>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("profiles.edit_title") %></h1>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -3108,6 +3419,7 @@ def configure_api
     module Api
       class ApiController < ActionController::API
         include ActionController::HttpAuthentication::Token::ControllerMethods
+        include LocalizedRequest
 
         before_action :authenticate_api_credential!
 
@@ -3256,13 +3568,29 @@ def configure_api
 
     export default class extends Controller {
       static targets = ["source", "button"]
+      static values = { copied: String }
 
       async copy() {
         await navigator.clipboard.writeText(this.sourceTarget.value)
-        this.buttonTarget.textContent = "コピーしました"
+        this.buttonTarget.textContent = this.copiedValue
       }
     }
   JAVASCRIPT
+
+  create_locale_pair("api_credentials",
+    ja: {
+      "api_credentials" => {
+        "title" => "APIキーの管理", "description" => "アプリケーションからAPIへ接続するためのcredentialを管理します。", "new" => "APIキーを作成", "edit" => "APIキーを編集", "details" => "APIキー詳細", "eyebrow" => "API credential", "name_hint" => "利用用途が分かる名前を入力してください。", "api_key" => "API key", "last_used" => "最終利用", "show" => "詳細", "empty" => "APIキーはまだありません。", "api_key_label" => "%{name}のAPI key", "secret_once" => "API Secretはこの画面で一度だけ表示されます。", "information" => "Credential情報", "revoke" => "API Secretを再発行", "revoke_confirm" => "現在のAPI Secretは無効になります。再発行しますか？", "delete_confirm" => "このAPIキーを削除しますか？", "back" => "APIキー一覧へ"
+      },
+      "activerecord" => { "attributes" => { "api_credential" => { "name" => "名前" } } }
+    },
+    en: {
+      "api_credentials" => {
+        "title" => "API credentials", "description" => "Manage credentials used by applications to connect to the API.", "new" => "Create API credential", "edit" => "Edit API credential", "details" => "API credential details", "eyebrow" => "API credential", "name_hint" => "Enter a name that describes how this credential is used.", "api_key" => "API key", "last_used" => "Last used", "show" => "Details", "empty" => "There are no API credentials yet.", "api_key_label" => "%{name} API key", "secret_once" => "The API Secret is shown only once on this screen.", "information" => "Credential information", "revoke" => "Reissue API Secret", "revoke_confirm" => "The current API Secret will be invalidated. Reissue it?", "delete_confirm" => "Delete this API credential?", "back" => "Back to API credentials"
+      },
+      "activerecord" => { "attributes" => { "api_credential" => { "name" => "Name" } } }
+    }
+  )
 
   route <<~RUBY
     resources :api_credentials do
@@ -3287,27 +3615,27 @@ def configure_api
         </div>
       <% end %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= form.label :name, "名前" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= form.label :name %></legend>
         <%= form.text_field :name, required: true, autocomplete: "off", class: "input input-rapid w-full" %>
-        <p class="label">利用用途が分かる名前を入力してください。</p>
+        <p class="label"><%= t("api_credentials.name_hint") %></p>
       </fieldset>
       <div class="flex flex-col gap-3 sm:flex-row">
         <%= form.submit class: "btn btn-primary btn-rapid" %>
-        <%= link_to "キャンセル", api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: "btn btn-outline btn-rapid" %>
+        <%= link_to t("common.cancel"), api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: "btn btn-outline btn-rapid" %>
       </div>
     <% end %>
   ERB
 
   create_file "app/views/api_credentials/index.html.erb", <<~ERB, force: true
-    <% content_for :title, "APIキーの管理 | Rapid Rails" %>
+    <% content_for :title, t("api_credentials.title") %>
     <div class="space-y-6">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p class="text-sm font-semibold text-primary">API credentials</p>
-          <h1 class="mt-1 text-2xl font-bold leading-[1.5]">APIキーの管理</h1>
-          <p class="mt-2 text-sm text-neutral">アプリケーションからAPIへ接続するためのcredentialを管理します。</p>
+          <p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p>
+          <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("api_credentials.title") %></h1>
+          <p class="mt-2 text-sm text-neutral"><%= t("api_credentials.description") %></p>
         </div>
-        <%= link_to "APIキーを作成", new_api_credential_path, class: "btn btn-primary btn-rapid" %>
+        <%= link_to t("api_credentials.new"), new_api_credential_path, class: "btn btn-primary btn-rapid" %>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -3315,26 +3643,26 @@ def configure_api
           <% if @api_credentials.any? %>
             <div class="overflow-x-auto">
               <table class="table">
-                <thead><tr><th>名前</th><th>API key</th><th>最終利用</th><th></th></tr></thead>
+                <thead><tr><th><%= ApiCredential.human_attribute_name(:name) %></th><th><%= t("api_credentials.api_key") %></th><th><%= t("api_credentials.last_used") %></th><th></th></tr></thead>
                 <tbody>
                   <% @api_credentials.each do |credential| %>
                     <tr>
                       <td class="font-semibold"><%= credential.name %></td>
                       <td>
-                        <div class="join w-80" data-controller="clipboard">
-                          <input type="text" value="<%= credential.api_key %>" readonly autocomplete="off" aria-label="<%= credential.name %>のAPI key" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-                          <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy">コピー</button>
+                        <div class="join w-80" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
+                          <input type="text" value="<%= credential.api_key %>" readonly autocomplete="off" aria-label="<%= t('api_credentials.api_key_label', name: credential.name) %>" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
+                          <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
                         </div>
                       </td>
-                      <td><%= credential.last_used_at ? l(credential.last_used_at, format: :short) : "未使用" %></td>
-                      <td><%= link_to "詳細", api_credential_path(credential), class: "btn btn-outline btn-sm" %></td>
+                      <td><%= credential.last_used_at ? l(credential.last_used_at, format: :short) : t("common.unused") %></td>
+                      <td><%= link_to t("api_credentials.show"), api_credential_path(credential), class: "btn btn-outline btn-sm" %></td>
                     </tr>
                   <% end %>
                 </tbody>
               </table>
             </div>
           <% else %>
-            <div class="alert alert-info alert-soft" role="status"><span>APIキーはまだありません。</span></div>
+            <div class="alert alert-info alert-soft" role="status"><span><%= t("api_credentials.empty") %></span></div>
           <% end %>
         </div>
       </section>
@@ -3342,21 +3670,21 @@ def configure_api
   ERB
 
   create_file "app/views/api_credentials/show.html.erb", <<~ERB, force: true
-    <% content_for :title, "APIキー詳細 | Rapid Rails" %>
+    <% content_for :title, t("api_credentials.details") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">API credential</p>
+        <p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p>
         <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @api_credential.name %></h1>
       </header>
 
       <% if @api_secret.present? %>
         <div class="alert alert-warning alert-vertical grid-cols-1 justify-items-stretch" role="status">
-          <p class="font-bold">ApiSecretはこの画面で一度だけ表示されます。</p>
-          <fieldset class="fieldset w-full" data-controller="clipboard">
+          <p class="font-bold"><%= t("api_credentials.secret_once") %></p>
+          <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
             <legend class="fieldset-legend">API Secret</legend>
             <div class="join w-full">
               <input type="text" value="<%= @api_secret %>" readonly autocomplete="off" aria-label="API Secret" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-              <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy">コピー</button>
+              <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
             </div>
           </fieldset>
         </div>
@@ -3364,42 +3692,42 @@ def configure_api
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body p-5 sm:p-6">
-          <h2 class="card-title text-base leading-[1.5]">Credential情報</h2>
+          <h2 class="card-title text-base leading-[1.5]"><%= t("api_credentials.information") %></h2>
           <div class="mt-3 grid gap-4">
-            <fieldset class="fieldset w-full" data-controller="clipboard">
+            <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
               <legend class="fieldset-legend">API key</legend>
               <div class="join w-full">
                 <input type="text" value="<%= @api_credential.api_key %>" readonly autocomplete="off" aria-label="API key" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-                <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy">コピー</button>
+                <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
               </div>
             </fieldset>
             <dl>
-            <div><dt class="text-sm text-neutral">最終利用</dt><dd><%= @api_credential.last_used_at ? l(@api_credential.last_used_at, format: :short) : "未使用" %></dd></div>
+            <div><dt class="text-sm text-neutral"><%= t("api_credentials.last_used") %></dt><dd><%= @api_credential.last_used_at ? l(@api_credential.last_used_at, format: :short) : t("common.unused") %></dd></div>
             </dl>
           </div>
           <div class="card-actions mt-4 justify-start">
-            <%= link_to "編集", edit_api_credential_path(@api_credential), class: "btn btn-outline btn-rapid" %>
-            <%= button_to "ApiSecretを再発行", revoke_api_credential_path(@api_credential), method: :patch, class: "btn btn-warning btn-outline btn-rapid", data: { turbo_confirm: "現在のApiSecretは無効になります。再発行しますか？" } %>
-            <%= button_to "削除", api_credential_path(@api_credential), method: :delete, class: "btn btn-error btn-outline btn-rapid", data: { turbo_confirm: "このAPIキーを削除しますか？" } %>
+            <%= link_to t("common.edit"), edit_api_credential_path(@api_credential), class: "btn btn-outline btn-rapid" %>
+            <%= button_to t("api_credentials.revoke"), revoke_api_credential_path(@api_credential), method: :patch, class: "btn btn-warning btn-outline btn-rapid", data: { turbo_confirm: t("api_credentials.revoke_confirm") } %>
+            <%= button_to t("common.delete"), api_credential_path(@api_credential), method: :delete, class: "btn btn-error btn-outline btn-rapid", data: { turbo_confirm: t("api_credentials.delete_confirm") } %>
           </div>
         </div>
       </section>
-      <%= link_to "APIキー一覧へ", api_credentials_path, class: "btn btn-outline btn-rapid" %>
+      <%= link_to t("api_credentials.back"), api_credentials_path, class: "btn btn-outline btn-rapid" %>
     </div>
   ERB
 
   create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
-    <% content_for :title, "APIキーを作成 | Rapid Rails" %>
+    <% content_for :title, t("api_credentials.new") %>
     <div class="space-y-6">
-      <header><p class="text-sm font-semibold text-primary">New credential</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">APIキーを作成</h1></header>
+      <header><p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("api_credentials.new") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
   create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, "APIキーを編集 | Rapid Rails" %>
+    <% content_for :title, t("api_credentials.edit") %>
     <div class="space-y-6">
-      <header><p class="text-sm font-semibold text-primary">Edit credential</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">APIキーを編集</h1></header>
+      <header><p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("api_credentials.edit") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
@@ -3505,7 +3833,7 @@ def configure_api
               chain_id: 1,
               nonce: nonce,
               issued_at: Time.current.iso8601,
-              statement: "Sign in to www.example.com"
+              statement: Rails.configuration.x.application_identity.siwe_statement
             ).prepare_message
             post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
             @user = User.find_by!(wallet_address: key.address.to_s.downcase)
@@ -3529,7 +3857,7 @@ def configure_api
         credential = @user.api_credentials.find_by!(name: "CLI")
         assert_select '.alert.alert-warning input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
         assert_select 'input[aria-label="API key"][readonly][value=?]', credential.api_key, count: 1
-        assert_select 'button[data-action="clipboard#copy"]', text: "コピー", count: 2
+        assert_select 'button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 2
         assert_select ".alert.alert-warning", text: /Bearer token/, count: 0
         original_digest = credential.api_secret_digest
 
@@ -3548,8 +3876,8 @@ def configure_api
 
         get api_credentials_url
         assert_response :success
-        assert_select 'table.table input[aria-label="BatchのAPI key"][readonly][value=?]', credential.api_key, count: 1
-        assert_select 'table.table button[data-action="clipboard#copy"]', text: "コピー", count: 1
+        assert_select 'table.table input[aria-label=?][readonly][value=?]', I18n.t("api_credentials.api_key_label", name: "Batch"), credential.api_key, count: 1
+        assert_select 'table.table button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 1
 
         assert_difference("ApiCredential.count", -1) do
           delete api_credential_url(credential)
@@ -3561,6 +3889,27 @@ def configure_api
 end
 
 def configure_devise_views
+  create_locale_pair("devise_views",
+    ja: {
+      "devise_views" => {
+        "links" => { "sign_in" => "ログイン画面へ", "sign_up" => "アカウントを作成", "forgot_password" => "パスワードをお忘れですか？" },
+        "sessions" => { "title" => "ログイン", "eyebrow" => "おかえりなさい", "description" => "登録済みのメールアドレスとパスワードを入力してください。", "remember_me" => "ログイン状態を保持する", "submit" => "ログイン" },
+        "registrations" => { "new_title" => "アカウント作成", "new_eyebrow" => "はじめましょう", "new_description" => "利用を始めるためのアカウントを作成します。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" },
+        "passwords" => { "new_title" => "パスワード再設定", "new_eyebrow" => "パスワード再設定", "new_description" => "再設定用リンクをメールで送信します。", "send" => "再設定メールを送信", "edit_title" => "新しいパスワード", "edit_eyebrow" => "パスワードを選択", "change" => "パスワードを変更" },
+        "mailer" => { "greeting" => "%{recipient}さん", "confirmation" => "以下のリンクから%{app_name}のメールアドレスを確認してください。", "confirm" => "メールアドレスを確認", "reset" => "以下のリンクから%{app_name}のパスワードを変更できます。", "reset_link" => "パスワードを変更", "unlock" => "以下のリンクから%{app_name}のアカウントロックを解除できます。", "unlock_link" => "アカウントロックを解除", "email_changed" => "%{app_name}のメールアドレスが変更されたことをお知らせします。", "password_changed" => "%{app_name}のパスワードが変更されたことをお知らせします。" }
+      }
+    },
+    en: {
+      "devise_views" => {
+        "links" => { "sign_in" => "Back to sign in", "sign_up" => "Create an account", "forgot_password" => "Forgot your password?" },
+        "sessions" => { "title" => "Sign in", "eyebrow" => "Welcome back", "description" => "Enter your registered email address and password.", "remember_me" => "Keep me signed in", "submit" => "Sign in" },
+        "registrations" => { "new_title" => "Create account", "new_eyebrow" => "Get started", "new_description" => "Create an account to get started.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" },
+        "passwords" => { "new_title" => "Reset password", "new_eyebrow" => "Password reset", "new_description" => "We will email you a password reset link.", "send" => "Send reset email", "edit_title" => "New password", "edit_eyebrow" => "Choose a password", "change" => "Change password" },
+        "mailer" => { "greeting" => "Hello %{recipient}", "confirmation" => "Confirm your email address for %{app_name} using the link below.", "confirm" => "Confirm email address", "reset" => "Change your %{app_name} password using the link below.", "reset_link" => "Change password", "unlock" => "Unlock your %{app_name} account using the link below.", "unlock_link" => "Unlock account", "email_changed" => "This is a notice that your %{app_name} email address was changed.", "password_changed" => "This is a notice that your %{app_name} password was changed." }
+      }
+    }
+  )
+
   create_file "app/views/devise/shared/_error_messages.html.erb", <<~ERB, force: true
     <% if resource.errors.any? %>
       <div class="alert alert-error mb-6" role="alert">
@@ -3580,83 +3929,83 @@ def configure_devise_views
     <div class="divider"></div>
     <ul class="menu menu-sm w-full">
       <% if controller_name != "sessions" %>
-        <li><%= link_to "ログイン画面へ", new_session_path(resource_name) %></li>
+        <li><%= link_to t("devise_views.links.sign_in"), new_session_path(resource_name) %></li>
       <% end %>
       <% if devise_mapping.registerable? && controller_name != "registrations" %>
-        <li><%= link_to "アカウントを作成", new_registration_path(resource_name) %></li>
+        <li><%= link_to t("devise_views.links.sign_up"), new_registration_path(resource_name) %></li>
       <% end %>
       <% if devise_mapping.recoverable? && controller_name != "passwords" && controller_name != "registrations" %>
-        <li><%= link_to "パスワードをお忘れですか？", new_password_path(resource_name) %></li>
+        <li><%= link_to t("devise_views.links.forgot_password"), new_password_path(resource_name) %></li>
       <% end %>
     </ul>
   ERB
 
   create_file "app/views/devise/sessions/new.html.erb", <<~ERB, force: true
-    <% content_for :title, "ログイン | Rapid Rails" %>
+    <% content_for :title, t("devise_views.sessions.title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary">Welcome back</p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">ログイン</h1>
-      <p class="mt-2 text-sm text-neutral">登録済みのメールアドレスとパスワードを入力してください。</p>
+      <p class="text-sm font-semibold text-primary"><%= t("devise_views.sessions.eyebrow") %></p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.sessions.title") %></h1>
+      <p class="mt-2 text-sm text-neutral"><%= t("devise_views.sessions.description") %></p>
     </header>
 
     <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "space-y-5" }) do |f| %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
         <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "パスワード" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
         <%= f.password_field :password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
       </fieldset>
       <% if devise_mapping.rememberable? %>
         <label class="label cursor-pointer justify-start gap-3 text-base-content">
           <%= f.check_box :remember_me, class: "checkbox checkbox-sm" %>
-          <span>ログイン状態を保持する</span>
+          <span><%= t("devise_views.sessions.remember_me") %></span>
         </label>
       <% end %>
-      <%= f.submit "ログイン", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+      <%= f.submit t("devise_views.sessions.submit"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
     <% end %>
 
     <%= render "devise/shared/links" %>
   ERB
 
   create_file "app/views/devise/registrations/new.html.erb", <<~ERB, force: true
-    <% content_for :title, "アカウント作成 | Rapid Rails" %>
+    <% content_for :title, t("devise_views.registrations.new_title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary">Get started</p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">アカウント作成</h1>
-      <p class="mt-2 text-sm text-neutral">開発を始めるためのアカウントを作成します。</p>
+      <p class="text-sm font-semibold text-primary"><%= t("devise_views.registrations.new_eyebrow") %></p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.registrations.new_title") %></h1>
+      <p class="mt-2 text-sm text-neutral"><%= t("devise_views.registrations.new_description") %></p>
     </header>
 
     <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "space-y-5" }) do |f| %>
       <%= render "devise/shared/error_messages", resource: resource %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
         <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "パスワード" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
         <%= f.password_field :password, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
         <% if @minimum_password_length %>
-          <p class="label text-sm text-neutral"><%= @minimum_password_length %>文字以上で入力してください。</p>
+          <p class="label text-sm text-neutral"><%= t("devise_views.registrations.minimum_password", count: @minimum_password_length) %></p>
         <% end %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation, "パスワード（確認）" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation %></legend>
         <%= f.password_field :password_confirmation, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
       </fieldset>
-      <%= f.submit "アカウントを作成", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+      <%= f.submit t("devise_views.registrations.create"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
     <% end %>
 
     <%= render "devise/shared/links" %>
   ERB
 
   create_file "app/views/devise/registrations/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, "アカウント設定 | Rapid Rails" %>
+    <% content_for :title, t("devise_views.registrations.edit_title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Account settings</p>
-        <h1 class="mt-2 text-2xl font-bold leading-[1.5]">アカウント設定</h1>
+        <p class="text-sm font-semibold text-primary"><%= t("devise_views.registrations.edit_title") %></p>
+        <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.registrations.edit_title") %></h1>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -3664,33 +4013,33 @@ def configure_devise_views
           <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
             <%= render "devise/shared/error_messages", resource: resource %>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
               <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
             </fieldset>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "新しいパスワード" %></legend>
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
               <%= f.password_field :password, autocomplete: "new-password", class: "input input-rapid w-full" %>
-              <p class="label text-sm text-neutral">変更しない場合は空欄にしてください。</p>
+              <p class="label text-sm text-neutral"><%= t("devise_views.registrations.password_hint") %></p>
             </fieldset>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation, "新しいパスワード（確認）" %></legend>
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation %></legend>
               <%= f.password_field :password_confirmation, autocomplete: "new-password", class: "input input-rapid w-full" %>
             </fieldset>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :current_password, "現在のパスワード" %></legend>
+              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :current_password %></legend>
               <%= f.password_field :current_password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
             </fieldset>
-            <%= f.submit "設定を更新", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+            <%= f.submit t("devise_views.registrations.update"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
           <% end %>
         </div>
       </section>
 
       <section class="card card-border border-error bg-base-100 shadow-none">
         <div class="card-body p-5 sm:p-6">
-          <h2 class="card-title text-base leading-[1.5]">アカウントの削除</h2>
-          <p class="text-sm text-neutral">この操作は取り消せません。</p>
+          <h2 class="card-title text-base leading-[1.5]"><%= t("devise_views.registrations.delete_title") %></h2>
+          <p class="text-sm text-neutral"><%= t("devise_views.registrations.delete_description") %></p>
           <div class="card-actions mt-2 justify-start">
-            <%= button_to "アカウントを削除", registration_path(resource_name), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "本当に削除しますか？" } %>
+            <%= button_to t("devise_views.registrations.delete"), registration_path(resource_name), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("devise_views.registrations.delete_confirm") } %>
           </div>
         </div>
       </section>
@@ -3698,53 +4047,77 @@ def configure_devise_views
   ERB
 
   create_file "app/views/devise/passwords/new.html.erb", <<~ERB, force: true
-    <% content_for :title, "パスワード再設定 | Rapid Rails" %>
+    <% content_for :title, t("devise_views.passwords.new_title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary">Password reset</p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">パスワード再設定</h1>
-      <p class="mt-2 text-sm text-neutral">再設定用リンクをメールで送信します。</p>
+      <p class="text-sm font-semibold text-primary"><%= t("devise_views.passwords.new_eyebrow") %></p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.passwords.new_title") %></h1>
+      <p class="mt-2 text-sm text-neutral"><%= t("devise_views.passwords.new_description") %></p>
     </header>
 
     <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "space-y-5" }) do |f| %>
       <%= render "devise/shared/error_messages", resource: resource %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email, "メールアドレス" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
         <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
       </fieldset>
-      <%= f.submit "再設定メールを送信", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+      <%= f.submit t("devise_views.passwords.send"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
     <% end %>
 
     <%= render "devise/shared/links" %>
   ERB
 
   create_file "app/views/devise/passwords/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, "新しいパスワード | Rapid Rails" %>
+    <% content_for :title, t("devise_views.passwords.edit_title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary">Choose a password</p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]">新しいパスワード</h1>
+      <p class="text-sm font-semibold text-primary"><%= t("devise_views.passwords.edit_eyebrow") %></p>
+      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.passwords.edit_title") %></h1>
     </header>
 
     <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
       <%= render "devise/shared/error_messages", resource: resource %>
       <%= f.hidden_field :reset_password_token %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password, "新しいパスワード" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
         <%= f.password_field :password, autofocus: true, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation, "新しいパスワード（確認）" %></legend>
+        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation %></legend>
         <%= f.password_field :password_confirmation, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
       </fieldset>
-      <%= f.submit "パスワードを変更", class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+      <%= f.submit t("devise_views.passwords.change"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
     <% end %>
 
     <%= render "devise/shared/links" %>
+  ERB
+
+  mailer_prefix = '<p><%= t("devise_views.mailer.greeting", recipient: @email) %></p>'
+  create_file "app/views/devise/mailer/confirmation_instructions.html.erb", <<~ERB, force: true
+    #{mailer_prefix}
+    <p><%= t("devise_views.mailer.confirmation", app_name: Rails.configuration.x.application_identity.app_name) %></p>
+    <p><%= link_to t("devise_views.mailer.confirm"), confirmation_url(@resource, confirmation_token: @token) %></p>
+  ERB
+  create_file "app/views/devise/mailer/reset_password_instructions.html.erb", <<~ERB, force: true
+    #{mailer_prefix}
+    <p><%= t("devise_views.mailer.reset", app_name: Rails.configuration.x.application_identity.app_name) %></p>
+    <p><%= link_to t("devise_views.mailer.reset_link"), edit_password_url(@resource, reset_password_token: @token) %></p>
+  ERB
+  create_file "app/views/devise/mailer/unlock_instructions.html.erb", <<~ERB, force: true
+    #{mailer_prefix}
+    <p><%= t("devise_views.mailer.unlock", app_name: Rails.configuration.x.application_identity.app_name) %></p>
+    <p><%= link_to t("devise_views.mailer.unlock_link"), unlock_url(@resource, unlock_token: @token) %></p>
+  ERB
+  create_file "app/views/devise/mailer/email_changed.html.erb", <<~ERB, force: true
+    #{mailer_prefix}
+    <p><%= t("devise_views.mailer.email_changed", app_name: Rails.configuration.x.application_identity.app_name) %></p>
+  ERB
+  create_file "app/views/devise/mailer/password_change.html.erb", <<~ERB, force: true
+    #{mailer_prefix}
+    <p><%= t("devise_views.mailer.password_changed", app_name: Rails.configuration.x.application_identity.app_name) %></p>
   ERB
 end
 
 def configure_default_views
   devise = VALUES.fetch("account_authentication") == "devise"
-  app_name = PLAN.fetch("app_name")
   pwa_enabled = VALUES.fetch("pwa") == "use"
   web_push_enabled = VALUES.fetch("web_push") == "use"
   api_enabled = VALUES.fetch("api") == "enable"
@@ -3755,19 +4128,19 @@ def configure_default_views
   display_name_enabled = profile_features.include?("display_name")
   account_navigation_count = 2 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) + (web_push_enabled ? 1 : 0)
   account_page_description = if profile_enabled
-    "プロフィールとアプリケーションの状態を確認できます。"
+    '<%= t("accounts.show.description_with_profile") %>'
   else
-    "アプリケーションの状態を確認できます。"
+    '<%= t("accounts.show.description") %>'
   end
   account_page_action = if profile_enabled
-    "サイドメニューからプロフィールや利用設定を管理できます。"
+    '<%= t("accounts.show.action_with_profile") %>'
   else
-    "サイドメニューから利用設定を管理できます。"
+    '<%= t("accounts.show.action") %>'
   end
   home_action = if devise
-    '<%= link_to "無料で始める", new_user_registration_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
+    '<%= link_to t("home.start_devise"), new_user_registration_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
   else
-    '<%= link_to "ウォレットで始める", new_session_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
+    '<%= link_to t("home.start_wallet"), new_session_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
   end
   account_navigation_items = <<~ERB
     <li>
@@ -3775,7 +4148,7 @@ def configure_default_views
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955a1.125 1.125 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
         </svg>
-        マイページ
+        <%= t("navigation.dashboard") %>
       <% end %>
     </li>
   ERB
@@ -3786,7 +4159,7 @@ def configure_default_views
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
-          プロフィール
+          <%= t("navigation.profile") %>
         <% end %>
       </li>
     ERB
@@ -3799,7 +4172,7 @@ def configure_default_views
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
         </svg>
-        アカウント設定
+        <%= t("navigation.account_settings") %>
       <% end %>
     </li>
   ERB
@@ -3810,7 +4183,7 @@ def configure_default_views
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
-          通知
+          <%= t("navigation.notifications") %>
         <% end %>
       </li>
     ERB
@@ -3822,7 +4195,7 @@ def configure_default_views
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
           </svg>
-          APIキーの管理
+          <%= t("navigation.api_credentials") %>
         <% end %>
       </li>
     ERB
@@ -3833,7 +4206,7 @@ def configure_default_views
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m6-3c0 7.142-3.75 12-9 13.5C6.75 18.75 3 13.892 3 6.75c3.75 0 7.5-1.5 9-4.5 1.5 3 5.25 4.5 9 4.5Z" />
           </svg>
-          ユーザー管理
+          <%= t("navigation.users") %>
         <% end %>
       </li>
       <li>
@@ -3841,7 +4214,7 @@ def configure_default_views
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5A3.375 3.375 0 0 0 10.125 2.25H8.25m0 12.75h7.5m-7.5 3h4.5M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-8.25a10.5 10.5 0 0 0-9-10.125Z" />
           </svg>
-          固定ページ管理
+          <%= t("navigation.pages") %>
         <% end %>
       </li>
       <li>
@@ -3849,7 +4222,7 @@ def configure_default_views
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 9.75a3.375 3.375 0 1 1 5.775 2.387c-.938.938-1.9 1.424-1.9 2.613M12 18h.008v.008H12V18Zm9-6a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
-          FAQ管理
+          <%= t("navigation.faqs") %>
         <% end %>
       </li>
       <li>
@@ -3857,7 +4230,7 @@ def configure_default_views
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
           </svg>
-          外部リンク設定
+          <%= t("content_management.admin.footer_settings.title") %>
         <% end %>
       </li>
   ERB
@@ -3869,22 +4242,22 @@ def configure_default_views
   logout_path = devise ? "destroy_user_session_path" : "session_path"
   guest_desktop_navigation = if devise
     <<~ERB
-      <%= link_to "ログイン", new_user_session_path, class: "btn btn-ghost btn-rapid" %>
-      <%= link_to "アカウント作成", new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
+      <%= link_to t("navigation.sign_in"), new_user_session_path, class: "btn btn-ghost btn-rapid" %>
+      <%= link_to t("navigation.sign_up"), new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
     ERB
   else
     <<~ERB
-      <%= link_to "ログイン", new_session_path, class: "btn btn-ghost btn-rapid" %>
+      <%= link_to t("navigation.sign_in"), new_session_path, class: "btn btn-ghost btn-rapid" %>
     ERB
   end
   guest_mobile_navigation = if devise
     <<~ERB
-      <li><%= link_to "ログイン", new_user_session_path %></li>
-      <li><%= link_to "アカウント作成", new_user_registration_path %></li>
+      <li><%= link_to t("navigation.sign_in"), new_user_session_path %></li>
+      <li><%= link_to t("navigation.sign_up"), new_user_registration_path %></li>
     ERB
   else
     <<~ERB
-      <li><%= link_to "ログイン", new_session_path %></li>
+      <li><%= link_to t("navigation.sign_in"), new_session_path %></li>
     ERB
   end
   profile_identity = if display_name_enabled || screen_name_enabled
@@ -3923,7 +4296,7 @@ def configure_default_views
   end
   account_menu_trigger = if avatar_enabled
     <<~ERB
-      <summary class="btn btn-circle btn-ghost" aria-label="アカウントメニューを開く">
+      <summary class="btn btn-circle btn-ghost" aria-label="<%= t('navigation.open_account_menu') %>">
         <div class="avatar">
           <div class="w-10 rounded-full">
             <%= profile_avatar(#{profile_owner}, size: 40, alt: "") %>
@@ -3937,7 +4310,7 @@ def configure_default_views
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
         </svg>
-        <span>MENU</span>
+        <span><%= t("common.menu") %></span>
       </summary>
     ERB
   end
@@ -3965,6 +4338,7 @@ def configure_default_views
        data-push-subscription-public-key-url-value="<%= vapid_public_key_push_subscription_path %>"
        data-push-subscription-subscription-url-value="<%= push_subscription_path %>"
        data-push-subscription-test-url-value="<%= test_push_subscription_path %>"
+       data-push-subscription-messages-value="<%= t('web_push.client').to_json %>"
     ERB
   end
 
@@ -4006,29 +4380,54 @@ def configure_default_views
         def destroy
           user = Current.user
           if user.last_admin?
-            redirect_to edit_account_path, alert: I18n.t("accounts.destroy.last_admin", locale: :ja), status: :see_other
+            redirect_to edit_account_path, alert: I18n.t("accounts.destroy.last_admin"), status: :see_other
             return
           end
 
           user.destroy!
           cookies.delete(:session_id)
           Current.session = nil
-          redirect_to root_path, notice: I18n.t("accounts.destroy.notice", locale: :ja), status: :see_other
+          redirect_to root_path, notice: I18n.t("accounts.destroy.notice"), status: :see_other
         end
       end
     RUBY
   end
   create_file "app/controllers/accounts_controller.rb", accounts_controller, force: true
 
+  create_file "app/helpers/application_helper.rb", <<~RUBY, force: true
+    module ApplicationHelper
+      def application_identity
+        Rails.configuration.x.application_identity
+      end
+
+      def document_title
+        page_title = content_for(:title).presence
+        [page_title, application_identity.app_name].compact.join(" | ")
+      end
+
+      def canonical_url
+        application_identity.canonical_url(request.path)
+      end
+    end
+  RUBY
+
   route 'root "home#index"'
   route devise ? "resource :account, only: :show" : "resource :account, only: %i[show edit destroy]"
 
   create_file "app/views/layouts/application.html.erb", <<~ERB, force: true
     <!DOCTYPE html>
-    <html lang="ja" data-theme="rapid-rails">
+    <html lang="<%= I18n.locale %>" data-theme="rapid-rails">
       <head>
-        <title><%= content_for(:title) || "Rapid Rails" %></title>
+        <title><%= document_title %></title>
         <meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="description" content="<%= t('meta.description', app_name: application_identity.app_name) %>">
+        <link rel="canonical" href="<%= canonical_url %>">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="<%= application_identity.app_name %>">
+        <meta property="og:title" content="<%= document_title %>">
+        <meta property="og:description" content="<%= t('meta.description', app_name: application_identity.app_name) %>">
+        <meta property="og:url" content="<%= canonical_url %>">
+        <meta property="og:locale" content="<%= I18n.locale == :ja ? 'ja_JP' : 'en_US' %>">
         <%= csrf_meta_tags %>
         <%= csp_meta_tag %>
     #{pwa_head.lines.map { |line| "    #{line}" }.join}        <%= yield :head %>
@@ -4069,9 +4468,9 @@ def configure_default_views
     <% content_for :content do %>
       <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="account">
         <aside class="h-fit">
-          <nav aria-label="アカウントメニュー">
+          <nav aria-label="<%= t('navigation.account_menu') %>">
             <ul class="menu w-full rounded-box bg-base-100">
-              <li class="menu-title"><span>マイページ</span></li>
+              <li class="menu-title"><span><%= t("navigation.dashboard") %></span></li>
     #{account_navigation_for_layout}          </ul>
           </nav>
         </aside>
@@ -4086,9 +4485,9 @@ def configure_default_views
     <% content_for :content do %>
       <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="admin">
         <aside class="h-fit">
-          <nav aria-label="管理メニュー">
+          <nav aria-label="<%= t('navigation.admin_menu') %>">
             <ul class="menu w-full rounded-box bg-base-100">
-              <li class="menu-title"><span>管理画面</span></li>
+              <li class="menu-title"><span><%= t("navigation.admin") %></span></li>
     #{admin_navigation_for_layout}          </ul>
           </nav>
         </aside>
@@ -4100,20 +4499,20 @@ def configure_default_views
 
   create_file "app/views/shared/_header.html.erb", <<~ERB, force: true
     <header class="border-b border-base-300 bg-base-100">
-      <nav class="navbar mx-auto w-full max-w-6xl px-5" aria-label="メインナビゲーション">
+      <nav class="navbar mx-auto w-full max-w-6xl px-5" aria-label="<%= t('navigation.main') %>">
         <div class="navbar-start">
-          <%= link_to "Rapid Rails", root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
+          <%= link_to application_identity.app_name, root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
         </div>
         <% if #{signed_in_condition} %>
           <div class="navbar-end">
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
     #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if controller_path.start_with?("admin/") %>
-                <li class="menu-title"><span>管理画面</span></li>
+                <li class="menu-title"><span><%= t("navigation.admin") %></span></li>
                 <%= render "shared/admin_navigation" %>
               <% else %>
     #{account_navigation_for_dropdown}            <% end %>
-              <li class="border-t border-base-300"><%= link_to "ログアウト", #{logout_path}, data: { turbo_method: :delete } %></li>
+              <li class="border-t border-base-300"><%= link_to t("navigation.sign_out"), #{logout_path}, data: { turbo_method: :delete } %></li>
               </ul>
             </details>
           </div>
@@ -4122,7 +4521,7 @@ def configure_default_views
     #{guest_desktop_navigation.lines.map { |line| "        #{line}" }.join}      </div>
           <div class="navbar-end min-[961px]:hidden">
             <details class="dropdown dropdown-end">
-              <summary class="btn btn-ghost">メニュー</summary>
+              <summary class="btn btn-ghost"><%= t("common.menu") %></summary>
               <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow-elevation-2">
     #{guest_mobile_navigation.lines.map { |line| "            #{line}" }.join}          </ul>
             </details>
@@ -4150,18 +4549,18 @@ def configure_default_views
     <div class="border-t border-base-300 bg-base-100">
       <footer class="footer footer-vertical mx-auto w-full max-w-6xl px-5 py-8 text-sm sm:footer-horizontal">
         <nav>
-          <h2 class="footer-title leading-[1.5]">About</h2>
-          <%= link_to #{("#{app_name}について").inspect}, about_path, class: "link link-hover" %>
-          <%= link_to "運営会社", corp_path, class: "link link-hover" %>
+          <h2 class="footer-title leading-[1.5]"><%= t("footer.about_section") %></h2>
+          <%= link_to t("footer.about", app_name: application_identity.app_name), about_path, class: "link link-hover" %>
+          <%= link_to t("footer.company"), corp_path, class: "link link-hover" %>
         </nav>
         <nav>
-          <h2 class="footer-title leading-[1.5]">Guides</h2>
-          <%= link_to "使い方", manual_path, class: "link link-hover" %>
-          <%= link_to "よくある質問", faq_path, class: "link link-hover" %>
+          <h2 class="footer-title leading-[1.5]"><%= t("footer.guides_section") %></h2>
+          <%= link_to t("footer.manual"), manual_path, class: "link link-hover" %>
+          <%= link_to t("footer.faq"), faq_path, class: "link link-hover" %>
         </nav>
         <% if external_links_configured %>
           <nav>
-            <h2 class="footer-title leading-[1.5]">Links</h2>
+            <h2 class="footer-title leading-[1.5]"><%= t("footer.links_section") %></h2>
             <% if footer_setting.x_url.present? %>
               <%= link_to "X(Twitter)", footer_setting.x_url, class: "link link-hover", target: "_blank", rel: "noopener noreferrer" %>
             <% end %>
@@ -4172,38 +4571,38 @@ def configure_default_views
         <% end %>
         <nav>
           <h2 class="footer-title leading-[1.5]">Legal</h2>
-          <%= link_to "利用規約", terms_path, class: "link link-hover" %>
-          <%= link_to "プライバシーポリシー", privacy_path, class: "link link-hover" %>
-          <%= link_to "特商法表記", transaction_law_path, class: "link link-hover" %>
+          <%= link_to t("footer.terms"), terms_path, class: "link link-hover" %>
+          <%= link_to t("footer.privacy"), privacy_path, class: "link link-hover" %>
+          <%= link_to t("footer.transaction_law"), transaction_law_path, class: "link link-hover" %>
         </nav>
       </footer>
     </div>
   ERB
 
   create_file "app/views/home/index.html.erb", <<~ERB, force: true
-    <% content_for :title, "Rapid Rails | Build with clarity" %>
+    <% content_for :title, t("home.title") %>
     <div class="mx-auto w-full max-w-[820px] space-y-8 px-5 py-10 md:py-14">
       <section class="hero rounded-box border border-base-300 bg-base-100">
         <div class="hero-content w-full max-w-none flex-col items-start gap-6 p-6 sm:p-8 md:p-10">
-          <span class="badge badge-outline">Rails application template</span>
+          <span class="badge badge-outline"><%= t("home.badge") %></span>
           <div>
-            <h1 class="text-[1.75rem] font-bold leading-[1.5] min-[961px]:text-[2.4rem]">迷わず始められる、<br class="hidden sm:block">モダンなRails開発環境。</h1>
-            <p class="mt-5 max-w-2xl text-neutral">Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。</p>
+            <h1 class="text-[1.75rem] font-bold leading-[1.5] min-[961px]:text-[2.4rem]"><%= t("home.heading") %></h1>
+            <p class="mt-5 max-w-2xl text-neutral"><%= t("home.description") %></p>
           </div>
           <div class="flex flex-col gap-3 sm:flex-row">
             #{home_action}
-            <%= link_to "構成を見る", "#features", class: "btn btn-primary btn-outline btn-rapid px-6" %>
+            <%= link_to t("home.features_link"), "#features", class: "btn btn-primary btn-outline btn-rapid px-6" %>
           </div>
         </div>
       </section>
 
       <section id="features" aria-labelledby="features-title">
         <div class="mb-5">
-          <p class="text-sm font-semibold text-primary">Starter kit</p>
-          <h2 id="features-title" class="mt-1 text-xl font-bold leading-[1.5]">最初から揃う開発基盤</h2>
+          <p class="text-sm font-semibold text-primary"><%= t("home.starter") %></p>
+          <h2 id="features-title" class="mt-1 text-xl font-bold leading-[1.5]"><%= t("home.features_title") %></h2>
         </div>
         <div class="grid gap-4 min-[961px]:grid-cols-3">
-          <% [["01", "Rails native", "Generator APIを中心に、安全な初期構成を生成します。"], ["02", "Readable UI", "daisyUIとsemantic colorで、読みやすい画面を用意します。"], ["03", "Production ready", "SQLiteとLitestreamを前提に、運用経路まで設計します。"]].each do |number, title, description| %>
+          <% [["01", t("home.features.rails.title"), t("home.features.rails.description")], ["02", t("home.features.ui.title"), t("home.features.ui.description")], ["03", t("home.features.production.title"), t("home.features.production.description")]].each do |number, title, description| %>
             <article class="card card-border border-base-300 bg-base-100 shadow-none transition-shadow hover:shadow-elevation-1">
               <div class="card-body gap-3 p-5">
                 <span class="text-xs font-bold text-primary"><%= number %></span>
@@ -4218,20 +4617,20 @@ def configure_default_views
   ERB
 
   create_file "app/views/accounts/show.html.erb", <<~ERB, force: true
-    <% content_for :title, "マイページ | Rapid Rails" %>
+    <% content_for :title, t("accounts.show.title") %>
     <div class="space-y-6">
       <header>
         <p class="text-sm font-semibold text-primary">Account</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]">マイページ</h1>
+        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("accounts.show.title") %></h1>
         <p class="mt-2 text-sm text-neutral">#{account_page_description}</p>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body p-5 sm:p-6">
-          <h2 class="card-title text-base leading-[1.5]">次のステップ</h2>
+          <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.show.next_step") %></h2>
           <p class="text-sm text-neutral">#{account_page_action}</p>
           <div class="card-actions mt-2 justify-end">
-            <%= link_to "ホームへ戻る", root_path, class: "btn btn-primary btn-outline btn-rapid" %>
+            <%= link_to t("accounts.show.back_home"), root_path, class: "btn btn-primary btn-outline btn-rapid" %>
           </div>
         </div>
       </section>
@@ -4240,21 +4639,21 @@ def configure_default_views
 
   unless devise
     create_file "app/views/accounts/edit.html.erb", <<~ERB, force: true
-      <% content_for :title, "アカウント設定 | Rapid Rails" %>
+      <% content_for :title, t("accounts.edit.title") %>
       <div class="space-y-6">
         <header>
           <p class="text-sm font-semibold text-primary">Account settings</p>
-          <h1 class="mt-2 text-2xl font-bold leading-[1.5]">アカウント設定</h1>
+          <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("accounts.edit.title") %></h1>
         </header>
 
         <section class="card card-border border-base-300 bg-base-100 shadow-none">
           <div class="card-body p-5 sm:p-6">
-            <h2 class="card-title text-base leading-[1.5]">アカウント情報</h2>
+            <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.edit.information") %></h2>
             <ul class="list mt-3">
               <li class="list-row px-0">
                 <span class="badge badge-outline">ID</span>
                 <div class="list-col-grow min-w-0">
-                  <p class="text-xs text-neutral">Wallet address</p>
+                  <p class="text-xs text-neutral"><%= t("accounts.edit.wallet_address") %></p>
                   <p class="mt-1 break-all font-semibold"><%= Current.user.wallet_address %></p>
                 </div>
               </li>
@@ -4264,10 +4663,10 @@ def configure_default_views
 
         <section class="card card-border border-error bg-base-100 shadow-none">
           <div class="card-body p-5 sm:p-6">
-            <h2 class="card-title text-base leading-[1.5]">アカウントの削除</h2>
-            <p class="text-sm text-neutral">この操作は取り消せません。このアカウントのすべてのセッションも削除されます。</p>
+            <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.edit.danger_title") %></h2>
+            <p class="text-sm text-neutral"><%= t("accounts.edit.danger_description") %></p>
             <div class="card-actions mt-2 justify-start">
-              <%= button_to "アカウントを削除", account_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: "本当に削除しますか？" } %>
+              <%= button_to t("accounts.edit.delete"), account_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("accounts.edit.confirm") } %>
             </div>
           </div>
         </section>
@@ -4279,17 +4678,21 @@ def configure_default_views
     configure_devise_views
   else
     create_file "app/views/sessions/new.html.erb", <<~ERB, force: true
-      <% content_for :title, "ウォレットでログイン | Rapid Rails" %>
-      <div data-controller="siwe-sign-in">
+      <% content_for :title, t("wallet_siwe.title") %>
+      <div data-controller="siwe-sign-in"
+           data-siwe-sign-in-statement-value="<%= application_identity.siwe_statement %>"
+           data-siwe-sign-in-wallet-missing-value="<%= t('wallet_siwe.errors.wallet_missing') %>"
+           data-siwe-sign-in-nonce-error-value="<%= t('wallet_siwe.errors.nonce') %>"
+           data-siwe-sign-in-verification-error-value="<%= t('wallet_siwe.errors.verification') %>">
         <header class="mb-8">
-          <p class="text-sm font-semibold text-primary">Sign in with Ethereum</p>
-          <h1 class="mt-2 text-2xl font-bold leading-[1.5]">ウォレットでログイン</h1>
-          <p class="mt-2 text-sm text-neutral">EVM互換ウォレットで署名し、アカウントを安全に確認します。</p>
+          <p class="text-sm font-semibold text-primary"><%= t("wallet_siwe.eyebrow") %></p>
+          <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("wallet_siwe.title") %></h1>
+          <p class="mt-2 text-sm text-neutral"><%= t("wallet_siwe.description") %></p>
         </header>
-        <button type="button" class="btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" data-action="click->siwe-sign-in#signIn">ウォレットを接続</button>
+        <button type="button" class="btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" data-action="click->siwe-sign-in#signIn"><%= t("wallet_siwe.connect") %></button>
         <p class="alert alert-error mt-5 hidden" data-siwe-sign-in-target="error" role="alert"></p>
         <div class="divider"></div>
-        <div class="alert alert-info alert-soft text-sm" role="note"><span>署名要求に秘密鍵や送金は必要ありません。</span></div>
+        <div class="alert alert-info alert-soft text-sm" role="note"><span><%= t("wallet_siwe.note") %></span></div>
       </div>
     ERB
   end
@@ -4382,7 +4785,7 @@ def configure_default_views
       get profile_url
       assert_response :success
       assert_select '[data-layout="account"] .list > .list-row', count: #{profile_features.length}
-      assert_select 'a[href=?]', edit_profile_path, text: 'プロフィールを編集', count: 1
+      assert_select 'a[href=?]', edit_profile_path, text: I18n.t("profiles.edit"), count: 1
       #{avatar_enabled ? "assert_select '.list .avatar svg[width=\"64\"][height=\"64\"]', count: 1\n      assert_select '.avatar-placeholder', count: 0" : ""}
 
       get edit_profile_url
@@ -4394,14 +4797,14 @@ def configure_default_views
             get edit_profile_url
             assert_select 'form[action=?][method="post"]', profile_avatar_path, count: 1 do
               assert_select 'input[name="_method"][value="delete"]', count: 1
-              assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm]', text: '設定済み画像を削除', count: 1
+              assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm]', text: I18n.t("profiles.avatar_delete"), count: 1
             end
 
             delete profile_avatar_url
             assert_redirected_to profile_url
             assert_not user.profile.reload.avatar.attached?
             follow_redirect!
-            assert_select '.alert.alert-success', text: 'アバター画像を削除しました', count: 1
+            assert_select '.alert.alert-success', text: I18n.t("profiles.avatar.destroy.notice"), count: 1
             assert_select '.list .avatar svg[width="64"][height="64"]', count: 1
           RUBY
         else
@@ -4428,7 +4831,7 @@ def configure_default_views
           get root_url
           assert_response :success
           assert_select 'html[data-theme="rapid-rails"]'
-          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label="メインナビゲーション"]'
+          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label=?]', I18n.t("navigation.main")
           assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
           assert_select 'header ul.menu.dropdown-content > li > a', count: 2
           assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
@@ -4467,17 +4870,18 @@ def configure_default_views
     #{profile_trigger_assertion}
           assert_select 'header ul.menu.dropdown-content > li > a', count: #{account_navigation_count + 1}
     #{profile_identity_assertion}      assert_select 'header ul.menu.dropdown-content a[data-turbo-method="delete"][href=?]', destroy_user_session_path, count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li.menu-title', text: 'マイページ', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: #{account_navigation_count}
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: #{account_navigation_count}
-          assert_select 'nav[aria-label="アカウントメニュー"] a[href=?]', root_path, count: 0
-          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', account_path, count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[class="menu-active"]', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a[class]', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a.min-h-11', count: 0
-          assert_select 'nav[aria-label="管理メニュー"]', count: 0
-          assert_select 'header li.menu-title', text: "管理画面", count: 0
+          account_menu = I18n.t("navigation.account_menu")
+          assert_select 'nav[aria-label=?] > .menu > li.menu-title', account_menu, text: I18n.t("navigation.dashboard"), count: 1
+          assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
+          assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
+          assert_select 'nav[aria-label=?] a[href=?]', account_menu, root_path, count: 0
+          assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', account_menu, account_path, count: 1
+          assert_select 'nav[aria-label=?] a.menu-active', account_menu, count: 1
+          assert_select 'nav[aria-label=?] a.menu-active[class="menu-active"]', account_menu, count: 1
+          assert_select 'nav[aria-label=?] > .menu > li > a[class]', account_menu, count: 1
+          assert_select 'nav[aria-label=?] > .menu > li > a.min-h-11', account_menu, count: 0
+          assert_select 'nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 0
+          assert_select 'header li.menu-title', text: I18n.t("navigation.admin"), count: 0
           assert_select 'header a[href=?]', admin_users_path, count: 0
           assert_select '.card > .card-body', count: 1
 
@@ -4486,14 +4890,14 @@ def configure_default_views
           get edit_user_registration_url
           assert_response :success
           assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a', count: #{account_navigation_count}
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', count: #{account_navigation_count}
-          assert_select 'nav[aria-label="アカウントメニュー"] a[href=?]', root_path, count: 0
-          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', edit_user_registration_path, count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[class="menu-active"]', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a[class]', count: 1
-          assert_select 'nav[aria-label="アカウントメニュー"] > .menu > li > a.min-h-11', count: 0
+          assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
+          assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
+          assert_select 'nav[aria-label=?] a[href=?]', account_menu, root_path, count: 0
+          assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', account_menu, edit_user_registration_path, count: 1
+          assert_select 'nav[aria-label=?] a.menu-active', account_menu, count: 1
+          assert_select 'nav[aria-label=?] a.menu-active[class="menu-active"]', account_menu, count: 1
+          assert_select 'nav[aria-label=?] > .menu > li > a[class]', account_menu, count: 1
+          assert_select 'nav[aria-label=?] > .menu > li > a.min-h-11', account_menu, count: 0
           assert_select '.card .fieldset', minimum: 1
           assert_select '.card-actions .btn.btn-error', count: 1
         end
@@ -4508,7 +4912,7 @@ def configure_default_views
           get root_url
           assert_response :success
           assert_select 'html[data-theme="rapid-rails"]'
-          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label="メインナビゲーション"]'
+          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label=?]', I18n.t("navigation.main")
           assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
           assert_select 'header ul.menu.dropdown-content > li > a', count: 1
           assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
@@ -4541,24 +4945,27 @@ def configure_default_views
 end
 
 def configure_pwa
-  app_name = PLAN.fetch("app_name")
   route 'get "manifest" => "rails/pwa#manifest", as: :pwa_manifest'
   route 'get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker'
 
-  create_file "app/views/pwa/manifest.json.erb", JSON.pretty_generate(
-    name: app_name,
-    short_name: app_name,
-    icons: [
-      { src: "/icon.png", type: "image/png", sizes: "512x512" },
-      { src: "/icon.png", type: "image/png", sizes: "512x512", purpose: "maskable" }
-    ],
-    start_url: "/",
-    display: "standalone",
-    scope: "/",
-    description: "#{app_name}.",
-    theme_color: "#3ea8ff",
-    background_color: "#ffffff"
-  ) + "\n", force: true
+  create_file "app/views/pwa/manifest.json.erb", <<~ERB, force: true
+    <% identity = Rails.configuration.x.application_identity %>
+    <%== JSON.pretty_generate(
+      name: identity.app_name,
+      short_name: identity.app_name,
+      lang: identity.default_locale.to_s,
+      icons: [
+        { src: "/icon.png", type: "image/png", sizes: "512x512" },
+        { src: "/icon.png", type: "image/png", sizes: "512x512", purpose: "maskable" }
+      ],
+      start_url: "/",
+      display: "standalone",
+      scope: "/",
+      description: I18n.t("meta.description", locale: identity.default_locale, app_name: identity.app_name),
+      theme_color: "#3ea8ff",
+      background_color: "#ffffff"
+    ) %>
+  ERB
 
   create_file "app/views/pwa/service-worker.js", <<~JAVASCRIPT, force: true
     self.addEventListener("push", (event) => {
@@ -4623,6 +5030,23 @@ def configure_pwa
       }
     }
   JAVASCRIPT
+
+  create_file "test/integration/pwa_identity_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class PwaIdentityTest < ActionDispatch::IntegrationTest
+      test "uses the application identity in the manifest" do
+        get pwa_manifest_url(format: :json)
+
+        identity = Rails.configuration.x.application_identity
+        assert_response :success
+        assert_equal identity.app_name, response.parsed_body.fetch("name")
+        assert_equal identity.app_name, response.parsed_body.fetch("short_name")
+        assert_equal identity.default_locale.to_s, response.parsed_body.fetch("lang")
+        assert_equal I18n.t("meta.description", locale: identity.default_locale, app_name: identity.app_name), response.parsed_body.fetch("description")
+      end
+    end
+  RUBY
 end
 
 def configure_web_push
@@ -4794,7 +5218,7 @@ def configure_web_push
         response.set_header("Cache-Control", "no-store")
         render json: { public_key: VapidConfiguration.fetch!.public_key }
       rescue VapidConfiguration::Error
-        render json: { error: I18n.t("web_push.errors.configuration", locale: :ja) }, status: :service_unavailable
+        render json: { error: I18n.t("web_push.errors.configuration") }, status: :service_unavailable
       end
 
       def create
@@ -4815,9 +5239,9 @@ def configure_web_push
 
         VapidConfiguration.fetch!
         payload = {
-          title: I18n.t("web_push.test.title", locale: :ja),
+          title: I18n.t("web_push.test.title"),
           options: {
-            body: I18n.t("web_push.test.body", locale: :ja),
+            body: I18n.t("web_push.test.body"),
             icon: "/icon.png",
             tag: "web-push-test",
             data: { path: notification_path }
@@ -4826,7 +5250,7 @@ def configure_web_push
         PushNotificationJob.perform_later(subscription.id, account_user.id, payload, PushNotifier::DEFAULT_TTL)
         head :accepted
       rescue VapidConfiguration::Error
-        render json: { error: I18n.t("web_push.errors.configuration", locale: :ja) }, status: :service_unavailable
+        render json: { error: I18n.t("web_push.errors.configuration") }, status: :service_unavailable
       end
 
       private
@@ -4853,13 +5277,14 @@ def configure_web_push
         authenticated: Boolean,
         publicKeyUrl: String,
         subscriptionUrl: String,
-        testUrl: String
+        testUrl: String,
+        messages: Object
       }
 
       connect() {
         if (!this.authenticatedValue) return
         if (!this.#supported()) {
-          this.#render("unsupported", "このブラウザはWeb Pushに対応していません。")
+          this.#render("unsupported", this.messagesValue.unsupported)
           return
         }
 
@@ -4888,8 +5313,8 @@ def configure_web_push
           const response = await this.#request(this.testUrlValue, "POST", {
             push_subscription: { browser_id: this.browserId }
           })
-          if (response.status !== 202) throw new Error("テスト通知を送信できませんでした。")
-          this.#render("success", "テスト通知を送信しました。")
+          if (response.status !== 202) throw new Error(this.messagesValue.test_failed)
+          this.#render("success", this.messagesValue.test_sent)
         } catch (error) {
           this.#fail(error)
         } finally {
@@ -4899,37 +5324,37 @@ def configure_web_push
 
       async #reconcile() {
         if (Notification.permission === "denied") {
-          this.#render("denied", "通知がブロックされています。ブラウザの設定から許可してください。")
+          this.#render("denied", this.messagesValue.blocked)
           return
         }
 
         const registration = await this.#registration()
         const subscription = await registration.pushManager.getSubscription()
         if (!subscription) {
-          this.#render("off", "このブラウザでは通知が無効です。")
+          this.#render("off", this.messagesValue.off)
           return
         }
 
         const publicKey = await this.#publicKey()
         if (!this.#sameApplicationServerKey(subscription, publicKey)) {
           const unsubscribed = await subscription.unsubscribe()
-          if (!unsubscribed) throw new Error("古いWeb Push購読を解除できませんでした。")
+          if (!unsubscribed) throw new Error(this.messagesValue.unsubscribe_failed)
           await this.#deleteServerSubscription()
           const replacement = await this.#subscribe(registration, publicKey)
           await this.#save(replacement)
-          this.#render("on", "VAPID鍵の変更に合わせて通知を再登録しました。")
+          this.#render("on", this.messagesValue.reconciled)
           return
         }
 
         await this.#save(subscription)
-        this.#render("on", "このブラウザでは通知が有効です。")
+        this.#render("on", this.messagesValue.on)
       }
 
       async #enable() {
         let permission = Notification.permission
         if (permission === "default") permission = await Notification.requestPermission()
         if (permission !== "granted") {
-          this.#render("denied", "通知が許可されていません。ブラウザの設定を確認してください。")
+          this.#render("denied", this.messagesValue.denied)
           return
         }
 
@@ -4938,7 +5363,7 @@ def configure_web_push
         let subscription = await registration.pushManager.getSubscription()
         if (subscription && !this.#sameApplicationServerKey(subscription, publicKey)) {
           const unsubscribed = await subscription.unsubscribe()
-          if (!unsubscribed) throw new Error("古いWeb Push購読を解除できませんでした。")
+          if (!unsubscribed) throw new Error(this.messagesValue.unsubscribe_failed)
           await this.#deleteServerSubscription()
           subscription = null
         }
@@ -4951,7 +5376,7 @@ def configure_web_push
           await this.#deleteServerSubscription()
           throw error
         }
-        this.#render("on", "このブラウザの通知を有効にしました。")
+        this.#render("on", this.messagesValue.enabled)
       }
 
       async #disable() {
@@ -4959,10 +5384,10 @@ def configure_web_push
         const subscription = await registration.pushManager.getSubscription()
         if (subscription) {
           const unsubscribed = await subscription.unsubscribe()
-          if (!unsubscribed) throw new Error("Web Push購読を解除できませんでした。")
+          if (!unsubscribed) throw new Error(this.messagesValue.unsubscribe_failed)
         }
         await this.#deleteServerSubscription()
-        this.#render("off", "このブラウザの通知を無効にしました。")
+        this.#render("off", this.messagesValue.disabled)
       }
 
       async #registration() {
@@ -4974,7 +5399,7 @@ def configure_web_push
           headers: { Accept: "application/json" },
           credentials: "same-origin"
         })
-        if (!response.ok) throw new Error(await this.#responseError(response, "VAPID公開鍵を取得できませんでした。"))
+        if (!response.ok) throw new Error(await this.#responseError(response, this.messagesValue.public_key_failed))
         const payload = await response.json()
         return this.#decodeBase64Url(payload.public_key)
       }
@@ -4996,19 +5421,19 @@ def configure_web_push
             auth: payload.keys?.auth
           }
         })
-        if (response.status !== 204) throw new Error("Web Push購読を保存できませんでした。")
+        if (response.status !== 204) throw new Error(this.messagesValue.save_failed)
       }
 
       async #deleteServerSubscription() {
         const response = await this.#request(this.subscriptionUrlValue, "DELETE", {
           push_subscription: { browser_id: this.browserId }
         })
-        if (response.status !== 204) throw new Error("Web Push購読を削除できませんでした。")
+        if (response.status !== 204) throw new Error(this.messagesValue.delete_failed)
       }
 
       async #request(url, method, body) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
-        if (!csrfToken) throw new Error("CSRF tokenが見つかりません。")
+        if (!csrfToken) throw new Error(this.messagesValue.csrf_missing)
         const response = await fetch(url, {
           method,
           headers: {
@@ -5019,7 +5444,7 @@ def configure_web_push
           credentials: "same-origin",
           body: JSON.stringify(body)
         })
-        if (!response.ok) throw new Error(await this.#responseError(response, "Web Pushリクエストに失敗しました。"))
+        if (!response.ok) throw new Error(await this.#responseError(response, this.messagesValue.request_failed))
         return response
       }
 
@@ -5090,18 +5515,18 @@ def configure_web_push
 
       #fail(error) {
         console.error("Web Push operation failed", error)
-        this.#render("error", error.message || "Web Pushの処理に失敗しました。")
+        this.#render("error", error.message || this.messagesValue.operation_failed)
       }
     }
   JAVASCRIPT
 
   create_file "app/views/notifications/show.html.erb", <<~ERB, force: true
-    <% content_for :title, "通知 | Rapid Rails" %>
+    <% content_for :title, t("web_push.page.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Notifications</p>
-        <h1 class="mt-2 text-2xl font-bold leading-[1.5]">通知</h1>
-        <p class="mt-2 text-sm text-neutral">このブラウザで受け取る通知を管理します。</p>
+        <p class="text-sm font-semibold text-primary"><%= t("web_push.page.eyebrow") %></p>
+        <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("web_push.page.title") %></h1>
+        <p class="mt-2 text-sm text-neutral"><%= t("web_push.page.description") %></p>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -5112,17 +5537,17 @@ def configure_web_push
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
-                Web Push通知
+                <%= t("web_push.page.card_title") %>
               </h2>
-              <p class="mt-2 text-sm text-neutral">アプリからの更新を、このブラウザへ通知します。</p>
+              <p class="mt-2 text-sm text-neutral"><%= t("web_push.page.card_description") %></p>
             </div>
             <label class="flex cursor-pointer items-center gap-3">
-              <span class="text-sm font-semibold">通知を受け取る</span>
-              <input type="checkbox" class="toggle" data-push-subscription-target="toggle" data-action="change->push-subscription#toggle" aria-label="このブラウザのWeb Push通知を切り替える">
+              <span class="text-sm font-semibold"><%= t("web_push.page.receive") %></span>
+              <input type="checkbox" class="toggle" data-push-subscription-target="toggle" data-action="change->push-subscription#toggle" aria-label="<%= t("web_push.page.toggle_label") %>">
             </label>
           </div>
           <div class="card-actions">
-            <button type="button" class="btn" data-push-subscription-target="testButton" data-action="click->push-subscription#sendTest" disabled>テスト通知を送信</button>
+            <button type="button" class="btn" data-push-subscription-target="testButton" data-action="click->push-subscription#sendTest" disabled><%= t("web_push.page.send_test") %></button>
           </div>
           <div class="alert alert-info hidden" role="status" aria-live="polite" data-push-subscription-target="status"></div>
         </div>
@@ -5370,7 +5795,7 @@ def configure_web_push
             chain_id: 1,
             nonce:,
             issued_at: Time.current.iso8601,
-            statement: "Sign in to www.example.com"
+            statement: Rails.configuration.x.application_identity.siwe_statement
           ).prepare_message
           post session_url, params: { message:, signature: key.personal_sign(message) }, as: :json
           assert_response :success
@@ -5400,8 +5825,8 @@ def configure_web_push
         get notification_url
 
         assert_response :success
-        assert_select "h1", text: "通知", count: 1
-        assert_select 'nav[aria-label="アカウントメニュー"] a.menu-active[aria-current="page"][href=?]', notification_path, count: 1
+        assert_select "h1", text: I18n.t("web_push.page.title"), count: 1
+        assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', I18n.t("navigation.account_menu"), notification_path, count: 1
         assert_select '[data-push-subscription-target="toggle"]', count: 1
         assert_select '[data-push-subscription-target="testButton"]', count: 1
       end
@@ -5498,15 +5923,24 @@ def configure_web_push
     end
   RUBY
 
-  create_file "config/locales/web_push.ja.yml", <<~YAML, force: true
-    ja:
-      web_push:
-        errors:
-          configuration: Web Pushのサーバー設定が完了していません。
-        test:
-          title: テスト通知
-          body: Web Pushは正常に設定されています。
-  YAML
+  create_locale_pair("web_push",
+    ja: {
+      "web_push" => {
+        "errors" => { "configuration" => "Web Pushのサーバー設定が完了していません。" },
+        "test" => { "title" => "テスト通知", "body" => "Web Pushは正常に設定されています。" },
+        "page" => { "title" => "通知", "eyebrow" => "通知", "description" => "このブラウザで受け取る通知を管理します。", "card_title" => "Web Push通知", "card_description" => "アプリからの更新を、このブラウザへ通知します。", "receive" => "通知を受け取る", "toggle_label" => "このブラウザのWeb Push通知を切り替える", "send_test" => "テスト通知を送信" },
+        "client" => { "unsupported" => "このブラウザはWeb Pushに対応していません。", "test_failed" => "テスト通知を送信できませんでした。", "test_sent" => "テスト通知を送信しました。", "blocked" => "通知がブロックされています。ブラウザの設定から許可してください。", "off" => "このブラウザでは通知が無効です。", "unsubscribe_failed" => "Web Push購読を解除できませんでした。", "reconciled" => "VAPID鍵の変更に合わせて通知を再登録しました。", "on" => "このブラウザでは通知が有効です。", "denied" => "通知が許可されていません。ブラウザの設定を確認してください。", "enabled" => "このブラウザの通知を有効にしました。", "disabled" => "このブラウザの通知を無効にしました。", "public_key_failed" => "VAPID公開鍵を取得できませんでした。", "save_failed" => "Web Push購読を保存できませんでした。", "delete_failed" => "Web Push購読を削除できませんでした。", "csrf_missing" => "CSRF tokenが見つかりません。", "request_failed" => "Web Pushリクエストに失敗しました。", "operation_failed" => "Web Pushの処理に失敗しました。" }
+      }
+    },
+    en: {
+      "web_push" => {
+        "errors" => { "configuration" => "The Web Push server configuration is incomplete." },
+        "test" => { "title" => "Test notification", "body" => "Web Push is configured correctly." },
+        "page" => { "title" => "Notifications", "eyebrow" => "Notifications", "description" => "Manage notifications received by this browser.", "card_title" => "Web Push notifications", "card_description" => "Receive application updates in this browser.", "receive" => "Receive notifications", "toggle_label" => "Toggle Web Push notifications for this browser", "send_test" => "Send test notification" },
+        "client" => { "unsupported" => "This browser does not support Web Push.", "test_failed" => "Could not send the test notification.", "test_sent" => "The test notification was sent.", "blocked" => "Notifications are blocked. Allow them in your browser settings.", "off" => "Notifications are disabled in this browser.", "unsubscribe_failed" => "Could not remove the Web Push subscription.", "reconciled" => "Notifications were re-registered for the new VAPID key.", "on" => "Notifications are enabled in this browser.", "denied" => "Notifications are not allowed. Check your browser settings.", "enabled" => "Notifications were enabled for this browser.", "disabled" => "Notifications were disabled for this browser.", "public_key_failed" => "Could not obtain the VAPID public key.", "save_failed" => "Could not save the Web Push subscription.", "delete_failed" => "Could not delete the Web Push subscription.", "csrf_missing" => "The CSRF token was not found.", "request_failed" => "The Web Push request failed.", "operation_failed" => "The Web Push operation failed." }
+      }
+    }
+  )
 end
 
 def install_solid_components
@@ -5564,6 +5998,7 @@ def configure_evidence_capture
       self.use_transactional_tests = false
 
       AUTHENTICATION = __AUTHENTICATION__
+      LOCALE = I18n.default_locale.to_s
       WEB_PUSH = __WEB_PUSH__
       require "eth" if AUTHENTICATION == "siwe"
       VIEWPORTS = {
@@ -5595,6 +6030,7 @@ def configure_evidence_capture
           @output_directory.join("captures.json"),
           JSON.pretty_generate(
             "authentication" => AUTHENTICATION,
+            "locale" => LOCALE,
             "viewports" => VIEWPORTS,
             "captures" => @captures
           ) + "\n"
@@ -5604,6 +6040,10 @@ def configure_evidence_capture
       private
         def devise?
           AUTHENTICATION == "devise"
+        end
+
+        def translate(key, **options)
+          I18n.t(key, **options)
         end
 
         def prepare_guest_data
@@ -5639,23 +6079,23 @@ def configure_evidence_capture
         end
 
         def capture_guest_pages(viewport)
-          capture_page("home-guest", "ホーム（未ログイン）", root_path, "迷わず始められる", viewport)
+          capture_page("home-guest", "ホーム（未ログイン）", root_path, translate("home.heading"), viewport)
           capture_page("about", "アプリについて", about_path, Page::TITLES.fetch("about"), viewport)
           assert_selector ".lexxy-content", text: "管理画面から更新したAction Text本文"
           capture_faq_page(viewport)
           login_path = devise? ? new_user_session_path : new_session_path
-          login_heading = devise? ? "ログイン" : "ウォレットでログイン"
+          login_heading = devise? ? translate("devise_views.sessions.title") : translate("wallet_siwe.title")
           capture_page("login", login_heading, login_path, login_heading, viewport)
 
           if devise?
-            capture_page("registration", "アカウント作成", new_user_registration_path, "アカウント作成", viewport)
-            capture_page("password-reset-request", "パスワード再設定", new_user_password_path, "パスワード再設定", viewport)
+            capture_page("registration", "アカウント作成", new_user_registration_path, translate("devise_views.registrations.new_title"), viewport)
+            capture_page("password-reset-request", "パスワード再設定", new_user_password_path, translate("devise_views.passwords.new_title"), viewport)
             reset_token = @user.send_reset_password_instructions
             capture_page(
               "password-reset-edit",
-              "新しいパスワード",
+              translate("devise_views.passwords.edit_title"),
               edit_user_password_path(reset_password_token: reset_token),
-              "新しいパスワード",
+              translate("devise_views.passwords.edit_title"),
               viewport
             )
           end
@@ -5670,9 +6110,9 @@ def configure_evidence_capture
         def authenticate
           if devise?
             visit new_user_session_path
-            fill_in "メールアドレス", with: @user.email
-            fill_in "パスワード", with: PASSWORD
-            click_button "ログイン"
+            fill_in User.human_attribute_name(:email), with: @user.email
+            fill_in User.human_attribute_name(:password), with: PASSWORD
+            click_button translate("devise_views.sessions.submit")
             assert_current_path root_path
           else
             authenticate_wallet_siwe
@@ -5697,7 +6137,7 @@ def configure_evidence_capture
             chain_id: 1,
             nonce: nonce,
             issued_at: Time.zone.parse("2026-01-01 00:00:00 UTC").iso8601,
-            statement: "Sign in to Rapid Rails"
+            statement: Rails.configuration.x.application_identity.siwe_statement
           ).prepare_message
           integration.post "/session", params: { message: message, signature: key.personal_sign(message) }, as: :json
           assert_equal 200, integration.response.status
@@ -5721,31 +6161,32 @@ def configure_evidence_capture
         end
 
         def capture_authenticated_pages(viewport)
-          capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, "迷わず始められる", viewport)
-          capture_page("account", "マイページ", account_path, "マイページ", viewport)
+          capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, translate("home.heading"), viewport)
+          capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
-          capture_page("profile", "プロフィール", profile_path, "プロフィール", viewport)
-          capture_page("profile-edit", "プロフィール編集", edit_profile_path, "プロフィール編集", viewport)
+          capture_page("profile", "プロフィール", profile_path, translate("profiles.title"), viewport)
+          capture_page("profile-edit", "プロフィール編集", edit_profile_path, translate("profiles.edit_title"), viewport)
           account_settings_path = devise? ? edit_user_registration_path : edit_account_path
-          capture_page("account-settings", "アカウント設定", account_settings_path, "アカウント設定", viewport)
-          capture_page("notifications", "通知", notification_path, "通知", viewport)
+          account_settings_heading = devise? ? translate("devise_views.registrations.edit_title") : translate("accounts.edit.title")
+          capture_page("account-settings", "アカウント設定", account_settings_path, account_settings_heading, viewport)
+          capture_page("notifications", "通知", notification_path, translate("web_push.page.title"), viewport)
           capture_enabled_web_push(viewport) if WEB_PUSH
 
           @user.api_credentials.destroy_all
-          capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, "APIキーの管理", viewport)
-          capture_page("api-credential-new", "APIキー作成", new_api_credential_path, "APIキーを作成", viewport)
-          fill_in "名前", with: "Evidence CLI"
+          capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, translate("api_credentials.title"), viewport)
+          capture_page("api-credential-new", "APIキー作成", new_api_credential_path, translate("api_credentials.new"), viewport)
+          fill_in ApiCredential.human_attribute_name(:name), with: "Evidence CLI"
           with_deterministic_secure_random do
             find('input[type="submit"]').click
           end
-          assert_text "ApiSecretはこの画面で一度だけ表示されます。"
+          assert_text translate("api_credentials.secret_once")
           capture_current_page("api-credential-secret", "APIキー詳細（初回secret）", viewport)
           credential = @user.api_credentials.find_by!(name: "Evidence CLI")
           capture_page("api-credential-show", "APIキー詳細", api_credential_path(credential), "Evidence CLI", viewport)
-          capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), "APIキーを編集", viewport)
-          capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, "APIキーの管理", viewport)
-          capture_page("admin-users", "ユーザー管理", admin_users_path, "ユーザー管理", viewport)
-          assert_admin_navigation_active("ユーザー管理")
+          capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), translate("api_credentials.edit"), viewport)
+          capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, translate("api_credentials.title"), viewport)
+          capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
+          assert_admin_navigation_active(translate("navigation.users"))
           capture_page(
             "admin-page-edit",
             "固定ページ編集",
@@ -5753,25 +6194,25 @@ def configure_evidence_capture
             Page::TITLES.fetch("about"),
             viewport
           )
-          assert_admin_navigation_active("固定ページ管理")
+          assert_admin_navigation_active(translate("navigation.pages"))
           assert_selector "lexxy-editor"
           capture_page(
             "admin-faq-edit",
             "FAQ編集",
             edit_admin_faq_path(@evidence_faq),
-            "FAQを編集",
+            translate("content_management.admin.faqs.edit"),
             viewport
           )
-          assert_admin_navigation_active("FAQ管理")
+          assert_admin_navigation_active(translate("navigation.faqs"))
           assert_selector "lexxy-editor"
           capture_page(
             "admin-footer-setting",
-            "外部リンク設定",
+            translate("content_management.admin.footer_settings.title"),
             edit_admin_footer_setting_path,
-            "外部リンク設定",
+            translate("content_management.admin.footer_settings.title"),
             viewport
           )
-          assert_admin_navigation_active("外部リンク設定")
+          assert_admin_navigation_active(translate("content_management.admin.footer_settings.title"))
 
           return unless viewport == "mobile"
 
@@ -5792,24 +6233,24 @@ def configure_evidence_capture
           toggle = find('[data-push-subscription-target="toggle"]')
           assert_not toggle.checked?
           toggle.click
-          assert_selector '[data-push-subscription-target="status"].alert-success', text: "このブラウザの通知を有効にしました。"
-          assert_selector '[data-push-subscription-target="testButton"]:not([disabled])', text: "テスト通知を送信"
+          assert_selector '[data-push-subscription-target="status"].alert-success', text: translate("web_push.client.enabled")
+          assert_selector '[data-push-subscription-target="testButton"]:not([disabled])', text: translate("web_push.page.send_test")
           capture_current_page("web-push-enabled", "Web Push（購読済み・テスト通知可能）", viewport)
 
           find('[data-push-subscription-target="testButton"]').click
-          assert_selector '[data-push-subscription-target="status"].alert-success', text: "テスト通知を送信しました。"
+          assert_selector '[data-push-subscription-target="status"].alert-success', text: translate("web_push.client.test_sent")
 
           set_evidence_web_push_mode("rotated")
           visit notification_path
           install_evidence_csrf_token
           assert_selector '[data-push-subscription-target="status"].alert-success',
-            text: "VAPID鍵の変更に合わせて通知を再登録しました。"
+            text: translate("web_push.client.reconciled")
           assert_equal({ "subscribeCount" => 1, "unsubscribeCount" => 1, "subscribed" => true,
                          "permissionRequests" => 0 }, evidence_web_push_stats)
 
           find('[data-push-subscription-target="toggle"]').click
           assert_selector '[data-push-subscription-target="status"].alert-info',
-            text: "このブラウザの通知を無効にしました。"
+            text: translate("web_push.client.disabled")
           assert_equal false, evidence_web_push_stats.fetch("subscribed")
 
           set_evidence_web_push_mode("default")
@@ -5817,19 +6258,19 @@ def configure_evidence_capture
           install_evidence_csrf_token
           find('[data-push-subscription-target="toggle"]').click
           assert_selector '[data-push-subscription-target="status"].alert-success',
-            text: "このブラウザの通知を有効にしました。"
+            text: translate("web_push.client.enabled")
           assert_equal 1, evidence_web_push_stats.fetch("permissionRequests")
 
           set_evidence_web_push_mode("denied")
           visit notification_path
           assert_selector '[data-push-subscription-target="status"].alert-warning',
-            text: "通知がブロックされています。ブラウザの設定から許可してください。"
+            text: translate("web_push.client.blocked")
           assert find('[data-push-subscription-target="toggle"]').disabled?
 
           set_evidence_web_push_mode("unsupported")
           visit notification_path
           assert_selector '[data-push-subscription-target="status"].alert-warning',
-            text: "このブラウザはWeb Pushに対応していません。"
+            text: translate("web_push.client.unsupported")
           assert find('[data-push-subscription-target="toggle"]').disabled?
         ensure
           page.execute_script('localStorage.removeItem("evidence-web-push-mode")')
@@ -5955,25 +6396,25 @@ def configure_evidence_capture
         end
 
         def assert_admin_navigation_active(label)
-          assert_selector '[data-layout="admin"] nav[aria-label="管理メニュー"]'
-          assert_selector '[data-layout="admin"] nav[aria-label="管理メニュー"] li.menu-title', text: "管理画面", count: 1
-          assert_no_selector '[data-layout="admin"] nav[aria-label="アカウントメニュー"]'
+          assert_selector %([data-layout="admin"] nav[aria-label="#{translate("navigation.admin_menu")}"])
+          assert_selector %([data-layout="admin"] nav[aria-label="#{translate("navigation.admin_menu")}"] li.menu-title), text: translate("navigation.admin"), count: 1
+          assert_no_selector %([data-layout="admin"] nav[aria-label="#{translate("navigation.account_menu")}"])
           assert_selector '[data-layout="admin"] a.menu-active[aria-current="page"]', text: label, count: 1
-          assert_selector 'header li.menu-title', text: "管理画面", count: 1, visible: :all
+          assert_selector 'header li.menu-title', text: translate("navigation.admin"), count: 1, visible: :all
           assert_no_selector %(header a[href="\#{account_path}"]), visible: :all
         end
 
         def assert_account_navigation_scope
-          assert_selector '[data-layout="account"] nav[aria-label="アカウントメニュー"]'
-          assert_no_selector '[data-layout="account"] nav[aria-label="管理メニュー"]'
-          assert_no_selector 'header li.menu-title', text: "管理画面", visible: :all
+          assert_selector %([data-layout="account"] nav[aria-label="#{translate("navigation.account_menu")}"])
+          assert_no_selector %([data-layout="account"] nav[aria-label="#{translate("navigation.admin_menu")}"])
+          assert_no_selector 'header li.menu-title', text: translate("navigation.admin"), visible: :all
           assert_no_selector %(header a[href="\#{admin_users_path}"]), visible: :all
         end
 
         def capture_faq_page(viewport)
           visit faq_path
           assert_equal 200, page.status_code
-          assert_selector "h1", text: "よくある質問"
+          assert_selector "h1", text: translate("content_management.faqs.title")
           find("details.collapse > summary", text: @evidence_faq.question).click
           assert_selector "details[open] .lexxy-content", text: "アカウントを作成し"
           assert_no_text "公開前の質問"
@@ -6293,6 +6734,7 @@ after_bundle do
   configure_common_files
   configure_evidence_capture
   configure_annotaterb
+  configure_application_identity
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
   configure_roles
   configure_content_management

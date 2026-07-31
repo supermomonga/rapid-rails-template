@@ -2,6 +2,7 @@
 
 require_relative "../test_helper"
 require "open3"
+require "pty"
 require "tmpdir"
 
 class BootstrapTest < Minitest::Test
@@ -35,15 +36,27 @@ class BootstrapTest < Minitest::Test
       RUBY
       File.chmod(0o755, gum_executable)
 
-      _stdout, stderr, status = Open3.capture3(
+      output = +""
+      status = nil
+      PTY.spawn(
         { "GUM_INSTALL_DIR" => gum_directory },
         RbConfig.ruby,
         File.join(ROOT, "bootstrap.rb"),
-        "--name=generated_app",
+        "--app-id=generated_app",
+        "--app-name=Generated App",
+        "--default-locale=ja",
         destination
-      )
+      ) do |reader, writer, child_pid|
+        writer.close
+        begin
+          loop { output << reader.readpartial(4096) }
+        rescue EOFError, Errno::EIO
+          nil
+        end
+        _pid, status = Process.wait2(child_pid)
+      end
 
-      assert status.success?, stderr
+      assert status.success?, output
       refute_path_exists destination
     end
   end

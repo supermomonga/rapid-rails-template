@@ -37,6 +37,32 @@ class RailsTemplateContractTest < Minitest::Test
       "expected one class attribute containing #{tokens.inspect}"
   end
 
+  def test_generates_one_application_identity_and_i18n_boundary
+    identity = generated_file_source("lib/application_identity.rb")
+    initializer = generated_file_source("config/initializers/application_identity.rb")
+    concern = generated_file_source("app/controllers/concerns/localized_request.rb")
+    helper = generated_file_source("app/helpers/application_helper.rb")
+    layout = generated_file_source("app/views/layouts/application.html.erb")
+    header = generated_file_source("app/views/shared/_header.html.erb")
+    manifest = generated_file_source("app/views/pwa/manifest.json.erb")
+
+    assert_includes identity, "AVAILABLE_LOCALES = %i[ja en].freeze"
+    assert_includes identity, 'environment.fetch(configuration.canonical_origin_env)'
+    assert_includes identity, "canonical_origin must be an HTTP(S) origin without path"
+    assert_includes identity, "def siwe_statement(locale: default_locale)"
+    assert_includes identity, "URI.encode_uri_component(app_name)"
+    assert_includes initializer, "Rails.application.routes.default_url_options = identity.default_url_options"
+    assert_includes initializer, "action_mailer.default_url_options = identity.default_url_options"
+    assert_includes concern, "I18n.with_locale(I18n.default_locale, &action)"
+    assert_includes helper, "Rails.configuration.x.application_identity"
+    assert_includes layout, '<html lang="<%= I18n.locale %>"'
+    assert_includes layout, 'property="og:site_name" content="<%= application_identity.app_name %>"'
+    assert_includes header, "link_to application_identity.app_name, root_path"
+    assert_includes manifest, "name: identity.app_name"
+    assert_includes manifest, "lang: identity.default_locale.to_s"
+    refute_match(/I18n\.t\([^)]*locale:\s*:ja/m, @source)
+  end
+
   def test_defines_one_complete_default_light_theme
     assert_equal 1, @source.scan('@plugin "daisyui/theme"').size
     assert_includes @source, 'name: "rapid-rails";'
@@ -271,7 +297,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes client, 'crypto.randomUUID()'
     assert_includes client, 'typeof window.Notification !== "undefined"'
     assert_includes client, 'Boolean(navigator.serviceWorker)'
-    assert_includes notifications_view, '<h1 class="mt-2 text-2xl font-bold leading-[1.5]">通知</h1>'.b
+    assert_includes notifications_view, 't("web_push.page.title")'
     assert_includes notifications_view, 'data-action="change->push-subscription#toggle"'
     assert_includes notifications_view, 'data-action="click->push-subscription#sendTest"'
     assert_includes notifications_view, 'aria-live="polite"'
@@ -331,7 +357,6 @@ class RailsTemplateContractTest < Minitest::Test
     view = generated_file_source("app/views/admin/users/index.html.erb")
     task = generated_file_source("lib/tasks/roles.rake")
     local_seed = generated_file_source("db/seeds.local.rb.example")
-    locale = generated_file_source("config/locales/roles.ja.yml")
 
     assert_class_tokens view, "card", "card-border"
     assert_class_tokens view, "overflow-x-auto"
@@ -356,9 +381,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes roles, 'append_to_file ".gitignore", "\\n/db/seeds.local.rb\\n"'
     assert_includes local_seed, 'ENV.fetch("#{identifier_environment}")'
     assert_includes local_seed, 'admin.grant_role!(:admin)'
-    assert_includes locale, 'last_admin: 最後の管理者はアカウントを削除できません'.b
-    assert_includes roles, 'I18n.t("admin.user_roles.create.notice", locale: :ja)'
-    assert_includes roles, 'I18n.t("admin.user_roles.destroy.self_forbidden", locale: :ja)'
+    assert_includes roles, 'create_locale_pair("roles"'
+    assert_includes roles, '"last_admin" => "The final administrator cannot delete their account"'
+    assert_includes roles, 'I18n.t("admin.user_roles.create.notice")'
+    assert_includes roles, 'I18n.t("admin.user_roles.destroy.self_forbidden")'
   end
 
   def test_role_generation_covers_both_authentication_contexts_and_last_admin_deletion
@@ -371,9 +397,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes roles, 'configure_devise_registration_route'
     assert_includes @source, 'devise_for :users, controllers: { registrations: "users/registrations" }'
     assert_includes devise_registration, 'if resource.last_admin?'
-    assert_includes devise_registration, 'I18n.t("accounts.destroy.last_admin", locale: :ja)'
+    assert_includes devise_registration, 'I18n.t("accounts.destroy.last_admin")'
     assert_includes defaults, 'if user.last_admin?'
-    assert_includes defaults, 'I18n.t("accounts.destroy.last_admin", locale: :ja)'
+    assert_includes defaults, 'I18n.t("accounts.destroy.last_admin")'
     assert_match(/install_wallet_siwe\n  configure_roles/, @source)
   end
 
@@ -395,7 +421,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes users_controller_test, 'assert_have_authorized_scope(type: :active_record_relation, with: UserPolicy)'
     assert_includes users_controller_test, 'assert_response :forbidden'
     assert_includes users_controller_test, 'create_additional_users(25)'
-    assert_includes users_controller_test, 'nav[aria-label="ユーザー一覧のページング"] .join'.b
+    assert_includes users_controller_test, 'I18n.t("admin.users.pagination")'
     assert_includes roles_controller_test, 'assert_no_difference("UserRole.count")'
     assert_includes roles_controller_test, 'assert_response :unprocessable_content'
     assert_includes @source, 'test "refuses deletion of the last admin account"'
@@ -456,10 +482,10 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes profile, "Current.user.wallet_address"
     refute_includes profile, ">ID<"
     assert_includes settings, "Current.user.wallet_address"
-    assert_includes settings, 'button_to "アカウントを削除", account_path, method: :delete'.b
+    assert_includes settings, 'button_to t("accounts.edit.delete"), account_path, method: :delete'
     assert_includes settings, "btn btn-outline btn-error btn-rapid"
-    assert_includes @source, 'notice: I18n.t("accounts.destroy.notice", locale: :ja)'
-    assert_includes @source, "notice: アカウントを削除しました".b
+    assert_includes @source, 'notice: I18n.t("accounts.destroy.notice")'
+    assert_includes @source, '"notice" => "Your account was deleted."'
   end
 
   def test_profile_generation_is_conditional_and_uses_selected_features
@@ -490,14 +516,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes profile_configuration, 'self.display_name = screen_name.camelize if display_name.blank?'
     assert_includes profile_configuration, 'required: true'
     assert_includes controller, 'params.expect(profile: ['
-    assert_includes controller, 'I18n.t("profiles.update.notice", locale: :ja)'
+    assert_includes controller, 'I18n.t("profiles.update.notice")'
     assert_includes profile_configuration, 'form.file_field :avatar, class: "file-input w-full", accept: "image/*"'
     assert_includes @source, 'route "resource :profile, only: %i[show edit update]"'
     assert_includes profile_configuration, 'delete "profile/avatar", to: "profiles#destroy_avatar", as: :profile_avatar'
     assert_includes profile_configuration, "def destroy_avatar"
     assert_includes profile_configuration, ".profile.avatar.purge if"
-    assert_includes profile_configuration, 'I18n.t("profiles.avatar.destroy.notice", locale: :ja)'
-    assert_includes profile_configuration, "アバター画像を削除しました".b
+    assert_includes profile_configuration, 'I18n.t("profiles.avatar.destroy.notice")'
+    assert_includes profile_configuration, '"notice" => "Your avatar image was deleted."'
     assert_includes avatar_helper, "BORING_AVATAR_COLORS = %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e].freeze"
     assert_includes avatar_helper, "profile.user_id.to_s"
     assert_includes avatar_helper, "variant: :marble"
@@ -575,7 +601,7 @@ class RailsTemplateContractTest < Minitest::Test
     faq_index = generated_file_source("app/views/faqs/index.html.erb")
 
     assert_includes page_model, "has_rich_text :content, store_if_blank: false"
-    assert_includes @source, '"transaction-law" => "特商法表記"'.b
+    assert_includes @source, '"transaction-law" => "content_management.pages.transaction_law"'
     assert_includes faq_model, "has_rich_text :answer"
     assert_includes faq_model, "where(published: true).order(:position, :id)"
     assert_includes footer_setting_model, "uri.is_a?(URI::HTTPS)"
@@ -586,7 +612,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes admin_pages_controller, "params.expect(page: [:content, :slug])"
     assert_includes admin_faqs_controller, "authorize!"
     assert_includes admin_faqs_controller, "params.expect(faq: [:question, :answer, :position, :published])"
-    assert_includes admin_faqs_controller, 'I18n.t("admin.faqs.update.notice", locale: :ja)'
+    assert_includes admin_faqs_controller, 'I18n.t("admin.faqs.update.notice")'
     assert_includes @source, 'get "/transaction-law", to: "pages#show"'
     assert_includes @source, 'resource :footer_setting, path: "footer-setting", only: %i[edit update]'
     assert_class_tokens faq_index, "collapse", "collapse-arrow"
@@ -628,11 +654,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes api_credentials_controller, "current_api_user.api_credentials"
     assert_includes api_credentials_controller, "params.expect(api_credential: [:name])"
     assert_includes web_controller, "account_user.api_credentials.find(params.expect(:id))"
-    assert_includes show, "ApiSecretはこの画面で一度だけ表示されます。".b
+    assert_includes show, 't("api_credentials.secret_once")'
     assert_includes show, 'input type="text" value="<%= @api_secret %>" readonly'.b
     assert_includes show, 'input type="text" value="<%= @api_credential.api_key %>" readonly'.b
     assert_includes index, 'input type="text" value="<%= credential.api_key %>" readonly'.b
-    assert_includes index, 'aria-label="<%= credential.name %>のAPI key"'.b
+    assert_includes index, "t('api_credentials.api_key_label', name: credential.name)"
     assert_includes index, 'class="join w-80" data-controller="clipboard"'.b
     assert_includes index, 'data-action="clipboard#copy"'
     assert_equal 2, show.scan('data-controller="clipboard"').length
@@ -640,7 +666,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes show, "Bearer token"
     assert_includes clipboard_controller, 'static targets = ["source", "button"]'
     assert_includes clipboard_controller, "await navigator.clipboard.writeText(this.sourceTarget.value)"
-    assert_includes clipboard_controller, 'this.buttonTarget.textContent = "コピーしました"'.b
+    assert_includes clipboard_controller, "this.buttonTarget.textContent = this.copiedValue"
     assert_includes @source, 'd="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"'
     assert_includes @source, "namespace :api do"
     assert_includes @source, "resources :api_credentials, only: %i[index show create update destroy]"
@@ -705,7 +731,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")'
     assert_includes evidence, 'integration.post "/session"'
     assert_includes evidence, 'playwright_page.context.add_cookies'
-    assert_includes evidence, 'fill_in "メールアドレス", with: @user.email'
+    assert_includes evidence, 'fill_in User.human_attribute_name(:email), with: @user.email'
     assert_includes evidence, '"api-credential-secret"'
     assert_includes evidence, "def with_deterministic_secure_random"
     assert_includes evidence, "singleton_class.define_method(:urlsafe_base64, original_method)"
@@ -736,8 +762,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"admin layout should use two columns at #{width}px"'
     assert_includes evidence, "def assert_admin_navigation_active"
     assert_includes evidence, "def assert_account_navigation_scope"
-    assert_includes evidence, 'assert_no_selector \'[data-layout="admin"] nav[aria-label="アカウントメニュー"]\''
-    assert_includes evidence, 'assert_no_selector \'[data-layout="account"] nav[aria-label="管理メニュー"]\''
+    assert_includes evidence, 'translate("navigation.account_menu")'
+    assert_includes evidence, 'translate("navigation.admin_menu")'
     assert_includes evidence, 'runner = runner.sub("__AUTHENTICATION__", authentication.inspect)'
     assert_includes evidence, 'runner = runner.sub("__WEB_PUSH__", web_push.inspect)'
     refute_includes evidence, "runner.sub!"
@@ -803,8 +829,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens admin_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
     assert_includes admin_layout, 'data-layout="admin"'
     assert_includes admin_layout, 'min-[961px]:grid-cols-[220px_minmax(0,1fr)]'
-    assert_includes admin_layout, 'nav aria-label="管理メニュー"'.b
-    assert_includes admin_layout, '<li class="menu-title"><span>管理画面</span></li>'.b
+    assert_includes admin_layout, "t('navigation.admin_menu')"
+    assert_includes admin_layout, 't("navigation.admin")'
     assert_includes @source, 'layout "admin"'
     assert_includes account_navigation, '"menu-active" if current_page?'
     refute_includes account_navigation, '"bg-base-content text-base-100" if current_page?'
@@ -814,11 +840,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
     assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, "profile_path"
-    assert_includes account_navigation, "マイページ".b
+    assert_includes account_navigation, 't("navigation.dashboard")'
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
     assert_includes account_navigation, 'link_to notification_path'
-    assert_includes account_navigation, "通知".b
+    assert_includes account_navigation, 't("navigation.notifications")'
     refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
     refute_includes account_navigation, 'allowed_to?(:index?, User)'
     refute_includes account_navigation, 'admin_users_path'
@@ -832,11 +858,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/faqs"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/footer_settings"'
     assert_includes header, '<% if controller_path.start_with?("admin/") %>'
-    assert_includes header, '<li class="menu-title"><span>管理画面</span></li>'.b
+    assert_includes header, 't("navigation.admin")'
     refute_includes @source, '<li class="menu-title"><span>管理</span></li>'.b
     assert_includes header, 'data: { turbo_method: :delete }'
     assert_includes @source, 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'
-    assert_includes @source, '<span>MENU</span>'
+    assert_includes @source, 't("common.menu")'
     refute_includes header, "min-h-11 items-center gap"
 
     assert_class_tokens authentication_layout, "hero"

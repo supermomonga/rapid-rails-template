@@ -15,6 +15,7 @@ class ConfigurationTest < Minitest::Test
     assert_equal "enable", configuration["api"]
     assert_equal "skip", configuration["action_cable"]
     assert_equal "use", configuration["mail"]
+    assert_equal "ja", configuration["default_locale"]
     refute_includes configuration.answers, "action_text"
   end
 
@@ -49,6 +50,11 @@ class ConfigurationTest < Minitest::Test
     assert_raises(RapidRailsTemplate::InvalidConfiguration) do
       RapidRailsTemplate::Configuration.build("pwa" => "maybe")
     end
+  end
+
+  def test_accepts_supported_default_locales
+    assert_equal "ja", RapidRailsTemplate::Configuration.build("default_locale" => "ja")["default_locale"]
+    assert_equal "en", RapidRailsTemplate::Configuration.build("default_locale" => "en")["default_locale"]
   end
 
   def test_accepts_an_empty_profile_feature_selection

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-desc "Devise版とSIWE版のUIエビデンスを再生成する"
+desc "Devise版とSIWE版のja/en UIエビデンスを再生成する"
 task "evidence:update" do
   ruby File.expand_path("bin/update-evidence", __dir__)
 end

@@ -23,7 +23,7 @@ class EvidenceTest < Minitest::Test
 
   def test_rejects_changed_or_extra_screenshots
     with_evidence_repository do |root|
-      screenshot = File.join(root, "docs/evidence/devise/home--desktop.png")
+      screenshot = File.join(root, "docs/evidence/devise-ja/home--desktop.png")
       File.binwrite(screenshot, fake_png(1400, 901))
 
       error = assert_raises(RuntimeError) { RapidRailsTemplate::Evidence.verify(root: root) }
@@ -31,7 +31,7 @@ class EvidenceTest < Minitest::Test
     end
 
     with_evidence_repository do |root|
-      File.binwrite(File.join(root, "docs/evidence/devise/extra.png"), fake_png(1400, 900))
+      File.binwrite(File.join(root, "docs/evidence/devise-ja/extra.png"), fake_png(1400, 900))
 
       error = assert_raises(RuntimeError) { RapidRailsTemplate::Evidence.verify(root: root) }
       assert_includes error.message, "スクリーンショット一覧がmanifestと一致しません"
@@ -40,7 +40,7 @@ class EvidenceTest < Minitest::Test
 
   def test_rejects_readme_that_does_not_match_manifest
     with_evidence_repository do |root|
-      File.write(File.join(root, "docs/evidence/siwe/README.md"), "stale\n")
+      File.write(File.join(root, "docs/evidence/siwe-en/README.md"), "stale\n")
 
       error = assert_raises(RuntimeError) { RapidRailsTemplate::Evidence.verify(root: root) }
 
@@ -56,14 +56,15 @@ class EvidenceTest < Minitest::Test
         File.write(File.join(root, "src/rapid_rails_template/template.rb"), "template\n")
         File.write(File.join(root, "bin/update-evidence"), "update\n")
         fingerprint = RapidRailsTemplate::Evidence.fingerprint(root)
-        manifests = RapidRailsTemplate::Evidence::VARIANTS.to_h do |variant|
+        manifests = RapidRailsTemplate::Evidence::VARIANTS.to_h do |variant, metadata|
           directory = File.join(root, "docs/evidence", variant)
           FileUtils.mkdir_p(directory)
           File.binwrite(File.join(directory, "home--desktop.png"), fake_png(1400, 900))
           File.write(
             File.join(directory, "captures.json"),
             JSON.pretty_generate(
-              "authentication" => variant,
+              "authentication" => metadata.fetch("authentication"),
+              "locale" => metadata.fetch("locale"),
               "viewports" => { "desktop" => { "width" => 1400, "height" => 900 } },
               "captures" => [
                 { "id" => "home", "title" => "ホーム", "viewport" => "desktop", "path" => "home--desktop.png" }
@@ -72,7 +73,8 @@ class EvidenceTest < Minitest::Test
           )
           manifest = RapidRailsTemplate::Evidence.finalize_variant(
             directory: directory,
-            authentication: variant,
+            authentication: metadata.fetch("authentication"),
+            locale: metadata.fetch("locale"),
             source_fingerprint: fingerprint,
             base_commit: "abc123"
           )

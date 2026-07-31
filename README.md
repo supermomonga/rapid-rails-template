@@ -22,18 +22,19 @@ Rapid Rails Templateは、Railsアプリケーションの初期設定を対話�
 ```console
 gem install gum -v 0.3.2
 curl -fsSL BOOTSTRAP_URL -o /tmp/rapid-rails-bootstrap.rb
-ruby /tmp/rapid-rails-bootstrap.rb --name=APP_NAME APP_PATH
+ruby /tmp/rapid-rails-bootstrap.rb --app-id=APP_ID --app-name="My App" APP_PATH
 ```
 
-`--name=APP_NAME`はRailsのアプリケーション名を生成先`APP_PATH`とは独立して指定します。省略した場合は、`APP_PATH`のbasenameを初期値として`Gum.input`で質問します。
+`--app-id=APP_ID`はRails内部識別子を生成先`APP_PATH`とは独立して指定し、Rails標準の`--name`へ変換します。省略した場合は、`APP_PATH`のbasenameを初期値として`Gum.input`で質問します。`--app-name=NAME`はheader、title、PWA、OGP、メール、通知などの表示用アプリ名です。省略した場合は確定済みのRailsアプリIDを初期値として質問します。旧`--name`は受け付けません。
 
 `bootstrap.rb`は、gum 0.3.2と同梱されたGum実行可能ファイルを質問開始前に検証します。生成先を変更する前に`Gum.input`と`Gum.choose`による質問・回答検証、`Gum.confirm`による実行予定の確認を完了し、回答から`rails new`オプションを構築します。その後、内包するApplication Templateを一時ファイルへ展開して`rails new`を起動します。
 
-アプリ名と各選択はCLI引数で個別に指定できます。指定済みの項目は再質問せず、未指定の適用可能な項目だけを質問します。アプリ名を含むすべての適用可能な項目を指定すると、質問と最終確認を行わず実行します。
+RailsアプリID、表示用アプリ名、各選択はCLI引数で個別に指定できます。指定済みの項目は再質問せず、未指定の適用可能な項目だけを質問します。すべての適用可能な項目を指定すると、質問と最終確認を行わず実行します。
 
 ```console
 ruby /tmp/rapid-rails-bootstrap.rb \
-  --name=my_app \
+  --app-id=my_app \
+  --app-name="My App" \
   --pwa=skip \
   --web-push=skip \
   --active-job=skip \
@@ -44,6 +45,7 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --action-cable=skip \
   --mail=auto \
   --deployment=dokploy \
+  --default-locale=ja \
   APP_PATH
 mise run generate-sampleapp
 mise run generate-sampleapp-wallet-siwe
@@ -52,6 +54,8 @@ mise run evidence-verify
 ```
 
 `--profile-features`は`screen_name`、`display_name`、`avatar`をカンマ区切りで指定します。既定では3機能すべてを選択し、`--profile-features=`と空値を指定するとProfile modelとプロフィール管理画面を生成しません。対話時はGumの複数選択を使用します。`screen_name`と`display_name`は選択時に必須かつ一意となり、User作成時にHaikunatorで自動生成されます。両方を選択した場合、`display_name`には自動生成した`screen_name`のCamelCaseを設定します。`avatar`を選択した場合、画像未設定時はUser IDから決定的に生成したBoring Avatarを表示し、設定済み画像はプロフィール編集画面から削除してBoring Avatarへ戻せます。生成seedを保存する追加columnは作りません。
+
+`--default-locale`は`ja`または`en`を指定し、既定値は`ja`です。生成アプリには両言語のlocaleを用意しますが、requestごとの切替UIやUserへのlocale保存は生成しません。productionのcanonical originは`APPLICATION_ORIGIN`環境変数で明示し、development/testだけが固定のローカル既定値を持ちます。
 
 リポジトリの`mise run generate-sampleapp`はDevise認証、`mise run generate-sampleapp-wallet-siwe`はWallet SIWE認証を指定します。どちらも既存の`sample/`を削除してから、同じ場所へアプリを再生成します。
 

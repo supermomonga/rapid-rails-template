@@ -22,15 +22,18 @@ Rapid Rails Templateは、Railsアプリケーションの初期設定を対話�
 ```console
 gem install gum -v 0.3.2
 curl -fsSL BOOTSTRAP_URL -o /tmp/rapid-rails-bootstrap.rb
-ruby /tmp/rapid-rails-bootstrap.rb APP_PATH
+ruby /tmp/rapid-rails-bootstrap.rb --name=APP_NAME APP_PATH
 ```
 
-`bootstrap.rb`は、gum 0.3.2と同梱されたGum実行可能ファイルを質問開始前に検証します。生成先を変更する前に`Gum.choose`による質問・回答検証・`Gum.confirm`による実行予定の確認を完了し、回答から`rails new`オプションを構築します。その後、内包するApplication Templateを一時ファイルへ展開して`rails new`を起動します。
+`--name=APP_NAME`はRailsのアプリケーション名を生成先`APP_PATH`とは独立して指定します。省略した場合は、`APP_PATH`のbasenameを初期値として`Gum.input`で質問します。
 
-各選択はCLI引数で個別に指定できます。指定済みの項目は再質問せず、未指定の適用可能な項目だけを質問します。すべての適用可能な項目を指定すると、質問と最終確認を行わず実行します。
+`bootstrap.rb`は、gum 0.3.2と同梱されたGum実行可能ファイルを質問開始前に検証します。生成先を変更する前に`Gum.input`と`Gum.choose`による質問・回答検証、`Gum.confirm`による実行予定の確認を完了し、回答から`rails new`オプションを構築します。その後、内包するApplication Templateを一時ファイルへ展開して`rails new`を起動します。
+
+アプリ名と各選択はCLI引数で個別に指定できます。指定済みの項目は再質問せず、未指定の適用可能な項目だけを質問します。アプリ名を含むすべての適用可能な項目を指定すると、質問と最終確認を行わず実行します。
 
 ```console
 ruby /tmp/rapid-rails-bootstrap.rb \
+  --name=my_app \
   --pwa=skip \
   --web-push=skip \
   --active-job=skip \

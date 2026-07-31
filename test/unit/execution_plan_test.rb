@@ -4,8 +4,15 @@ require_relative "../test_helper"
 
 class ExecutionPlanTest < Minitest::Test
   def test_default_plan_installs_only_selected_solid_component
-    plan = RapidRailsTemplate::ExecutionPlan.build(RapidRailsTemplate::Configuration.build({}))
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build({}),
+      app_name: "sample"
+    )
 
+    assert_equal "sample", plan.app_name
+    assert_equal "sample", plan.to_h.fetch("app_name")
+    assert_equal "--name=sample", plan.generator_options.first
+    assert_includes plan.summary, "アプリ名: sample"
     assert_includes plan.gems, "solid_cache"
     refute_includes plan.gems, "solid_queue"
     refute_includes plan.gems, "solid_cable"
@@ -71,7 +78,10 @@ class ExecutionPlanTest < Minitest::Test
   end
 
   def test_api_disabled_plan_omits_api_steps_and_artifacts
-    plan = RapidRailsTemplate::ExecutionPlan.build(RapidRailsTemplate::Configuration.build("api" => "disable"))
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build("api" => "disable"),
+      app_name: "sample"
+    )
 
     refute_includes plan.steps, "configure_api"
     refute_includes plan.artifacts, "app/models/api_credential.rb"
@@ -82,7 +92,8 @@ class ExecutionPlanTest < Minitest::Test
 
   def test_empty_profile_features_omit_profile_and_active_storage_steps_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("profile_features" => [])
+      RapidRailsTemplate::Configuration.build("profile_features" => []),
+      app_name: "sample"
     )
 
     refute_includes plan.steps, "install_active_storage"
@@ -98,7 +109,8 @@ class ExecutionPlanTest < Minitest::Test
 
   def test_profile_without_avatar_does_not_install_active_storage
     plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name display_name])
+      RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name display_name]),
+      app_name: "sample"
     )
 
     assert_includes plan.steps, "configure_profile"
@@ -109,7 +121,8 @@ class ExecutionPlanTest < Minitest::Test
 
   def test_avatar_only_profile_does_not_install_haikunator
     plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("profile_features" => %w[avatar])
+      RapidRailsTemplate::Configuration.build("profile_features" => %w[avatar]),
+      app_name: "sample"
     )
 
     assert_includes plan.steps, "configure_profile"
@@ -121,7 +134,8 @@ class ExecutionPlanTest < Minitest::Test
 
   def test_wallet_plan_uses_siwe_and_not_devise
     plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("account_authentication" => "wallet_siwe", "deployment" => "none")
+      RapidRailsTemplate::Configuration.build("account_authentication" => "wallet_siwe", "deployment" => "none"),
+      app_name: "sample"
     )
 
     assert_includes plan.gems, "siwe-rb"
@@ -160,7 +174,7 @@ class ExecutionPlanTest < Minitest::Test
       "action_cable" => "solid_cable",
       "deployment" => "dokploy"
     )
-    plan = RapidRailsTemplate::ExecutionPlan.build(configuration)
+    plan = RapidRailsTemplate::ExecutionPlan.build(configuration, app_name: "sample")
 
     assert_includes plan.gems, "web-push"
     assert_includes plan.gems, "solid_queue"

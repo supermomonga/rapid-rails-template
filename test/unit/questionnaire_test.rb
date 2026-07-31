@@ -4,13 +4,20 @@ require_relative "../test_helper"
 
 class QuestionnaireTest < Minitest::Test
   class RecordingPrompt
-    attr_reader :choose_calls, :confirm_calls
+    attr_reader :choose_calls, :confirm_calls, :input_calls
 
-    def initialize(answers: [], confirmation: false)
+    def initialize(answers: [], confirmation: false, input_answer: nil)
       @answers = answers
       @confirmation = confirmation
+      @input_answer = input_answer
       @choose_calls = []
       @confirm_calls = []
+      @input_calls = []
+    end
+
+    def input(**options)
+      @input_calls << options
+      @input_answer
     end
 
     def choose(choices, **options)
@@ -23,6 +30,26 @@ class QuestionnaireTest < Minitest::Test
     def confirm(message, **options)
       @confirm_calls << [message, options]
       @confirmation
+    end
+  end
+
+  def test_asks_app_name_with_path_basename_as_initial_value
+    prompt = RecordingPrompt.new(input_answer: "custom_app")
+    questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)
+
+    assert_equal "custom_app", questionnaire.ask_app_name("sample")
+    assert_equal [
+      { header: "アプリ名を入力してください。", value: "sample" }
+    ], prompt.input_calls
+    assert questionnaire.asked_any?
+  end
+
+  def test_rejects_cancelled_or_empty_app_name
+    [nil, ""].each do |answer|
+      prompt = RecordingPrompt.new(input_answer: answer)
+      questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)
+
+      assert_raises(RapidRailsTemplate::PromptError) { questionnaire.ask_app_name("sample") }
     end
   end
 

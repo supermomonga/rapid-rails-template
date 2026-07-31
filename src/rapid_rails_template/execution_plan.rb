@@ -2,15 +2,16 @@
 
 module RapidRailsTemplate
   class ExecutionPlan
-    attr_reader :configuration, :generator_options, :gems, :steps, :artifacts, :processes
+    attr_reader :app_name, :configuration, :generator_options, :gems, :steps, :artifacts, :processes
 
-    def self.build(configuration)
-      new(configuration)
+    def self.build(configuration, app_name:)
+      new(configuration, app_name:)
     end
 
-    def initialize(configuration)
+    def initialize(configuration, app_name:)
+      @app_name = app_name
       @configuration = configuration
-      @generator_options = GeneratorOptions.build(configuration)
+      @generator_options = ["--name=#{app_name}", *GeneratorOptions.build(configuration)].freeze
       @gems = build_gems.freeze
       @steps = build_steps.freeze
       @artifacts = build_artifacts.freeze
@@ -20,6 +21,7 @@ module RapidRailsTemplate
 
     def to_h
       {
+        "app_name" => app_name,
         "configuration" => configuration.to_h,
         "generator_options" => generator_options,
         "gems" => gems,
@@ -30,7 +32,7 @@ module RapidRailsTemplate
     end
 
     def summary
-      lines = ["\n実行計画", "========", "実効値:"]
+      lines = ["\n実行計画", "========", "アプリ名: #{app_name}", "実効値:"]
       configuration.values.each { |key, value| lines << "  #{key}: #{value}" }
       configuration.reasons.each { |key, reason| lines << "    (#{key}: #{reason})" }
       lines << "rails new options: #{generator_options.join(' ')}"

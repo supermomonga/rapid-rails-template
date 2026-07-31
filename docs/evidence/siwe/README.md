@@ -1,7 +1,7 @@
 # Wallet SIWE エビデンス
 
-- Source fingerprint: `b72b7d68640483b5e3169762d4324ee987df50815bf0181b7b01f3ec29de4b0b`
-- Base commit: `e8e0b616f09b70c59fe731baca71971a00a6a7ec`
+- Source fingerprint: `1702a790c1445cafe1347d526281e59b1cb9e4eff1662aff39e4d9ca4c3a2ef4`
+- Base commit: `ea8a041fc86c52cf9a5fbbcc8c22ca5be723b336`
 - 更新: `rake evidence:update`
 
 ## ホーム（未ログイン）

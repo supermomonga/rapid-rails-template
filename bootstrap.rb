@@ -175,6 +175,20 @@ module RapidRailsTemplate
       @asked_question_ids = []
     end
 
+    def ask_app_name(default)
+      @asked_question_ids << "app_name"
+      answer = with_prompt_error do
+        @prompt.input(
+          header: "アプリ名を入力してください。",
+          value: default
+        )
+      end
+      raise PromptError, "アプリ名の入力がキャンセルされました" if answer.nil?
+      raise PromptError, "アプリ名を空にすることはできません" if answer.empty?
+
+      answer
+    end
+
     def ask_all(initial_answers = {})
       answers = initial_answers.transform_keys(&:to_s).dup
 
@@ -272,15 +286,16 @@ end
 
 module RapidRailsTemplate
   class ExecutionPlan
-    attr_reader :configuration, :generator_options, :gems, :steps, :artifacts, :processes
+    attr_reader :app_name, :configuration, :generator_options, :gems, :steps, :artifacts, :processes
 
-    def self.build(configuration)
-      new(configuration)
+    def self.build(configuration, app_name:)
+      new(configuration, app_name:)
     end
 
-    def initialize(configuration)
+    def initialize(configuration, app_name:)
+      @app_name = app_name
       @configuration = configuration
-      @generator_options = GeneratorOptions.build(configuration)
+      @generator_options = ["--name=#{app_name}", *GeneratorOptions.build(configuration)].freeze
       @gems = build_gems.freeze
       @steps = build_steps.freeze
       @artifacts = build_artifacts.freeze
@@ -290,6 +305,7 @@ module RapidRailsTemplate
 
     def to_h
       {
+        "app_name" => app_name,
         "configuration" => configuration.to_h,
         "generator_options" => generator_options,
         "gems" => gems,
@@ -300,7 +316,7 @@ module RapidRailsTemplate
     end
 
     def summary
-      lines = ["\n実行計画", "========", "実効値:"]
+      lines = ["\n実行計画", "========", "アプリ名: #{app_name}", "実効値:"]
       configuration.values.each { |key, value| lines << "  #{key}: #{value}" }
       configuration.reasons.each { |key, reason| lines << "    (#{key}: #{reason})" }
       lines << "rails new options: #{generator_options.join(' ')}"
@@ -527,17 +543,19 @@ end
 
 module RapidRailsTemplate
   class Entrypoint
+    APP_NAME_OPTION = "--name"
     CLI_OPTIONS = Configuration::VALID_VALUES.to_h do |id, allowed|
       ["--#{id.tr('_', '-')}", [id, allowed]]
     end.freeze
 
     def self.run(argv, output: $stdout, error: $stderr, runner_class: Runner, prompt: nil)
-      argument_answers, app_path = parse_arguments(argv)
+      argument_answers, app_name, app_path = parse_arguments(argv)
 
       Environment.validate!
       questionnaire = Questionnaire.new(prompt: prompt || Environment.gum, output:)
+      app_name ||= questionnaire.ask_app_name(File.basename(app_path))
       configuration = Configuration.build(questionnaire.ask_all(argument_answers))
-      plan = ExecutionPlan.build(configuration)
+      plan = ExecutionPlan.build(configuration, app_name:)
       if questionnaire.asked_any?
         return 0 unless questionnaire.confirm?(plan.summary)
       else
@@ -552,6 +570,7 @@ module RapidRailsTemplate
 
     def self.parse_arguments(argv)
       answers = {}
+      app_name = nil
       paths = []
 
       argv.each do |argument|
@@ -561,6 +580,14 @@ module RapidRailsTemplate
         end
 
         option, value = argument.split("=", 2)
+        if option == APP_NAME_OPTION
+          raise Error, "#{option}が複数回指定されています" unless app_name.nil?
+          raise Error, "#{option}には値が必要です\n#{usage}" if value.nil? || value.empty?
+
+          app_name = value
+          next
+        end
+
         definition = CLI_OPTIONS[option]
         raise Error, "不明なオプションです: #{option}\n#{usage}" if definition.nil?
         id, allowed = definition
@@ -571,14 +598,15 @@ module RapidRailsTemplate
 
       raise Error, usage unless paths.length == 1
 
-      [answers, paths.fetch(0)]
+      [answers, app_name, paths.fetch(0)]
     end
 
     def self.usage
-      options = CLI_OPTIONS.map do |option, (_, allowed)|
+      options = ["  #{APP_NAME_OPTION}=NAME"]
+      options.concat(CLI_OPTIONS.map do |option, (_, allowed)|
         separator = option == "--profile-features" ? "," : "|"
         "  #{option}=#{allowed.join(separator)}"
-      end
+      end)
       (["使用方法: ruby bootstrap.rb [OPTIONS] APP_PATH", "オプション:"] + options).join("\n")
     end
 

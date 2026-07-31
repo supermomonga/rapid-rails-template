@@ -4,7 +4,7 @@
 
 ## ランチャーUI
 
-`bootstrap.rb`の対話UIには`marcoroth/gum-ruby`の`gum` 0.3.2を使用します。gemに同梱された現在のplatform向けGum実行可能ファイルを利用し、個別オプションの選択は`Gum.choose`、実行計画の最終確認は`Gum.confirm`で行います。bootstrap自身によるgemの自動install、別versionへの暗黙の切り替え、標準入力を直接読む代替UIは行いません。
+`bootstrap.rb`の対話UIには`marcoroth/gum-ruby`の`gum` 0.3.2を使用します。gemに同梱された現在のplatform向けGum実行可能ファイルを利用し、アプリ名の入力は`Gum.input`、個別オプションの選択は`Gum.choose`、実行計画の最終確認は`Gum.confirm`で行います。bootstrap自身によるgemの自動install、別versionへの暗黙の切り替え、標準入力を直接読む代替UIは行いません。
 
 ## 固定構成
 

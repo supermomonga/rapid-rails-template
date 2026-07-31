@@ -39,6 +39,7 @@ class BootstrapTest < Minitest::Test
         { "GUM_INSTALL_DIR" => gum_directory },
         RbConfig.ruby,
         File.join(ROOT, "bootstrap.rb"),
+        "--name=generated_app",
         destination
       )
 

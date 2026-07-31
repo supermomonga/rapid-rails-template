@@ -2,17 +2,19 @@
 
 module RapidRailsTemplate
   class Entrypoint
+    APP_NAME_OPTION = "--name"
     CLI_OPTIONS = Configuration::VALID_VALUES.to_h do |id, allowed|
       ["--#{id.tr('_', '-')}", [id, allowed]]
     end.freeze
 
     def self.run(argv, output: $stdout, error: $stderr, runner_class: Runner, prompt: nil)
-      argument_answers, app_path = parse_arguments(argv)
+      argument_answers, app_name, app_path = parse_arguments(argv)
 
       Environment.validate!
       questionnaire = Questionnaire.new(prompt: prompt || Environment.gum, output:)
+      app_name ||= questionnaire.ask_app_name(File.basename(app_path))
       configuration = Configuration.build(questionnaire.ask_all(argument_answers))
-      plan = ExecutionPlan.build(configuration)
+      plan = ExecutionPlan.build(configuration, app_name:)
       if questionnaire.asked_any?
         return 0 unless questionnaire.confirm?(plan.summary)
       else
@@ -27,6 +29,7 @@ module RapidRailsTemplate
 
     def self.parse_arguments(argv)
       answers = {}
+      app_name = nil
       paths = []
 
       argv.each do |argument|
@@ -36,6 +39,14 @@ module RapidRailsTemplate
         end
 
         option, value = argument.split("=", 2)
+        if option == APP_NAME_OPTION
+          raise Error, "#{option}が複数回指定されています" unless app_name.nil?
+          raise Error, "#{option}には値が必要です\n#{usage}" if value.nil? || value.empty?
+
+          app_name = value
+          next
+        end
+
         definition = CLI_OPTIONS[option]
         raise Error, "不明なオプションです: #{option}\n#{usage}" if definition.nil?
         id, allowed = definition
@@ -46,14 +57,15 @@ module RapidRailsTemplate
 
       raise Error, usage unless paths.length == 1
 
-      [answers, paths.fetch(0)]
+      [answers, app_name, paths.fetch(0)]
     end
 
     def self.usage
-      options = CLI_OPTIONS.map do |option, (_, allowed)|
+      options = ["  #{APP_NAME_OPTION}=NAME"]
+      options.concat(CLI_OPTIONS.map do |option, (_, allowed)|
         separator = option == "--profile-features" ? "," : "|"
         "  #{option}=#{allowed.join(separator)}"
-      end
+      end)
       (["使用方法: ruby bootstrap.rb [OPTIONS] APP_PATH", "オプション:"] + options).join("\n")
     end
 

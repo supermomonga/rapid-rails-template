@@ -20,6 +20,7 @@ root = File.realpath(Dir.pwd)
 sample = File.join(root, "sample")
 FileUtils.rm_rf(sample)
 exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
+  "--name=sample",
   "--pwa=skip",
   "--web-push=skip",
   "--active-job=skip",
@@ -45,6 +46,7 @@ root = File.realpath(Dir.pwd)
 sample = File.join(root, "sample")
 FileUtils.rm_rf(sample)
 exec RbConfig.ruby, File.join(root, "bootstrap.rb"),
+  "--name=sample",
   "--pwa=skip",
   "--web-push=skip",
   "--active-job=skip",

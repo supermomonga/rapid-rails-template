@@ -24,6 +24,20 @@ module RapidRailsTemplate
       @asked_question_ids = []
     end
 
+    def ask_app_name(default)
+      @asked_question_ids << "app_name"
+      answer = with_prompt_error do
+        @prompt.input(
+          header: "アプリ名を入力してください。",
+          value: default
+        )
+      end
+      raise PromptError, "アプリ名の入力がキャンセルされました" if answer.nil?
+      raise PromptError, "アプリ名を空にすることはできません" if answer.empty?
+
+      answer
+    end
+
     def ask_all(initial_answers = {})
       answers = initial_answers.transform_keys(&:to_s).dup
 

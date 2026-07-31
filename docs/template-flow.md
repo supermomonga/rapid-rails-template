@@ -5,7 +5,10 @@ Rapid Rails Templateは、単一の`bootstrap.rb`で前段の対話とApplicatio
 ```mermaid
 flowchart TD
     A["bootstrap.rb [OPTIONS] APP_PATHを起動"] --> B["引数・Rails・Rubyを検証"]
-    B --> C["Gum.chooseで次の適用可能な質問に回答"]
+    B --> V{"--nameが指定済みか"}
+    V -->|いいえ| W["Gum.inputでアプリ名を入力"]
+    V -->|はい| C["Gum.chooseで次の適用可能な質問に回答"]
+    W --> C
     C --> D{"未回答の適用可能な質問があるか"}
     D -->|はい| C
     D -->|いいえ| E["Auto・非適用値を正規化して検証"]
@@ -42,7 +45,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 ### 質問と計画
 
-CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、`profile_features`では全featureを選択済みとして表示し、`no_limit: true`の複数選択を使用します。選択なしと`--profile-features=`はProfile生成を無効にする明示回答です。すべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
+`--name`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でアプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、`profile_features`では全featureを選択済みとして表示し、`no_limit: true`の複数選択を使用します。選択なしと`--profile-features=`はProfile生成を無効にする明示回答です。アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
 
 全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production processを一覧で提示します。
 
@@ -50,7 +53,7 @@ CLI引数で指定された個別設定を事前回答とし、依存順に未�
 
 ### Railsアプリケーション生成
 
-固定構成と回答からgenerator optionを構築します。Application Template payloadと正規化済み設定を権限制限された一時ファイルへ展開し、設定パスを`RAPID_RAILS_TEMPLATE_CONFIG`環境変数、template pathを`--template`として`rails new`を起動します。SQLite、Importmap、Tailwind CSSなどの初期構成と、メール、Action Text、RuboCop、Solid系機能、デプロイ方法のskip optionはこの時点で確定済みです。
+アプリ名、固定構成、回答からgenerator optionを構築します。Application Template payloadと正規化済み設定を権限制限された一時ファイルへ展開し、設定パスを`RAPID_RAILS_TEMPLATE_CONFIG`環境変数、application nameを`--name`、template pathを`--template`として`rails new`を起動します。SQLite、Importmap、Tailwind CSSなどの初期構成と、メール、Action Text、RuboCop、Solid系機能、デプロイ方法のskip optionはこの時点で確定済みです。
 
 `rails new`はshell文字列として実行せず、実行ファイルと各optionを分離した引数配列で起動します。Application Templateは回答を再質問しません。
 

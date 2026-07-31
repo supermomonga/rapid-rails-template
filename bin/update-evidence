@@ -10,6 +10,7 @@ ROOT = File.expand_path("..", __dir__)
 SAMPLE = File.join(ROOT, "sample")
 DESTINATION = File.join(ROOT, "docs/evidence")
 COMMON_OPTIONS = %w[
+  --name=sample
   --pwa=skip
   --web-push=skip
   --active-job=skip

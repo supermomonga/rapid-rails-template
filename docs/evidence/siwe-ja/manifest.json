@@ -1,9 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "authentication": "siwe",
   "locale": "ja",
-  "source_fingerprint": "ac663b19ba0a2aaab143930311662431288855cb4d8b6e0b0e9ef24b86865523",
-  "base_commit": "1335ced76302e0f1b2370591d39783553dbd072d",
+  "image_delivery": "rails",
+  "source_fingerprint": "f5c8d8f49b784238ae291450fa6fb41bbed0be8839f4c0e540776118b1f678eb",
+  "base_commit": "56eca247ce477967c30d9200767e653b5fd90331",
   "viewports": {
     "desktop": {
       "width": 1400,
@@ -70,22 +71,67 @@
       "pixel_height": 900
     },
     {
-      "id": "profile",
-      "title": "プロフィール",
+      "id": "profile-boring-avatar",
+      "title": "プロフィール（自動生成アバター）",
       "viewport": "desktop",
-      "path": "profile--desktop.png",
+      "path": "profile-boring-avatar--desktop.png",
       "sha256": "fcfbe6689c69ce47e1aed90bb6052502a8c77cf74aa2af96bf8ec643afe29dc4",
       "pixel_width": 1400,
       "pixel_height": 900
     },
     {
-      "id": "profile-edit",
-      "title": "プロフィール編集",
+      "id": "profile-edit-boring-avatar",
+      "title": "プロフィール編集（自動生成アバター）",
       "viewport": "desktop",
-      "path": "profile-edit--desktop.png",
-      "sha256": "3897098d513910ffc76f1072b45d91308674dfce4da19cdcc63322bef13a1846",
+      "path": "profile-edit-boring-avatar--desktop.png",
+      "sha256": "558eccbca60f356e90a0b1f84ae463264215529c5f2394aa617d9614ceba6717",
+      "pixel_width": 1400,
+      "pixel_height": 943
+    },
+    {
+      "id": "home-uploaded-avatar",
+      "title": "ホーム（画像アバター）",
+      "viewport": "desktop",
+      "path": "home-uploaded-avatar--desktop.png",
+      "sha256": "85fecf773251f05a9b8ceaedf58c5afbeb7776f6eea6e2f8297bc45667e3520f",
+      "pixel_width": 1400,
+      "pixel_height": 994
+    },
+    {
+      "id": "profile-uploaded-avatar",
+      "title": "プロフィール（画像アバター）",
+      "viewport": "desktop",
+      "path": "profile-uploaded-avatar--desktop.png",
+      "sha256": "48ba9a38ce616cfcc85d8ce56509ace290de4b1b8830060b3752e3980f741471",
       "pixel_width": 1400,
       "pixel_height": 900
+    },
+    {
+      "id": "profile-edit-uploaded-avatar",
+      "title": "プロフィール編集（画像アバター）",
+      "viewport": "desktop",
+      "path": "profile-edit-uploaded-avatar--desktop.png",
+      "sha256": "6898ca4cdbda1baff27e5bec8f8cd6a5b77bc1ae4246f04223e95af6f1c32604",
+      "pixel_width": 1400,
+      "pixel_height": 1117
+    },
+    {
+      "id": "profile-avatar-deleted",
+      "title": "プロフィール（画像削除後）",
+      "viewport": "desktop",
+      "path": "profile-avatar-deleted--desktop.png",
+      "sha256": "44c1f40683cc632e0360242b1e4a3b2f35adb3b55449d8a4a03301b60575df80",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "home-avatar-deleted",
+      "title": "ホーム（画像削除後）",
+      "viewport": "desktop",
+      "path": "home-avatar-deleted--desktop.png",
+      "sha256": "8590cd645cf9c0113dd32cbe89672a1f6ae9734f2ae849c59a2e3b1a5c0e0eca",
+      "pixel_width": 1400,
+      "pixel_height": 994
     },
     {
       "id": "account-settings",
@@ -137,7 +183,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "desktop",
       "path": "api-credential-secret--desktop.png",
-      "sha256": "9eae7cf60c7ed8825dc7695168bedf7459ee4d74a83656a9ed61f06f82a33a29",
+      "sha256": "b6829ad51dbc994803fe0a293372e1d96de8e1a1238868d1ad5d3e57ffb3190c",
       "pixel_width": 1400,
       "pixel_height": 954
     },
@@ -146,7 +192,7 @@
       "title": "APIキー詳細",
       "viewport": "desktop",
       "path": "api-credential-show--desktop.png",
-      "sha256": "31279fe2fb570e19e4eef88e5bf9d0b207c5afc0731bfa8ca8775e613743c9c4",
+      "sha256": "535fad5a13afa3cc439e096715df61c71baadfd1f61b7894e1e6e6ef0866c162",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -164,7 +210,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "desktop",
       "path": "api-credentials-populated--desktop.png",
-      "sha256": "39e7699ae99fd753f7b566cf552b392818632df6b8172cf197c70e21a9176c72",
+      "sha256": "d4297011073587202b54ac3ebe811deab95f4c68d8f53a93a37f5d717d2c12a4",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -277,22 +323,67 @@
       "pixel_height": 1251
     },
     {
-      "id": "profile",
-      "title": "プロフィール",
+      "id": "profile-boring-avatar",
+      "title": "プロフィール（自動生成アバター）",
       "viewport": "mobile",
-      "path": "profile--mobile.png",
+      "path": "profile-boring-avatar--mobile.png",
       "sha256": "9d7910b14ec1cc88b08a0f0464244225fddc1f2f81b5243ca9477a1ee97be715",
       "pixel_width": 390,
       "pixel_height": 1342
     },
     {
-      "id": "profile-edit",
-      "title": "プロフィール編集",
+      "id": "profile-edit-boring-avatar",
+      "title": "プロフィール編集（自動生成アバター）",
       "viewport": "mobile",
-      "path": "profile-edit--mobile.png",
-      "sha256": "132c3c85702148441a2aea4ceb2db5a80a26f87046e9cb872e7e1f17583b122f",
+      "path": "profile-edit-boring-avatar--mobile.png",
+      "sha256": "fff98ddb027f65615344991219d579f4d72745859b1ad7e89a7d4b2f04101302",
       "pixel_width": 390,
-      "pixel_height": 1456
+      "pixel_height": 1575
+    },
+    {
+      "id": "home-uploaded-avatar",
+      "title": "ホーム（画像アバター）",
+      "viewport": "mobile",
+      "path": "home-uploaded-avatar--mobile.png",
+      "sha256": "b618c50caf0c4d1302abeb78b2d0884c3d09d922a0a1e9c02069ddb40e0cb641",
+      "pixel_width": 390,
+      "pixel_height": 1678
+    },
+    {
+      "id": "profile-uploaded-avatar",
+      "title": "プロフィール（画像アバター）",
+      "viewport": "mobile",
+      "path": "profile-uploaded-avatar--mobile.png",
+      "sha256": "839a987777a037d645da8abbe0a515c313777d332102468070be001c4528c74c",
+      "pixel_width": 390,
+      "pixel_height": 1342
+    },
+    {
+      "id": "profile-edit-uploaded-avatar",
+      "title": "プロフィール編集（画像アバター）",
+      "viewport": "mobile",
+      "path": "profile-edit-uploaded-avatar--mobile.png",
+      "sha256": "f3559c623ba920c48a1c450059b85ed4ceda78c2387eda29d4cf4ecbef755f0e",
+      "pixel_width": 390,
+      "pixel_height": 1769
+    },
+    {
+      "id": "profile-avatar-deleted",
+      "title": "プロフィール（画像削除後）",
+      "viewport": "mobile",
+      "path": "profile-avatar-deleted--mobile.png",
+      "sha256": "9655ac4dae10d619e241a047da04ce8908717c2be637a3c043a628edcd2a38cf",
+      "pixel_width": 390,
+      "pixel_height": 1408
+    },
+    {
+      "id": "home-avatar-deleted",
+      "title": "ホーム（画像削除後）",
+      "viewport": "mobile",
+      "path": "home-avatar-deleted--mobile.png",
+      "sha256": "b981e21178319959afe3525eeee10598baca607769ac7157af1b800b5c732488",
+      "pixel_width": 390,
+      "pixel_height": 1678
     },
     {
       "id": "account-settings",
@@ -344,7 +435,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "mobile",
       "path": "api-credential-secret--mobile.png",
-      "sha256": "e5ff340f8c19b9920589df2398e05d3a876a11e6378efc7c5383411bf0a56d01",
+      "sha256": "b2fa98693fd1f713b1135f9a86092dcaf41a5dc2837b30ce5bb02afd0f80b50d",
       "pixel_width": 390,
       "pixel_height": 1604
     },
@@ -353,7 +444,7 @@
       "title": "APIキー詳細",
       "viewport": "mobile",
       "path": "api-credential-show--mobile.png",
-      "sha256": "10f40e8802063465871fc9994bb92bf8b64f774c3714a7e5618243f21c847098",
+      "sha256": "9859e7968cb8720e7b06eaa69d3a98d2e4d7b9cc14dd7987ad98271eb08e19ba",
       "pixel_width": 390,
       "pixel_height": 1438
     },
@@ -371,7 +462,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "mobile",
       "path": "api-credentials-populated--mobile.png",
-      "sha256": "9f84d815fa2ad8812e1882cb4e8ca67f2740d1d5a8f5256639a56ae57a86140f",
+      "sha256": "61b65789466cf97eb5017b4cfa67dd09a3c67568469cebdb72857a97b255e27c",
       "pixel_width": 390,
       "pixel_height": 1354
     },

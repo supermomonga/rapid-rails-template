@@ -2,7 +2,8 @@
 
 module RapidRailsTemplate
   class ExecutionPlan
-    attr_reader :app_id, :app_name, :configuration, :generator_options, :gems, :steps, :artifacts, :processes
+    attr_reader :app_id, :app_name, :configuration, :generator_options, :gems, :steps, :artifacts, :processes,
+      :production_requirements
 
     def self.build(configuration, app_id:, app_name:)
       new(configuration, app_id:, app_name:)
@@ -17,6 +18,7 @@ module RapidRailsTemplate
       @steps = build_steps.freeze
       @artifacts = build_artifacts.freeze
       @processes = build_processes.freeze
+      @production_requirements = build_production_requirements.freeze
       freeze
     end
 
@@ -29,7 +31,8 @@ module RapidRailsTemplate
         "gems" => gems,
         "steps" => steps,
         "artifacts" => artifacts,
-        "processes" => processes
+        "processes" => processes,
+        "production_requirements" => production_requirements
       }
     end
 
@@ -42,6 +45,7 @@ module RapidRailsTemplate
       lines << "Steps: #{steps.join(' -> ')}"
       lines << "生成物: #{artifacts.empty? ? '(なし)' : artifacts.join(', ')}"
       lines << "Production processes: #{processes.empty? ? '(未設定)' : processes.join(', ')}"
+      lines << "Production requirements: #{production_requirements.empty? ? '(なし)' : production_requirements.join(', ')}"
       lines.join("\n")
     end
 
@@ -54,6 +58,7 @@ module RapidRailsTemplate
       result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
       result << "boring_avatars" if configuration["profile_features"].include?("avatar")
+      result << "imgproxy-rails" if configuration["image_delivery"] == "imgproxy"
       result << "web-push" if configuration["web_push"] == "use"
       result << "solid_queue" if configuration["active_job"] == "solid_queue"
       result << "maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
@@ -64,7 +69,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity]
+      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
       result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
       result << "configure_roles"
       result << "configure_content_management"
@@ -184,7 +189,19 @@ module RapidRailsTemplate
         config/initializers/active_storage_db.rb
         db/storage_migrate/*_create_active_storage_db_files.active_storage_db.rb
         test/models/active_storage_db_test.rb
+        docs/image_delivery.md
+        test/support/image_test_fixture.rb
       ]
+      if configuration["image_delivery"] == "imgproxy"
+        result.concat(%w[
+          lib/image_delivery_configuration.rb
+          lib/imgproxy/active_storage_url_adapter.rb
+          config/initializers/imgproxy.rb
+          bin/imgproxy-dev
+          test/lib/image_delivery_configuration_test.rb
+          test/lib/imgproxy/active_storage_url_adapter_test.rb
+        ])
+      end
       if configuration["api"] == "enable"
         result.concat(%w[
           app/models/api_credential.rb
@@ -218,7 +235,10 @@ module RapidRailsTemplate
       end
       if configuration["profile_features"].include?("avatar")
         result.concat(%w[
+          app/services/avatar_image_policy.rb
+          app/validators/avatar_upload_validator.rb
           app/helpers/avatar_helper.rb
+          test/services/avatar_image_policy_test.rb
           test/helpers/avatar_helper_test.rb
         ])
       end
@@ -297,6 +317,18 @@ module RapidRailsTemplate
       result = ["web"]
       result << "worker" if configuration["active_job"] == "solid_queue"
       result
+    end
+
+    def build_production_requirements
+      return [] unless configuration["image_delivery"] == "imgproxy"
+
+      [
+        "separate imgproxy v4 service",
+        "IMGPROXY_ENDPOINT (HTTPS)",
+        "IMGPROXY_KEY (hex)",
+        "IMGPROXY_SALT (hex)",
+        "public HTTPS APPLICATION_ORIGIN"
+      ]
     end
   end
 end

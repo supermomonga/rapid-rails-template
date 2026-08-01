@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job maintenance_tasks solid_cache account_authentication profile_features api action_cable mail deployment default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job maintenance_tasks solid_cache account_authentication profile_features image_delivery api action_cable mail deployment default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -45,6 +45,7 @@ gem "devise-i18n" if VALUES.fetch("account_authentication") == "devise"
 gem "siwe-rb", "~> 0.2.0" if VALUES.fetch("account_authentication") == "wallet_siwe"
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
+gem "imgproxy-rails", "~> 0.3.0" if VALUES.fetch("image_delivery") == "imgproxy"
 gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
 gem "solid_queue" if VALUES.fetch("active_job") == "solid_queue"
 gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"
@@ -401,6 +402,345 @@ def configure_application_identity
         end
     end
   RUBY
+end
+
+def configure_image_delivery
+  delivery = VALUES.fetch("image_delivery")
+  environment <<~RUBY
+    config.active_storage.variant_processor = :vips
+    config.active_storage.track_variants = true
+    config.active_storage.resolve_model_to_route = :#{delivery == "imgproxy" ? "imgproxy_active_storage" : "rails_storage_redirect"}
+  RUBY
+
+  if delivery == "imgproxy"
+    create_file "lib/image_delivery_configuration.rb", <<~'RUBY', force: true
+      require "ipaddr"
+      require "resolv"
+      require "uri"
+
+      class ImageDeliveryConfiguration
+        Error = Class.new(StandardError)
+        HEX_PATTERN = /\A(?:[0-9a-fA-F]{2})+\z/
+        NON_PUBLIC_IPV4_NETWORKS = %w[
+          0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16
+          172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.88.99.0/24
+          192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24
+          224.0.0.0/4 240.0.0.0/4
+        ].map { |network| IPAddr.new(network) }.freeze
+        GLOBAL_IPV6_NETWORK = IPAddr.new("2000::/3")
+        NON_PUBLIC_IPV6_NETWORKS = %w[2001:2::/48 2001:db8::/32].map { |network| IPAddr.new(network) }.freeze
+
+        attr_reader :endpoint, :key, :salt, :source_origin
+
+        def self.fetch!(environment: ENV, rails_environment: Rails.env,
+          application_identity: Rails.configuration.x.application_identity,
+          resolver: Resolv.method(:getaddresses))
+          new(environment:, rails_environment:, application_identity:, resolver:)
+        end
+
+        def initialize(environment:, rails_environment:, application_identity:, resolver:)
+          production = rails_environment.to_s == "production"
+          @endpoint = validate_url(environment.fetch("IMGPROXY_ENDPOINT") { raise Error, "IMGPROXY_ENDPOINT is required" }, "IMGPROXY_ENDPOINT", origin: false, https: production)
+          @key = validate_hex(environment.fetch("IMGPROXY_KEY") { raise Error, "IMGPROXY_KEY is required" }, "IMGPROXY_KEY")
+          @salt = validate_hex(environment.fetch("IMGPROXY_SALT") { raise Error, "IMGPROXY_SALT is required" }, "IMGPROXY_SALT")
+          source = if production
+                     application_identity.canonical_origin
+                   else
+                     environment.fetch("IMGPROXY_SOURCE_ORIGIN") { raise Error, "IMGPROXY_SOURCE_ORIGIN is required outside production" }
+                   end
+          @source_origin = validate_url(source, "imgproxy source origin", origin: true, https: production)
+          if production
+            validate_public_host!(@endpoint, "IMGPROXY_ENDPOINT", resolver)
+            validate_public_host!(@source_origin, "imgproxy source origin", resolver)
+          end
+          freeze
+        rescue URI::InvalidURIError => error
+          raise Error, "image delivery URL is invalid: #{error.message}"
+        end
+
+        private
+          def validate_hex(value, name)
+            value = value.to_s
+            raise Error, "#{name} must be non-empty even-length hexadecimal" unless value.match?(HEX_PATTERN)
+
+            value.freeze
+          end
+
+          def validate_url(value, name, origin:, https:)
+            raise Error, "#{name} is required" if value.to_s.strip.empty?
+
+            uri = URI.parse(value.to_s)
+            valid = uri.is_a?(URI::HTTP) && uri.host && uri.userinfo.nil? && uri.query.nil? && uri.fragment.nil?
+            valid &&= ["", "/"].include?(uri.path) if origin
+            raise Error, "#{name} must be an HTTP(S) URL without userinfo, query, or fragment" unless valid
+            raise Error, "#{name} must use HTTPS in production" if https && uri.scheme != "https"
+
+            uri.path = "" if origin
+            uri.to_s.delete_suffix("/").freeze
+          end
+
+          def validate_public_host!(url, name, resolver)
+            host = URI.parse(url).host
+            raise Error, "#{name} must not use localhost in production" if host.casecmp?("localhost")
+
+            addresses = begin
+              [IPAddr.new(host)]
+            rescue IPAddr::InvalidAddressError
+              Array(resolver.call(host)).map { |address| IPAddr.new(address) }
+            end
+            raise Error, "#{name} host could not be resolved" if addresses.empty?
+            return if addresses.all? { |address| public_address?(address) }
+
+            raise Error, "#{name} must resolve only to public addresses in production"
+          rescue Resolv::ResolvError, SocketError, IPAddr::InvalidAddressError => error
+            raise Error, "#{name} host could not be resolved: #{error.message}"
+          end
+
+          def public_address?(address)
+            return NON_PUBLIC_IPV4_NETWORKS.none? { |network| network.include?(address) } if address.ipv4?
+
+            GLOBAL_IPV6_NETWORK.include?(address) && NON_PUBLIC_IPV6_NETWORKS.none? { |network| network.include?(address) }
+          end
+      end
+    RUBY
+
+    create_file "lib/imgproxy/active_storage_url_adapter.rb", <<~'RUBY', force: true
+      module Imgproxy
+        class ActiveStorageUrlAdapter < UrlAdapters::ActiveStorage
+          def initialize(source_origin:)
+            super()
+            @source_origin = source_origin.delete_suffix("/")
+          end
+
+          def url(image)
+            path = Rails.application.routes.url_helpers.rails_storage_proxy_path(image)
+            "#{@source_origin}#{path}"
+          end
+        end
+      end
+    RUBY
+
+    create_file "config/initializers/imgproxy.rb", <<~'RUBY', force: true
+      require Rails.root.join("lib/image_delivery_configuration")
+      require Rails.root.join("lib/imgproxy/active_storage_url_adapter")
+
+      assets_precompile = ENV["SECRET_KEY_BASE_DUMMY"] == "1" &&
+        defined?(Rake) && Rake.application.top_level_tasks.include?("assets:precompile")
+      unless assets_precompile
+        image_delivery = ImageDeliveryConfiguration.fetch!
+        Rails.configuration.x.image_delivery = image_delivery
+
+        Imgproxy.configure do |config|
+          config.endpoint = image_delivery.endpoint
+          config.key = image_delivery.key
+          config.salt = image_delivery.salt
+          config.use_short_options = true
+          config.base64_encode_urls = true
+          config.url_adapters.clear!
+          config.url_adapters.add(Imgproxy::ActiveStorageUrlAdapter.new(source_origin: image_delivery.source_origin))
+        end
+      end
+    RUBY
+
+    create_file "bin/imgproxy-dev", <<~'SH', force: true
+      #!/bin/sh
+      set -eu
+      : "${IMGPROXY_KEY:?IMGPROXY_KEY is required}"
+      : "${IMGPROXY_SALT:?IMGPROXY_SALT is required}"
+      : "${IMGPROXY_SOURCE_ORIGIN:?IMGPROXY_SOURCE_ORIGIN is required}"
+      IMGPROXY_PORT="${IMGPROXY_PORT:-8080}"
+      ALLOWED_SOURCE="${IMGPROXY_SOURCE_ORIGIN%/}/"
+      exec docker run --rm -p "${IMGPROXY_PORT}:8080" \
+        -e IMGPROXY_KEY \
+        -e IMGPROXY_SALT \
+        -e IMGPROXY_ALLOWED_SOURCES="${ALLOWED_SOURCE}" \
+        -e IMGPROXY_MAX_SRC_FILE_SIZE=5242880 \
+        -e IMGPROXY_MAX_SRC_RESOLUTION=16.8 \
+        -e IMGPROXY_MAX_ANIMATION_FRAMES=1 \
+        darthsim/imgproxy:v4.0.12
+    SH
+    chmod "bin/imgproxy-dev", 0o755
+
+    create_file "test/lib/image_delivery_configuration_test.rb", <<~'RUBY', force: true
+      require "test_helper"
+
+      class ImageDeliveryConfigurationTest < ActiveSupport::TestCase
+        test "accepts signed explicit development settings" do
+          configuration = build_configuration
+
+          assert_equal "http://localhost:8080", configuration.endpoint
+          assert_equal "http://host.docker.internal:3000", configuration.source_origin
+        end
+
+        test "requires endpoint key salt and source origin" do
+          %w[IMGPROXY_ENDPOINT IMGPROXY_KEY IMGPROXY_SALT IMGPROXY_SOURCE_ORIGIN].each do |name|
+            environment = valid_environment.except(name)
+            assert_raises(ImageDeliveryConfiguration::Error) { build_configuration(environment:) }
+          end
+        end
+
+        test "rejects malformed signing values" do
+          ["", "0", "xyz", "00-11"].each do |value|
+            error = assert_raises(ImageDeliveryConfiguration::Error) do
+              build_configuration(environment: valid_environment.merge("IMGPROXY_KEY" => value))
+            end
+            assert_match(/IMGPROXY_KEY/, error.message)
+          end
+        end
+
+        test "production requires HTTPS public endpoint and canonical source origin" do
+          identity = ApplicationIdentity.new(app_name: "Sample", canonical_origin: "https://app.example.com", default_locale: :en)
+          resolver = ->(_host) { ["93.184.216.34"] }
+          configuration = build_configuration(
+            environment: valid_environment.except("IMGPROXY_SOURCE_ORIGIN").merge("IMGPROXY_ENDPOINT" => "https://images.example.com"),
+            rails_environment: "production",
+            application_identity: identity,
+            resolver:
+          )
+
+          assert_equal "https://app.example.com", configuration.source_origin
+          assert_raises(ImageDeliveryConfiguration::Error) do
+            build_configuration(rails_environment: "production", application_identity: identity, resolver:)
+          end
+          assert_raises(ImageDeliveryConfiguration::Error) do
+            build_configuration(
+              environment: valid_environment.except("IMGPROXY_SOURCE_ORIGIN").merge("IMGPROXY_ENDPOINT" => "https://images.example.com"),
+              rails_environment: "production",
+              application_identity: identity,
+              resolver: ->(_host) { ["127.0.0.1"] }
+            )
+          end
+          assert_raises(ImageDeliveryConfiguration::Error) do
+            build_configuration(
+              environment: valid_environment.except("IMGPROXY_SOURCE_ORIGIN").merge("IMGPROXY_ENDPOINT" => "https://images.example.com"),
+              rails_environment: "production",
+              application_identity: identity,
+              resolver: ->(_host) { ["203.0.113.10"] }
+            )
+          end
+        end
+
+        private
+          def build_configuration(environment: valid_environment, rails_environment: "test",
+            application_identity: Rails.configuration.x.application_identity,
+            resolver: ->(_host) { ["93.184.216.34"] })
+            ImageDeliveryConfiguration.new(environment:, rails_environment:, application_identity:, resolver:)
+          end
+
+          def valid_environment
+            {
+              "IMGPROXY_ENDPOINT" => "http://localhost:8080",
+              "IMGPROXY_KEY" => "00112233",
+              "IMGPROXY_SALT" => "aabbccdd",
+              "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"
+            }
+          end
+      end
+    RUBY
+
+    create_file "test/lib/imgproxy/active_storage_url_adapter_test.rb", <<~'RUBY', force: true
+      require "test_helper"
+      require "base64"
+      require "openssl"
+      require "uri"
+
+      class ImgproxyActiveStorageUrlAdapterTest < ActiveSupport::TestCase
+        test "builds a source URL only from an Active Storage blob proxy path" do
+          blob = ActiveStorage::Blob.create_and_upload!(
+            io: StringIO.new("stored image"), filename: "avatar.png", content_type: "image/png"
+          )
+          adapter = Imgproxy::ActiveStorageUrlAdapter.new(source_origin: "https://app.example.com")
+
+          url = adapter.url(blob)
+
+          assert url.start_with?("https://app.example.com/rails/active_storage/blobs/proxy/")
+          assert_includes url, blob.signed_id
+        ensure
+          blob&.purge
+        end
+
+        test "signs an imgproxy URL whose encoded source is the blob proxy path" do
+          blob = ActiveStorage::Blob.create_and_upload!(
+            io: StringIO.new("stored image"), filename: "avatar.png", content_type: "image/png"
+          )
+
+          url = Imgproxy.url_for(blob, resizing_type: "fill", width: 40, height: 40, enlarge: 1)
+          path = URI(url).path
+          signature, processing, *encoded_source = path.delete_prefix("/").split("/")
+          unsigned_path = "/#{([processing] + encoded_source).join("/")}"
+          expected_signature = Base64.urlsafe_encode64(
+            OpenSSL::HMAC.digest(
+              "sha256",
+              [Rails.configuration.x.image_delivery.key].pack("H*"),
+              [Rails.configuration.x.image_delivery.salt].pack("H*") + unsigned_path
+            ),
+            padding: false
+          )
+
+          assert_equal expected_signature, signature
+          assert_equal "rs:fill:40:40:1", processing
+          source = Base64.urlsafe_decode64(encoded_source.join)
+          assert source.start_with?("http://host.docker.internal:45678/rails/active_storage/blobs/proxy/")
+          assert_includes source, blob.signed_id
+          assert_not_includes url, "/unsafe/"
+        ensure
+          blob&.purge
+        end
+      end
+    RUBY
+  end
+
+  delivery_description = if delivery == "imgproxy"
+    <<~MARKDOWN
+      `imgproxy`配信では`imgproxy-rails`がActive Storage named variantを署名済みimgproxy URLへ解決します。元画像sourceは`rails_storage_proxy`の署名済みpathだけで、Active Storage DBが元画像のsource of truthです。任意の外部URLは受け付けません。
+
+      必須環境変数は`IMGPROXY_ENDPOINT`、`IMGPROXY_KEY`、`IMGPROXY_SALT`です。keyとsaltは偶数長hexで指定します。productionのsource originは`APPLICATION_ORIGIN`から取得し、HTTPSかつpublic addressだけを許可します。development/testでは`IMGPROXY_SOURCE_ORIGIN`も明示してください。
+
+      imgproxyはRailsとは別の必須serviceです。`bin/imgproxy-dev`は`darthsim/imgproxy:v4.0.12`を直接起動します。Rails用Dokploy imageや`Procfile.prod`にはimgproxyを追加しません。
+
+      ```console
+      export IMGPROXY_ENDPOINT=http://localhost:8080
+      export IMGPROXY_KEY="$(openssl rand -hex 32)"
+      export IMGPROXY_SALT="$(openssl rand -hex 32)"
+      export IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:3000
+      bin/imgproxy-dev
+      ```
+    MARKDOWN
+  else
+    "`rails`配信ではActive Storage公式のrepresentation routeを使用します。imgproxy Gem、設定、外部serviceは不要です。\n"
+  end
+  create_file "docs/image_delivery.md", <<~MARKDOWN, force: true
+    # Image delivery
+
+    Active Storageのattachment、blob metadata、元画像は、配信方式にかかわらずActive Storage／Active Storage DBをsource of truthとします。Rails配信の処理済みvariantはActive Storage DBへ保存します。imgproxyの派生画像は外部serviceが生成・cacheしますが、永続的なsourceにはしません。variant processorはlibvipsです。
+    Docker外で開発・testするhostにもlibvips runtimeが必要です（macOSでは例: `brew install vips`）。
+
+    #{delivery_description}
+    ## Avatar policy
+
+    Profile avatarは`header_avatar`（40×40）と`profile_avatar`（64×64）のnamed variantだけを使用し、中央基準で正方形にcropします。uploadは静止画JPEG、PNG、WebP、5 MiB以下、幅・高さ4096px以下に限定します。GIF、APNG、animated WebP、空・破損・偽装画像は拒否します。
+
+    Action Text添付はavatar policyの対象外です。表示、download、削除はAction TextとActive Storageの標準契約を維持します。
+  MARKDOWN
+  append_to_file "README.md", "\n## Image delivery\n\nSee [docs/image_delivery.md](docs/image_delivery.md) for variant, upload, and deployment requirements.\n"
+
+  create_file "test/support/image_test_fixture.rb", <<~'RUBY', force: true
+    require "base64"
+    require "stringio"
+
+    module ImageTestFixture
+      PNG = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+
+      module_function
+
+      def png_blob(filename: "attachment.png")
+        ActiveStorage::Blob.create_and_upload!(
+          io: StringIO.new(PNG), filename:, content_type: "image/png"
+        )
+      end
+    end
+  RUBY
+  append_to_file "test/test_helper.rb", "\nrequire_relative \"support/image_test_fixture\"\n"
 end
 
 def install_action_text
@@ -2695,6 +3035,32 @@ def configure_content_management
         assert_select ".lexxy-content", text: "管理された本文", count: 1
       end
 
+      test "keeps Action Text image attachments separate from the avatar policy" do
+        page = pages(:about)
+        blob = ImageTestFixture.png_blob
+        page.update!(content: %(<action-text-attachment sgid="\#{blob.attachable_sgid}"></action-text-attachment>))
+
+        get about_url
+
+        assert_response :success
+        assert_select ".lexxy-content figure.attachment img[src]", count: 1
+        source = css_select(".lexxy-content figure.attachment img[src]").first["src"]
+        if Rails.configuration.active_storage.resolve_model_to_route == :imgproxy_active_storage
+          assert source.start_with?("http://localhost:8080/")
+          assert_not_includes source, "/unsafe/"
+        else
+          assert_includes source, "/rails/active_storage/representations/"
+        end
+        assert_equal ImageTestFixture::PNG, blob.download
+        rich_text = page.reload.rich_text_content
+        assert_equal [blob], rich_text.embeds.blobs
+
+        page.update!(content: "")
+        assert_not ActiveStorage::Attachment.exists?(record: rich_text, blob:)
+      ensure
+        blob&.purge if blob&.persisted?
+      end
+
       test "hides unset external links and renders configured links safely" do
         get about_url
 
@@ -2923,7 +3289,17 @@ def configure_profile
   RUBY
 
   model_lines = ["  belongs_to :user"]
-  model_lines << "  has_one_attached :avatar" if avatar_enabled
+  if avatar_enabled
+    model_lines << <<~RUBY.chomp
+      has_one_attached :avatar do |attachment|
+        attachment.variant :header_avatar, resize_to_fill: [40, 40]
+        attachment.variant :profile_avatar, resize_to_fill: [64, 64]
+      end
+      attr_accessor :avatar_upload
+      validates :avatar_upload, avatar_upload: true
+      before_save :assign_avatar_upload, if: -> { avatar_upload.present? }
+    RUBY
+  end
   if features.include?("screen_name")
     model_lines << '  validates :screen_name, presence: true, uniqueness: true, format: { with: /\\A[a-z0-9_]+\\z/ }'
   end
@@ -2987,12 +3363,149 @@ def configure_profile
   else
     ""
   end
+  avatar_upload_methods = if avatar_enabled
+    <<~RUBY
+
+      private
+        def assign_avatar_upload
+          self.avatar = avatar_upload
+          self.avatar_upload = nil
+        end
+    RUBY
+  else
+    ""
+  end
   create_file "app/models/profile.rb", <<~RUBY, force: true
     class Profile < ApplicationRecord
     #{model_lines.join("\n")}
-    #{generated_name_methods}
+    #{generated_name_methods}#{avatar_upload_methods}
     end
   RUBY
+
+  if avatar_enabled
+    create_file "app/services/avatar_image_policy.rb", <<~'RUBY', force: true
+      require "marcel"
+      require "pathname"
+      require "vips"
+
+      class AvatarImagePolicy
+        MAX_BYTES = 5 * 1024 * 1024
+        MAX_SIZE_LABEL = "5 MiB"
+        MAX_DIMENSION = 4096
+        CONTENT_TYPES = %w[image/jpeg image/png image/webp].freeze
+
+        class ValidationError < StandardError
+          attr_reader :code
+
+          def initialize(code)
+            @code = code
+            super(code.to_s)
+          end
+        end
+
+        def self.validate!(upload)
+          new(upload).validate!
+        end
+
+        def initialize(upload)
+          @upload = upload
+        end
+
+        def validate!
+          raise_error(:empty) if upload.size.to_i.zero?
+          raise_error(:too_large) if upload.size.to_i > MAX_BYTES
+
+          path = upload.tempfile.path
+          actual_type = Marcel::MimeType.for(Pathname(path), name: nil, declared_type: nil)
+          declared_type = upload.content_type.to_s.downcase
+          raise_error(:unsupported_type) unless CONTENT_TYPES.include?(actual_type)
+          raise_error(:content_type_mismatch) unless declared_type == actual_type
+
+          bytes = File.binread(path)
+          raise_error(:animated) if animated_png?(bytes) || animated_webp?(bytes)
+
+          image = Vips::Image.new_from_file(path, access: :sequential, fail_on: :truncated)
+          raise_error(:too_wide_or_tall) if image.width > MAX_DIMENSION || image.height > MAX_DIMENSION
+          if image.get_typeof("n-pages") != 0 && image.get("n-pages").to_i > 1
+            raise_error(:animated)
+          end
+          image.avg
+          true
+        rescue ValidationError
+          raise
+        rescue StandardError
+          raise_error(:undecodable)
+        end
+
+        private
+          attr_reader :upload
+
+          def raise_error(code)
+            raise ValidationError, code
+          end
+
+          def animated_png?(bytes)
+            return false unless bytes.start_with?("\x89PNG\r\n\x1A\n".b)
+
+            each_chunk(bytes, offset: 8, length_bytes: 4, byte_order: "N") do |type, _data|
+              return true if type == "acTL"
+              break if type == "IEND"
+            end
+            false
+          end
+
+          def animated_webp?(bytes)
+            return false unless bytes.byteslice(0, 4) == "RIFF" && bytes.byteslice(8, 4) == "WEBP"
+
+            offset = 12
+            while offset + 8 <= bytes.bytesize
+              type = bytes.byteslice(offset, 4)
+              length = bytes.byteslice(offset + 4, 4).unpack1("V")
+              data_start = offset + 8
+              break if data_start + length > bytes.bytesize
+
+              data = bytes.byteslice(data_start, length)
+              return true if %w[ANIM ANMF].include?(type)
+              return true if type == "VP8X" && (data.getbyte(0).to_i & 0b0000_0010).positive?
+
+              offset += 8 + length + (length.odd? ? 1 : 0)
+            end
+            false
+          end
+
+          def each_chunk(bytes, offset:, length_bytes:, byte_order:)
+            while offset + length_bytes + 4 <= bytes.bytesize
+              length = bytes.byteslice(offset, length_bytes).unpack1(byte_order)
+              type = bytes.byteslice(offset + length_bytes, 4)
+              data_start = offset + length_bytes + 4
+              break if data_start + length > bytes.bytesize
+
+              yield type, bytes.byteslice(data_start, length)
+              chunk_size = length_bytes + 4 + length
+              chunk_size += 4
+              offset += chunk_size
+            end
+          end
+      end
+    RUBY
+
+    create_file "app/validators/avatar_upload_validator.rb", <<~'RUBY', force: true
+      class AvatarUploadValidator < ActiveModel::EachValidator
+        def validate_each(record, attribute, upload)
+          return if upload.blank?
+
+          AvatarImagePolicy.validate!(upload)
+        rescue AvatarImagePolicy::ValidationError => error
+          record.errors.add(
+            attribute,
+            error.code,
+            max_size: AvatarImagePolicy::MAX_SIZE_LABEL,
+            max_dimension: AvatarImagePolicy::MAX_DIMENSION
+          )
+        end
+      end
+    RUBY
+  end
 
   inject_into_class "app/models/user.rb", "User", <<~RUBY
       has_one :profile, dependent: :destroy
@@ -3002,7 +3515,7 @@ def configure_profile
 
   profile_owner = devise ? "current_user" : "Current.user"
   authentication = devise ? "  before_action :authenticate_user!\n" : ""
-  permitted_features = features.map { |feature| ":#{feature}" }.join(", ")
+  permitted_features = features.map { |feature| feature == "avatar" ? ":avatar_upload" : ":#{feature}" }.join(", ")
   destroy_avatar_action = if avatar_enabled
     <<~RUBY
 
@@ -3048,20 +3561,34 @@ def configure_profile
   profile_locale_ja = {
     "profiles" => {
       "title" => "プロフィール", "edit_title" => "プロフィール編集", "eyebrow" => "プロフィール", "edit" => "プロフィールを編集",
-      "screen_name_hint" => "小文字の英数字とアンダースコアが使えます。", "current_avatar" => "現在のアバター", "avatar_label" => "アバター",
+      "screen_name_hint" => "小文字の英数字とアンダースコアが使えます。", "current_avatar" => "現在のアバター", "avatar_label" => "アバター", "avatar_hint" => "静止画JPEG、PNG、WebP（5 MiB以下、幅・高さ4096px以下）を選択してください。",
       "avatar_delete_title" => "アバター画像の削除", "avatar_delete_description" => "設定済みの画像を削除し、IDから生成したアバターへ戻します。", "avatar_delete" => "設定済み画像を削除", "avatar_delete_confirm" => "設定済みのアバター画像を削除しますか？",
       "update" => { "notice" => "プロフィールを更新しました" }, "avatar" => { "destroy" => { "notice" => "アバター画像を削除しました" } }
     },
-    "activerecord" => { "attributes" => { "profile" => { "screen_name" => "スクリーンネーム", "display_name" => "表示名", "avatar" => "アバター画像" } } }
+    "activerecord" => {
+      "attributes" => { "profile" => { "screen_name" => "スクリーンネーム", "display_name" => "表示名", "avatar" => "アバター画像", "avatar_upload" => "アバター画像" } },
+      "errors" => { "models" => { "profile" => { "attributes" => { "avatar_upload" => {
+        "empty" => "が空です", "too_large" => "は%{max_size}以下にしてください", "unsupported_type" => "は静止画JPEG、PNG、WebPを選択してください",
+        "content_type_mismatch" => "のファイル形式と申告形式が一致しません", "too_wide_or_tall" => "の幅と高さは%{max_dimension}px以下にしてください",
+        "animated" => "にanimationを含めることはできません", "undecodable" => "を画像として解析できません"
+      } } } } }
+    }
   }
   profile_locale_en = {
     "profiles" => {
       "title" => "Profile", "edit_title" => "Edit profile", "eyebrow" => "Profile", "edit" => "Edit profile",
-      "screen_name_hint" => "Use lowercase letters, numbers, and underscores.", "current_avatar" => "Current avatar", "avatar_label" => "Avatar",
+      "screen_name_hint" => "Use lowercase letters, numbers, and underscores.", "current_avatar" => "Current avatar", "avatar_label" => "Avatar", "avatar_hint" => "Choose a static JPEG, PNG, or WebP up to 5 MiB and 4096px on either side.",
       "avatar_delete_title" => "Delete avatar image", "avatar_delete_description" => "Delete the uploaded image and return to the avatar generated from your ID.", "avatar_delete" => "Delete uploaded image", "avatar_delete_confirm" => "Delete the uploaded avatar image?",
       "update" => { "notice" => "Your profile was updated." }, "avatar" => { "destroy" => { "notice" => "Your avatar image was deleted." } }
     },
-    "activerecord" => { "attributes" => { "profile" => { "screen_name" => "Screen name", "display_name" => "Display name", "avatar" => "Avatar image" } } }
+    "activerecord" => {
+      "attributes" => { "profile" => { "screen_name" => "Screen name", "display_name" => "Display name", "avatar" => "Avatar image", "avatar_upload" => "Avatar image" } },
+      "errors" => { "models" => { "profile" => { "attributes" => { "avatar_upload" => {
+        "empty" => "is empty", "too_large" => "must be no larger than %{max_size}", "unsupported_type" => "must be a static JPEG, PNG, or WebP",
+        "content_type_mismatch" => "does not match its declared file type", "too_wide_or_tall" => "must be no wider or taller than %{max_dimension}px",
+        "animated" => "must not contain animation", "undecodable" => "could not be decoded as an image"
+      } } } } }
+    }
   }
   create_locale_pair("profiles", ja: profile_locale_ja, en: profile_locale_en)
 
@@ -3069,10 +3596,12 @@ def configure_profile
     create_file "app/helpers/avatar_helper.rb", <<~RUBY, force: true
       module AvatarHelper
         BORING_AVATAR_COLORS = %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e].freeze
+        AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze
 
         def profile_avatar(profile, size:, alt:)
+          variant = AVATAR_VARIANTS.fetch(size)
           if profile.avatar.attached?
-            image_tag profile.avatar, alt: alt, class: "object-cover"
+            image_tag profile.avatar.variant(variant), alt: alt, class: "object-cover", width: size, height: size
           else
             accessibility = alt.present? ? { label: alt } : { hidden: true }
             boring_avatar(
@@ -3088,9 +3617,141 @@ def configure_profile
       end
     RUBY
 
+    create_file "test/support/avatar_test_image.rb", <<~'RUBY', force: true
+      require "base64"
+      require "rack/test"
+      require "tempfile"
+      require "vips"
+      require "zlib"
+
+      module AvatarTestImage
+        GIF = Base64.decode64("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")
+
+        module_function
+
+        def upload(format: :png, width: 96, height: 72, content_type: nil)
+          tempfile = Tempfile.new(["avatar-", ".#{format}"])
+          tempfile.binmode
+          image = Vips::Image.black(width, height, bands: 3).new_from_image([32, 128, 224])
+          image.write_to_file(tempfile.path)
+          tempfile.rewind
+          uploaded_file(tempfile, "avatar.#{format}", content_type || "image/#{format == :jpg ? 'jpeg' : format}")
+        end
+
+        def empty_upload
+          tempfile = Tempfile.new(["avatar-empty-", ".png"])
+          uploaded_file(tempfile, "empty.png", "image/png")
+        end
+
+        def corrupt_png_upload
+          tempfile = Tempfile.new(["avatar-corrupt-", ".png"])
+          tempfile.binmode
+          tempfile.write("\x89PNG\r\n\x1A\ncorrupt".b)
+          tempfile.rewind
+          uploaded_file(tempfile, "corrupt.png", "image/png")
+        end
+
+        def gif_upload
+          binary_upload(GIF, "avatar.gif", "image/gif")
+        end
+
+        def oversized_bytes_upload
+          file = upload
+          insert_png_chunk(file.tempfile, "tEXt", "padding\0" + ("x" * AvatarImagePolicy::MAX_BYTES))
+          file
+        end
+
+        def apng_upload
+          file = upload
+          insert_png_chunk(file.tempfile, "acTL", [2, 0].pack("NN"), after_ihdr: true)
+          file
+        end
+
+        def animated_webp_upload
+          tempfile = Tempfile.new(["avatar-animated-", ".webp"])
+          tempfile.binmode
+          first = Vips::Image.black(16, 16, bands: 3).new_from_image([255, 0, 0])
+          second = Vips::Image.black(16, 16, bands: 3).new_from_image([0, 0, 255])
+          pages = Vips::Image.arrayjoin([first, second], across: 1)
+          pages = pages.mutate do |image|
+            image.set_type! GObject::GINT_TYPE, "page-height", 16
+          end
+          pages.write_to_file(tempfile.path, page_height: 16)
+          tempfile.rewind
+          uploaded_file(tempfile, "animated.webp", "image/webp")
+        end
+
+        def binary_upload(bytes, filename, content_type)
+          tempfile = Tempfile.new(["avatar-binary-", File.extname(filename)])
+          tempfile.binmode
+          tempfile.write(bytes)
+          tempfile.rewind
+          uploaded_file(tempfile, filename, content_type)
+        end
+
+        def uploaded_file(tempfile, filename, content_type)
+          uploaded_file = Rack::Test::UploadedFile.new(
+            tempfile.path, content_type, true, original_filename: filename
+          )
+          tempfile.close!
+          uploaded_file
+        end
+
+        def insert_png_chunk(tempfile, type, data, after_ihdr: false)
+          bytes = File.binread(tempfile.path)
+          chunk = [data.bytesize].pack("N") + type + data + [Zlib.crc32(type + data)].pack("N")
+          offset = after_ihdr ? 33 : bytes.index("IEND") - 4
+          tempfile.rewind
+          tempfile.truncate(0)
+          tempfile.write(bytes.byteslice(0, offset) + chunk + bytes.byteslice(offset..))
+          tempfile.rewind
+        end
+      end
+    RUBY
+    append_to_file "test/test_helper.rb", "\nrequire_relative \"support/avatar_test_image\"\n"
+
+    create_file "test/services/avatar_image_policy_test.rb", <<~'RUBY', force: true
+      require "test_helper"
+
+      class AvatarImagePolicyTest < ActiveSupport::TestCase
+        test "accepts decodable static JPEG PNG and WebP images" do
+          { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }.each do |format, content_type|
+            assert AvatarImagePolicy.validate!(AvatarTestImage.upload(format:, content_type:))
+          end
+        end
+
+        test "rejects empty and oversized files before decoding" do
+          assert_policy_error :empty, AvatarTestImage.empty_upload
+          assert_policy_error :too_large, AvatarTestImage.oversized_bytes_upload
+        end
+
+        test "rejects mismatched declared content type and unsupported formats" do
+          assert_policy_error :content_type_mismatch, AvatarTestImage.upload(content_type: "image/jpeg")
+          assert_policy_error :unsupported_type, AvatarTestImage.gif_upload
+        end
+
+        test "rejects excessive dimensions and undecodable images" do
+          assert_policy_error :too_wide_or_tall, AvatarTestImage.upload(width: AvatarImagePolicy::MAX_DIMENSION + 1, height: 1)
+          assert_policy_error :undecodable, AvatarTestImage.corrupt_png_upload
+        end
+
+        test "rejects APNG and animated WebP" do
+          assert_policy_error :animated, AvatarTestImage.apng_upload
+          assert_policy_error :animated, AvatarTestImage.animated_webp_upload
+        end
+
+        private
+          def assert_policy_error(code, upload)
+            error = assert_raises(AvatarImagePolicy::ValidationError) do
+              AvatarImagePolicy.validate!(upload)
+            end
+            assert_equal code, error.code
+          end
+      end
+    RUBY
+
     create_file "test/helpers/avatar_helper_test.rb", <<~RUBY, force: true
       require "test_helper"
-      require "stringio"
 
       class AvatarHelperTest < ActionView::TestCase
         test "generates the default avatar from the user id and Rapid Rails palette" do
@@ -3112,12 +3773,45 @@ def configure_profile
 
         test "renders an attached image instead of a Boring Avatar" do
           profile = profiles(:one)
-          profile.avatar.attach(io: StringIO.new("avatar"), filename: "avatar.png", content_type: "image/png")
+          upload = AvatarTestImage.upload
+          profile.avatar.attach(upload)
 
           rendered = profile_avatar(profile, size: 64, alt: "現在のアバター")
 
           assert_includes rendered, "<img"
           assert_not_includes rendered, "<svg"
+          if Rails.configuration.active_storage.resolve_model_to_route == :imgproxy_active_storage
+            assert_includes rendered, "http://localhost:8080/"
+            assert_not_includes rendered, "/unsafe/"
+          else
+            assert_includes rendered, "/rails/active_storage/representations/"
+          end
+          assert_includes rendered, 'width="64"'
+          assert_includes rendered, 'height="64"'
+        ensure
+          profile&.avatar&.purge
+        end
+
+        test "uses only the named variants with their exact output dimensions" do
+          profile = profiles(:one)
+          profile.avatar.attach(AvatarTestImage.upload(width: 120, height: 80))
+
+          { header_avatar: [40, 40], profile_avatar: [64, 64] }.each do |name, dimensions|
+            variant = profile.avatar.variant(name).processed
+            variant.image.blob.open do |file|
+              image = Vips::Image.new_from_file(file.path)
+              assert_equal dimensions, [image.width, image.height]
+            end
+          end
+          assert_equal 2, profile.avatar.blob.variant_records.count
+        ensure
+          profile&.avatar&.purge
+        end
+
+        test "rejects a display size without a named variant" do
+          assert_raises(KeyError) do
+            profile_avatar(profiles(:one), size: 48, alt: "未定義")
+          end
         end
 
         private
@@ -3227,10 +3921,59 @@ def configure_profile
       end
     RUBY
   end
+  if avatar_enabled
+    profile_tests << <<~RUBY
+      test "attaches validated JPEG PNG and WebP uploads only when the profile saves" do
+        profile = profiles(:one)
+        { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }.each do |format, content_type|
+          profile.avatar_upload = AvatarTestImage.upload(format:, content_type:)
+
+          assert profile.save
+          assert_predicate profile.avatar, :attached?
+          assert_equal content_type, profile.avatar.blob.content_type
+          profile.avatar.purge
+        end
+      ensure
+        profile&.avatar&.purge
+      end
+
+      test "keeps the current avatar when a replacement upload is invalid" do
+        profile = profiles(:one)
+        profile.avatar.attach(AvatarTestImage.upload)
+        original_blob = profile.avatar.blob
+        profile.avatar_upload = AvatarTestImage.corrupt_png_upload
+
+        blob_count = ActiveStorage::Blob.count
+        file_count = ActiveStorageDB::File.count
+        assert_not profile.save
+        assert profile.errors.of_kind?(:avatar_upload, :undecodable)
+        assert_equal original_blob, profile.reload.avatar.blob
+        assert_equal blob_count, ActiveStorage::Blob.count
+        assert_equal file_count, ActiveStorageDB::File.count
+      ensure
+        profile&.avatar&.purge
+      end
+
+      test "removes avatar blobs variants and Active Storage DB files with the user" do
+        user = users(:one)
+        user.profile.avatar.attach(AvatarTestImage.upload(width: 120, height: 80))
+        user.profile.avatar.variant(:profile_avatar).processed
+        blob_ids = [user.profile.avatar.blob_id, *user.profile.avatar.blob.variant_records.map { |record| record.image.blob_id }]
+        storage_refs = ActiveStorage::Blob.where(id: blob_ids).pluck(:key)
+
+        perform_enqueued_jobs { user.destroy! }
+
+        assert_empty ActiveStorage::Blob.where(id: blob_ids)
+        assert_empty ActiveStorageDB::File.where(ref: storage_refs)
+        assert_empty ActiveStorage::VariantRecord.where(blob_id: blob_ids)
+      end
+    RUBY
+  end
   create_file "test/models/profile_test.rb", <<~RUBY, force: true
     require "test_helper"
 
     class ProfileTest < ActiveSupport::TestCase
+    #{avatar_enabled ? "  include ActiveJob::TestHelper\n" : ""}
     #{profile_tests.join("\n")}end
   RUBY
 
@@ -3254,9 +3997,15 @@ def configure_profile
   end
   if avatar_enabled
     form_fields << <<~ERB
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :avatar %></legend>
-        <%= form.file_field :avatar, class: "file-input w-full", accept: "image/*" %>
+      <fieldset class="fieldset min-w-0 grid-cols-1">
+        <legend class="fieldset-legend"><%= form.label :avatar_upload %></legend>
+        <div class="avatar">
+          <div class="w-16 rounded-full">
+            <%= profile_avatar(profile, size: 64, alt: t("profiles.current_avatar")) %>
+          </div>
+        </div>
+        <%= form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp" %>
+        <p class="label"><span class="min-w-0 whitespace-normal"><%= t("profiles.avatar_hint") %></span></p>
       </fieldset>
     ERB
   end
@@ -4780,7 +5529,7 @@ def configure_default_views
     RUBY
   else
     <<~RUBY.lines.map { |line| "      #{line}" }.join
-      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-ghost', text: 'MENU', count: 1 do
+      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-ghost', text: I18n.t("common.menu"), count: 1 do
         assert_select 'svg[data-slot="icon"]', count: 1
       end
     RUBY
@@ -4808,7 +5557,9 @@ def configure_default_views
     end
     if avatar_enabled
       form_assertions << <<~RUBY
-        assert_select 'form[action=?] input.file-input[name="profile[avatar]"][accept="image/*"]', profile_path, count: 1
+        assert_select 'form[action=?] fieldset.fieldset.min-w-0.grid-cols-1 input.file-input.min-w-0[name="profile[avatar_upload]"][accept="image/jpeg,image/png,image/webp"]', profile_path, count: 1
+        assert_select 'form[action=?] fieldset.fieldset p.label > span.min-w-0.whitespace-normal', profile_path, text: I18n.t("profiles.avatar_hint"), count: 1
+        assert_select 'form[action=?] .avatar svg[width="64"][height="64"]', profile_path, count: 1
         assert_select 'form[action=?]', profile_avatar_path, count: 0
       RUBY
     end
@@ -4839,12 +5590,22 @@ def configure_default_views
       #{form_assertions.join}#{update_assertion}
       #{if avatar_enabled
           <<~RUBY
-            user.profile.avatar.attach(io: StringIO.new("avatar"), filename: "avatar.png", content_type: "image/png")
+            patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.upload } }
+            assert_redirected_to profile_url
+            assert_predicate user.profile.reload.avatar, :attached?
             get edit_profile_url
+            assert_select 'form[action=?] .avatar img[width="64"][height="64"]', profile_path, count: 1
             assert_select 'form[action=?][method="post"]', profile_avatar_path, count: 1 do
               assert_select 'input[name="_method"][value="delete"]', count: 1
               assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm]', text: I18n.t("profiles.avatar_delete"), count: 1
             end
+
+            original_blob = user.profile.avatar.blob
+            patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.corrupt_png_upload } }
+            assert_response :unprocessable_content
+            error_text = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.undecodable")
+            assert_select '.alert.alert-error[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
+            assert_equal original_blob, user.profile.reload.avatar.blob
 
             delete profile_avatar_url
             assert_redirected_to profile_url
@@ -6463,6 +7224,7 @@ end
 
 def configure_evidence_capture
   authentication = VALUES.fetch("account_authentication") == "devise" ? "devise" : "siwe"
+  image_delivery = VALUES.fetch("image_delivery")
   web_push = VALUES.fetch("web_push") == "use"
   maintenance_tasks = VALUES.fetch("maintenance_tasks") == "enable"
   runner = <<~'RUBY'
@@ -6478,9 +7240,15 @@ def configure_evidence_capture
       self.use_transactional_tests = false
 
       AUTHENTICATION = __AUTHENTICATION__
+      IMAGE_DELIVERY = __IMAGE_DELIVERY__
       LOCALE = I18n.default_locale.to_s
       WEB_PUSH = __WEB_PUSH__
       MAINTENANCE_TASKS = __MAINTENANCE_TASKS__
+      if IMAGE_DELIVERY == "imgproxy"
+        Capybara.server_host = "0.0.0.0"
+        Capybara.server_port = 45_678
+        Capybara.app_host = "http://127.0.0.1:45678"
+      end
       require "eth" if AUTHENTICATION == "siwe"
       VIEWPORTS = {
         "desktop" => { "width" => 1400, "height" => 900 },
@@ -6513,6 +7281,7 @@ def configure_evidence_capture
           JSON.pretty_generate(
             "authentication" => AUTHENTICATION,
             "locale" => LOCALE,
+            "image_delivery" => IMAGE_DELIVERY,
             "viewports" => VIEWPORTS,
             "captures" => @captures
           ) + "\n"
@@ -6634,6 +7403,7 @@ def configure_evidence_capture
 
         def prepare_authenticated_data
           @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
+          @user.profile.avatar.purge if @user.profile.avatar.attached?
           @user.grant_role!(:admin)
           identifier = devise? ? { email: "member@example.com", password: PASSWORD, password_confirmation: PASSWORD } :
             { wallet_address: "0x2222222222222222222222222222222222222222" }
@@ -6646,8 +7416,7 @@ def configure_evidence_capture
           capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, translate("home.heading"), viewport)
           capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
-          capture_page("profile", "プロフィール", profile_path, translate("profiles.title"), viewport)
-          capture_page("profile-edit", "プロフィール編集", edit_profile_path, translate("profiles.edit_title"), viewport)
+          capture_avatar_states(viewport)
           account_settings_path = devise? ? edit_user_registration_path : edit_account_path
           account_settings_heading = devise? ? translate("devise_views.registrations.edit_title") : translate("accounts.edit.title")
           capture_page("account-settings", "アカウント設定", account_settings_path, account_settings_heading, viewport)
@@ -6723,6 +7492,63 @@ def configure_evidence_capture
           assert_equal 200, page.status_code
           assert_selector "h1", text: heading
           capture_current_page(identifier, title, viewport)
+        end
+
+        def capture_avatar_states(viewport)
+          capture_page("profile-boring-avatar", "プロフィール（自動生成アバター）", profile_path, translate("profiles.title"), viewport)
+          capture_page("profile-edit-boring-avatar", "プロフィール編集（自動生成アバター）", edit_profile_path, translate("profiles.edit_title"), viewport)
+
+          @user.profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
+          capture_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport)
+          assert_avatar_image_geometry(40)
+          capture_page("profile-uploaded-avatar", "プロフィール（画像アバター）", profile_path, translate("profiles.title"), viewport)
+          assert_avatar_image_geometry(40, 64)
+          capture_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", edit_profile_path, translate("profiles.edit_title"), viewport)
+          assert_avatar_image_geometry(40, 64)
+
+          accept_confirm { click_button translate("profiles.avatar_delete") }
+          assert_current_path profile_path
+          assert_selector ".alert.alert-success", text: translate("profiles.avatar.destroy.notice")
+          capture_current_page("profile-avatar-deleted", "プロフィール（画像削除後）", viewport)
+          capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, translate("home.heading"), viewport)
+        end
+
+        def assert_avatar_image_geometry(*sizes)
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            javascript = <<~JAVASCRIPT
+              () => {
+                const expectedSizes = __EXPECTED_SIZES__
+                return {
+                documentWidth: document.documentElement.scrollWidth,
+                viewportWidth: window.innerWidth,
+                images: expectedSizes.map((size) => {
+                  const image = document.querySelector(`img[width="${size}"][height="${size}"]`)
+                  if (!image) return null
+                  const bounds = image.getBoundingClientRect()
+                  return {
+                    expectedSize: size,
+                    naturalWidth: image.naturalWidth,
+                    naturalHeight: image.naturalHeight,
+                    renderedWidth: bounds.width,
+                    renderedHeight: bounds.height
+                  }
+                })
+                }
+              }
+            JAVASCRIPT
+            playwright_page.evaluate(javascript.sub("__EXPECTED_SIZES__", JSON.generate(sizes)))
+          end
+
+          assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+            "avatar page must not overflow horizontally"
+          geometry.fetch("images").each do |image|
+            assert_not_nil image, "expected an attached avatar image"
+            size = image.fetch("expectedSize")
+            assert_equal size, image.fetch("naturalWidth"), "avatar variant width"
+            assert_equal size, image.fetch("naturalHeight"), "avatar variant height"
+            assert_in_delta size, image.fetch("renderedWidth"), 0.5, "rendered avatar width"
+            assert_in_delta size, image.fetch("renderedHeight"), 0.5, "rendered avatar height"
+          end
         end
 
         def capture_enabled_web_push(viewport)
@@ -7073,6 +7899,7 @@ def configure_evidence_capture
     end
   RUBY
   runner = runner.sub("__AUTHENTICATION__", authentication.inspect)
+  runner = runner.sub("__IMAGE_DELIVERY__", image_delivery.inspect)
   runner = runner.sub("__WEB_PUSH__", web_push.inspect)
   runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)
   create_file "test/support/evidence_capture.rb", runner, force: true
@@ -7252,7 +8079,7 @@ def configure_dokploy
     COPY package.json package-lock.json ./
     RUN npm ci
     COPY . .
-    RUN SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile && rm -rf node_modules
+    RUN APPLICATION_ORIGIN=https://build.example.com SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile && rm -rf node_modules
 
     FROM base AS final
     ARG TARGETARCH
@@ -7286,6 +8113,7 @@ after_bundle do
   configure_evidence_capture
   configure_annotaterb
   configure_application_identity
+  configure_image_delivery
   VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
   configure_roles
   configure_content_management

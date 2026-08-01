@@ -14,6 +14,7 @@ class ConfigurationTest < Minitest::Test
     assert_equal "use", configuration["solid_cache"]
     assert_equal "devise", configuration["account_authentication"]
     assert_equal %w[screen_name display_name avatar], configuration["profile_features"]
+    assert_equal "rails", configuration["image_delivery"]
     assert_equal "enable", configuration["api"]
     assert_equal "skip", configuration["action_cable"]
     assert_equal "use", configuration["mail"]
@@ -69,6 +70,14 @@ class ConfigurationTest < Minitest::Test
   def test_rejects_invalid_choice
     assert_raises(RapidRailsTemplate::InvalidConfiguration) do
       RapidRailsTemplate::Configuration.build("pwa" => "maybe")
+    end
+  end
+
+  def test_accepts_only_explicit_image_delivery_modes
+    assert_equal "rails", RapidRailsTemplate::Configuration.build("image_delivery" => "rails")["image_delivery"]
+    assert_equal "imgproxy", RapidRailsTemplate::Configuration.build("image_delivery" => "imgproxy")["image_delivery"]
+    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("image_delivery" => "auto")
     end
   end
 

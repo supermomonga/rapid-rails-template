@@ -2,7 +2,9 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "net/http"
 require "open3"
+require "securerandom"
 require "tmpdir"
 require_relative "../src/rapid_rails_template/evidence"
 
@@ -24,10 +26,17 @@ COMMON_OPTIONS = [
   "--deployment=dokploy"
 ].freeze
 VARIANTS = {
-  "devise-ja" => { authentication: "devise", locale: "ja" },
-  "devise-en" => { authentication: "devise", locale: "en" },
-  "siwe-ja" => { authentication: "wallet_siwe", report_authentication: "siwe", locale: "ja" },
-  "siwe-en" => { authentication: "wallet_siwe", report_authentication: "siwe", locale: "en" }
+  "devise-ja" => { authentication: "devise", locale: "ja", image_delivery: "rails" },
+  "devise-en" => { authentication: "devise", locale: "en", image_delivery: "rails" },
+  "siwe-ja" => { authentication: "wallet_siwe", report_authentication: "siwe", locale: "ja", image_delivery: "rails" },
+  "siwe-en" => { authentication: "wallet_siwe", report_authentication: "siwe", locale: "en", image_delivery: "rails" },
+  "imgproxy-devise-ja" => { authentication: "devise", locale: "ja", image_delivery: "imgproxy" }
+}.freeze
+IMGPROXY_ENVIRONMENT = {
+  "IMGPROXY_ENDPOINT" => "http://localhost:8080",
+  "IMGPROXY_KEY" => SecureRandom.hex(32),
+  "IMGPROXY_SALT" => SecureRandom.hex(32),
+  "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:45678"
 }.freeze
 
 def run!(*command, env: {}, chdir: ROOT)
@@ -36,8 +45,40 @@ def run!(*command, env: {}, chdir: ROOT)
   raise "コマンドが失敗しました: #{command.join(" ")}" unless success
 end
 
+def with_imgproxy
+  container = "rapid-rails-imgproxy-evidence-#{Process.pid}"
+  run!(
+    "docker", "run", "--detach", "--rm", "--name", container,
+    "--publish", "8080:8080",
+    "--add-host", "host.docker.internal:host-gateway",
+    "--env", "IMGPROXY_KEY=#{IMGPROXY_ENVIRONMENT.fetch("IMGPROXY_KEY")}",
+    "--env", "IMGPROXY_SALT=#{IMGPROXY_ENVIRONMENT.fetch("IMGPROXY_SALT")}",
+    "--env", "IMGPROXY_ALLOWED_SOURCES=#{IMGPROXY_ENVIRONMENT.fetch("IMGPROXY_SOURCE_ORIGIN")}/",
+    "--env", "IMGPROXY_MAX_SRC_FILE_SIZE=5242880",
+    "--env", "IMGPROXY_MAX_SRC_RESOLUTION=16.8",
+    "--env", "IMGPROXY_MAX_ANIMATION_FRAMES=1",
+    "darthsim/imgproxy:v4.0.12"
+  )
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 30
+  loop do
+    response = Net::HTTP.get_response(URI("http://localhost:8080/health"))
+    break if response.is_a?(Net::HTTPSuccess)
+    raise "imgproxy health checkが時間内に成功しませんでした" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+    sleep 0.5
+  rescue EOFError, Errno::ECONNREFUSED, Errno::ECONNRESET, Net::OpenTimeout, Net::ReadTimeout
+    raise "imgproxy health checkが時間内に成功しませんでした" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+    sleep 0.5
+  end
+  yield
+ensure
+  system("docker", "stop", container) if container
+end
+
 run!(File.join(ROOT, "bin/build-bootstrap"))
 run!(File.join(ROOT, "bin/verify-bootstrap"))
+run!("docker", "info", "--format", "{{.ServerVersion}}") if VARIANTS.values.any? { |metadata| metadata.fetch(:image_delivery) == "imgproxy" }
 source_fingerprint = RapidRailsTemplate::Evidence.fingerprint(ROOT)
 base_commit, status = Open3.capture2("git", "rev-parse", "HEAD", chdir: ROOT)
 raise "base commitを取得できません" unless status.success?
@@ -50,11 +91,13 @@ begin
     options = COMMON_OPTIONS + [
       "--account-authentication=#{metadata.fetch(:authentication)}",
       "--default-locale=#{metadata.fetch(:locale)}",
+      "--image-delivery=#{metadata.fetch(:image_delivery)}",
       SAMPLE
     ]
-    run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *options)
-    run!(File.join(SAMPLE, "bin/rails"), "test", chdir: SAMPLE)
-    run!(File.join(SAMPLE, "bin/rubocop"), chdir: SAMPLE)
+    image_environment = metadata.fetch(:image_delivery) == "imgproxy" ? IMGPROXY_ENVIRONMENT : {}
+    run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *options, env: image_environment)
+    run!(File.join(SAMPLE, "bin/rails"), "test", env: image_environment, chdir: SAMPLE)
+    run!(File.join(SAMPLE, "bin/rubocop"), env: image_environment, chdir: SAMPLE)
 
     playwright = File.join(SAMPLE, "node_modules/.bin/playwright")
     raise "Playwright CLIが生成されていません: #{playwright}" unless File.executable?(playwright)
@@ -62,20 +105,20 @@ begin
 
     output_directory = File.join(staging_root, variant)
     FileUtils.mkdir_p(output_directory)
-    run!(
-      File.join(SAMPLE, "bin/rails"),
-      "evidence:capture",
-      env: {
+    capture_environment = image_environment.merge(
         "RAILS_ENV" => "test",
         "EVIDENCE_OUTPUT_DIR" => output_directory,
         "PLAYWRIGHT_CLI_EXECUTABLE_PATH" => playwright
-      },
-      chdir: SAMPLE
     )
+    capture = lambda do
+      run!(File.join(SAMPLE, "bin/rails"), "evidence:capture", env: capture_environment, chdir: SAMPLE)
+    end
+    metadata.fetch(:image_delivery) == "imgproxy" ? with_imgproxy(&capture) : capture.call
     manifests[variant] = RapidRailsTemplate::Evidence.finalize_variant(
       directory: output_directory,
       authentication: metadata.fetch(:report_authentication, metadata.fetch(:authentication)),
       locale: metadata.fetch(:locale),
+      image_delivery: metadata.fetch(:image_delivery),
       source_fingerprint: source_fingerprint,
       base_commit: base_commit.strip
     )

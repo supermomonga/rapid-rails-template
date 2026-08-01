@@ -65,6 +65,7 @@ class EvidenceTest < Minitest::Test
             JSON.pretty_generate(
               "authentication" => metadata.fetch("authentication"),
               "locale" => metadata.fetch("locale"),
+              "image_delivery" => metadata.fetch("image_delivery"),
               "viewports" => { "desktop" => { "width" => 1400, "height" => 900 } },
               "captures" => [
                 { "id" => "home", "title" => "ホーム", "viewport" => "desktop", "path" => "home--desktop.png" }
@@ -75,6 +76,7 @@ class EvidenceTest < Minitest::Test
             directory: directory,
             authentication: metadata.fetch("authentication"),
             locale: metadata.fetch("locale"),
+            image_delivery: metadata.fetch("image_delivery"),
             source_fingerprint: fingerprint,
             base_commit: "abc123"
           )

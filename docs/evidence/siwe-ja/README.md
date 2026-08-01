@@ -1,8 +1,9 @@
-# Wallet SIWE / ja エビデンス
+# Wallet SIWE / ja / rails エビデンス
 
-- Source fingerprint: `ac663b19ba0a2aaab143930311662431288855cb4d8b6e0b0e9ef24b86865523`
-- Base commit: `1335ced76302e0f1b2370591d39783553dbd072d`
+- Source fingerprint: `f5c8d8f49b784238ae291450fa6fb41bbed0be8839f4c0e540776118b1f678eb`
+- Base commit: `56eca247ce477967c30d9200767e653b5fd90331`
 - Locale: `ja`
+- Image delivery: `rails`
 - 更新: `rake evidence:update`
 
 ## ホーム（未ログイン）
@@ -65,25 +66,75 @@
 
 ![マイページ (mobile)](account--mobile.png)
 
-## プロフィール
+## プロフィール（自動生成アバター）
 
 ### Desktop
 
-![プロフィール (desktop)](profile--desktop.png)
+![プロフィール（自動生成アバター） (desktop)](profile-boring-avatar--desktop.png)
 
 ### Mobile
 
-![プロフィール (mobile)](profile--mobile.png)
+![プロフィール（自動生成アバター） (mobile)](profile-boring-avatar--mobile.png)
 
-## プロフィール編集
+## プロフィール編集（自動生成アバター）
 
 ### Desktop
 
-![プロフィール編集 (desktop)](profile-edit--desktop.png)
+![プロフィール編集（自動生成アバター） (desktop)](profile-edit-boring-avatar--desktop.png)
 
 ### Mobile
 
-![プロフィール編集 (mobile)](profile-edit--mobile.png)
+![プロフィール編集（自動生成アバター） (mobile)](profile-edit-boring-avatar--mobile.png)
+
+## ホーム（画像アバター）
+
+### Desktop
+
+![ホーム（画像アバター） (desktop)](home-uploaded-avatar--desktop.png)
+
+### Mobile
+
+![ホーム（画像アバター） (mobile)](home-uploaded-avatar--mobile.png)
+
+## プロフィール（画像アバター）
+
+### Desktop
+
+![プロフィール（画像アバター） (desktop)](profile-uploaded-avatar--desktop.png)
+
+### Mobile
+
+![プロフィール（画像アバター） (mobile)](profile-uploaded-avatar--mobile.png)
+
+## プロフィール編集（画像アバター）
+
+### Desktop
+
+![プロフィール編集（画像アバター） (desktop)](profile-edit-uploaded-avatar--desktop.png)
+
+### Mobile
+
+![プロフィール編集（画像アバター） (mobile)](profile-edit-uploaded-avatar--mobile.png)
+
+## プロフィール（画像削除後）
+
+### Desktop
+
+![プロフィール（画像削除後） (desktop)](profile-avatar-deleted--desktop.png)
+
+### Mobile
+
+![プロフィール（画像削除後） (mobile)](profile-avatar-deleted--mobile.png)
+
+## ホーム（画像削除後）
+
+### Desktop
+
+![ホーム（画像削除後） (desktop)](home-avatar-deleted--desktop.png)
+
+### Mobile
+
+![ホーム（画像削除後） (mobile)](home-avatar-deleted--mobile.png)
 
 ## アカウント設定
 

@@ -182,6 +182,19 @@ class QuestionnaireTest < Minitest::Test
     assert_empty answers["profile_features"]
   end
 
+  def test_always_asks_image_delivery_when_it_is_not_prefilled
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |key, _| key == "image_delivery" }
+    prompt = RecordingPrompt.new(answers: ["imgproxy"])
+
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all(initial_answers)
+
+    assert_equal "imgproxy", answers["image_delivery"]
+    assert_equal [
+      %w[rails imgproxy],
+      { header: "画像配信方式を選択してください。", selected: ["rails"] }
+    ], prompt.choose_calls.fetch(0)
+  end
+
   def test_cancelled_selection_fails_before_configuration_is_built
     prompt = RecordingPrompt.new(answers: [nil])
     questionnaire = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new)

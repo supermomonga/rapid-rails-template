@@ -25,9 +25,11 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "annotaterb"
     assert_includes plan.gems, "lexxy"
     assert_includes plan.gems, "active_storage_db"
+    refute_includes plan.gems, "imgproxy-rails"
     assert_includes plan.gems, "rails-i18n"
     assert_includes plan.gems, "devise-i18n"
     assert_includes plan.steps, "configure_application_identity"
+    assert_includes plan.steps, "configure_image_delivery"
     assert_includes plan.steps, "install_action_text"
     assert_includes plan.steps, "install_active_storage_db"
     assert_includes plan.steps, "configure_database"
@@ -116,6 +118,26 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "config/initializers/active_storage_db.rb"
     assert_includes plan.artifacts, "db/storage_migrate/*_create_active_storage_db_files.active_storage_db.rb"
     assert_includes plan.artifacts, "test/models/active_storage_db_test.rb"
+    assert_includes plan.artifacts, "docs/image_delivery.md"
+    assert_includes plan.artifacts, "app/services/avatar_image_policy.rb"
+    assert_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
+    assert_empty plan.production_requirements
+    assert_equal plan.production_requirements, plan.to_h.fetch("production_requirements")
+  end
+
+  def test_imgproxy_plan_adds_only_the_official_integration_and_production_requirements
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build("image_delivery" => "imgproxy"),
+      app_id: "sample", app_name: "Sample App"
+    )
+
+    assert_includes plan.gems, "imgproxy-rails"
+    assert_includes plan.artifacts, "config/initializers/imgproxy.rb"
+    assert_includes plan.artifacts, "lib/image_delivery_configuration.rb"
+    assert_includes plan.artifacts, "lib/imgproxy/active_storage_url_adapter.rb"
+    assert_includes plan.artifacts, "bin/imgproxy-dev"
+    assert_includes plan.production_requirements, "separate imgproxy v4 service"
+    assert_includes plan.summary, "IMGPROXY_KEY (hex)"
   end
 
   def test_api_disabled_plan_omits_api_steps_and_artifacts
@@ -183,6 +205,8 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "app/views/profiles/edit.html.erb"
     refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
     refute_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
+    refute_includes plan.artifacts, "app/services/avatar_image_policy.rb"
+    refute_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
   end
 
   def test_profile_without_avatar_uses_the_shared_action_text_active_storage_install

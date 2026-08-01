@@ -18,7 +18,7 @@ class RailsTemplateContractTest < Minitest::Test
   end
 
   def generated_file_source(path)
-    pattern = /^(?<indent>[ \t]*)create_file #{Regexp.escape(path.inspect)}, <<~(?<delimiter>[A-Z]+), force: true\n(?<body>.*?)^\k<indent>\k<delimiter>$/m
+    pattern = /^(?<indent>[ \t]*)create_file #{Regexp.escape(path.inspect)}, <<~(?<quote>'?)(?<delimiter>[A-Z]+)\k<quote>, force: true\n(?<body>.*?)^\k<indent>\k<delimiter>$/m
     @source.match(pattern)&.[](:body) || flunk("generated template not found: #{path}")
   end
 
@@ -569,7 +569,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes profile_configuration, 'required: true'
     assert_includes controller, 'params.expect(profile: ['
     assert_includes controller, 'I18n.t("profiles.update.notice")'
-    assert_includes profile_configuration, 'form.file_field :avatar, class: "file-input w-full", accept: "image/*"'
+    assert_includes profile_configuration, '<fieldset class="fieldset min-w-0 grid-cols-1">'
+    assert_includes profile_configuration, 'form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp"'
+    assert_includes profile_configuration, '<p class="label"><span class="min-w-0 whitespace-normal"><%= t("profiles.avatar_hint") %></span></p>'
     assert_includes @source, 'route "resource :profile, only: %i[show edit update]"'
     assert_includes profile_configuration, 'delete "profile/avatar", to: "profiles#destroy_avatar", as: :profile_avatar'
     assert_includes profile_configuration, "def destroy_avatar"
@@ -579,11 +581,48 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes avatar_helper, "BORING_AVATAR_COLORS = %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e].freeze"
     assert_includes avatar_helper, "profile.user_id.to_s"
     assert_includes avatar_helper, "variant: :marble"
-    assert_includes avatar_helper, "image_tag profile.avatar"
+    assert_includes avatar_helper, "AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze"
+    assert_includes avatar_helper, "image_tag profile.avatar.variant(variant)"
+    assert_includes avatar_helper, "width: size, height: size"
+    assert_includes profile_configuration, "attachment.variant :header_avatar, resize_to_fill: [40, 40]"
+    assert_includes profile_configuration, "attachment.variant :profile_avatar, resize_to_fill: [64, 64]"
+    assert_includes profile_configuration, "validates :avatar_upload, avatar_upload: true"
+    assert_includes profile_configuration, "self.avatar = avatar_upload"
+    assert_includes profile_configuration, "MAX_BYTES = 5 * 1024 * 1024"
+    assert_includes profile_configuration, "MAX_DIMENSION = 4096"
+    assert_includes profile_configuration, "Marcel::MimeType.for"
+    assert_includes profile_configuration, 'Vips::Image.new_from_file(path, access: :sequential, fail_on: :truncated)'
     assert_includes avatar_helper_test, "profile.user_id.to_s"
     assert_includes avatar_helper_test, "normalize_boring_avatar_ids"
     refute_includes profile_configuration, "boring_avatar_seed"
     assert_includes @source, 'assert_equal user.profile.screen_name.camelize, user.profile.display_name'
+  end
+
+  def test_configures_explicit_rails_and_imgproxy_image_delivery_boundaries
+    delivery = source_between("def configure_image_delivery", "def install_action_text")
+    configuration = generated_file_source("lib/image_delivery_configuration.rb")
+    adapter = generated_file_source("lib/imgproxy/active_storage_url_adapter.rb")
+    initializer = generated_file_source("config/initializers/imgproxy.rb")
+    action_text_test = generated_file_source("test/controllers/pages_controller_test.rb")
+
+    assert_includes @source, 'gem "imgproxy-rails", "~> 0.3.0" if VALUES.fetch("image_delivery") == "imgproxy"'
+    assert_includes delivery, "config.active_storage.variant_processor = :vips"
+    assert_includes delivery, "config.active_storage.track_variants = true"
+    assert_includes delivery, "rails_storage_redirect"
+    assert_includes delivery, "imgproxy_active_storage"
+    assert_includes configuration, 'environment.fetch("IMGPROXY_ENDPOINT")'
+    assert_includes configuration, 'environment.fetch("IMGPROXY_KEY")'
+    assert_includes configuration, 'environment.fetch("IMGPROXY_SALT")'
+    assert_includes configuration, 'application_identity.canonical_origin'
+    assert_includes configuration, "NON_PUBLIC_IPV4_NETWORKS"
+    assert_includes configuration, "GLOBAL_IPV6_NETWORK"
+    assert_includes configuration, "addresses.all? { |address| public_address?(address) }"
+    assert_includes adapter, "rails_storage_proxy_path(image)"
+    assert_includes initializer, "config.url_adapters.clear!"
+    assert_includes initializer, "Imgproxy::ActiveStorageUrlAdapter"
+    assert_includes action_text_test, "keeps Action Text image attachments separate from the avatar policy"
+    assert_includes delivery, 'assert_not_includes url, "/unsafe/"'
+    refute_includes delivery, 'ENV.fetch("IMGPROXY_ENDPOINT",'
   end
 
   def test_installs_action_text_and_configures_lexxy_before_daisyui

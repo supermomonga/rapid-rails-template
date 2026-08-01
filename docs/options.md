@@ -87,11 +87,13 @@ RailsアプリIDは有限選択の設定値とは分離して扱います。キ�
 5. ジョブ管理を使うか（Web Pushを使わない場合）
 6. Solid Cacheを使うか
 7. アカウント管理方法
-8. API機能を有効にするか
-9. Action Cableを使うか
-10. メール機能
-11. デプロイ方法
-12. 既定locale
+8. プロフィール機能
+9. 画像配信方式
+10. API機能を有効にするか
+11. Action Cableを使うか
+12. メール機能
+13. デプロイ方法
+14. 既定locale
 
 この順序で適用可能な質問をすべて完了するまで、実行予定の確認へ進みません。表示条件を満たさない質問は利用者へ表示せず、全質問完了後の正規化で仕様どおりの値を設定します。
 
@@ -186,9 +188,26 @@ Maintenance TasksはActive Jobを介して実行するため、実効値が`acti
 
 `avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`とProfileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。画像未設定時はUser IDの文字列表現をseedとして、`marble` variantとRapid Rails theme palette（`#3ea8ff`、`#0f83fd`、`#10b981`、`#f59e0b`、`#f43f5e`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
+添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
+
+avatar uploadは静止画JPEG、PNG、WebPだけを許可し、5 MiB以下、幅・高さとも4096px以下に制限します。空ファイル、申告MIMEと実形式の不一致、decode不能画像、GIF、APNG、animated WebPを拒否し、検証成功後だけActive Storageへ添付します。formの`accept`と説明文、I18n errorはこのpolicyと一致させます。Action Text添付にはavatar policyを適用しません。
+
 認証後のheader menu triggerは、設定済み画像またはBoring Avatarとし、クリックとhoverの両方で展開します。プロフィール詳細も同じ共通helperを使用します。`avatar`を選択しない場合はHeroiconsの`bars-3`と`MENU` textをtriggerにします。展開内容は、選択済みなら`display_name`と`screen_name`、account navigationと同じ項目群、ログアウトの順です。
 
 何も選択しなかった場合はProfile model、migration、controller、route、View、test fixtureを生成しません。header menuは`bars-3` + `MENU`を使い、account navigationからプロフィール項目を除外します。
+
+## `image_delivery`
+
+- CLI引数: `--image-delivery=rails|imgproxy`
+- 質問文: 画像配信方式を選択してください。
+- 選択肢: `rails`、`imgproxy`
+- 既定値: `rails`
+- 表示条件: 常に表示する
+- 影響する処理: Active Storage variant processor、画像配信initializer、生成アプリ文書、production要件
+
+`rails`はActive Storage公式のvariant／representation routeを使用します。`imgproxy`は`imgproxy-rails ~> 0.3.0`を追加し、同じnamed variant APIを署名済みimgproxy URLへ解決します。どちらもblob metadataとattachmentをprimary database、元画像をActive Storage DBに保存します。Railsの処理済みvariantはActive Storage DBへ保存し、imgproxyの派生画像は外部serviceが生成・cacheしますが永続的なsourceにはしません。任意の外部URLを画像sourceとして受け付けません。
+
+両方式ともvariant processorを`:vips`へ固定します。`rails`選択時はimgproxy Gem、initializer、環境変数、外部service要件を生成しません。`imgproxy`選択時はRailsとは別のimgproxy service、`IMGPROXY_ENDPOINT`、hex形式の`IMGPROXY_KEY`と`IMGPROXY_SALT`を必須とし、production source originにはApplication Identityのcanonical originを再利用します。development/testでは`IMGPROXY_SOURCE_ORIGIN`を明示した場合だけHTTPとprivate addressを許可します。productionのHTTP、localhost、private/link-local address、署名なしURLを拒否し、Rails配信へ切り替えません。
 
 ## `api`
 

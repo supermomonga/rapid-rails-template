@@ -1,9 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "authentication": "devise",
   "locale": "en",
-  "source_fingerprint": "ac663b19ba0a2aaab143930311662431288855cb4d8b6e0b0e9ef24b86865523",
-  "base_commit": "1335ced76302e0f1b2370591d39783553dbd072d",
+  "image_delivery": "rails",
+  "source_fingerprint": "f5c8d8f49b784238ae291450fa6fb41bbed0be8839f4c0e540776118b1f678eb",
+  "base_commit": "56eca247ce477967c30d9200767e653b5fd90331",
   "viewports": {
     "desktop": {
       "width": 1400,
@@ -97,29 +98,74 @@
       "pixel_height": 900
     },
     {
-      "id": "profile",
-      "title": "プロフィール",
+      "id": "profile-boring-avatar",
+      "title": "プロフィール（自動生成アバター）",
       "viewport": "desktop",
-      "path": "profile--desktop.png",
+      "path": "profile-boring-avatar--desktop.png",
       "sha256": "66ac0ccd9ffa1c936ef1c1df6d7e5f0f7b0bcf960cfd81c37982c5e3a4fd8a3e",
       "pixel_width": 1400,
       "pixel_height": 900
     },
     {
-      "id": "profile-edit",
-      "title": "プロフィール編集",
+      "id": "profile-edit-boring-avatar",
+      "title": "プロフィール編集（自動生成アバター）",
       "viewport": "desktop",
-      "path": "profile-edit--desktop.png",
-      "sha256": "87e4116d9245a2b1c82cd74ce44aa5b0836ac500af83ad0beb4dae8c666f6e21",
+      "path": "profile-edit-boring-avatar--desktop.png",
+      "sha256": "94a48c48e62ac45ec0ca8d04b022f1cc18f26e665c75acb63d32e7f92f97ba30",
+      "pixel_width": 1400,
+      "pixel_height": 943
+    },
+    {
+      "id": "home-uploaded-avatar",
+      "title": "ホーム（画像アバター）",
+      "viewport": "desktop",
+      "path": "home-uploaded-avatar--desktop.png",
+      "sha256": "ed1bd5ff14200b3c091cbebd47b7e475d3c7e581554e99b21ce1d78706512497",
+      "pixel_width": 1400,
+      "pixel_height": 1014
+    },
+    {
+      "id": "profile-uploaded-avatar",
+      "title": "プロフィール（画像アバター）",
+      "viewport": "desktop",
+      "path": "profile-uploaded-avatar--desktop.png",
+      "sha256": "629568b43f3f522259dd7d3ff6ea83a073db3424d071effa6a25a60eef93c94e",
       "pixel_width": 1400,
       "pixel_height": 900
+    },
+    {
+      "id": "profile-edit-uploaded-avatar",
+      "title": "プロフィール編集（画像アバター）",
+      "viewport": "desktop",
+      "path": "profile-edit-uploaded-avatar--desktop.png",
+      "sha256": "4c0895067e4c46e79448834fc014287fd80ee05e3539fd72371b2cc77e7d98ca",
+      "pixel_width": 1400,
+      "pixel_height": 1117
+    },
+    {
+      "id": "profile-avatar-deleted",
+      "title": "プロフィール（画像削除後）",
+      "viewport": "desktop",
+      "path": "profile-avatar-deleted--desktop.png",
+      "sha256": "23b93ba7f4d4daea97039f451ad1a2983ed5f376b8a0f4740060f629e1d52e16",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "home-avatar-deleted",
+      "title": "ホーム（画像削除後）",
+      "viewport": "desktop",
+      "path": "home-avatar-deleted--desktop.png",
+      "sha256": "b5a0b7c83a5e506107bdf1f899bd4390136ab98fa765e939f4293a5aed3afe0d",
+      "pixel_width": 1400,
+      "pixel_height": 1014
     },
     {
       "id": "account-settings",
       "title": "アカウント設定",
       "viewport": "desktop",
       "path": "account-settings--desktop.png",
-      "sha256": "f30f0ce78d7158c0cbf4106a2734390d48beca6a16d564f1162220e31d4401e3",
+      "sha256": "f8b3acee4f9c3bd666f57245b0b7b494b8a3f414753f7d8a6671a79c04e3b85b",
       "pixel_width": 1400,
       "pixel_height": 1129
     },
@@ -164,7 +210,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "desktop",
       "path": "api-credential-secret--desktop.png",
-      "sha256": "77faf3efe845fececad606334176202f187ec58907a60c17d1b8e96f00193a2b",
+      "sha256": "8bfe0dff8466c0a8aaaafdbd4f75d0b7a13aecf5a3ba6d6aa81a215a88cc81c8",
       "pixel_width": 1400,
       "pixel_height": 954
     },
@@ -173,7 +219,7 @@
       "title": "APIキー詳細",
       "viewport": "desktop",
       "path": "api-credential-show--desktop.png",
-      "sha256": "f8176f08e87ed94ae7c3ed2010fd9e7d933a208d3faa5fef8383034aafd04fc6",
+      "sha256": "b9dbc4f8e58b6c492bef9ecc531e4449d03bc75e293541b0701caf9b118c6a31",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -191,7 +237,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "desktop",
       "path": "api-credentials-populated--desktop.png",
-      "sha256": "682c6797f2bb4454541dc4c0377443d6bac597f2f2104a81edc15e1e0033015d",
+      "sha256": "e09a8744a51571a59316f6dd1d4607be21707b755d34ef1cd1ba212e1fef96e1",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -331,22 +377,67 @@
       "pixel_height": 1231
     },
     {
-      "id": "profile",
-      "title": "プロフィール",
+      "id": "profile-boring-avatar",
+      "title": "プロフィール（自動生成アバター）",
       "viewport": "mobile",
-      "path": "profile--mobile.png",
+      "path": "profile-boring-avatar--mobile.png",
       "sha256": "a390032351bc39c3f7395087614043b90cd347ed1a31a53e9844ca14cdf737b2",
       "pixel_width": 390,
       "pixel_height": 1342
     },
     {
-      "id": "profile-edit",
-      "title": "プロフィール編集",
+      "id": "profile-edit-boring-avatar",
+      "title": "プロフィール編集（自動生成アバター）",
       "viewport": "mobile",
-      "path": "profile-edit--mobile.png",
-      "sha256": "3296b23b7cba0c96e9cf771a7b1d389630a9adc2c937caf06d70726ba81ac87c",
+      "path": "profile-edit-boring-avatar--mobile.png",
+      "sha256": "1a1f8b47bc4a75962f1ce4d0e90c88b6f65406b1bf68a74e4fec6516a4ee8735",
       "pixel_width": 390,
-      "pixel_height": 1456
+      "pixel_height": 1575
+    },
+    {
+      "id": "home-uploaded-avatar",
+      "title": "ホーム（画像アバター）",
+      "viewport": "mobile",
+      "path": "home-uploaded-avatar--mobile.png",
+      "sha256": "79b33620ca28611ec4622eada13039cef462b25f73b37139d7a2a74e65949ca9",
+      "pixel_width": 390,
+      "pixel_height": 1720
+    },
+    {
+      "id": "profile-uploaded-avatar",
+      "title": "プロフィール（画像アバター）",
+      "viewport": "mobile",
+      "path": "profile-uploaded-avatar--mobile.png",
+      "sha256": "1026025a0159d88ba549c4d3155b56f725b030d32fde4449528e7dedbd708cf8",
+      "pixel_width": 390,
+      "pixel_height": 1342
+    },
+    {
+      "id": "profile-edit-uploaded-avatar",
+      "title": "プロフィール編集（画像アバター）",
+      "viewport": "mobile",
+      "path": "profile-edit-uploaded-avatar--mobile.png",
+      "sha256": "0c653a890bb7500170e944ada729d8351f0f78e0be25f75ce27e7037320db795",
+      "pixel_width": 390,
+      "pixel_height": 1769
+    },
+    {
+      "id": "profile-avatar-deleted",
+      "title": "プロフィール（画像削除後）",
+      "viewport": "mobile",
+      "path": "profile-avatar-deleted--mobile.png",
+      "sha256": "3ae186dd649470e9b01daf1bf163a8bef4e88dcda245b5fb96155bdaf465eda3",
+      "pixel_width": 390,
+      "pixel_height": 1408
+    },
+    {
+      "id": "home-avatar-deleted",
+      "title": "ホーム（画像削除後）",
+      "viewport": "mobile",
+      "path": "home-avatar-deleted--mobile.png",
+      "sha256": "749c38ea4fc3d206bf606d0559a2c2ee08870a5c9b236717b469e993409c4401",
+      "pixel_width": 390,
+      "pixel_height": 1720
     },
     {
       "id": "account-settings",
@@ -398,7 +489,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "mobile",
       "path": "api-credential-secret--mobile.png",
-      "sha256": "3af90772857d8e5690b89524c7706ac8478d9cd71189766a5e8f733e31c2ae87",
+      "sha256": "4fe06c440be9c9bba2a7816636673dc3af8a81432bbe0524e22b8e82cfcc3e2e",
       "pixel_width": 390,
       "pixel_height": 1624
     },
@@ -407,7 +498,7 @@
       "title": "APIキー詳細",
       "viewport": "mobile",
       "path": "api-credential-show--mobile.png",
-      "sha256": "9fd7cad028335a547710202c760a5eb268c2316c82dbef8b25353bc365ada0a6",
+      "sha256": "7f4b122ecb13787e74658d8384736bb1c6cd9a7d6cdda8aa84cd1d029dae8945",
       "pixel_width": 390,
       "pixel_height": 1438
     },
@@ -425,7 +516,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "mobile",
       "path": "api-credentials-populated--mobile.png",
-      "sha256": "3ce0b278462c478df96bc7730c85358aebcf28de52e7c492800320999a72459c",
+      "sha256": "4c0058843e7b83b24e5dd8b8d21a236fc1ddaa67aabce8c2ee43a1e663e29b9f",
       "pixel_width": 390,
       "pixel_height": 1329
     },

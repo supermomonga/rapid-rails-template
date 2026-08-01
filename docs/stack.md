@@ -30,7 +30,8 @@ I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`
 | ページネーション | `pagy` | ページネーションの標準実装とする |
 | active link | `active_link_to` | 現在ページに応じたリンク表示に使用する |
 | 認可 | `action_policy` | authorization policyの標準実装とする |
-| Rich text | Action Text、Active Storage、`active_storage_db`、`lexxy ~> 0.9.21` | 固定ページとFAQの本文および管理editorとして常設し、添付本体は専用SQLite databaseへ保存する |
+| Rich text・画像storage | Action Text、Active Storage、`active_storage_db`、`image_processing ~> 1.2`、`lexxy ~> 0.9.21` | 添付本体とvariantを専用SQLite databaseへ保存し、画像variantはlibvipsで処理する |
+| 画像配信 | Active Storage representation route、または`imgproxy-rails ~> 0.3.0` | `image_delivery`で明示選択し、実行時fallbackを持たない |
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
 | Profile名生成 | `haikunator` | `screen_name`または`display_name`を選択した場合だけUser作成時の既定値生成に使用する |
 | 既定アバター生成 | `boring_avatars ~> 0.1.0` | `avatar`を選択した場合だけUser IDから決定的なSVGを生成する |
@@ -91,6 +92,16 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 ### Action Text、固定ページ、FAQ、footer設定
 
 Action Text、Active Storage、Active Storage DB、Lexxyは選択式にせず、すべての生成アプリケーションへ導入します。Action Textの公式install generatorでActive Storageのmetadata／attachment migrationと添付表示partialを生成し、`active_storage_db`の公式migration taskでファイル本体用migrationを生成して`db/storage_migrate`へ分離します。Active Storage DB engineを`/active_storage_db`へmountし、development、test、productionのActive Storage serviceをすべて`:db`に設定します。Active Storageのblob metadataとattachmentはprimary database、ファイル本体は専用storage SQLite databaseへ保存し、Disk serviceへ暗黙に切り替えません。
+
+Active Storageのvariant processorは全環境で`:vips`へ固定します。Rails標準生成物の`image_processing ~> 1.2`を利用し、Dokploy用runtime imageには`libvips`を含めます。Profile avatarは40×40の`header_avatar`と64×64の`profile_avatar`だけをnamed variantとして定義し、任意の変換hashをViewへ記述しません。attachment、blob metadata、元画像のsource of truthは両方式ともActive Storage／Active Storage DBです。Rails配信の処理済みvariantはActive Storage DBへ保存し、imgproxy配信の派生画像は外部serviceが生成・cacheしますが、永続的な画像sourceとして扱いません。
+
+生成アプリをDocker外で開発・testするhostにもlibvips runtimeが必要です。macOSでは`brew install vips`など、対象OSのpackage managerでlibvipsを明示的に導入し、`Vips::Image`が実画像をdecodeできることをtestで確認します。
+
+`image_delivery=rails`はActive Storage公式representation routeを使用します。`image_delivery=imgproxy`だけが公式`imgproxy-rails`と署名済みURLを使用し、Active Storage blobの署名済みproxy routeだけをsourceとして構成します。任意の外部URLを受け取るendpointは生成しません。Action Textのoriginal、download、削除とavatar policyは分離し、global route resolverを変更した状態でもAction Textの契約を検証します。
+
+imgproxy設定は`ImageDeliveryConfiguration`が一元的に検証します。productionではHTTPS endpoint、空でない偶数長hex key/salt、Application Identity由来のHTTPS public source originを必須とし、DNS解決したloopback、private、link-local addressも拒否します。development/testだけ、`IMGPROXY_SOURCE_ORIGIN`で明示したlocalhostまたはprivate HTTP originを許可します。設定不足、署名なしURL、画像処理失敗をRails配信や元画像表示へfallbackしません。
+
+imgproxyはRails processと別の必須serviceです。Dokploy用Rails imageや`Procfile.prod`へimgproxyを同居させず、platform固有sidecar設定も生成しません。開発・integration検証は固定した`darthsim/imgproxy:v4.0.12`を直接起動し、key、salt、末尾`/`付きの`IMGPROXY_ALLOWED_SOURCES`、source byte数・resolution・animation上限を環境変数で明示します。秘密値はGit管理対象へ保存しません。
 
 Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
 
@@ -281,7 +292,7 @@ Dokployではbuild typeをDockerfile、Dockerfile pathを`Dockerfile.prod`に設
 `Dockerfile.prod`は、公式Docker Hubに存在する対象範囲内の固定tag `ruby:4.0.0-slim`を使うmulti-stage buildとします。開発環境は`mise.toml`でRuby 4.0.6へ固定します。
 
 - base stageでproduction用Bundler環境とLitestreamを用意する。
-- build stageでGemをinstallし、`SECRET_KEY_BASE_DUMMY=1`でassetsをprecompileする。
+- build stageでGemをinstallし、build専用の`APPLICATION_ORIGIN=https://build.example.com`と`SECRET_KEY_BASE_DUMMY=1`でassetsをprecompileする。imgproxy initializerが設定検証を省略するのはこのRake taskだけで、serverやworkerのproduction bootでは必要な環境変数を常に検証する。
 - final stageには実行時Gem、SQLite、libvips、jemalloc、Litestream、アプリケーションだけを含める。
 - `/data`をvolumeとして宣言し、SQLite databaseをimage layerやephemeral filesystemへ保存しない。
 - `PORT=3000`でPumaを公開する。

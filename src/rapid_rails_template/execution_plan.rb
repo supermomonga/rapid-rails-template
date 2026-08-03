@@ -296,9 +296,12 @@ module RapidRailsTemplate
         result.concat(%w[
           config/initializers/maintenance_tasks.rb
           app/controllers/admin/maintenance_tasks_controller.rb
+          app/helpers/admin/maintenance_tasks_helper.rb
           app/policies/maintenance_task_policy.rb
           app/views/layouts/maintenance_tasks/admin.html.erb
-          app/assets/stylesheets/maintenance_tasks.css
+          app/views/maintenance_tasks/tasks/*.html.erb
+          app/views/maintenance_tasks/runs/*.html.erb
+          app/views/maintenance_tasks/runs/info/_errored.html.erb
           app/javascript/controllers/maintenance_tasks_refresh_controller.js
           config/locales/maintenance_tasks.ja.yml
           config/locales/maintenance_tasks.en.yml

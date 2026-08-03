@@ -259,7 +259,7 @@ Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Contr
 
 engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksController`を`MaintenanceTasks.parent_controller`へ設定します。parent controllerは既存`Admin::BaseController`を継承し、全engine actionを`MaintenanceTaskPolicy#manage?`で認可します。Deviseでは`current_user`、Wallet SIWEでは`Current.user`を既存Action Policy contextから利用し、controller内でroleを直接判定しません。
 
-engine Viewは2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。公式Bulma 1.0.4 stylesheetはengine画面だけでintegrity付きで読み込み、補助styleと3秒ごとの`data-refresh`更新だけをhost assetへ移します。CSPはself、公式CDN、request nonceへ限定し、無効化や`unsafe-inline`は使用しません。
+engineのroute、controller、helper API、Run操作は2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。Bulma stylesheetは読み込まず、Bulma classを出力するtask、run、errorのViewと表示helperをhost側でshadowして、既存Tailwind CSS 4／daisyUI 5のcard、badge、collapse、form、alert componentへ統一します。3秒ごとの`data-refresh`更新はhostのStimulus controllerで行い、外部stylesheet用CSP例外やinline scriptは追加しません。
 
 Maintenance Taskは既存Solid Queue workerで実行します。Dokployでは既存`worker: bin/jobs --mode async`を共有し、専用workerを追加しません。`deployment=none`ではproduction worker processを生成せず、利用者がSolid Queue workerの起動と監視を別途構成します。
 

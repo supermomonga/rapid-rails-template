@@ -173,7 +173,7 @@ Solid Queue 1.6.0の公式install generatorは`config/recurring.yml`へ、完了
 
 Maintenance TasksはActive Jobを介して実行するため、実効値が`active_job == solid_queue`の場合だけ利用できます。Solid Queueを使用しない場合は質問せず`disable`へ正規化し、確認画面へ理由を表示します。CLIで`--maintenance-tasks=enable`とSolid Queueを使用しない設定を同時に明示した場合は、`rails new`開始前に矛盾として拒否します。同期実行やinline adapterへの切替は行いません。
 
-`enable`では`maintenance_tasks` 2.17.0の公式install generatorを実行し、Gem標準のRun modelとmigrationでstatus、cursor、error、job ID、arguments、metadataを管理します。engineは`/admin/maintenance_tasks`だけへmountし、既存のadmin認証、Action Policy、admin layoutを再利用します。実taskやplaceholderは生成しません。
+`enable`では`maintenance_tasks` 2.17.0の公式install generatorを実行し、Gem標準のRun modelとmigrationでstatus、cursor、error、job ID、arguments、metadataを管理します。engineは`/admin/maintenance_tasks`だけへmountし、既存のadmin認証、Action Policy、admin layoutを再利用します。管理画面はBulmaを読み込まず、host側のdaisyUI View overrideを使用します。実taskやplaceholderは生成しません。
 
 ## `account_authentication`
 

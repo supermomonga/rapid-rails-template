@@ -344,7 +344,12 @@ class RailsTemplateContractTest < Minitest::Test
     policy = generated_file_source("app/policies/maintenance_task_policy.rb")
     initializer = generated_file_source("config/initializers/maintenance_tasks.rb")
     layout = generated_file_source("app/views/layouts/maintenance_tasks/admin.html.erb")
-    stylesheet = generated_file_source("app/assets/stylesheets/maintenance_tasks.css")
+    helper = generated_file_source("app/helpers/admin/maintenance_tasks_helper.rb")
+    tasks_index = generated_file_source("app/views/maintenance_tasks/tasks/index.html.erb")
+    task = generated_file_source("app/views/maintenance_tasks/tasks/_task.html.erb")
+    task_show = generated_file_source("app/views/maintenance_tasks/tasks/show.html.erb")
+    run = generated_file_source("app/views/maintenance_tasks/runs/_run.html.erb")
+    error = generated_file_source("app/views/maintenance_tasks/runs/info/_errored.html.erb")
     refresh = generated_file_source("app/javascript/controllers/maintenance_tasks_refresh_controller.js")
     controller_test = generated_file_source("test/controllers/admin/maintenance_tasks_controller_test.rb")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
@@ -357,29 +362,66 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes initializer, 'MaintenanceTasks.parent_controller = "Admin::MaintenanceTasksController"'
     assert_includes initializer, '"triggered_by_type"'
     assert_includes initializer, '"triggered_by_identifier"'
-    assert_includes initializer, "SecureRandom.base64(16)"
-    assert_includes initializer, "%w[script-src-elem style-src-elem]"
+    assert_includes initializer, "Rails.application.config.to_prepare"
+    assert_includes initializer, "MaintenanceTasks::TasksHelper"
+    assert_includes initializer, "target.prepend(helper) unless target < helper"
+    assert_includes initializer, "MaintenanceTasks::ApplicationController.content_security_policy false"
+    refute_includes initializer, "content_security_policy_nonce"
+    refute_includes initializer, "style_src_elem"
     assert_includes controller, "class MaintenanceTasksController < BaseController"
-    assert_includes controller, "include Rails.application.routes.url_helpers"
-    assert_includes controller, "helper Rails.application.routes.url_helpers"
+    refute_includes controller, "include Rails.application.routes.url_helpers"
+    refute_includes controller, "helper Rails.application.routes.url_helpers"
+    assert_includes controller, "helper Admin::MaintenanceTasksHelper"
     assert_includes controller, "authorize! :maintenance_task, to: :manage?"
+    refute_includes controller, "BULMA_CDN"
     refute_includes controller, "has_role?"
     assert_includes policy, "def manage?"
     assert_includes policy, "admin?"
     assert_includes layout, 'render template: "layouts/admin"'
     assert_includes layout, 'data-controller="maintenance-tasks-refresh"'
-    assert_includes layout, "bulma@1.0.4/css/bulma.min.css"
-    assert_includes stylesheet, "[data-maintenance-tasks-root]"
-    assert_includes stylesheet, '[data-maintenance-tasks-shell="true"]'
-    assert_includes stylesheet, "grid-template-columns: 220px minmax(0, 1fr)"
-    assert_includes stylesheet, "repeat(auto-fit, minmax(min(20rem, 100%), 1fr))"
+    refute_includes layout, "stylesheet_link_tag"
+    assert_includes helper, '"new" => { badge: "badge-neutral", progress: "progress-neutral" }'
+    assert_includes helper, '"running" => { badge: "badge-info", progress: "progress-info" }'
+    assert_includes helper, '"paused" => { badge: "badge-warning", progress: "progress-warning" }'
+    assert_includes helper, '"succeeded" => { badge: "badge-success", progress: "progress-success" }'
+    assert_includes helper, '"errored" => { badge: "badge-error", progress: "progress-error" }'
+    refute_includes helper, 'badge-\#{color}'
+    refute_includes helper, 'progress-\#{color}'
+    assert_includes helper, 'class: "select w-full"'
+    assert_includes helper, 'class: "textarea w-full"'
+    assert_class_tokens tasks_index, "card", "card-border"
+    assert_class_tokens task, "link", "link-hover"
+    assert_class_tokens task_show, "fieldset"
+    assert_class_tokens task_show, "file-input"
+    assert_class_tokens task_show, "btn", "btn-primary"
+    assert_class_tokens task_show, "collapse", "collapse-arrow"
+    assert_class_tokens task_show, "mockup-code"
+    assert_class_tokens run, "btn", "btn-warning"
+    assert_class_tokens run, "btn", "btn-error"
+    assert_includes task, "admin_maintenance_tasks.task_path(task)"
+    assert_includes task_show, "admin_maintenance_tasks.task_runs_path(@task)"
+    assert_includes run, "admin_maintenance_tasks.resume_task_run_path(@task, run)"
+    assert_class_tokens error, "alert", "alert-error"
+    refute_includes maintenance, 'create_file "app/assets/stylesheets/maintenance_tasks.css"'
+    refute_includes maintenance, "bulma@"
     assert_includes refresh, 'this.element.querySelector("[data-refresh]")'
     assert_includes refresh, "window.setTimeout"
     assert_includes refresh, "this.abortController?.abort()"
     assert_includes maintenance, 'create_file "docs/maintenance_tasks.md"'
     assert_includes controller_test, "assert_enqueued_with(job: MaintenanceTasks::TaskJob)"
     assert_includes controller_test, 'assert_equal "succeeded", run.reload.status'
+    assert_includes controller_test, 'assert_equal "pausing", pausing_run.reload.status'
+    assert_includes controller_test, 'assert_equal "enqueued", resumable_run.reload.status'
+    assert_includes controller_test, 'assert_equal "cancelled", cancellable_run.reload.status'
+    assert_includes controller_test, 'input.file-input[type=file][name=csv_file]'
     assert_includes maintenance, "no_collection"
+    assert_includes maintenance, "csv_collection"
+    assert_includes maintenance, "attribute :quantity, :integer"
+    assert_includes maintenance, "attribute :ratio, :float"
+    assert_includes maintenance, "attribute :amount, :decimal"
+    assert_includes maintenance, "attribute :scheduled_at, :datetime"
+    assert_includes maintenance, "attribute :due_on, :date"
+    assert_includes maintenance, "attribute :starts_at, :time"
     assert_includes maintenance, "def process"
     refute_match(/create_file "app\/tasks\/maintenance\//, maintenance)
     refute_includes maintenance, '.keep'

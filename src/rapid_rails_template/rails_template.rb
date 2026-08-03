@@ -5226,6 +5226,10 @@ def configure_default_views
 
   create_file "app/helpers/application_helper.rb", <<~RUBY, force: true
     module ApplicationHelper
+      def application_routes
+        Rails.application.routes.url_helpers
+      end
+
       def application_identity
         Rails.configuration.x.application_identity
       end
@@ -7245,15 +7249,21 @@ def install_maintenance_tasks
 
   create_file "config/initializers/maintenance_tasks.rb", <<~RUBY, force: true
     MaintenanceTasks.parent_controller = "Admin::MaintenanceTasksController"
+
+    Rails.application.config.to_prepare do
+      helper = Admin::MaintenanceTasksHelper
+      [MaintenanceTasks::ApplicationHelper, MaintenanceTasks::TasksHelper].each do |target|
+        target.prepend(helper) unless target < helper
+      end
+      MaintenanceTasks::ApplicationController.content_security_policy false
+    end
+
     MaintenanceTasks.metadata = lambda do
       {
         "triggered_by_type" => "#{identifier_type}",
         "triggered_by_identifier" => #{identifier_expression}
       }
     end
-
-    Rails.application.config.content_security_policy_nonce_generator = ->(_request) { SecureRandom.base64(16) }
-    Rails.application.config.content_security_policy_nonce_directives = %w[script-src-elem style-src-elem]
   RUBY
 
   create_file "app/policies/maintenance_task_policy.rb", <<~RUBY, force: true
@@ -7267,25 +7277,15 @@ def install_maintenance_tasks
   create_file "app/controllers/admin/maintenance_tasks_controller.rb", <<~RUBY, force: true
     module Admin
       class MaintenanceTasksController < BaseController
-        include Rails.application.routes.url_helpers
-        helper Rails.application.routes.url_helpers
+        helper Admin::MaintenanceTasksHelper
 
         layout "maintenance_tasks/admin"
 
         before_action :authorize_maintenance_tasks!
-        after_action :configure_maintenance_tasks_content_security_policy
 
     #{authentication_route_bridge.lines.map { |line| "    #{line}" }.join}    private
           def authorize_maintenance_tasks!
             authorize! :maintenance_task, to: :manage?
-          end
-
-          def configure_maintenance_tasks_content_security_policy
-            request.content_security_policy.style_src_elem(
-              :self,
-              MaintenanceTasks::ApplicationController::BULMA_CDN
-            )
-            request.content_security_policy.script_src_elem(:self)
           end
       end
     end
@@ -7293,95 +7293,319 @@ def install_maintenance_tasks
 
   create_file "app/views/layouts/maintenance_tasks/admin.html.erb", <<~ERB, force: true
     <% content_for :title, (content_for(:page_title).presence || t("maintenance_tasks.title")) %>
-    <% content_for :head do %>
-      <% unless request.xhr? %>
-        <%= stylesheet_link_tag "https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css", media: :all, integrity: "sha256-Z/om3xyp6V2PKtx8BPobFfo9JCV0cOvBDMaLmquRS+4=", crossorigin: "anonymous" %>
-        <%= stylesheet_link_tag "maintenance_tasks", "data-turbo-track": "reload" %>
-      <% end %>
-    <% end %>
     <% content_for :admin_content do %>
-      <div data-controller="maintenance-tasks-refresh" data-maintenance-tasks-root>
+      <div class="min-w-0 space-y-8" data-controller="maintenance-tasks-refresh" data-maintenance-tasks-root>
         <%= yield %>
       </div>
     <% end %>
     <%= render template: "layouts/admin" %>
   ERB
 
-  create_file "app/assets/stylesheets/maintenance_tasks.css", <<~CSS, force: true
-    [data-maintenance-tasks-shell="true"] {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    @media (min-width: 961px) {
-      [data-maintenance-tasks-shell="true"] {
-        grid-template-columns: 220px minmax(0, 1fr);
-      }
-    }
+  create_file "app/helpers/admin/maintenance_tasks_helper.rb", <<~RUBY, force: true
+    module Admin
+      module MaintenanceTasksHelper
+        STATUS_CLASSES = {
+          "new" => { badge: "badge-neutral", progress: "progress-neutral" },
+          "enqueued" => { badge: "badge-info", progress: "progress-info" },
+          "running" => { badge: "badge-info", progress: "progress-info" },
+          "interrupted" => { badge: "badge-info", progress: "progress-info" },
+          "pausing" => { badge: "badge-warning", progress: "progress-warning" },
+          "paused" => { badge: "badge-warning", progress: "progress-warning" },
+          "succeeded" => { badge: "badge-success", progress: "progress-success" },
+          "cancelling" => { badge: "badge-neutral", progress: "progress-neutral" },
+          "cancelled" => { badge: "badge-neutral", progress: "progress-neutral" },
+          "errored" => { badge: "badge-error", progress: "progress-error" }
+        }.freeze
 
-    [data-maintenance-tasks-root] {
-      min-width: 0;
-    }
+        def status_tag(status)
+          tag.span(status.capitalize, class: ["badge", STATUS_CLASSES.fetch(status).fetch(:badge)])
+        end
 
-    [data-maintenance-tasks-root] .ruby-comment { color: #6a737d; }
-    [data-maintenance-tasks-root] .ruby-const { color: #e36209; }
-    [data-maintenance-tasks-root] .ruby-embexpr-beg,
-    [data-maintenance-tasks-root] .ruby-embexpr-end,
-    [data-maintenance-tasks-root] .ruby-period { color: #24292e; }
-    [data-maintenance-tasks-root] .ruby-ident,
-    [data-maintenance-tasks-root] .ruby-symbeg { color: #6f42c1; }
-    [data-maintenance-tasks-root] .ruby-ivar,
-    [data-maintenance-tasks-root] .ruby-cvar,
-    [data-maintenance-tasks-root] .ruby-gvar,
-    [data-maintenance-tasks-root] .ruby-int,
-    [data-maintenance-tasks-root] .ruby-imaginary,
-    [data-maintenance-tasks-root] .ruby-float,
-    [data-maintenance-tasks-root] .ruby-rational { color: #005cc5; }
-    [data-maintenance-tasks-root] .ruby-kw { color: #d73a49; }
-    [data-maintenance-tasks-root] .ruby-label,
-    [data-maintenance-tasks-root] .ruby-tstring-beg,
-    [data-maintenance-tasks-root] .ruby-tstring-content,
-    [data-maintenance-tasks-root] .ruby-tstring-end { color: #032f62; }
-    [data-maintenance-tasks-root] .select,
-    [data-maintenance-tasks-root] select { width: 100%; }
-    [data-maintenance-tasks-root] summary { cursor: pointer; }
-    [data-maintenance-tasks-root] input[type="datetime-local"],
-    [data-maintenance-tasks-root] input[type="date"],
-    [data-maintenance-tasks-root] input[type="time"] { width: fit-content; }
-    [data-maintenance-tasks-root] details > summary { list-style: none; }
-    [data-maintenance-tasks-root] summary::-webkit-details-marker { display: none; }
-    [data-maintenance-tasks-root] summary::before {
-      content: "► ";
-      position: absolute;
-      font-size: 16px;
-    }
-    [data-maintenance-tasks-root] details[open] summary::before { content: "▼ "; }
-    [data-maintenance-tasks-root] .box {
-      box-shadow: 0 0 6px 0 #0000001a, 0 2px 4px -1px #0000001a;
-    }
-    [data-maintenance-tasks-root] .label.is-required::after {
-      content: " (required)";
-      color: #ff6685;
-      font-size: 12px;
-    }
+        def progress(run)
+          return unless run.started?
 
-    [data-maintenance-tasks-root] .grid.is-col-min-20 {
-      grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-    }
-    [data-maintenance-tasks-root] .grid.is-col-min-20 > .cell {
-      min-width: 0;
-      width: auto;
-    }
+          progress = MaintenanceTasks::Progress.new(run)
+          attributes = { max: progress.max, class: ["progress", STATUS_CLASSES.fetch(run.status).fetch(:progress)] }
+          attributes[:value] = progress.value unless progress.value.nil?
+          tag.div(class: "space-y-2") do
+            tag.progress(**attributes) + tag.p(tag.i(progress.text), class: "text-sm text-neutral")
+          end
+        end
 
-    @media (max-width: 960px) {
-      [data-maintenance-tasks-root] .title.is-flex { flex-wrap: wrap; }
-      [data-maintenance-tasks-root] .title.is-flex > a {
-        min-width: 0;
-        overflow-wrap: anywhere;
-      }
-      [data-maintenance-tasks-root] .title.is-flex > .tag {
-        margin-inline: 0 !important;
-      }
-    }
-  CSS
+        def parameter_field(form_builder, parameter_name)
+          inclusion_values = resolve_inclusion_value(form_builder.object, parameter_name)
+          return form_builder.select(parameter_name, inclusion_values, { prompt: "Select a value" }, class: "select w-full") if inclusion_values
+
+          case form_builder.object.class.attribute_types[parameter_name]
+          when ActiveModel::Type::Integer
+            form_builder.number_field(parameter_name, class: "input input-rapid w-full")
+          when ActiveModel::Type::Decimal, ActiveModel::Type::Float
+            form_builder.number_field(parameter_name, step: "any", class: "input input-rapid w-full")
+          when ActiveModel::Type::DateTime
+            form_builder.datetime_field(parameter_name, class: "input input-rapid w-full sm:w-fit") + datetime_field_help_text
+          when ActiveModel::Type::Date
+            form_builder.date_field(parameter_name, class: "input input-rapid w-full sm:w-fit")
+          when ActiveModel::Type::Time
+            form_builder.time_field(parameter_name, class: "input input-rapid w-full sm:w-fit")
+          when ActiveModel::Type::Boolean
+            form_builder.check_box(parameter_name, class: "checkbox")
+          else
+            form_builder.text_area(parameter_name, class: "textarea w-full")
+          end
+        end
+
+        def datetime_field_help_text
+          zone = if Time.zone_default.nil? || Time.zone_default.name == "UTC"
+            "UTC"
+          else
+            Time.now.zone
+          end
+          tag.p("Timezone: \#{zone}.", class: "label")
+        end
+
+        def time_ago(datetime)
+          time_tag(datetime, title: datetime.utc, class: "cursor-help") do
+            time_ago_in_words(datetime) + " ago"
+          end
+        end
+      end
+    end
+  RUBY
+
+  create_file "app/views/maintenance_tasks/tasks/index.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("maintenance_tasks.title") %>
+
+    <header>
+      <p class="text-sm font-semibold text-primary">Operations</p>
+      <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("maintenance_tasks.title") %></h1>
+    </header>
+
+    <%= tag.div(data: { refresh: (defined?(@refresh) && @refresh) || "" }, class: "space-y-8") do %>
+      <% if @available_tasks.empty? %>
+        <section class="card card-border border-base-300 bg-base-100">
+          <div class="card-body">
+            <h2 class="card-title leading-[1.5]">The MaintenanceTasks gem has been successfully installed!</h2>
+            <p>Any new Tasks will show up here. To start writing your first Task, run <code>bin/rails generate maintenance_tasks:task my_task</code>.</p>
+          </div>
+        </section>
+      <% else %>
+        <% [["Active Tasks", @available_tasks[:active]], ["New Tasks", @available_tasks[:new]], ["Completed Tasks", @available_tasks[:completed]]].each do |heading, tasks| %>
+          <% if tasks.present? %>
+            <section class="space-y-4" aria-labelledby="<%= heading.parameterize %>">
+              <h2 id="<%= heading.parameterize %>" class="text-xl font-bold leading-[1.5]"><%= heading %></h2>
+              <div class="grid gap-4 lg:grid-cols-2">
+                <%= render partial: "maintenance_tasks/tasks/task", collection: tasks %>
+              </div>
+            </section>
+          <% end %>
+        <% end %>
+      <% end %>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/tasks/_task.html.erb", <<~ERB, force: true
+    <article class="card card-border min-w-0 border-base-300 bg-base-100">
+      <div class="card-body min-w-0">
+        <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <h3 class="card-title min-w-0 text-base leading-[1.5]">
+            <%= link_to task, admin_maintenance_tasks.task_path(task), class: "link link-hover min-w-0 break-all" %>
+          </h3>
+          <%= status_tag(task.status) %>
+        </div>
+
+        <% if (run = task.related_run) %>
+          <% if task.stale? %>
+            <div class="alert alert-warning alert-soft text-sm" role="status">
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+              </svg>
+              <span>This task last ran <%= MaintenanceTasks.task_staleness_threshold.inspect %> ago. Consider removing it as it may be stale.</span>
+            </div>
+          <% end %>
+
+          <time class="text-sm font-semibold" datetime="<%= run.created_at.iso8601 %>" title="<%= run.created_at.utc %>"><%= run.created_at.to_fs(:long) %></time>
+          <%= progress run %>
+          <div class="text-sm"><%= render "maintenance_tasks/runs/info/\#{run.status}", run: run %></div>
+          <div class="text-sm" id="custom-content"><%= render "maintenance_tasks/runs/info/custom", run: run %></div>
+          <%= render "maintenance_tasks/runs/csv", run: run %>
+          <%= render "maintenance_tasks/runs/arguments", arguments: run.masked_arguments %>
+          <%= render "maintenance_tasks/runs/metadata", metadata: run.metadata %>
+        <% end %>
+      </div>
+    </article>
+  ERB
+
+  create_file "app/views/maintenance_tasks/tasks/show.html.erb", <<~ERB, force: true
+    <% content_for :page_title, @task %>
+
+    <header>
+      <p class="text-sm font-semibold text-primary">Maintenance task</p>
+      <h1 class="mt-1 break-all text-2xl font-bold leading-[1.5]"><%= @task %></h1>
+    </header>
+
+    <section class="card card-border border-base-300 bg-base-100">
+      <div class="card-body">
+        <%= form_with url: admin_maintenance_tasks.task_runs_path(@task), method: :post, class: "space-y-6" do |form| %>
+          <% if @task.csv_task? %>
+            <fieldset class="fieldset">
+              <%= form.label :csv_file, class: "fieldset-legend" %>
+              <%= form.file_field :csv_file, accept: "text/csv", class: "file-input w-full" %>
+            </fieldset>
+          <% end %>
+
+          <% parameter_names = @task.parameter_names %>
+          <% if parameter_names.any? %>
+            <div class="grid gap-5 md:grid-cols-2">
+              <%= fields_for :task, @task.new do |ff| %>
+                <% parameter_names.each do |parameter_name| %>
+                  <fieldset class="fieldset min-w-0">
+                    <%= ff.label parameter_name, class: "fieldset-legend" do %>
+                      <span class="font-mono"><%= parameter_name %></span>
+                      <% if attribute_required?(ff.object, parameter_name) %>
+                        <span class="text-error" aria-hidden="true">*</span><span class="sr-only"> required</span>
+                      <% end %>
+                    <% end %>
+                    <%= parameter_field(ff, parameter_name) %>
+                  </fieldset>
+                <% end %>
+              <% end %>
+            </div>
+          <% end %>
+
+          <%= render "maintenance_tasks/tasks/custom", form: form %>
+          <div class="card-actions justify-end">
+            <%= form.submit "Run", class: "btn btn-primary btn-rapid", disabled: @task.deleted? %>
+          </div>
+        <% end %>
+      </div>
+    </section>
+
+    <% if (code = @task.code) %>
+      <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100">
+        <summary class="collapse-title text-lg font-semibold">Source code</summary>
+        <div class="collapse-content">
+          <div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= highlight_code(code) %></code></pre></div>
+        </div>
+      </details>
+    <% end %>
+
+    <%= tag.div(data: { refresh: @task.refresh? || "" }, class: "space-y-8") do %>
+      <% if @task.active_runs.any? %>
+        <section class="space-y-4">
+          <h2 class="text-xl font-bold leading-[1.5]">Active Runs</h2>
+          <%= render partial: "maintenance_tasks/runs/run", collection: @task.active_runs %>
+        </section>
+      <% end %>
+
+      <% if @task.runs_page.records.present? %>
+        <section class="space-y-4">
+          <h2 class="text-xl font-bold leading-[1.5]">Previous Runs</h2>
+          <%= render partial: "maintenance_tasks/runs/run", collection: @task.runs_page.records %>
+          <% unless @task.runs_page.last? %>
+            <div class="join"><%= link_to "Next page", admin_maintenance_tasks.task_path(@task, cursor: @task.runs_page.next_cursor), class: "btn join-item" %></div>
+          <% end %>
+        </section>
+      <% end %>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/_run.html.erb", <<~ERB, force: true
+    <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100" open id="run_<%= run.id %>">
+      <summary class="collapse-title pr-12">
+        <span class="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <span class="flex min-w-0 flex-wrap items-center gap-3">
+            <time class="font-semibold" datetime="<%= run.created_at.iso8601 %>" title="<%= run.created_at.utc %>"><%= run.created_at.to_fs(:long) %></time>
+            <%= status_tag run.status %>
+          </span>
+          <a href="#run_<%= run.id %>" class="link link-hover" title="Run ID">#<%= run.id %></a>
+        </span>
+      </summary>
+
+      <div class="collapse-content space-y-5">
+        <%= progress run %>
+        <div class="text-sm"><%= render "maintenance_tasks/runs/info/\#{run.status}", run: run %></div>
+        <div class="text-sm" id="custom-content"><%= render "maintenance_tasks/runs/info/custom", run: run %></div>
+        <%= render "maintenance_tasks/runs/csv", run: run %>
+        <%= render "maintenance_tasks/runs/arguments", arguments: run.masked_arguments %>
+        <%= render "maintenance_tasks/runs/metadata", metadata: run.metadata %>
+
+        <div class="card-actions flex-wrap justify-end">
+          <% if run.paused? %>
+            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: "btn", disabled: @task.deleted? %>
+            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error" %>
+          <% elsif run.errored? %>
+            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: "btn", disabled: @task.deleted? %>
+          <% elsif run.cancelling? %>
+            <% if run.stuck? %><%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error", disabled: @task.deleted? %><% end %>
+          <% elsif run.pausing? %>
+            <%= button_to "Pausing", admin_maintenance_tasks.pause_task_run_path(@task, run), class: "btn btn-warning", disabled: true %>
+            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error" %>
+            <% if run.stuck? %><%= button_to "Force pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: "btn btn-error", disabled: @task.deleted? %><% end %>
+          <% elsif run.active? %>
+            <%= button_to "Pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: "btn btn-warning", disabled: @task.deleted? %>
+            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error" %>
+          <% end %>
+        </div>
+      </div>
+    </details>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/_arguments.html.erb", <<~ERB, force: true
+    <% if arguments.present? %>
+      <section class="space-y-3">
+        <h3 class="text-sm font-semibold leading-[1.5]">Arguments:</h3>
+        <%= render "maintenance_tasks/runs/serializable", serializable: arguments %>
+      </section>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/_metadata.html.erb", <<~ERB, force: true
+    <% if metadata.present? %>
+      <section class="space-y-3">
+        <h3 class="text-sm font-semibold leading-[1.5]">Metadata:</h3>
+        <%= render "maintenance_tasks/runs/serializable", serializable: metadata %>
+      </section>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/_csv.html.erb", <<~ERB, force: true
+    <% if run.csv_file.present? %>
+      <%= link_to "Download CSV", csv_file_download_path(run), class: "link link-hover" %>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/_serializable.html.erb", <<~ERB, force: true
+    <% if serializable.present? %>
+      <% case serializable %>
+      <% when Hash %>
+        <dl class="grid gap-3 md:grid-cols-2">
+          <% serializable.transform_values(&:to_s).each do |key, value| %>
+            <div class="rounded-box bg-base-200 p-4">
+              <dt class="mb-2 break-all font-mono text-sm font-semibold"><%= key %></dt>
+              <dd class="min-w-0">
+                <% unless value.empty? %>
+                  <% if value.include?("\n") %><pre class="overflow-x-auto whitespace-pre-wrap break-words text-sm"><%= value %></pre><% else %><code class="break-all text-sm"><%= value %></code><% end %>
+                <% end %>
+              </dd>
+            </div>
+          <% end %>
+        </dl>
+      <% else %>
+        <code class="block break-all rounded-box bg-base-200 p-4 text-sm"><%= serializable.inspect %></code>
+      <% end %>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/info/_errored.html.erb", <<~ERB, force: true
+    <div class="space-y-4">
+      <p>Ran for <%= time_running_in_words run %> until an error happened <%= time_ago run.ended_at %>.</p>
+      <div class="alert alert-error alert-vertical" role="alert">
+        <div class="font-semibold"><%= run.error_class %></div>
+        <p><%= run.error_message %></p>
+        <% if run.backtrace.present? %><pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words text-sm"><code><%= format_backtrace(run.backtrace) %></code></pre><% end %>
+      </div>
+    </div>
+  ERB
 
   create_file "app/javascript/controllers/maintenance_tasks_refresh_controller.js", <<~JAVASCRIPT, force: true
     import { Controller } from "@hotwired/stimulus"
@@ -7471,9 +7695,30 @@ def install_maintenance_tasks
   create_file "test/support/maintenance_tasks/safe_test_task.rb", <<~RUBY, force: true
     module Maintenance
       class SafeTestTask < MaintenanceTasks::Task
+        attribute :note, :string, default: "Evidence note"
+        attribute :quantity, :integer, default: 1
+        attribute :ratio, :float, default: 1.5
+        attribute :amount, :decimal, default: 2.5
+        attribute :scheduled_at, :datetime
+        attribute :due_on, :date
+        attribute :starts_at, :time
+        attribute :mode, :integer
+        attribute :notify, :boolean, default: false
+
+        validates :note, presence: true
+        validates :mode, inclusion: { in: [1, 2], allow_nil: true }
+
         no_collection
 
         def process
+          nil
+        end
+      end
+
+      class CsvTestTask < MaintenanceTasks::Task
+        csv_collection
+
+        def process(_row)
           nil
         end
       end
@@ -7560,6 +7805,8 @@ def install_maintenance_tasks
       TASK_NAME = "Maintenance::SafeTestTask"
       TASK_PATH = "/admin/maintenance_tasks/tasks/\#{CGI.escapeURIComponent(TASK_NAME)}"
       RUNS_PATH = "\#{TASK_PATH}/runs"
+      CSV_TASK_NAME = "Maintenance::CsvTestTask"
+      CSV_TASK_PATH = "/admin/maintenance_tasks/tasks/\#{CGI.escapeURIComponent(CSV_TASK_NAME)}"
 
     #{controller_test_support}
       test "requires authentication" do
@@ -7589,14 +7836,93 @@ def install_maintenance_tasks
 
         get admin_maintenance_tasks_url
         assert_response :success
+        assert_nil response.headers["Content-Security-Policy"]
         assert_select "[data-maintenance-tasks-root]", count: 1
+        assert_select "header h1", text: I18n.t("maintenance_tasks.title"), count: 1
+        assert_select ".card.card-border", minimum: 1
+        assert_select ".badge.badge-neutral", text: "New", count: 2
+        assert_select 'link[href*="bulma"]', count: 0
         assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="admin"] a[href=?]', Rails.application.routes.url_helpers.admin_users_path,
+          text: I18n.t("navigation.users"), minimum: 1
         assert_select '[data-layout="admin"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_maintenance_tasks_path,
           text: I18n.t("navigation.maintenance_tasks"), count: 1
 
         get TASK_PATH
         assert_response :success
         assert_select "[data-maintenance-tasks-root]", count: 1
+        assert_select "fieldset.fieldset", count: 9
+        assert_select "textarea.textarea[name=?]", "task[note]", count: 1
+        assert_select "input.input[type=number][name=?]", "task[quantity]", count: 1
+        assert_select "input.input[type=number][step=any][name=?]", "task[ratio]", count: 1
+        assert_select "input.input[type=number][step=any][name=?]", "task[amount]", count: 1
+        assert_select "input.input[type=datetime-local][name=?]", "task[scheduled_at]", count: 1
+        assert_select "input.input[type=date][name=?]", "task[due_on]", count: 1
+        assert_select "input.input[type=time][name=?]", "task[starts_at]", count: 1
+        assert_select "select.select[name=?]", "task[mode]", count: 1
+        assert_select "input.checkbox[name=?]", "task[notify]", count: 1
+        assert_select "input.btn.btn-primary[type=submit]", value: "Run", count: 1
+        assert_select "form[action=?]", admin_maintenance_tasks.task_runs_path(TASK_NAME), count: 1
+        assert_select "details.collapse.collapse-arrow", minimum: 1
+        assert_select ".mockup-code", count: 1
+
+        get CSV_TASK_PATH
+        assert_response :success
+        assert_select "input.file-input[type=file][name=csv_file]", count: 1
+      end
+
+      test "preserves pause, resume, and cancel operations" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        pausing_run = MaintenanceTasks::Run.create!(task_name: TASK_NAME, status: "running", job_id: "running-job")
+        post "\#{RUNS_PATH}/\#{pausing_run.id}/pause"
+        assert_redirected_to admin_maintenance_tasks.task_path(TASK_NAME)
+        assert_equal "pausing", pausing_run.reload.status
+
+        resumable_run = MaintenanceTasks::Run.create!(task_name: TASK_NAME, status: "paused", job_id: "paused-job")
+        assert_enqueued_with(job: MaintenanceTasks::TaskJob) do
+          post "\#{RUNS_PATH}/\#{resumable_run.id}/resume"
+        end
+        assert_redirected_to admin_maintenance_tasks.task_path(TASK_NAME)
+        assert_equal "enqueued", resumable_run.reload.status
+
+        cancellable_run = MaintenanceTasks::Run.create!(task_name: TASK_NAME, status: "paused", job_id: "cancel-job")
+        post "\#{RUNS_PATH}/\#{cancellable_run.id}/cancel"
+        assert_redirected_to admin_maintenance_tasks.task_path(TASK_NAME)
+        assert_equal "cancelled", cancellable_run.reload.status
+      end
+
+      test "renders daisyUI run controls, progress, and errors" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        now = Time.current
+        MaintenanceTasks::Run.create!(
+          task_name: TASK_NAME,
+          status: "paused",
+          job_id: "paused-job",
+          started_at: now - 2.minutes,
+          tick_count: 2,
+          tick_total: 10
+        )
+        MaintenanceTasks::Run.create!(
+          task_name: TASK_NAME,
+          status: "errored",
+          job_id: "errored-job",
+          started_at: now - 1.minute,
+          ended_at: now,
+          error_class: "ArgumentError",
+          error_message: "Something went wrong",
+          backtrace: ["app/tasks/maintenance/safe_test_task.rb:10"]
+        )
+
+        get TASK_PATH
+
+        assert_response :success
+        assert_select ".badge.badge-warning", text: "Paused", count: 1
+        assert_select "progress.progress-warning", count: 1
+        assert_select "form[action$='/resume'] .btn", text: "Resume", count: 2
+        assert_select "form[action$='/cancel'] .btn.btn-error", text: "Cancel", count: 1
+        assert_select ".badge.badge-error", text: "Errored", count: 1
+        assert_select ".alert.alert-error", text: /Something went wrong/, count: 1
       end
 
       test "enqueues and executes a task while preserving standard run history" do
@@ -7619,6 +7945,11 @@ def install_maintenance_tasks
         assert_predicate run.started_at, :present?
         assert_predicate run.ended_at, :present?
         assert_equal 1, MaintenanceTasks::Run.where(task_name: TASK_NAME).count
+
+        get TASK_PATH
+        assert_response :success
+        assert_select ".badge.badge-success", text: "Succeeded", count: 1
+        assert_select "progress.progress-success", count: 1
       end
     end
   RUBY
@@ -7669,6 +8000,8 @@ def configure_evidence_capture
 
     class EvidenceCapture < ApplicationSystemTestCase
       self.use_transactional_tests = false
+
+      include ActiveJob::TestHelper
 
       AUTHENTICATION = __AUTHENTICATION__
       IMAGE_DELIVERY = __IMAGE_DELIVERY__
@@ -7850,6 +8183,11 @@ def configure_evidence_capture
           @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
           @user.profile.avatar.purge if @user.profile.avatar.attached?
           @user.grant_role!(:admin)
+          if MAINTENANCE_TASKS
+            MaintenanceTasks::Run.delete_all
+            clear_enqueued_jobs
+            clear_performed_jobs
+          end
           identifier = devise? ? { email: "member@example.com", password: PASSWORD, password_confirmation: PASSWORD } :
             { wallet_address: Eth::Key.new(priv: REGULAR_PRIVATE_KEY).address.to_s.downcase }
           @regular_user = User.find_or_create_by!(identifier.slice(devise? ? :email : :wallet_address)) do |user|
@@ -7904,7 +8242,19 @@ def configure_evidence_capture
             assert_selector "[data-maintenance-tasks-root]", count: 1
             assert_admin_navigation_active(translate("navigation.maintenance_tasks"))
             capture_current_page("admin-maintenance-tasks", "運用タスク", viewport)
+            click_link "Maintenance::SafeTestTask"
+            assert_selector "textarea[name='task[note]']", count: 1
+            assert_selector "input.checkbox[name='task[notify]']", count: 1
+            capture_current_page("admin-maintenance-task-details", "運用タスク詳細", viewport)
+            click_button "Run"
+            assert_text "Enqueued"
+            perform_enqueued_jobs
+            visit page.current_path
+            assert_text "Succeeded"
+            assert_selector ".badge.badge-success", text: "Succeeded", count: 1
+            capture_current_page("admin-maintenance-task-completed", "運用タスク完了", viewport)
             if viewport == "mobile"
+              visit admin_maintenance_tasks_path
               find("header details.dropdown > summary", visible: :visible).click
               capture_current_page(
                 "admin-maintenance-tasks-navigation-open",
@@ -8346,6 +8696,8 @@ def configure_evidence_capture
                   const shell = document.querySelector('[data-maintenance-tasks-shell="true"]')
                   const sidebar = shell.querySelector(":scope > aside").getBoundingClientRect()
                   const content = shell.querySelector(":scope > div").getBoundingClientRect()
+                  const activeIcon = shell.querySelector('a.menu-active svg').getBoundingClientRect()
+                  const footer = document.querySelector("footer.footer")
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
@@ -8354,7 +8706,10 @@ def configure_evidence_capture
                     sidebarBottom: sidebar.bottom,
                     sidebarRight: sidebar.right,
                     contentTop: content.top,
-                    contentLeft: content.left
+                    contentLeft: content.left,
+                    activeIconWidth: activeIcon.width,
+                    activeIconHeight: activeIcon.height,
+                    footerFlow: getComputedStyle(footer).gridAutoFlow
                   }
                 }
               JAVASCRIPT
@@ -8363,6 +8718,13 @@ def configure_evidence_capture
               "Maintenance Tasks horizontal overflow at #{width}px"
             assert_operator geometry.fetch("rootWidth"), :>, 0,
               "Maintenance Tasks content should be visible at #{width}px"
+            assert_in_delta 20, geometry.fetch("activeIconWidth"), 0.5,
+              "Maintenance Tasks navigation icon width at #{width}px"
+            assert_in_delta 20, geometry.fetch("activeIconHeight"), 0.5,
+              "Maintenance Tasks navigation icon height at #{width}px"
+            expected_footer_flow = width < 640 ? "row" : "column"
+            assert_equal expected_footer_flow, geometry.fetch("footerFlow"),
+              "Maintenance Tasks footer layout at #{width}px"
             if width < 961
               assert_operator geometry.fetch("contentTop"), :>=, geometry.fetch("sidebarBottom"),
                 "Maintenance Tasks admin shell should use one column at #{width}px"

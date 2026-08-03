@@ -61,6 +61,7 @@ module RapidRailsTemplate
       result << "imgproxy-rails" if configuration["image_delivery"] == "imgproxy"
       result << "web-push" if configuration["web_push"] == "use"
       result << "solid_queue" if configuration["active_job"] == "solid_queue"
+      result << "mission_control-jobs" if configuration["job_operations"] == "enable"
       result << "maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
       result << "solid_cache" if configuration["solid_cache"] == "use"
       result << "solid_cable" if configuration["action_cable"] == "solid_cable"
@@ -79,6 +80,7 @@ module RapidRailsTemplate
       result << "configure_web_push" if configuration["web_push"] == "use"
       result << "configure_default_views"
       result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
+      result << "install_job_operations" if configuration["job_operations"] == "enable"
       result << "install_maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
       result << "install_solid_cache" if configuration["solid_cache"] == "use"
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
@@ -262,6 +264,7 @@ module RapidRailsTemplate
         result << "app/views/sessions/new.html.erb"
         result << "app/javascript/controllers/siwe_sign_in_controller.js"
         result << "app/views/accounts/edit.html.erb"
+        result << "test/support/siwe_test_request.rb"
       end
       if configuration["pwa"] == "use"
         result.concat(%w[
@@ -306,6 +309,21 @@ module RapidRailsTemplate
           test/support/maintenance_tasks/safe_test_task.rb
         ])
       end
+      if configuration["job_operations"] == "enable"
+        result.concat(%w[
+          config/initializers/mission_control_jobs.rb
+          app/controllers/admin/job_operations_controller.rb
+          app/policies/job_operation_policy.rb
+          app/views/layouts/mission_control/jobs/application.html.erb
+          app/assets/stylesheets/mission_control_jobs_scoped.css
+          config/locales/job_operations.ja.yml
+          config/locales/job_operations.en.yml
+          docs/job_operations.md
+          test/policies/job_operation_policy_test.rb
+          test/controllers/admin/job_operations_controller_test.rb
+          test/models/solid_queue_cleanup_test.rb
+        ])
+      end
       result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"
       result << "mise.local.toml" if configuration["web_push"] == "use"
       result.uniq
@@ -320,15 +338,21 @@ module RapidRailsTemplate
     end
 
     def build_production_requirements
-      return [] unless configuration["image_delivery"] == "imgproxy"
-
-      [
-        "separate imgproxy v4 service",
-        "IMGPROXY_ENDPOINT (HTTPS)",
-        "IMGPROXY_KEY (hex)",
-        "IMGPROXY_SALT (hex)",
-        "public HTTPS APPLICATION_ORIGIN"
-      ]
+      result = []
+      if configuration["active_job"] == "solid_queue"
+        result << "Solid Queue worker/dispatcher/scheduler"
+        result << "finished jobs retained for 1 day; failed jobs retained until retry/discard"
+      end
+      if configuration["image_delivery"] == "imgproxy"
+        result.concat([
+          "separate imgproxy v4 service",
+          "IMGPROXY_ENDPOINT (HTTPS)",
+          "IMGPROXY_KEY (hex)",
+          "IMGPROXY_SALT (hex)",
+          "public HTTPS APPLICATION_ORIGIN"
+        ])
+      end
+      result
     end
   end
 end

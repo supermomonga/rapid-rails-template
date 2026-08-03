@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job maintenance_tasks solid_cache account_authentication profile_features image_delivery api action_cable mail deployment default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache account_authentication profile_features image_delivery api action_cable mail deployment default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -47,7 +47,8 @@ gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_n
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
 gem "imgproxy-rails", "~> 0.3.0" if VALUES.fetch("image_delivery") == "imgproxy"
 gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
-gem "solid_queue" if VALUES.fetch("active_job") == "solid_queue"
+gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"
+gem "mission_control-jobs", "1.1.0" if VALUES.fetch("job_operations") == "enable"
 gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
 gem "solid_cable" if VALUES.fetch("action_cable") == "solid_cable"
@@ -1329,6 +1330,24 @@ def install_wallet_siwe
   RUBY
   create_file "config/initializers/siwe.rb", "require \"siwe\"\n"
 
+  create_file "test/support/siwe_test_request.rb", <<~RUBY, force: true
+    module SiweTestRequest
+      private
+        def siwe_test_headers(key)
+          address_groups = key.address.to_s.delete_prefix("0x").scan(/.{4}/).first(4)
+          { "REMOTE_ADDR" => "2001:db8::\#{address_groups.join(":")}" }
+        end
+    end
+
+    class ActiveSupport::TestCase
+      include SiweTestRequest
+    end
+  RUBY
+  append_to_file "test/test_helper.rb", <<~RUBY
+
+    require_relative "support/siwe_test_request"
+  RUBY
+
   create_file "app/javascript/controllers/siwe_sign_in_controller.js", <<~JAVASCRIPT
     import { Controller } from "@hotwired/stimulus"
 
@@ -1407,9 +1426,9 @@ def install_wallet_siwe
 
     class SessionsControllerTest < ActionDispatch::IntegrationTest
       test 'creates one user per wallet address after a valid SIWE signature' do
-        get session_nonce_url
-        nonce = response.parsed_body.fetch('nonce')
         key = Eth::Key.new
+        get session_nonce_url, headers: siwe_test_headers(key)
+        nonce = response.parsed_body.fetch('nonce')
         message = Siwe::Message.new(
           domain: 'www.example.com',
           address: key.address.to_s,
@@ -1421,7 +1440,8 @@ def install_wallet_siwe
         ).prepare_message
 
         assert_difference('User.count', 1) do
-          post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+          post session_url, params: { message: message, signature: key.personal_sign(message) },
+            headers: siwe_test_headers(key), as: :json
         end
         assert_response :success
 
@@ -1917,7 +1937,7 @@ def configure_roles
           end
 
           def sign_in_as(_user, key)
-            get session_nonce_url
+            get session_nonce_url, headers: siwe_test_headers(key)
             nonce = response.parsed_body.fetch("nonce")
             message = Siwe::Message.new(
               domain: "www.example.com",
@@ -1928,7 +1948,8 @@ def configure_roles
               issued_at: Time.current.iso8601,
               statement: Rails.configuration.x.application_identity.siwe_statement
             ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            post session_url, params: { message: message, signature: key.personal_sign(message) },
+              headers: siwe_test_headers(key), as: :json
             assert_response :success
           end
 
@@ -2852,7 +2873,7 @@ def configure_content_management
           end
 
           def sign_in_content_user(_user, key)
-            get session_nonce_url
+            get session_nonce_url, headers: siwe_test_headers(key)
             nonce = response.parsed_body.fetch("nonce")
             message = Siwe::Message.new(
               domain: "www.example.com",
@@ -2863,7 +2884,8 @@ def configure_content_management
               issued_at: Time.current.iso8601,
               statement: Rails.configuration.x.application_identity.siwe_statement
             ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            post session_url, params: { message: message, signature: key.personal_sign(message) },
+              headers: siwe_test_headers(key), as: :json
             assert_response :success
           end
       end
@@ -4600,9 +4622,9 @@ def configure_api
           require "eth"
 
           setup do
-            get session_nonce_url
-            nonce = response.parsed_body.fetch("nonce")
             key = Eth::Key.new
+            get session_nonce_url, headers: siwe_test_headers(key)
+            nonce = response.parsed_body.fetch("nonce")
             message = Siwe::Message.new(
               domain: "www.example.com",
               address: key.address.to_s,
@@ -4612,7 +4634,8 @@ def configure_api
               issued_at: Time.current.iso8601,
               statement: Rails.configuration.x.application_identity.siwe_statement
             ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            post session_url, params: { message: message, signature: key.personal_sign(message) },
+              headers: siwe_test_headers(key), as: :json
             @user = User.find_by!(wallet_address: key.address.to_s.downcase)
           end
     RUBY
@@ -4897,6 +4920,7 @@ def configure_default_views
   devise = VALUES.fetch("account_authentication") == "devise"
   pwa_enabled = VALUES.fetch("pwa") == "use"
   web_push_enabled = VALUES.fetch("web_push") == "use"
+  job_operations_enabled = VALUES.fetch("job_operations") == "enable"
   maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
   profile_features = VALUES.fetch("profile_features")
@@ -4922,7 +4946,7 @@ def configure_default_views
   end
   account_navigation_items = <<~ERB
     <li>
-      <%= link_to account_path, class: ("menu-active" if current_page?(account_path)), aria: { current: ("page" if current_page?(account_path)) } do %>
+      <%= link_to application_routes.account_path, class: ("menu-active" if current_page?(application_routes.account_path)), aria: { current: ("page" if current_page?(application_routes.account_path)) } do %>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955a1.125 1.125 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
         </svg>
@@ -4933,7 +4957,7 @@ def configure_default_views
   if profile_enabled
     account_navigation_items += <<~ERB
       <li>
-        <%= link_to profile_path, class: ("menu-active" if controller_path == "profiles"), aria: { current: ("page" if controller_path == "profiles") } do %>
+        <%= link_to application_routes.profile_path, class: ("menu-active" if controller_path == "profiles"), aria: { current: ("page" if controller_path == "profiles") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
@@ -4942,7 +4966,7 @@ def configure_default_views
       </li>
     ERB
   end
-  account_settings_path = devise ? "edit_user_registration_path" : "edit_account_path"
+  account_settings_path = devise ? "application_routes.edit_user_registration_path" : "application_routes.edit_account_path"
   account_navigation_items += <<~ERB
     <li>
       <%= link_to #{account_settings_path}, class: ("menu-active" if current_page?(#{account_settings_path})), aria: { current: ("page" if current_page?(#{account_settings_path})) } do %>
@@ -4957,7 +4981,7 @@ def configure_default_views
   if web_push_enabled
     account_navigation_items += <<~ERB
       <li>
-        <%= link_to notification_path, class: ("menu-active" if controller_path == "notifications"), aria: { current: ("page" if controller_path == "notifications") } do %>
+        <%= link_to application_routes.notification_path, class: ("menu-active" if controller_path == "notifications"), aria: { current: ("page" if controller_path == "notifications") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
@@ -4969,7 +4993,7 @@ def configure_default_views
   if api_enabled
     account_navigation_items += <<~ERB
       <li>
-        <%= link_to api_credentials_path, class: ("menu-active" if controller_path == "api_credentials"), aria: { current: ("page" if controller_path == "api_credentials") } do %>
+        <%= link_to application_routes.api_credentials_path, class: ("menu-active" if controller_path == "api_credentials"), aria: { current: ("page" if controller_path == "api_credentials") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
           </svg>
@@ -4980,46 +5004,58 @@ def configure_default_views
   end
   admin_navigation_items = <<~ERB
       <li>
-        <%= link_to admin_users_path, class: ("menu-active" if controller_path.in?(%w[admin/users admin/user_roles])), aria: { current: ("page" if controller_path.in?(%w[admin/users admin/user_roles])) } do %>
+        <%= link_to application_routes.admin_users_path, class: ("menu-active" if controller_path.in?(%w[admin/users admin/user_roles])), aria: { current: ("page" if controller_path.in?(%w[admin/users admin/user_roles])) } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m6-3c0 7.142-3.75 12-9 13.5C6.75 18.75 3 13.892 3 6.75c3.75 0 7.5-1.5 9-4.5 1.5 3 5.25 4.5 9 4.5Z" />
           </svg>
-          <%= t("navigation.users") %>
+          <%= application_translate("navigation.users") %>
         <% end %>
       </li>
       <li>
-        <%= link_to admin_pages_path, class: ("menu-active" if controller_path == "admin/pages"), aria: { current: ("page" if controller_path == "admin/pages") } do %>
+        <%= link_to application_routes.admin_pages_path, class: ("menu-active" if controller_path == "admin/pages"), aria: { current: ("page" if controller_path == "admin/pages") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5A3.375 3.375 0 0 0 10.125 2.25H8.25m0 12.75h7.5m-7.5 3h4.5M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-8.25a10.5 10.5 0 0 0-9-10.125Z" />
           </svg>
-          <%= t("navigation.pages") %>
+          <%= application_translate("navigation.pages") %>
         <% end %>
       </li>
       <li>
-        <%= link_to admin_faqs_path, class: ("menu-active" if controller_path == "admin/faqs"), aria: { current: ("page" if controller_path == "admin/faqs") } do %>
+        <%= link_to application_routes.admin_faqs_path, class: ("menu-active" if controller_path == "admin/faqs"), aria: { current: ("page" if controller_path == "admin/faqs") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 9.75a3.375 3.375 0 1 1 5.775 2.387c-.938.938-1.9 1.424-1.9 2.613M12 18h.008v.008H12V18Zm9-6a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
-          <%= t("navigation.faqs") %>
+          <%= application_translate("navigation.faqs") %>
         <% end %>
       </li>
       <li>
-        <%= link_to edit_admin_footer_setting_path, class: ("menu-active" if controller_path == "admin/footer_settings"), aria: { current: ("page" if controller_path == "admin/footer_settings") } do %>
+        <%= link_to application_routes.edit_admin_footer_setting_path, class: ("menu-active" if controller_path == "admin/footer_settings"), aria: { current: ("page" if controller_path == "admin/footer_settings") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
           </svg>
-          <%= t("content_management.admin.footer_settings.title") %>
+          <%= application_translate("content_management.admin.footer_settings.title") %>
         <% end %>
       </li>
   ERB
+  if job_operations_enabled
+    admin_navigation_items += <<~ERB
+      <li>
+        <%= link_to application_routes.admin_jobs_path, class: ("menu-active" if controller_path.start_with?("mission_control/jobs/")), aria: { current: ("page" if controller_path.start_with?("mission_control/jobs/")) } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 18h16.5M4.5 6.75h15a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-15a.75.75 0 0 1-.75-.75V7.5a.75.75 0 0 1 .75-.75Z" />
+          </svg>
+          <%= application_translate("navigation.job_operations") %>
+        <% end %>
+      </li>
+    ERB
+  end
   if maintenance_tasks_enabled
     admin_navigation_items += <<~ERB
       <li>
-        <%= link_to admin_maintenance_tasks_path, class: ("menu-active" if controller_path.start_with?("maintenance_tasks/")), aria: { current: ("page" if controller_path.start_with?("maintenance_tasks/")) } do %>
+        <%= link_to application_routes.admin_maintenance_tasks_path, class: ("menu-active" if controller_path.start_with?("maintenance_tasks/")), aria: { current: ("page" if controller_path.start_with?("maintenance_tasks/")) } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766m-3.704 3.796-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 2.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 2.437 1.745-2.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
           </svg>
-          <%= t("navigation.maintenance_tasks") %>
+          <%= application_translate("navigation.maintenance_tasks") %>
         <% end %>
       </li>
     ERB
@@ -5028,31 +5064,30 @@ def configure_default_views
   account_navigation_for_dropdown = account_navigation_items.lines.map { |line| "          #{line}" }.join
   admin_navigation_for_layout = admin_navigation_items.lines.map { |line| "                #{line}" }.join
   signed_in_condition = devise ? "user_signed_in?" : "authenticated?"
-  admin_controller_condition = if maintenance_tasks_enabled
-    'controller_path.start_with?("admin/") || controller_path.start_with?("maintenance_tasks/")'
-  else
-    'controller_path.start_with?("admin/")'
-  end
+  admin_controller_conditions = ['controller_path.start_with?("admin/")']
+  admin_controller_conditions << 'controller_path.start_with?("mission_control/jobs/")' if job_operations_enabled
+  admin_controller_conditions << 'controller_path.start_with?("maintenance_tasks/")' if maintenance_tasks_enabled
+  admin_controller_condition = admin_controller_conditions.join(" || ")
   profile_owner = devise ? "current_user.profile" : "Current.user.profile"
-  logout_path = devise ? "destroy_user_session_path" : "session_path"
+  logout_path = devise ? "application_routes.destroy_user_session_path" : "application_routes.session_path"
   guest_desktop_navigation = if devise
     <<~ERB
-      <%= link_to t("navigation.sign_in"), new_user_session_path, class: "btn btn-ghost btn-rapid" %>
-      <%= link_to t("navigation.sign_up"), new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
+      <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-ghost btn-rapid" %>
+      <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
     ERB
   else
     <<~ERB
-      <%= link_to t("navigation.sign_in"), new_session_path, class: "btn btn-ghost btn-rapid" %>
+      <%= link_to t("navigation.sign_in"), application_routes.new_session_path, class: "btn btn-ghost btn-rapid" %>
     ERB
   end
   guest_mobile_navigation = if devise
     <<~ERB
-      <li><%= link_to t("navigation.sign_in"), new_user_session_path %></li>
-      <li><%= link_to t("navigation.sign_up"), new_user_registration_path %></li>
+      <li><%= link_to t("navigation.sign_in"), application_routes.new_user_session_path %></li>
+      <li><%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path %></li>
     ERB
   else
     <<~ERB
-      <li><%= link_to t("navigation.sign_in"), new_session_path %></li>
+      <li><%= link_to t("navigation.sign_in"), application_routes.new_session_path %></li>
     ERB
   end
   profile_identity = if display_name_enabled || screen_name_enabled
@@ -5118,7 +5153,7 @@ def configure_default_views
   pwa_head = if pwa_enabled
     <<~ERB
       <meta name="theme-color" content="#3ea8ff">
-      <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
+      <%= tag.link rel: "manifest", href: application_routes.pwa_manifest_path(format: :json) %>
     ERB
   else
     ""
@@ -5130,9 +5165,9 @@ def configure_default_views
   if web_push_enabled
     body_data_attributes += <<~ERB.chomp
        data-push-subscription-authenticated-value="<%= #{signed_in_condition} %>"
-       data-push-subscription-public-key-url-value="<%= vapid_public_key_push_subscription_path %>"
-       data-push-subscription-subscription-url-value="<%= push_subscription_path %>"
-       data-push-subscription-test-url-value="<%= test_push_subscription_path %>"
+       data-push-subscription-public-key-url-value="<%= application_routes.vapid_public_key_push_subscription_path %>"
+       data-push-subscription-subscription-url-value="<%= application_routes.push_subscription_path %>"
+       data-push-subscription-test-url-value="<%= application_routes.test_push_subscription_path %>"
        data-push-subscription-messages-value="<%= t('web_push.client').to_json %>"
     ERB
   end
@@ -5195,6 +5230,10 @@ def configure_default_views
         Rails.configuration.x.application_identity
       end
 
+      def application_routes
+        Rails.application.routes.url_helpers
+      end
+
       def document_title
         page_title = content_for(:title).presence
         [page_title, application_identity.app_name].compact.join(" | ")
@@ -5202,6 +5241,10 @@ def configure_default_views
 
       def canonical_url
         application_identity.canonical_url(request.path)
+      end
+
+      def application_translate(key, **options)
+        I18n.backend.translate(application_identity.default_locale, key, **options)
       end
     end
   RUBY
@@ -5229,7 +5272,7 @@ def configure_default_views
         <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag "lexxy", "data-turbo-track": "reload" %>
-    #{wallet_script}    <%= javascript_importmap_tags %>
+    #{wallet_script}    <%= content_for?(:javascript_importmap) ? yield(:javascript_importmap) : javascript_importmap_tags %>
       </head>
       <body class="min-h-screen bg-base-100 text-base-content antialiased" data-layout="application"#{body_data_attributes}>
         <div class="flex min-h-screen flex-col">
@@ -5280,9 +5323,9 @@ def configure_default_views
     <% content_for :content do %>
       <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="admin"#{maintenance_tasks_enabled ? ' data-maintenance-tasks-shell="<%= controller_path.start_with?("maintenance_tasks/") %>"' : ""}>
         <aside class="h-fit">
-          <nav aria-label="<%= t('navigation.admin_menu') %>">
+          <nav aria-label="<%= application_translate('navigation.admin_menu') %>">
             <ul class="menu w-full rounded-box bg-base-100">
-              <li class="menu-title"><span><%= t("navigation.admin") %></span></li>
+              <li class="menu-title"><span><%= application_translate("navigation.admin") %></span></li>
     #{admin_navigation_for_layout}          </ul>
           </nav>
         </aside>
@@ -5296,14 +5339,14 @@ def configure_default_views
     <header class="border-b border-base-300 bg-base-100">
       <nav class="navbar mx-auto w-full max-w-6xl px-5" aria-label="<%= t('navigation.main') %>">
         <div class="navbar-start">
-          <%= link_to application_identity.app_name, root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
+          <%= link_to application_identity.app_name, application_routes.root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
         </div>
         <% if #{signed_in_condition} %>
           <div class="navbar-end">
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
     #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if #{admin_controller_condition} %>
-                <li class="menu-title"><span><%= t("navigation.admin") %></span></li>
+                <li class="menu-title"><span><%= application_translate("navigation.admin") %></span></li>
                 <%= render "shared/admin_navigation" %>
               <% else %>
     #{account_navigation_for_dropdown}            <% end %>
@@ -5345,13 +5388,13 @@ def configure_default_views
       <footer class="footer footer-vertical mx-auto w-full max-w-6xl px-5 py-8 text-sm sm:footer-horizontal">
         <nav>
           <h2 class="footer-title leading-[1.5]"><%= t("footer.about_section") %></h2>
-          <%= link_to t("footer.about", app_name: application_identity.app_name), about_path, class: "link link-hover" %>
-          <%= link_to t("footer.company"), corp_path, class: "link link-hover" %>
+          <%= link_to t("footer.about", app_name: application_identity.app_name), application_routes.about_path, class: "link link-hover" %>
+          <%= link_to t("footer.company"), application_routes.corp_path, class: "link link-hover" %>
         </nav>
         <nav>
           <h2 class="footer-title leading-[1.5]"><%= t("footer.guides_section") %></h2>
-          <%= link_to t("footer.manual"), manual_path, class: "link link-hover" %>
-          <%= link_to t("footer.faq"), faq_path, class: "link link-hover" %>
+          <%= link_to t("footer.manual"), application_routes.manual_path, class: "link link-hover" %>
+          <%= link_to t("footer.faq"), application_routes.faq_path, class: "link link-hover" %>
         </nav>
         <% if external_links_configured %>
           <nav>
@@ -5366,9 +5409,9 @@ def configure_default_views
         <% end %>
         <nav>
           <h2 class="footer-title leading-[1.5]">Legal</h2>
-          <%= link_to t("footer.terms"), terms_path, class: "link link-hover" %>
-          <%= link_to t("footer.privacy"), privacy_path, class: "link link-hover" %>
-          <%= link_to t("footer.transaction_law"), transaction_law_path, class: "link link-hover" %>
+          <%= link_to t("footer.terms"), application_routes.terms_path, class: "link link-hover" %>
+          <%= link_to t("footer.privacy"), application_routes.privacy_path, class: "link link-hover" %>
+          <%= link_to t("footer.transaction_law"), application_routes.transaction_law_path, class: "link link-hover" %>
         </nav>
       </footer>
     </div>
@@ -5625,6 +5668,65 @@ def configure_default_views
     RUBY
   end
   profile_page_assertions = profile_page_assertions.lines.map { |line| "      #{line}" }.join
+  job_operations_route_test = if job_operations_enabled
+    <<~RUBY
+
+        test "mounts Mission Control Jobs only below the admin namespace" do
+          assert_respond_to Rails.application.routes.url_helpers, :admin_jobs_path
+          assert_equal "/admin/jobs", admin_jobs_path
+          assert Rails.application.routes.recognize_path("/admin/jobs", method: :get)
+          %w[
+            config/initializers/mission_control_jobs.rb
+            app/controllers/admin/job_operations_controller.rb
+            app/policies/job_operation_policy.rb
+            app/views/layouts/mission_control/jobs/application.html.erb
+            app/assets/stylesheets/mission_control_jobs_scoped.css
+            config/locales/job_operations.ja.yml
+            config/locales/job_operations.en.yml
+            docs/job_operations.md
+            test/policies/job_operation_policy_test.rb
+            test/controllers/admin/job_operations_controller_test.rb
+            test/models/solid_queue_cleanup_test.rb
+          ].each { |path| assert Rails.root.join(path).file?, path }
+          assert_match(/gem ["']mission_control-jobs["'], ["']1\.1\.0["']/, Rails.root.join("Gemfile").read)
+          assert_raises(ActionController::RoutingError) do
+            Rails.application.routes.recognize_path("/jobs", method: :get)
+          end
+        end
+    RUBY
+  else
+    <<~RUBY
+
+        test "does not expose Mission Control Jobs when the feature is disabled" do
+          assert_not_respond_to Rails.application.routes.url_helpers, :admin_jobs_path
+          %w[
+            config/initializers/mission_control_jobs.rb
+            app/controllers/admin/job_operations_controller.rb
+            app/policies/job_operation_policy.rb
+            app/views/layouts/mission_control/jobs/application.html.erb
+            app/assets/stylesheets/mission_control_jobs_scoped.css
+            config/locales/job_operations.ja.yml
+            config/locales/job_operations.en.yml
+            docs/job_operations.md
+            test/policies/job_operation_policy_test.rb
+            test/controllers/admin/job_operations_controller_test.rb
+            test/models/solid_queue_cleanup_test.rb
+          ].each { |path| assert_not Rails.root.join(path).exist?, path }
+          assert_no_match(/gem ["']mission_control-jobs["']/, Rails.root.join("Gemfile").read)
+          recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
+            .fetch("production").fetch("clear_solid_queue_finished_jobs")
+          assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
+          assert_equal "every hour at minute 12", recurring.fetch("schedule")
+          assert_equal 1, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") }
+          assert_raises(ActionController::RoutingError) do
+            Rails.application.routes.recognize_path("/admin/jobs", method: :get)
+          end
+          assert_raises(ActionController::RoutingError) do
+            Rails.application.routes.recognize_path("/jobs", method: :get)
+          end
+        end
+    RUBY
+  end
   maintenance_route_test = if maintenance_tasks_enabled
     <<~RUBY
 
@@ -5736,7 +5838,7 @@ def configure_default_views
           assert_select '.card .fieldset', minimum: 1
           assert_select '.card-actions .btn.btn-error', count: 1
         end
-    #{maintenance_route_test}
+    #{job_operations_route_test}#{maintenance_route_test}
       end
     RUBY
   else
@@ -5774,7 +5876,7 @@ def configure_default_views
           assert_redirected_to new_session_url
           assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path("/session/edit", method: :get) }
         end
-    #{maintenance_route_test}
+    #{job_operations_route_test}#{maintenance_route_test}
       end
     RUBY
   end
@@ -6621,9 +6723,9 @@ def configure_web_push
         setup do
           @user = users(:one)
           Rails.cache.clear
-          get session_nonce_url
-          nonce = response.parsed_body.fetch("nonce")
           key = Eth::Key.new(priv: "1".rjust(64, "0"))
+          get session_nonce_url, headers: siwe_test_headers(key)
+          nonce = response.parsed_body.fetch("nonce")
           @user.update!(wallet_address: key.address.to_s)
           message = Siwe::Message.new(
             domain: "www.example.com",
@@ -6634,7 +6736,8 @@ def configure_web_push
             issued_at: Time.current.iso8601,
             statement: Rails.configuration.x.application_identity.siwe_statement
           ).prepare_message
-          post session_url, params: { message:, signature: key.personal_sign(message) }, as: :json
+          post session_url, params: { message:, signature: key.personal_sign(message) },
+            headers: siwe_test_headers(key), as: :json
           assert_response :success
           configure_vapid
         end
@@ -6789,6 +6892,332 @@ def install_solid_components
   end
   generate "solid_cache:install" if VALUES.fetch("solid_cache") == "use"
   generate "solid_cable:install" if VALUES.fetch("action_cable") == "solid_cable"
+end
+
+def install_job_operations
+  devise = VALUES.fetch("account_authentication") == "devise"
+  production_worker = if VALUES.fetch("deployment") == "dokploy"
+    "Dokployでは既存の`worker: bin/jobs --mode async`がworker、dispatcher、schedulerを起動します。cleanup専用processは追加しません。"
+  else
+    "このテンプレートはproduction worker processを設定しません。利用環境に合わせてSolid Queue worker、dispatcher、schedulerの起動と監視を別途構成してください。"
+  end
+  authentication_route_bridge = if devise
+    ""
+  else
+    <<~RUBY
+      def new_session_path
+        Rails.application.routes.url_helpers.new_session_path
+      end
+
+    RUBY
+  end
+
+  environment "config.mission_control.jobs.adapters = [:solid_queue]"
+  environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "test"
+  route 'mount MissionControl::Jobs::Engine, at: "/admin/jobs", as: :admin_jobs'
+
+  create_file "config/initializers/mission_control_jobs.rb", <<~RUBY, force: true
+    MissionControl::Jobs.base_controller_class = "Admin::JobOperationsController"
+    MissionControl::Jobs.http_basic_auth_enabled = false
+  RUBY
+
+  create_file "app/policies/job_operation_policy.rb", <<~RUBY, force: true
+    class JobOperationPolicy < ApplicationPolicy
+      def manage?
+        admin?
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/job_operations_controller.rb", <<~RUBY, force: true
+    module Admin
+      class JobOperationsController < BaseController
+        include Rails.application.routes.url_helpers
+        helper Rails.application.routes.url_helpers
+
+        before_action :authorize_job_operations!
+
+    #{authentication_route_bridge.lines.map { |line| "    #{line}" }.join}    private
+          def authorize_job_operations!
+            authorize! :job_operation, to: :manage?
+          end
+      end
+    end
+  RUBY
+
+  mission_control_stylesheet_root = File.join(
+    Gem::Specification.find_by_name("mission_control-jobs", "1.1.0").full_gem_path,
+    "app/assets/stylesheets/mission_control/jobs"
+  )
+  mission_control_stylesheet = %w[bulma.min.css forms.css jobs.css].map do |filename|
+    path = File.join(mission_control_stylesheet_root, filename)
+    raise "Mission Control Jobs 1.1.0の公式stylesheetが見つかりません: #{path}" unless File.file?(path)
+
+    stylesheet = File.binread(path).force_encoding(Encoding::UTF_8)
+    raise "Mission Control Jobs 1.1.0の公式stylesheetがUTF-8ではありません: #{path}" unless stylesheet.valid_encoding?
+
+    stylesheet.delete_prefix(%(@charset "UTF-8";\n))
+  end.join("\n")
+  create_file "app/assets/stylesheets/mission_control_jobs_scoped.css", <<~CSS, force: true
+    /* Mission Control Jobs 1.1.0 official styles, scoped to the mounted engine. */
+    @scope ([data-mission-control-jobs-root]) {
+    #{mission_control_stylesheet}
+    }
+  CSS
+
+  create_file "app/views/layouts/mission_control/jobs/application.html.erb", <<~ERB, force: true
+    <% content_for :title, application_translate("job_operations.title") %>
+    <% content_for :head do %>
+      <style>
+        @layer mission-control-foundation, theme, base, components, utilities;
+        @import url("<%= asset_path("mission_control/jobs/bulma.min.css") %>") layer(mission-control-foundation);
+      </style>
+      <%= stylesheet_link_tag "mission_control_jobs_scoped", "data-turbo-track": "reload" %>
+    <% end %>
+    <% content_for :javascript_importmap do %>
+      <%= javascript_importmap_tags "application", importmap: MissionControl::Jobs.importmap %>
+    <% end %>
+    <% content_for :admin_content do %>
+      <div class="min-w-0 overflow-x-auto" data-mission-control-jobs-root>
+        <%= render "layouts/mission_control/jobs/application_selection" %>
+        <%= render "layouts/mission_control/jobs/navigation" %>
+        <%= yield %>
+      </div>
+    <% end %>
+    <%= render template: "layouts/admin" %>
+  ERB
+
+  create_locale_pair(
+    "job_operations",
+    ja: {
+      "navigation" => { "job_operations" => "ジョブ運用" },
+      "job_operations" => { "title" => "ジョブ運用" }
+    },
+    en: {
+      "navigation" => { "job_operations" => "Job operations" },
+      "job_operations" => { "title" => "Job operations" }
+    }
+  )
+
+  append_to_file "README.md", <<~MARKDOWN
+
+    ## ジョブ運用
+
+    Solid QueueとMission Control Jobsによる監視、失敗確認、retry/discard、cleanupの運用方法は[ジョブ運用ガイド](docs/job_operations.md)を参照してください。
+  MARKDOWN
+  create_file "docs/job_operations.md", <<~MARKDOWN, force: true
+    # ジョブ運用ガイド
+
+    Mission Control Jobs 1.1.0は`/admin/jobs`で管理者だけが利用できます。guestはログイン画面へ移動し、ログイン済みの一般Userは403 Forbiddenになります。別path、HTTP Basic認証、別queue adapterは設定していません。
+
+    ## 監視と操作
+
+    queue、状態別job、worker、定期task、失敗内容、retry/discard状況を確認できます。失敗jobのretryは同じjobを再度queueへ戻し、discardはjobをqueue databaseから削除します。Mission Control Jobsは運用task自体を定義・開始するMaintenance Tasksとは独立しており、Maintenance Tasksは`/admin/maintenance_tasks`で管理します。
+
+    ## 完了jobのcleanup
+
+    Solid Queue 1.6.0の公式install generatorが生成した`config/recurring.yml`を使用します。完了jobは公式既定の1日だけ保持し、毎時12分に`SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)`でbatch削除します。独自SQL、private API、追加のcleanup jobは使用しません。
+
+    失敗jobは`finished_at`を持たないためcleanup対象外です。管理者が原因を確認してretryまたはdiscardするまで`solid_queue_failed_executions`に保持されます。
+
+    ## Production process
+
+    #{production_worker}
+  MARKDOWN
+
+  create_file "test/policies/job_operation_policy_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class JobOperationPolicyTest < ActiveSupport::TestCase
+      test "allows admins and denies regular users" do
+        admin = users(:one)
+        regular = users(:two)
+        admin.grant_role!(:admin)
+
+        assert JobOperationPolicy.new(:job_operation, user: admin).apply(:manage?)
+        assert_not JobOperationPolicy.new(:job_operation, user: regular).apply(:manage?)
+      end
+    end
+  RUBY
+
+  controller_test_support = if devise
+    <<~RUBY
+        include Devise::Test::IntegrationHelpers
+
+        setup do
+          @admin = User.create!(email: "jobs-admin@example.com", password: "password123", password_confirmation: "password123")
+          @regular = User.create!(email: "jobs-regular@example.com", password: "password123", password_confirmation: "password123")
+          @admin.grant_role!(:admin)
+        end
+
+        private
+          def sign_in_as(user, _key = nil)
+            sign_in user
+          end
+    RUBY
+  else
+    <<~RUBY
+        require "eth"
+
+        setup do
+          @admin, @admin_key = create_wallet_user
+          @regular, @regular_key = create_wallet_user
+          @admin.grant_role!(:admin)
+        end
+
+        private
+          def create_wallet_user
+            key = Eth::Key.new
+            [User.create!(wallet_address: key.address.to_s), key]
+          end
+
+          def sign_in_as(_user, key)
+            get session_nonce_url, headers: siwe_test_headers(key)
+            nonce = response.parsed_body.fetch("nonce")
+            message = Siwe::Message.new(
+              domain: "www.example.com",
+              address: key.address.to_s,
+              uri: "http://www.example.com",
+              chain_id: 1,
+              nonce: nonce,
+              issued_at: Time.current.iso8601,
+              statement: Rails.configuration.x.application_identity.siwe_statement
+            ).prepare_message
+            post session_url, params: { message: message, signature: key.personal_sign(message) },
+              headers: siwe_test_headers(key), as: :json
+            assert_response :success
+          end
+    RUBY
+  end
+
+  create_file "test/controllers/admin/job_operations_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::JobOperationsControllerTest < ActionDispatch::IntegrationTest
+      class RetryProbeJob < ApplicationJob
+        self.queue_adapter = :solid_queue
+
+        def perform
+          nil
+        end
+      end
+
+    #{controller_test_support}
+      test "requires authentication" do
+        get admin_jobs_url
+
+        assert_redirected_to #{devise ? "new_user_session_url" : "Rails.application.routes.url_helpers.new_session_path"}
+      end
+
+      test "denies regular users" do
+        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+
+        get admin_jobs_url
+
+        assert_response :forbidden
+      end
+
+      test "renders the console for admins inside the admin layout" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+
+        get admin_jobs_url
+
+        assert_response :success
+        assert_select "[data-mission-control-jobs-root]", count: 1
+        assert_select '[data-layout="admin"] nav[aria-label=?]', host_translate("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_jobs_path,
+          text: host_translate("navigation.job_operations"), count: 1
+      end
+
+      test "routes every engine action through the authorized base controller" do
+        controllers = MissionControl::Jobs::Engine.routes.routes.filter_map do |engine_route|
+          engine_route.defaults[:controller]
+        end.uniq
+
+        assert_predicate controllers, :any?
+        controllers.each do |controller_name|
+          namespaced_name = controller_name.start_with?("mission_control/jobs/") ? controller_name : "mission_control/jobs/\#{controller_name}"
+          controller = "\#{namespaced_name}_controller".camelize.constantize
+
+          assert_operator controller, :<, Admin::JobOperationsController
+          assert_includes controller._process_action_callbacks.map(&:filter), :authorize_job_operations!
+        end
+      end
+
+      test "allows admins to retry a failed Solid Queue job" do
+        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        active_job = RetryProbeJob.perform_later
+        solid_queue_job = SolidQueue::Job.find_by!(active_job_id: active_job.job_id)
+        solid_queue_job.ready_execution.destroy!
+        solid_queue_job.failed_with(RuntimeError.new("expected failure"))
+        application = MissionControl::Jobs.applications.first
+        server = application.servers.first
+        retry_path = MissionControl::Jobs::Engine.routes.url_helpers.application_job_retry_path(
+          application_id: application.to_param,
+          job_id: active_job.job_id,
+          server_id: server.to_param
+        )
+
+        post retry_path
+
+        assert_response :redirect
+        assert_not SolidQueue::FailedExecution.exists?(job_id: solid_queue_job.id)
+        assert SolidQueue::ReadyExecution.exists?(job_id: solid_queue_job.id)
+      end
+
+      private
+        def host_translate(key)
+          locale = Rails.configuration.x.application_identity.default_locale
+          I18n.backend.translate(locale, key)
+        end
+    end
+  RUBY
+
+  create_file "test/models/solid_queue_cleanup_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class SolidQueueCleanupTest < ActiveSupport::TestCase
+      class ProbeJob < ApplicationJob
+        self.queue_adapter = :solid_queue
+
+        def perform
+          nil
+        end
+      end
+
+      test "keeps the official one day retention and recurring cleanup" do
+        recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true).fetch("production")
+        cleanup = recurring.fetch("clear_solid_queue_finished_jobs")
+
+        assert_equal 1.day, SolidQueue.clear_finished_jobs_after
+        assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", cleanup.fetch("command")
+        assert_equal "every hour at minute 12", cleanup.fetch("schedule")
+      end
+
+      test "clears only finished jobs older than the retention boundary" do
+        old_finished = solid_queue_job
+        recent_finished = solid_queue_job
+        failed = solid_queue_job
+        old_finished.update!(finished_at: 2.days.ago)
+        recent_finished.update!(finished_at: 12.hours.ago)
+        failed.ready_execution.destroy!
+        failed.failed_with(RuntimeError.new("expected failure"))
+
+        SolidQueue::Job.clear_finished_in_batches(finished_before: 1.day.ago, sleep_between_batches: 0)
+
+        assert_not SolidQueue::Job.exists?(old_finished.id)
+        assert SolidQueue::Job.exists?(recent_finished.id)
+        assert SolidQueue::Job.exists?(failed.id)
+        assert SolidQueue::FailedExecution.exists?(job_id: failed.id)
+      end
+
+      private
+        def solid_queue_job
+          active_job = ProbeJob.perform_later
+          SolidQueue::Job.find_by!(active_job_id: active_job.job_id)
+        end
+    end
+  RUBY
 end
 
 def install_maintenance_tasks
@@ -7105,7 +7534,7 @@ def install_maintenance_tasks
           end
 
           def sign_in_as(_user, key)
-            get session_nonce_url
+            get session_nonce_url, headers: siwe_test_headers(key)
             nonce = response.parsed_body.fetch("nonce")
             message = Siwe::Message.new(
               domain: "www.example.com",
@@ -7116,7 +7545,8 @@ def install_maintenance_tasks
               issued_at: Time.current.iso8601,
               statement: Rails.configuration.x.application_identity.siwe_statement
             ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) }, as: :json
+            post session_url, params: { message: message, signature: key.personal_sign(message) },
+              headers: siwe_test_headers(key), as: :json
             assert_response :success
           end
     RUBY
@@ -7161,7 +7591,7 @@ def install_maintenance_tasks
         assert_response :success
         assert_select "[data-maintenance-tasks-root]", count: 1
         assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_maintenance_tasks_path,
+        assert_select '[data-layout="admin"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_maintenance_tasks_path,
           text: I18n.t("navigation.maintenance_tasks"), count: 1
 
         get TASK_PATH
@@ -7226,6 +7656,7 @@ def configure_evidence_capture
   authentication = VALUES.fetch("account_authentication") == "devise" ? "devise" : "siwe"
   image_delivery = VALUES.fetch("image_delivery")
   web_push = VALUES.fetch("web_push") == "use"
+  job_operations = VALUES.fetch("job_operations") == "enable"
   maintenance_tasks = VALUES.fetch("maintenance_tasks") == "enable"
   runner = <<~'RUBY'
     # frozen_string_literal: true
@@ -7243,6 +7674,7 @@ def configure_evidence_capture
       IMAGE_DELIVERY = __IMAGE_DELIVERY__
       LOCALE = I18n.default_locale.to_s
       WEB_PUSH = __WEB_PUSH__
+      JOB_OPERATIONS = __JOB_OPERATIONS__
       MAINTENANCE_TASKS = __MAINTENANCE_TASKS__
       if IMAGE_DELIVERY == "imgproxy"
         Capybara.server_host = "0.0.0.0"
@@ -7255,6 +7687,7 @@ def configure_evidence_capture
         "mobile" => { "width" => 390, "height" => 844 }
       }.freeze
       PRIVATE_KEY = "1".rjust(64, "0")
+      REGULAR_PRIVATE_KEY = "2".rjust(64, "0")
       PASSWORD = "password123"
 
       test "captures every generated page and key visual state" do
@@ -7271,8 +7704,10 @@ def configure_evidence_capture
           authenticate
           prepare_authenticated_data
           verify_admin_layout_geometry if viewport_name == "desktop"
+          verify_job_operations_geometry if viewport_name == "desktop" && JOB_OPERATIONS
           verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
           capture_authenticated_pages(viewport_name)
+          capture_regular_user_navigation(viewport_name)
           Capybara.reset_sessions!
         end
 
@@ -7295,6 +7730,15 @@ def configure_evidence_capture
 
         def translate(key, **options)
           I18n.t(key, **options)
+        end
+
+        def host_translate(key, **options)
+          locale = Rails.configuration.x.application_identity.default_locale
+          I18n.backend.translate(locale, key, **options)
+        end
+
+        def host_routes
+          Rails.application.routes.url_helpers
         end
 
         def prepare_guest_data
@@ -7370,15 +7814,15 @@ def configure_evidence_capture
           end
         end
 
-        def authenticate_wallet_siwe
+        def authenticate_wallet_siwe(private_key = PRIVATE_KEY)
           visit root_path
           browser_uri = URI(page.current_url)
           integration = ActionDispatch::Integration::Session.new(Rails.application)
           integration.host! browser_uri.host + (browser_uri.port == 80 ? "" : ":#{browser_uri.port}")
-          integration.get "/session/nonce"
+          key = Eth::Key.new(priv: private_key)
+          integration.get "/session/nonce", headers: siwe_test_headers(key)
           assert_equal 200, integration.response.status
 
-          key = Eth::Key.new(priv: PRIVATE_KEY)
           nonce = integration.response.parsed_body.fetch("nonce")
           origin = "#{browser_uri.scheme}://#{browser_uri.host}:#{browser_uri.port}"
           message = Siwe::Message.new(
@@ -7390,7 +7834,8 @@ def configure_evidence_capture
             issued_at: Time.zone.parse("2026-01-01 00:00:00 UTC").iso8601,
             statement: Rails.configuration.x.application_identity.siwe_statement
           ).prepare_message
-          integration.post "/session", params: { message: message, signature: key.personal_sign(message) }, as: :json
+          integration.post "/session", params: { message: message, signature: key.personal_sign(message) },
+            headers: siwe_test_headers(key), as: :json
           assert_equal 200, integration.response.status
 
           cookie = integration.cookies.to_hash.fetch("session_id")
@@ -7406,8 +7851,8 @@ def configure_evidence_capture
           @user.profile.avatar.purge if @user.profile.avatar.attached?
           @user.grant_role!(:admin)
           identifier = devise? ? { email: "member@example.com", password: PASSWORD, password_confirmation: PASSWORD } :
-            { wallet_address: "0x2222222222222222222222222222222222222222" }
-          User.find_or_create_by!(identifier.slice(devise? ? :email : :wallet_address)) do |user|
+            { wallet_address: Eth::Key.new(priv: REGULAR_PRIVATE_KEY).address.to_s.downcase }
+          @regular_user = User.find_or_create_by!(identifier.slice(devise? ? :email : :wallet_address)) do |user|
             identifier.each { |name, value| user.public_send("#{name}=", value) }
           end
         end
@@ -7438,8 +7883,23 @@ def configure_evidence_capture
           capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, translate("api_credentials.title"), viewport)
           capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
           assert_admin_navigation_active(translate("navigation.users"))
+          if JOB_OPERATIONS
+            visit host_routes.admin_jobs_path
+            assert_equal 200, page.status_code
+            assert_selector "[data-mission-control-jobs-root]", count: 1
+            assert_admin_navigation_active(host_translate("navigation.job_operations"))
+            capture_current_page("admin-job-operations", host_translate("job_operations.title"), viewport)
+            if viewport == "mobile"
+              find("header details.dropdown > summary", visible: :visible).click
+              capture_current_page(
+                "admin-job-operations-navigation-open",
+                "#{host_translate('job_operations.title')}のモバイルメニュー",
+                viewport
+              )
+            end
+          end
           if MAINTENANCE_TASKS
-            visit admin_maintenance_tasks_path
+            visit host_routes.admin_maintenance_tasks_path
             assert_equal 200, page.status_code
             assert_selector "[data-maintenance-tasks-root]", count: 1
             assert_admin_navigation_active(translate("navigation.maintenance_tasks"))
@@ -7485,6 +7945,30 @@ def configure_evidence_capture
           visit root_path
           find("header details.dropdown > summary", visible: :visible).click
           capture_current_page("navigation-authenticated-open", "モバイルメニュー（ログイン済み）", viewport)
+        end
+
+        def capture_regular_user_navigation(viewport)
+          Capybara.reset_sessions!
+          viewport_size = VIEWPORTS.fetch(viewport)
+          page.current_window.resize_to(viewport_size.fetch("width"), viewport_size.fetch("height"))
+          if devise?
+            visit new_user_session_path
+            fill_in User.human_attribute_name(:email), with: @regular_user.email
+            fill_in User.human_attribute_name(:password), with: PASSWORD
+            click_button translate("devise_views.sessions.submit")
+            assert_current_path root_path
+            @user = @regular_user
+          else
+            authenticate_wallet_siwe(REGULAR_PRIVATE_KEY)
+            assert_equal @regular_user, @user
+          end
+
+          visit root_path
+          find("header details.dropdown > summary", visible: :visible).click if viewport == "mobile"
+          assert_no_selector %(header a[href="#{host_routes.admin_users_path}"]), visible: :all
+          assert_no_selector %(header a[href="#{host_routes.admin_jobs_path}"]), visible: :all if JOB_OPERATIONS
+          assert_no_selector %(header a[href="#{host_routes.admin_maintenance_tasks_path}"]), visible: :all if MAINTENANCE_TASKS
+          capture_current_page("navigation-regular-user", "一般Userのナビゲーション", viewport)
         end
 
         def capture_page(identifier, title, path, heading, viewport)
@@ -7719,11 +8203,11 @@ def configure_evidence_capture
         end
 
         def assert_admin_navigation_active(label)
-          assert_selector %([data-layout="admin"] nav[aria-label="#{translate("navigation.admin_menu")}"])
-          assert_selector %([data-layout="admin"] nav[aria-label="#{translate("navigation.admin_menu")}"] li.menu-title), text: translate("navigation.admin"), count: 1
-          assert_no_selector %([data-layout="admin"] nav[aria-label="#{translate("navigation.account_menu")}"])
+          assert_selector %([data-layout="admin"] nav[aria-label="#{host_translate("navigation.admin_menu")}"])
+          assert_selector %([data-layout="admin"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] li.menu-title), text: host_translate("navigation.admin"), count: 1
+          assert_no_selector %([data-layout="admin"] nav[aria-label="#{host_translate("navigation.account_menu")}"])
           assert_selector '[data-layout="admin"] a.menu-active[aria-current="page"]', text: label, count: 1
-          assert_selector 'header li.menu-title', text: translate("navigation.admin"), count: 1, visible: :all
+          assert_selector 'header li.menu-title', text: host_translate("navigation.admin"), count: 1, visible: :all
           assert_no_selector %(header a[href="\#{account_path}"]), visible: :all
         end
 
@@ -7814,10 +8298,44 @@ def configure_evidence_capture
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
+        def verify_job_operations_geometry
+          [320, 390, 640, 960, 961].each do |width|
+            page.current_window.resize_to(width, 900)
+            visit host_routes.admin_jobs_path
+            assert_equal 200, page.status_code
+            assert_selector "[data-mission-control-jobs-root]", count: 1
+            assert_admin_navigation_active(host_translate("navigation.job_operations"))
+
+            geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const root = document.querySelector("[data-mission-control-jobs-root]")
+                  return {
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    rootWidth: root.getBoundingClientRect().width,
+                    rootScrollWidth: root.scrollWidth,
+                    rootClientWidth: root.clientWidth
+                  }
+                }
+              JAVASCRIPT
+            end
+
+            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+              "Mission Control Jobs page overflow at #{width}px"
+            assert_operator geometry.fetch("rootWidth"), :>, 0,
+              "Mission Control Jobs content should be visible at #{width}px"
+            assert_operator geometry.fetch("rootScrollWidth"), :>=, geometry.fetch("rootClientWidth")
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
         def verify_maintenance_tasks_geometry
           [320, 390, 640, 960, 961].each do |width|
             page.current_window.resize_to(width, 900)
-            visit admin_maintenance_tasks_path
+            visit host_routes.admin_maintenance_tasks_path
             assert_equal 200, page.status_code
             assert_selector "[data-maintenance-tasks-root]", count: 1
             assert_admin_navigation_active(translate("navigation.maintenance_tasks"))
@@ -7901,6 +8419,7 @@ def configure_evidence_capture
   runner = runner.sub("__AUTHENTICATION__", authentication.inspect)
   runner = runner.sub("__IMAGE_DELIVERY__", image_delivery.inspect)
   runner = runner.sub("__WEB_PUSH__", web_push.inspect)
+  runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)
   runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)
   create_file "test/support/evidence_capture.rb", runner, force: true
   create_file "lib/tasks/evidence.rake", <<~'RAKE', force: true
@@ -8026,16 +8545,20 @@ def configure_database
   production = databases.transform_values do |database|
     { "adapter" => "sqlite3", "pool" => "<%= ENV.fetch(\"DATABASE_POOL_SIZE\", ENV.fetch(\"RAILS_MAX_THREADS\", 5)) %>", "timeout" => 20_000, "transaction_mode" => "immediate" }.merge(database)
   end
+  test_databases = {
+    "primary" => { "database" => "storage/test.sqlite3" },
+    "storage" => { "database" => "storage/test_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
+  }
+  if VALUES.fetch("job_operations") == "enable"
+    test_databases["queue"] = { "database" => "storage/test_queue.sqlite3", "migrations_paths" => "db/queue_migrate" }
+  end
   config = {
     "default" => { "adapter" => "sqlite3", "pool" => "<%= ENV.fetch(\"RAILS_MAX_THREADS\", 5) %>", "timeout" => 5000 },
     "development" => {
       "primary" => { "database" => "storage/development.sqlite3" },
       "storage" => { "database" => "storage/development_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
     },
-    "test" => {
-      "primary" => { "database" => "storage/test.sqlite3" },
-      "storage" => { "database" => "storage/test_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
-    },
+    "test" => test_databases,
     "production" => production
   }
   database_yaml = YAML.dump(config, line_width: -1)
@@ -8123,6 +8646,7 @@ after_bundle do
   configure_web_push if VALUES.fetch("web_push") == "use"
   configure_default_views
   install_solid_components
+  install_job_operations if VALUES.fetch("job_operations") == "enable"
   install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"
   configure_database
   configure_active_storage_db

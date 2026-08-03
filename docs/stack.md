@@ -231,7 +231,7 @@ https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2
 
 ## Solid Queue
 
-ジョブ管理を使用する場合だけ`solid_queue`を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、`solid_queue:install`が生成するschemaとmigration pathを使用します。test環境だけはActive Storageを含むenqueue処理とjob assertionを外部worker・queue DBから分離するため、Rails標準の`test` adapterへ明示的に上書きします。
+ジョブ管理を使用する場合だけ、現在解決される`solid_queue` 1.6.0を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、`solid_queue:install`が生成するschemaとmigration pathを使用します。test環境だけはActive Storageを含むenqueue処理とjob assertionを外部worker・queue DBから分離するため、Rails標準の`test` adapterへ明示的に上書きします。
 
 developmentではPumaからSolid Queueを起動します。
 
@@ -240,6 +240,18 @@ plugin :solid_queue if ENV.fetch("RAILS_ENV", "development") == "development"
 ```
 
 productionではPuma pluginを有効化せず、`bin/jobs`をworkerプロセスとして起動します。`deployment == dokploy`の場合だけ`Procfile.prod`へworkerを定義し、Webプロセスと同じコンテナ内でForemanから起動します。`deployment == none`でも`bin/jobs`自体は生成しますが、起動方法をこのテンプレートでは設定しません。
+
+`solid_queue:install`が生成する`config/recurring.yml`の標準cleanupを維持します。`preserve_finished_jobs`は既定の`true`、`clear_finished_jobs_after`は既定の1日とし、毎時12分に`SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)`を実行します。cleanupは`finished_at`が保持期間より古い完了ジョブだけを対象とします。失敗ジョブは`solid_queue_failed_executions`に残り、管理者または運用者がretryかdiscardを行うまで削除しません。既存の`bin/jobs --mode async` supervisorがworker、dispatcher、schedulerを起動するため、cleanup専用processは追加しません。
+
+## Mission Control Jobs
+
+`job_operations=enable`かつ`active_job=solid_queue`の場合だけ、Mission Control Jobs 1.1.0を導入します。engineは`/admin/jobs`だけへmountし、root直下の`/jobs`や別pathへ公開しません。queue一覧、状態別job、worker、定期task、失敗内容、単体・一括retry/discardなど、Solid Queue adapterが提供する操作を使用します。
+
+`MissionControl::Jobs.base_controller_class`には`Admin::JobOperationsController`を設定します。このcontrollerは既存`Admin::BaseController`を継承し、全engine actionを`JobOperationPolicy#manage?`で認可します。Deviseの`current_user`とWallet SIWEの`Current.user`は既存Action Policy contextを再利用し、controller内でroleを直接判定しません。Mission Control標準のHTTP Basic認証は明示的に無効化し、環境変数やcredentialsによる別系統の認証は追加しません。
+
+Mission Controlの公式layoutはengine内で固定されているため、Rails 8.1 Enginesの公式View lookup順序を利用し、host application側の同名layoutで既存admin shellへ統合します。生成時にMission Control Jobs 1.1.0の公開stylesheet asset（Bulma、forms、jobs）が存在することを検証し、その公式内容をCSS標準の`@scope`でengine rootへ限定したhost assetを生成します。Bulmaのcustom propertiesは最下位のCascade Layerから継承させるため、公式UIのstyleを維持しつつ、`.grid`、`.menu`、要素selectorなどがhostのheader、admin navigation、footerへ波及しません。asset構造が解決versionと異なる場合は推測で継続せず生成を失敗させます。通常画面ではhost Importmap、engine画面ではMission Control Importmapだけを出力します。admin navigationとdocument titleは生成アプリの既定localeに従うja/en、engine本文は公式の英語UIとします。Gemのcontroller、View、middlewareはmonkey patchしません。
+
+Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Control Jobsはqueueとjobの監視・retry/discard、Maintenance Tasksは運用taskの開始・進捗管理を担当し、`/admin/jobs`と`/admin/maintenance_tasks`のroute、policy、navigationを独立させます。
 
 ## Maintenance Tasks
 

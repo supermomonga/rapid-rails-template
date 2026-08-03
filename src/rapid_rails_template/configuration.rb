@@ -8,6 +8,7 @@ module RapidRailsTemplate
       "pwa" => %w[use skip],
       "web_push" => %w[use skip],
       "active_job" => %w[solid_queue skip],
+      "job_operations" => %w[enable disable],
       "maintenance_tasks" => %w[enable disable],
       "solid_cache" => %w[use skip],
       "account_authentication" => %w[devise wallet_siwe],
@@ -24,6 +25,7 @@ module RapidRailsTemplate
       "pwa" => "skip",
       "web_push" => "skip",
       "active_job" => "skip",
+      "job_operations" => "disable",
       "maintenance_tasks" => "disable",
       "solid_cache" => "use",
       "account_authentication" => "devise",
@@ -49,6 +51,10 @@ module RapidRailsTemplate
       if !provided_answers.key?("maintenance_tasks") &&
           (provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue")
         resolved_defaults["maintenance_tasks"] = "enable"
+      end
+      if !provided_answers.key?("job_operations") &&
+          (provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue")
+        resolved_defaults["job_operations"] = "enable"
       end
       @answers = resolved_defaults.merge(provided_answers).transform_values do |value|
         value.is_a?(Array) ? value.dup.freeze : value
@@ -99,6 +105,8 @@ module RapidRailsTemplate
       end
 
       unless @values["active_job"] == "solid_queue"
+        @values["job_operations"] = "disable"
+        @reasons["job_operations"] = "Solid Queueを使用しないため"
         @values["maintenance_tasks"] = "disable"
         @reasons["maintenance_tasks"] = "Solid Queueを使用しないため"
       end
@@ -116,6 +124,10 @@ module RapidRailsTemplate
 
       if provided_answers["web_push"] == "use" && provided_answers["active_job"] == "skip"
         raise InvalidConfiguration, "Web Push使用時にActive Jobを無効化できません"
+      end
+      if provided_answers["job_operations"] == "enable" &&
+          provided_answers["web_push"] != "use" && provided_answers["active_job"] != "solid_queue"
+        raise InvalidConfiguration, "ジョブ運用画面使用時はSolid Queueが必要です"
       end
       return unless provided_answers["maintenance_tasks"] == "enable"
       return if provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue"

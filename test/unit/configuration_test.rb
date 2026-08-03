@@ -9,6 +9,8 @@ class ConfigurationTest < Minitest::Test
     assert_equal "skip", configuration["pwa"]
     assert_equal "skip", configuration["web_push"]
     assert_equal "skip", configuration["active_job"]
+    assert_equal "disable", configuration["job_operations"]
+    assert_equal "Solid Queueを使用しないため", configuration.reasons["job_operations"]
     assert_equal "disable", configuration["maintenance_tasks"]
     assert_equal "Solid Queueを使用しないため", configuration.reasons["maintenance_tasks"]
     assert_equal "use", configuration["solid_cache"]
@@ -33,6 +35,7 @@ class ConfigurationTest < Minitest::Test
     configuration = RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "use")
 
     assert_equal "solid_queue", configuration["active_job"]
+    assert_equal "enable", configuration["job_operations"]
     assert_equal "enable", configuration["maintenance_tasks"]
     assert_equal "Web Pushの非同期送信に必要なため", configuration.reasons["active_job"]
 
@@ -42,6 +45,24 @@ class ConfigurationTest < Minitest::Test
     assert_raises(RapidRailsTemplate::InvalidConfiguration) do
       RapidRailsTemplate::Configuration.build("pwa" => "use", "web_push" => "use", "active_job" => "skip")
     end
+  end
+
+  def test_job_operations_defaults_to_enabled_with_solid_queue
+    configuration = RapidRailsTemplate::Configuration.build("active_job" => "solid_queue")
+
+    assert_equal "enable", configuration["job_operations"]
+    refute configuration.reasons.key?("job_operations")
+  end
+
+  def test_job_operations_requires_solid_queue_when_explicitly_enabled
+    error = assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build(
+        "active_job" => "skip",
+        "job_operations" => "enable"
+      )
+    end
+
+    assert_equal "ジョブ運用画面使用時はSolid Queueが必要です", error.message
   end
 
   def test_maintenance_tasks_requires_solid_queue

@@ -85,15 +85,17 @@ RailsアプリIDは有限選択の設定値とは分離して扱います。キ�
 3. PWAを使うか
 4. PWAでWeb Pushを使うか
 5. ジョブ管理を使うか（Web Pushを使わない場合）
-6. Solid Cacheを使うか
-7. アカウント管理方法
-8. プロフィール機能
-9. 画像配信方式
-10. API機能を有効にするか
-11. Action Cableを使うか
-12. メール機能
-13. デプロイ方法
-14. 既定locale
+6. 管理者向けジョブ運用画面を使うか（Solid Queueを使う場合）
+7. 管理者向け運用タスクを使うか（Solid Queueを使う場合）
+8. Solid Cacheを使うか
+9. アカウント管理方法
+10. プロフィール機能
+11. 画像配信方式
+12. API機能を有効にするか
+13. Action Cableを使うか
+14. メール機能
+15. デプロイ方法
+16. 既定locale
 
 この順序で適用可能な質問をすべて完了するまで、実行予定の確認へ進みません。表示条件を満たさない質問は利用者へ表示せず、全質問完了後の正規化で仕様どおりの値を設定します。
 
@@ -145,6 +147,21 @@ Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push�
 - 影響する処理: `solid_queue` gemとinstall generator、SQLite queue database、Active Job adapter、development用Puma plugin、production worker
 
 `solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentではPuma pluginを有効化し、productionではPumaから起動しません。`deployment == dokploy`の場合は`Procfile.prod`のworkerプロセスで`bin/jobs --mode async`を実行し、`deployment == none`の場合はproductionでの起動方法を設定しません。
+
+## `job_operations`
+
+- CLI引数: `--job-operations=enable|disable`
+- 質問文: 管理者向けジョブ運用画面を使用しますか？
+- 選択肢: `enable`、`disable`
+- 既定値: 適用可能な場合は`enable`
+- 表示条件: `web_push == use`または`active_job == solid_queue`
+- 影響する処理: Mission Control Jobs、`/admin/jobs`の管理画面、管理者用navigation、ジョブ運用文書
+
+Mission Control JobsはSolid Queueのqueue、job、worker、定期task、失敗とretry状況を監視・操作するため、実効値が`active_job == solid_queue`の場合だけ利用できます。Solid Queueを使用しない場合は質問せず`disable`へ正規化し、確認画面へ理由を表示します。CLIで`--job-operations=enable`とSolid Queueを使用しない設定を同時に明示した場合は、`rails new`開始前に矛盾として拒否します。inline、async、別queue adapterへの切替は行いません。
+
+`enable`ではMission Control Jobs 1.1.0を`/admin/jobs`だけへmountし、公式`base_controller_class` extension pointから既存の`Admin::BaseController`、管理者role、Action Policyへ接続します。Mission Control標準のHTTP Basic認証は無効化し、追加のusername/passwordは要求しません。host側のadmin navigationとdocument titleはja/enに対応し、engine本文はGem公式の英語UIを維持します。
+
+Solid Queue 1.6.0の公式install generatorは`config/recurring.yml`へ、完了ジョブを毎時12分に`SolidQueue::Job.clear_finished_in_batches`で整理するtaskを生成します。完了ジョブの保持期間は公式既定の1日です。失敗ジョブは`finished_at`を持つcleanup対象ではなく、管理者がretryまたはdiscardするまで保持されます。このcleanupはqueue database全体の運用要件なので、`job_operations=disable`でもSolid Queue標準生成物から削除しません。
 
 ## `maintenance_tasks`
 
@@ -294,6 +311,9 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - `pwa=skip + web_push=use`と`web_push=use + active_job=skip`の明示矛盾を変更開始前に拒否すること。
 - Web Push使用時はActive Jobを質問せず、未指定値を理由付きでSolid Queueへ正規化すること。
 - Solid Queue使用時だけMaintenance Tasksを質問し、適用可能な場合は`enable`を既定値とすること。
+- Solid Queue使用時だけジョブ運用画面を質問し、適用可能な場合は`enable`を既定値とすること。
+- Solid Queueを使わない場合はジョブ運用画面を`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
+- ジョブ運用画面を使わない場合、Mission Control JobsのGem、initializer、controller、policy、route、layout override、navigation、locale、文書を生成しないこと。
 - Solid Queueを使わない場合はMaintenance Tasksを`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
 - PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
 - Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。

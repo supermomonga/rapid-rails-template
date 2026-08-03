@@ -38,6 +38,7 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --pwa=skip \
   --web-push=skip \
   --active-job=skip \
+  --job-operations=disable \
   --maintenance-tasks=disable \
   --solid-cache=use \
   --account-authentication=devise \
@@ -60,6 +61,8 @@ mise run evidence-verify
 `--image-delivery`は`rails`または`imgproxy`を指定し、既定値は`rails`です。Rails配信はActive Storageのnamed variant／representation route、imgproxy配信は署名済みURLを使用します。どちらもActive Storage DBを画像storageのsource of truthとし、実行時に相互fallbackしません。imgproxyではRailsとは別のserviceと環境変数が必要です。生成アプリの`docs/image_delivery.md`にnamed variant、upload制約、起動方法、production要件を記載します。
 
 `--default-locale`は`ja`または`en`を指定し、既定値は`ja`です。生成アプリには両言語のlocaleを用意しますが、requestごとの切替UIやUserへのlocale保存は生成しません。productionのcanonical originは`APPLICATION_ORIGIN`環境変数で明示し、development/testだけが固定のローカル既定値を持ちます。
+
+`--job-operations=enable`はSolid Queue使用時だけ選択でき、Mission Control Jobs 1.1.0を`/admin/jobs`へmountします。画面は既存の管理者認証、Action Policy、admin navigationへ統合し、Mission Control独自のHTTP Basic認証は使用しません。完了ジョブはSolid Queue 1.6.0の標準設定により1日保持した後、毎時12分に公式APIでbatch削除されます。失敗ジョブはcleanup対象外で、管理者がretryまたはdiscardするまで保持されます。
 
 リポジトリの`mise run generate-sampleapp`はDevise認証、`mise run generate-sampleapp-wallet-siwe`はWallet SIWE認証を指定します。どちらも既存の`sample/`を削除してから、同じ場所へアプリを再生成します。
 

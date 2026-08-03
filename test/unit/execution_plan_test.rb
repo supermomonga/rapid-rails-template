@@ -18,6 +18,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.summary, "表示用アプリ名: Sample App"
     assert_includes plan.gems, "solid_cache"
     refute_includes plan.gems, "solid_queue"
+    refute_includes plan.gems, "mission_control-jobs"
     refute_includes plan.gems, "solid_cable"
     assert_includes plan.gems, "devise"
     assert_includes plan.gems, "haikunator"
@@ -174,6 +175,51 @@ class ExecutionPlanTest < Minitest::Test
     assert_equal 1, plan.processes.count("worker")
   end
 
+  def test_job_operations_enabled_plan_uses_existing_solid_queue_scheduler
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build(
+        "active_job" => "solid_queue",
+        "job_operations" => "enable",
+        "deployment" => "dokploy"
+      ),
+      app_id: "sample", app_name: "Sample App"
+    )
+
+    assert_includes plan.gems, "mission_control-jobs"
+    assert_includes plan.steps, "install_job_operations"
+    assert_operator plan.steps.index("install_solid_queue"), :<, plan.steps.index("install_job_operations")
+    assert_includes plan.artifacts, "config/initializers/mission_control_jobs.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/job_operations_controller.rb"
+    assert_includes plan.artifacts, "app/policies/job_operation_policy.rb"
+    assert_includes plan.artifacts, "app/views/layouts/mission_control/jobs/application.html.erb"
+    assert_includes plan.artifacts, "app/assets/stylesheets/mission_control_jobs_scoped.css"
+    assert_includes plan.artifacts, "test/models/solid_queue_cleanup_test.rb"
+    assert_equal %w[web worker], plan.processes
+    assert_equal 1, plan.processes.count("worker")
+    assert_includes plan.production_requirements, "Solid Queue worker/dispatcher/scheduler"
+    assert_includes plan.production_requirements, "finished jobs retained for 1 day; failed jobs retained until retry/discard"
+  end
+
+  def test_job_operations_disabled_plan_omits_related_gem_step_and_artifacts
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build(
+        "active_job" => "solid_queue",
+        "job_operations" => "disable"
+      ),
+      app_id: "sample", app_name: "Sample App"
+    )
+
+    refute_includes plan.gems, "mission_control-jobs"
+    refute_includes plan.steps, "install_job_operations"
+    refute_includes plan.artifacts, "config/initializers/mission_control_jobs.rb"
+    refute_includes plan.artifacts, "app/controllers/admin/job_operations_controller.rb"
+    refute_includes plan.artifacts, "app/policies/job_operation_policy.rb"
+    refute_includes plan.artifacts, "app/views/layouts/mission_control/jobs/application.html.erb"
+    refute_includes plan.artifacts, "app/assets/stylesheets/mission_control_jobs_scoped.css"
+    refute_includes plan.artifacts, "test/models/solid_queue_cleanup_test.rb"
+    assert_includes plan.production_requirements, "finished jobs retained for 1 day; failed jobs retained until retry/discard"
+  end
+
   def test_maintenance_tasks_disabled_plan_omits_related_gem_step_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build(
@@ -247,6 +293,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/views/sessions/new.html.erb"
     assert_includes plan.artifacts, "app/javascript/controllers/siwe_sign_in_controller.js"
     assert_includes plan.artifacts, "app/views/accounts/edit.html.erb"
+    assert_includes plan.artifacts, "test/support/siwe_test_request.rb"
     assert_includes plan.artifacts, "config/locales/application.ja.yml"
     assert_includes plan.artifacts, "config/locales/application.en.yml"
     assert_equal plan.artifacts.uniq, plan.artifacts

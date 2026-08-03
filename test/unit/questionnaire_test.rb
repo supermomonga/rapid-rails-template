@@ -121,6 +121,29 @@ class QuestionnaireTest < Minitest::Test
     ], prompt.choose_calls.fetch(0)
   end
 
+  def test_asks_job_operations_with_enable_preselected_when_solid_queue_is_selected
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.merge(
+      "active_job" => "solid_queue"
+    ).reject { |key, _| key == "job_operations" }
+    prompt = RecordingPrompt.new(answers: ["enable"])
+
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all(initial_answers)
+
+    assert_equal "enable", answers["job_operations"]
+    assert_equal [
+      %w[enable disable],
+      { header: "管理者向けジョブ運用画面を使用しますか？", selected: ["enable"] }
+    ], prompt.choose_calls.fetch(0)
+  end
+
+  def test_skips_job_operations_without_solid_queue
+    prompt = RecordingPrompt.new
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
+
+    refute answers.key?("job_operations")
+    refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("ジョブ運用画面") }
+  end
+
   def test_asks_maintenance_tasks_when_web_push_requires_solid_queue
     initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.merge(
       "pwa" => "use",

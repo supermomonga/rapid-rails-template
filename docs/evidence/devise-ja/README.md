@@ -1,7 +1,7 @@
 # Devise / ja / rails エビデンス
 
-- Source fingerprint: `f5c8d8f49b784238ae291450fa6fb41bbed0be8839f4c0e540776118b1f678eb`
-- Base commit: `56eca247ce477967c30d9200767e653b5fd90331`
+- Source fingerprint: `655298d7a7250d4abb138970bd0bbe32263b8196162382e4cc663c9185aad8a6`
+- Base commit: `6ea1a4a2e112dcf35461218d39274a0f513263cf`
 - Locale: `ja`
 - Image delivery: `rails`
 - 更新: `rake evidence:update`
@@ -266,6 +266,16 @@
 
 ![ユーザー管理 (mobile)](admin-users--mobile.png)
 
+## ジョブ運用
+
+### Desktop
+
+![ジョブ運用 (desktop)](admin-job-operations--desktop.png)
+
+### Mobile
+
+![ジョブ運用 (mobile)](admin-job-operations--mobile.png)
+
 ## 運用タスク
 
 ### Desktop
@@ -306,11 +316,27 @@
 
 ![外部リンク設定 (mobile)](admin-footer-setting--mobile.png)
 
+## 一般Userのナビゲーション
+
+### Desktop
+
+![一般Userのナビゲーション (desktop)](navigation-regular-user--desktop.png)
+
+### Mobile
+
+![一般Userのナビゲーション (mobile)](navigation-regular-user--mobile.png)
+
 ## モバイルメニュー（未ログイン）
 
 ### Mobile
 
 ![モバイルメニュー（未ログイン） (mobile)](navigation-guest-open--mobile.png)
+
+## ジョブ運用のモバイルメニュー
+
+### Mobile
+
+![ジョブ運用のモバイルメニュー (mobile)](admin-job-operations-navigation-open--mobile.png)
 
 ## 運用タスクのモバイルメニュー
 

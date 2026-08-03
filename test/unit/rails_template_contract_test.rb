@@ -55,9 +55,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes initializer, "action_mailer.default_url_options = identity.default_url_options"
     assert_includes concern, "I18n.with_locale(I18n.default_locale, &action)"
     assert_includes helper, "Rails.configuration.x.application_identity"
+    assert_includes helper, "Rails.application.routes.url_helpers"
     assert_includes layout, '<html lang="<%= I18n.locale %>"'
     assert_includes layout, 'property="og:site_name" content="<%= application_identity.app_name %>"'
-    assert_includes header, "link_to application_identity.app_name, root_path"
+    assert_includes header, "link_to application_identity.app_name, application_routes.root_path"
     assert_includes manifest, "name: identity.app_name"
     assert_includes manifest, "lang: identity.default_locale.to_s"
     refute_match(/I18n\.t\([^)]*locale:\s*:ja/m, @source)
@@ -224,7 +225,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes pwa, 'theme_color: "#3ea8ff"'
     defaults = source_between("def configure_default_views", "def configure_web_push")
     assert_includes defaults, '<meta name="theme-color" content="#3ea8ff">'
-    assert_includes defaults, 'tag.link rel: "manifest", href: pwa_manifest_path(format: :json)'
+    assert_includes defaults, 'tag.link rel: "manifest", href: application_routes.pwa_manifest_path(format: :json)'
     assert_includes defaults, '#{pwa_head.lines.map'
     assert_includes defaults, 'body_data_attributes = body_controllers.empty? ? "" : %( data-controller="#{body_controllers.join(\' \')}")'
     assert_includes controller, 'navigator.serviceWorker.register("/service-worker", { scope: "/" })'
@@ -274,11 +275,66 @@ class RailsTemplateContractTest < Minitest::Test
   end
 
   def test_solid_queue_uses_the_test_adapter_only_in_test_environment
-    solid = source_between("def install_solid_components", "def configure_common_files")
+    solid = source_between("def install_solid_components", "def install_job_operations")
 
+    assert_includes @source, 'gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :solid_queue"'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :test", env: "test"'
     assert_includes solid, 'plugin :solid_queue if ENV.fetch(\\"RAILS_ENV\\", \\"development\\") == \\"development\\"'
+  end
+
+  def test_installs_mission_control_jobs_at_the_admin_authorization_boundary
+    job_operations = source_between("def install_job_operations", "def install_maintenance_tasks")
+    initializer = generated_file_source("config/initializers/mission_control_jobs.rb")
+    controller = generated_file_source("app/controllers/admin/job_operations_controller.rb")
+    policy = generated_file_source("app/policies/job_operation_policy.rb")
+    layout = generated_file_source("app/views/layouts/mission_control/jobs/application.html.erb")
+    scoped_stylesheet = generated_file_source("app/assets/stylesheets/mission_control_jobs_scoped.css")
+    controller_test = generated_file_source("test/controllers/admin/job_operations_controller_test.rb")
+    cleanup_test = generated_file_source("test/models/solid_queue_cleanup_test.rb")
+    application_layout = generated_file_source("app/views/layouts/application.html.erb")
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+
+    assert_includes @source, 'gem "mission_control-jobs", "1.1.0" if VALUES.fetch("job_operations") == "enable"'
+    assert_includes job_operations, 'environment "config.mission_control.jobs.adapters = [:solid_queue]"'
+    assert_includes job_operations, 'environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "test"'
+    assert_includes job_operations, 'mount MissionControl::Jobs::Engine, at: "/admin/jobs", as: :admin_jobs'
+    refute_includes job_operations, 'at: "/jobs"'
+    assert_equal 1, @source.scan('mount MissionControl::Jobs::Engine').size
+    assert_includes initializer, 'MissionControl::Jobs.base_controller_class = "Admin::JobOperationsController"'
+    assert_includes initializer, "MissionControl::Jobs.http_basic_auth_enabled = false"
+    refute_includes initializer, "username"
+    refute_includes initializer, "password"
+    assert_includes controller, "class JobOperationsController < BaseController"
+    assert_includes controller, "authorize! :job_operation, to: :manage?"
+    refute_includes controller, "has_role?"
+    assert_includes policy, "def manage?"
+    assert_includes policy, "admin?"
+    assert_includes layout, 'render template: "layouts/admin"'
+    assert_includes layout, "@layer mission-control-foundation, theme, base, components, utilities;"
+    assert_includes layout, '@import url("<%= asset_path("mission_control/jobs/bulma.min.css") %>") layer(mission-control-foundation)'
+    assert_includes layout, 'stylesheet_link_tag "mission_control_jobs_scoped"'
+    assert_includes scoped_stylesheet, "@scope ([data-mission-control-jobs-root])"
+    assert_includes job_operations, 'Gem::Specification.find_by_name("mission_control-jobs", "1.1.0")'
+    assert_includes job_operations, "%w[bulma.min.css forms.css jobs.css]"
+    assert_includes job_operations, "Mission Control Jobs 1.1.0の公式stylesheetが見つかりません".b
+    assert_includes job_operations, "force_encoding(Encoding::UTF_8)"
+    assert_includes job_operations, "stylesheet.valid_encoding?"
+    assert_includes layout, "MissionControl::Jobs.importmap"
+    assert_includes application_layout, "content_for?(:javascript_importmap)"
+    assert_includes controller_test, "routes every engine action through the authorized base controller"
+    assert_includes controller_test, "controller._process_action_callbacks.map(&:filter)"
+    assert_includes controller_test, "allows admins to retry a failed Solid Queue job"
+    assert_includes controller_test, "application_job_retry_path"
+    assert_includes controller_test, "assert SolidQueue::ReadyExecution.exists?"
+    assert_includes cleanup_test, "SolidQueue::Job.clear_finished_in_batches"
+    assert_includes cleanup_test, 'assert_equal "every hour at minute 12"'
+    assert_includes cleanup_test, "assert SolidQueue::Job.exists?(failed.id)"
+    assert_includes @source, 'test_databases["queue"] = { "database" => "storage/test_queue.sqlite3", "migrations_paths" => "db/queue_migrate" }'
+    assert_operator after_bundle.index("install_solid_components"), :<,
+      after_bundle.index('install_job_operations if VALUES.fetch("job_operations") == "enable"')
+    assert_operator after_bundle.index('install_job_operations if VALUES.fetch("job_operations") == "enable"'), :<,
+      after_bundle.index('install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"')
   end
 
   def test_installs_maintenance_tasks_through_the_official_generator_and_admin_boundary
@@ -354,7 +410,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes notifications_view, 'data-action="click->push-subscription#sendTest"'
     assert_includes notifications_view, 'aria-live="polite"'
     assert_includes notifications_controller, 'layout "account"'
-    assert_includes defaults, 'link_to notification_path'
+    assert_includes defaults, 'link_to application_routes.notification_path'
     assert_includes defaults, 'controller_path == "notifications"'
     refute_includes defaults, 'web_push_section'
     refute_includes devise, 'accounts/push_notifications'
@@ -525,6 +581,18 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'data-siwe-sign-in-target="error"'
     refute_includes @source, 'app/javascript/siwe_sign_in.js'
     refute_includes @source, 'import \\"siwe_sign_in\\"'
+  end
+
+  def test_wallet_integration_requests_use_distinct_rate_limit_addresses
+    helper = generated_file_source("test/support/siwe_test_request.rb")
+
+    assert_includes helper, "module SiweTestRequest"
+    assert_includes helper, 'key.address.to_s.delete_prefix("0x").scan(/.{4}/).first(4)'
+    assert_includes helper, '"REMOTE_ADDR" => "2001:db8::\#{address_groups.join(":")}"'
+    assert_includes helper, "class ActiveSupport::TestCase"
+    assert_includes helper, "include SiweTestRequest"
+    assert_equal 16, @source.scan("headers: siwe_test_headers(key)").size
+    refute_match(/^\s*(?:integration\.)?get (?:session_nonce_url|"\/session\/nonce")$/m, @source)
   end
 
   def test_wallet_account_settings_own_identity_and_account_deletion
@@ -857,12 +925,20 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'translate("navigation.admin_menu")'
     assert_includes evidence, 'runner = runner.sub("__AUTHENTICATION__", authentication.inspect)'
     assert_includes evidence, 'runner = runner.sub("__WEB_PUSH__", web_push.inspect)'
+    assert_includes evidence, 'runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)'
     assert_includes evidence, 'runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)'
+    assert_includes evidence, '"admin-job-operations"'
+    assert_includes evidence, '"admin-job-operations-navigation-open"'
+    assert_includes evidence, '"navigation-regular-user"'
+    assert_includes evidence, 'viewport_size = VIEWPORTS.fetch(viewport)'
+    assert_includes evidence, "def verify_job_operations_geometry"
+    assert_includes evidence, "REGULAR_PRIVATE_KEY"
+    assert_includes evidence, 'visit host_routes.admin_jobs_path'
     assert_includes evidence, '"admin-maintenance-tasks"'
     assert_includes evidence, '"admin-maintenance-tasks-navigation-open"'
     assert_includes evidence, "def verify_maintenance_tasks_geometry"
     assert_includes evidence, "[320, 390, 640, 960, 961].each"
-    assert_includes evidence, 'visit admin_maintenance_tasks_path'
+    assert_includes evidence, 'visit host_routes.admin_maintenance_tasks_path'
     assert_includes evidence, 'meta[name="csp-nonce"]'
     refute_includes evidence, "runner.sub!"
     assert_includes @source, "configure_common_files\n  configure_evidence_capture"
@@ -927,8 +1003,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens admin_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
     assert_includes admin_layout, 'data-layout="admin"'
     assert_includes admin_layout, 'min-[961px]:grid-cols-[220px_minmax(0,1fr)]'
-    assert_includes admin_layout, "t('navigation.admin_menu')"
-    assert_includes admin_layout, 't("navigation.admin")'
+    assert_includes admin_layout, "application_translate('navigation.admin_menu')"
+    assert_includes admin_layout, 'application_translate("navigation.admin")'
     assert_includes @source, 'layout "admin"'
     assert_includes account_navigation, '"menu-active" if current_page?'
     refute_includes account_navigation, '"bg-base-content text-base-100" if current_page?'
@@ -941,7 +1017,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes account_navigation, 't("navigation.dashboard")'
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
-    assert_includes account_navigation, 'link_to notification_path'
+    assert_includes account_navigation, 'link_to application_routes.notification_path'
     assert_includes account_navigation, 't("navigation.notifications")'
     refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
     refute_includes account_navigation, 'allowed_to?(:index?, User)'
@@ -949,15 +1025,20 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "admin_pages_path"
     refute_includes account_navigation, "admin_faqs_path"
     refute_includes account_navigation, "edit_admin_footer_setting_path"
-    assert_equal 5, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 5, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 6, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 6, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes admin_navigation, '"menu-active" if controller_path.in?(%w[admin/users admin/user_roles])'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/pages"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/faqs"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/footer_settings"'
+    assert_includes admin_navigation, "application_routes.admin_users_path"
+    assert_includes admin_navigation, "application_routes.admin_jobs_path"
+    assert_includes admin_navigation, '"menu-active" if controller_path.start_with?("mission_control/jobs/")'
     assert_includes admin_navigation, '"menu-active" if controller_path.start_with?("maintenance_tasks/")'
-    assert_includes @source, 'controller_path.start_with?("admin/") || controller_path.start_with?("maintenance_tasks/")'
-    assert_includes header, 't("navigation.admin")'
+    assert_includes @source, 'controller_path.start_with?("admin/")'
+    assert_includes @source, 'controller_path.start_with?("mission_control/jobs/")'
+    assert_includes @source, 'controller_path.start_with?("maintenance_tasks/")'
+    assert_includes header, 'application_translate("navigation.admin")'
     refute_includes @source, '<li class="menu-title"><span>管理</span></li>'.b
     assert_includes header, 'data: { turbo_method: :delete }'
     assert_includes @source, 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'

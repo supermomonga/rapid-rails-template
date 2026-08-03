@@ -5234,10 +5234,6 @@ def configure_default_views
         Rails.configuration.x.application_identity
       end
 
-      def application_routes
-        Rails.application.routes.url_helpers
-      end
-
       def document_title
         page_title = content_for(:title).presence
         [page_title, application_identity.app_name].compact.join(" | ")

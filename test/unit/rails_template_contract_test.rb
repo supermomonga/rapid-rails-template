@@ -56,6 +56,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes concern, "I18n.with_locale(I18n.default_locale, &action)"
     assert_includes helper, "Rails.configuration.x.application_identity"
     assert_includes helper, "Rails.application.routes.url_helpers"
+    assert_equal 1, helper.scan("def application_routes").size
     assert_includes layout, '<html lang="<%= I18n.locale %>"'
     assert_includes layout, 'property="og:site_name" content="<%= application_identity.app_name %>"'
     assert_includes header, "link_to application_identity.app_name, application_routes.root_path"

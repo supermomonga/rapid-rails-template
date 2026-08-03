@@ -1,7 +1,7 @@
 # Wallet SIWE / en / rails エビデンス
 
-- Source fingerprint: `655298d7a7250d4abb138970bd0bbe32263b8196162382e4cc663c9185aad8a6`
-- Base commit: `6ea1a4a2e112dcf35461218d39274a0f513263cf`
+- Source fingerprint: `9f7ddd928261411d08d2358354b0bce0b8bf237c84c87c1573094b7ba3e60713`
+- Base commit: `781a7a60a2eb06d8af6713cf6752c99dd78b0eda`
 - Locale: `en`
 - Image delivery: `rails`
 - 更新: `rake evidence:update`
@@ -255,6 +255,26 @@
 ### Mobile
 
 ![運用タスク (mobile)](admin-maintenance-tasks--mobile.png)
+
+## 運用タスク詳細
+
+### Desktop
+
+![運用タスク詳細 (desktop)](admin-maintenance-task-details--desktop.png)
+
+### Mobile
+
+![運用タスク詳細 (mobile)](admin-maintenance-task-details--mobile.png)
+
+## 運用タスク完了
+
+### Desktop
+
+![運用タスク完了 (desktop)](admin-maintenance-task-completed--desktop.png)
+
+### Mobile
+
+![運用タスク完了 (mobile)](admin-maintenance-task-completed--mobile.png)
 
 ## 固定ページ編集
 

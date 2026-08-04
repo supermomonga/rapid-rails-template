@@ -159,7 +159,7 @@ Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push�
 
 Mission Control JobsはSolid Queueのqueue、job、worker、定期task、失敗とretry状況を監視・操作するため、実効値が`active_job == solid_queue`の場合だけ利用できます。Solid Queueを使用しない場合は質問せず`disable`へ正規化し、確認画面へ理由を表示します。CLIで`--job-operations=enable`とSolid Queueを使用しない設定を同時に明示した場合は、`rails new`開始前に矛盾として拒否します。inline、async、別queue adapterへの切替は行いません。
 
-`enable`ではMission Control Jobs 1.1.0を`/admin/jobs`だけへmountし、公式`base_controller_class` extension pointから既存の`Admin::BaseController`、管理者role、Action Policyへ接続します。Mission Control標準のHTTP Basic認証は無効化し、追加のusername/passwordは要求しません。host側のadmin navigationとdocument titleはja/enに対応し、engine本文はGem公式の英語UIを維持します。
+`enable`ではMission Control Jobs 1.1.0を`/admin/jobs`だけへmountし、公式`base_controller_class` extension pointから既存の`Admin::BaseController`、管理者role、Action Policyへ接続します。Mission Control標準のHTTP Basic認証は無効化し、追加のusername/passwordは要求しません。host側のadmin navigationとdocument titleはja/enに対応し、engineの英語label、route、操作契約は維持したまま、host側のdaisyUI View overrideで表示します。Bulma stylesheetとBulma classは生成しません。
 
 Solid Queue 1.6.0の公式install generatorは`config/recurring.yml`へ、完了ジョブを毎時12分に`SolidQueue::Job.clear_finished_in_batches`で整理するtaskを生成します。完了ジョブの保持期間は公式既定の1日です。失敗ジョブは`finished_at`を持つcleanup対象ではなく、管理者がretryまたはdiscardするまで保持されます。このcleanupはqueue database全体の運用要件なので、`job_operations=disable`でもSolid Queue標準生成物から削除しません。
 
@@ -313,7 +313,7 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - Solid Queue使用時だけMaintenance Tasksを質問し、適用可能な場合は`enable`を既定値とすること。
 - Solid Queue使用時だけジョブ運用画面を質問し、適用可能な場合は`enable`を既定値とすること。
 - Solid Queueを使わない場合はジョブ運用画面を`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
-- ジョブ運用画面を使わない場合、Mission Control JobsのGem、initializer、controller、policy、route、layout override、navigation、locale、文書を生成しないこと。
+- ジョブ運用画面を使わない場合、Mission Control JobsのGem、initializer、controller、helper、policy、route、daisyUI View override、navigation、locale、文書を生成しないこと。
 - Solid Queueを使わない場合はMaintenance Tasksを`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
 - PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
 - Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。

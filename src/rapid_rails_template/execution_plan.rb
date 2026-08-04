@@ -316,9 +316,11 @@ module RapidRailsTemplate
         result.concat(%w[
           config/initializers/mission_control_jobs.rb
           app/controllers/admin/job_operations_controller.rb
+          app/helpers/admin/job_operations_helper.rb
           app/policies/job_operation_policy.rb
           app/views/layouts/mission_control/jobs/application.html.erb
-          app/assets/stylesheets/mission_control_jobs_scoped.css
+          app/views/layouts/mission_control/jobs/*.html.erb
+          app/views/mission_control/jobs/**/*.html.erb
           config/locales/job_operations.ja.yml
           config/locales/job_operations.en.yml
           docs/job_operations.md

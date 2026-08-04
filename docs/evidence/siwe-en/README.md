@@ -1,7 +1,7 @@
 # Wallet SIWE / en / rails エビデンス
 
-- Source fingerprint: `9f7ddd928261411d08d2358354b0bce0b8bf237c84c87c1573094b7ba3e60713`
-- Base commit: `781a7a60a2eb06d8af6713cf6752c99dd78b0eda`
+- Source fingerprint: `03604c2d545e45468b8af7eda8f2f624244b7dbbfc24fa4ea28ccb588aa93ea3`
+- Base commit: `75248ae269b4b2d30b0027b8d1b1080f6530ebea`
 - Locale: `en`
 - Image delivery: `rails`
 - 更新: `rake evidence:update`

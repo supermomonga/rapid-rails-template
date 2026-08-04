@@ -288,9 +288,15 @@ class RailsTemplateContractTest < Minitest::Test
     job_operations = source_between("def install_job_operations", "def install_maintenance_tasks")
     initializer = generated_file_source("config/initializers/mission_control_jobs.rb")
     controller = generated_file_source("app/controllers/admin/job_operations_controller.rb")
+    helper = generated_file_source("app/helpers/admin/job_operations_helper.rb")
     policy = generated_file_source("app/policies/job_operation_policy.rb")
     layout = generated_file_source("app/views/layouts/mission_control/jobs/application.html.erb")
-    scoped_stylesheet = generated_file_source("app/assets/stylesheets/mission_control_jobs_scoped.css")
+    navigation = generated_file_source("app/views/layouts/mission_control/jobs/_navigation.html.erb")
+    application_selection = generated_file_source("app/views/layouts/mission_control/jobs/_application_selection.html.erb")
+    jobs_index = generated_file_source("app/views/mission_control/jobs/jobs/index.html.erb")
+    job_show = generated_file_source("app/views/mission_control/jobs/jobs/show.html.erb")
+    queues_index = generated_file_source("app/views/mission_control/jobs/queues/index.html.erb")
+    pagination = generated_file_source("app/views/mission_control/jobs/shared/_pagination_toolbar.html.erb")
     controller_test = generated_file_source("test/controllers/admin/job_operations_controller_test.rb")
     cleanup_test = generated_file_source("test/models/solid_queue_cleanup_test.rb")
     application_layout = generated_file_source("app/views/layouts/application.html.erb")
@@ -307,20 +313,37 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes initializer, "username"
     refute_includes initializer, "password"
     assert_includes controller, "class JobOperationsController < BaseController"
+    assert_includes controller, "helper Admin::JobOperationsHelper"
     assert_includes controller, "authorize! :job_operation, to: :manage?"
     refute_includes controller, "has_role?"
     assert_includes policy, "def manage?"
     assert_includes policy, "admin?"
     assert_includes layout, 'render template: "layouts/admin"'
-    assert_includes layout, "@layer mission-control-foundation, theme, base, components, utilities;"
-    assert_includes layout, '@import url("<%= asset_path("mission_control/jobs/bulma.min.css") %>") layer(mission-control-foundation)'
-    assert_includes layout, 'stylesheet_link_tag "mission_control_jobs_scoped"'
-    assert_includes scoped_stylesheet, "@scope ([data-mission-control-jobs-root])"
-    assert_includes job_operations, 'Gem::Specification.find_by_name("mission_control-jobs", "1.1.0")'
-    assert_includes job_operations, "%w[bulma.min.css forms.css jobs.css]"
-    assert_includes job_operations, "Mission Control Jobs 1.1.0の公式stylesheetが見つかりません".b
-    assert_includes job_operations, "force_encoding(Encoding::UTF_8)"
-    assert_includes job_operations, "stylesheet.valid_encoding?"
+    assert_includes navigation, 'class="tabs tabs-lift min-w-max"'
+    assert_includes navigation, '"tab-active": key == current_section'
+    assert_includes application_selection, 'class="card card-border border-base-300 bg-base-100"'
+    assert_includes application_selection, '<% if @application.servers.many? || selectable_applications.any? %>'
+    assert_includes application_selection, 'class="card-body flex-row flex-wrap items-center justify-end gap-4 py-4"'
+    assert_includes application_selection, 'class="tabs tabs-lift tabs-sm"'
+    refute_includes application_selection, "Back to main app"
+    refute_includes application_selection, "main_app.root_path"
+    assert_includes jobs_index, 'class="card card-border overflow-x-auto border-base-300 bg-base-100"'
+    assert_includes jobs_index, 'class="table"'
+    assert_includes jobs_index, 'class: "btn btn-error"'
+    assert_includes jobs_index, 'class: "btn btn-warning"'
+    assert_includes job_show, 'class="mockup-code overflow-x-auto"'
+    assert_includes job_show, 'class="collapse collapse-arrow card card-border border-base-300 bg-base-100"'
+    assert_includes queues_index, 'class: "btn btn-sm btn-warning"'
+    assert_includes pagination, 'class="join"'
+    assert_includes helper, '"failed" => "badge-error"'
+    assert_includes helper, '"finished" => "badge-success"'
+    refute_includes layout, "bulma.min.css"
+    refute_includes job_operations, 'mission_control/jobs/bulma.min.css'
+    refute_includes job_operations, "mission_control_jobs_scoped"
+    refute_includes job_operations, "@scope"
+    %w[is-boxed is-active navbar-item navbar-menu message-body is-hoverable is-fullwidth].each do |bulma_class|
+      refute_includes [layout, navigation, application_selection, jobs_index, job_show, queues_index, pagination].join, bulma_class
+    end
     assert_includes layout, "MissionControl::Jobs.importmap"
     assert_includes application_layout, "content_for?(:javascript_importmap)"
     assert_includes controller_test, "routes every engine action through the authorized base controller"

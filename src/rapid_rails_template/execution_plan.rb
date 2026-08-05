@@ -93,6 +93,7 @@ module RapidRailsTemplate
       result << "prepare_test_database"
       result << "generate_sorbet_dsl"
       result << "typecheck_application"
+      result << "resolve_sorbet_todos"
       result << "verify_sorbet"
       result << "verify"
       result
@@ -113,6 +114,7 @@ module RapidRailsTemplate
         sorbet/rbi/shims/framework_bindings.rbi
         sorbet/rbi/**/*
         test/sorbet_test.rb
+        db/seeds.rb
         test/support/evidence_capture.rb
         lib/tasks/evidence.rake
         app/models/user_role.rb
@@ -132,6 +134,7 @@ module RapidRailsTemplate
         app/controllers/admin/users_controller.rb
         app/controllers/admin/user_roles_controller.rb
         app/views/admin/users/index.html.erb
+        app/services/admin_role_grant.rb
         app/models/page.rb
         app/models/faq.rb
         app/models/footer_setting.rb
@@ -221,6 +224,8 @@ module RapidRailsTemplate
           test/lib/imgproxy/active_storage_url_adapter_test.rb
         ])
       end
+      result << "sorbet/rbi/shims/boring_avatars.rbi" if configuration["profile_features"].include?("avatar")
+      result << "sorbet/rbi/shims/bundler_connection_pool.rbi" if configuration["additional_login_methods"].include?("siwe")
       if configuration["api"] == "enable"
         result.concat(%w[
           app/models/api_credential.rb
@@ -255,6 +260,7 @@ module RapidRailsTemplate
       if configuration["profile_features"].include?("avatar")
         result.concat(%w[
           app/services/avatar_image_policy.rb
+          app/services/avatar_upload.rb
           app/validators/avatar_upload_validator.rb
           app/helpers/avatar_helper.rb
           test/services/avatar_image_policy_test.rb
@@ -309,6 +315,7 @@ module RapidRailsTemplate
           app/controllers/push_subscriptions_controller.rb
           app/controllers/notifications_controller.rb
           app/jobs/push_notification_job.rb
+          app/services/push_notification_payload.rb
           app/services/push_notifier.rb
           app/services/vapid_configuration.rb
           app/javascript/controllers/push_subscription_controller.js

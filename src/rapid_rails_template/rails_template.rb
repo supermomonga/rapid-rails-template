@@ -176,30 +176,36 @@ def configure_application_identity
       sig { returns(Symbol) }
       attr_reader :default_locale
 
-      sig { params(configuration: T.untyped, environment: T.untyped).returns(ApplicationIdentity) }
-      def self.build(configuration, environment: ENV)
-        canonical_origin = configuration.canonical_origin
-        if configuration.canonical_origin_env.present?
-          canonical_origin = environment.fetch(configuration.canonical_origin_env) do
-            raise Error, "\#{configuration.canonical_origin_env} is required"
+      sig do
+        params(
+          configuration: T::Hash[Symbol, T.nilable(String)],
+          environment: T::Hash[String, String]
+        ).returns(ApplicationIdentity)
+      end
+      def self.build(configuration, environment: ENV.to_h)
+        canonical_origin = configuration[:canonical_origin]
+        canonical_origin_env = configuration[:canonical_origin_env]
+        if canonical_origin_env.present?
+          canonical_origin = environment.fetch(canonical_origin_env) do
+            raise Error, "\#{canonical_origin_env} is required"
           end
         end
         new(
-          app_name: configuration.app_name,
-          canonical_origin:,
-          default_locale: configuration.default_locale
+          app_name: T.must(configuration[:app_name]),
+          canonical_origin: T.must(canonical_origin),
+          default_locale: T.must(configuration[:default_locale])
         )
       end
 
       sig { params(app_name: T.any(String, Symbol), canonical_origin: String, default_locale: T.any(String, Symbol)).void }
       def initialize(app_name:, canonical_origin:, default_locale:)
-        @app_name = app_name.to_s.strip
+        @app_name = T.let(app_name.to_s.strip, String)
         raise Error, "app_name is required" if @app_name.empty?
 
-        @default_locale = default_locale.to_s.to_sym
+        @default_locale = T.let(default_locale.to_s.to_sym, Symbol)
         raise Error, "default_locale must be ja or en" unless AVAILABLE_LOCALES.include?(@default_locale)
 
-        @canonical_origin = validate_origin(canonical_origin)
+        @canonical_origin = T.let(validate_origin(canonical_origin), String)
         freeze
       end
 
@@ -228,6 +234,7 @@ def configure_application_identity
       end
 
       private
+        sig { params(value: String).returns(String) }
         def validate_origin(value)
           raise Error, "canonical_origin is required" if value.blank?
 
@@ -256,7 +263,7 @@ def configure_application_identity
 
   environment <<~RUBY
     require_relative "../lib/application_identity"
-    config.x.application_identity = ApplicationIdentity.build(config_for(:application_identity))
+    config.x.application_identity = ApplicationIdentity.build(config_for(:application_identity).to_h)
     config.i18n.available_locales = ApplicationIdentity::AVAILABLE_LOCALES
     config.i18n.default_locale = config.x.application_identity.default_locale
     config.i18n.fallbacks = false
@@ -359,10 +366,10 @@ def configure_application_identity
         configuration[:default_locale] = "ja"
         configuration[:canonical_origin_env] = "APPLICATION_ORIGIN"
 
-        error = assert_raises(ApplicationIdentity::Error) { ApplicationIdentity.build(configuration, environment: {}) }
+        error = assert_raises(ApplicationIdentity::Error) { ApplicationIdentity.build(configuration.to_h, environment: {}) }
         assert_equal "APPLICATION_ORIGIN is required", error.message
 
-        identity = ApplicationIdentity.build(configuration, environment: { "APPLICATION_ORIGIN" => "https://example.com" })
+        identity = ApplicationIdentity.build(configuration.to_h, environment: { "APPLICATION_ORIGIN" => "https://example.com" })
         assert_equal "https://example.com", identity.canonical_origin
       end
 
@@ -445,14 +452,17 @@ def configure_image_delivery
 
         Error = Class.new(StandardError)
         HEX_PATTERN = /\A(?:[0-9a-fA-F]{2})+\z/
-        NON_PUBLIC_IPV4_NETWORKS = %w[
+        NON_PUBLIC_IPV4_NETWORKS = T.let(%w[
           0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16
           172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.88.99.0/24
           192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24
           224.0.0.0/4 240.0.0.0/4
-        ].map { |network| IPAddr.new(network) }.freeze
+        ].map { |network| IPAddr.new(network) }.freeze, T::Array[IPAddr])
         GLOBAL_IPV6_NETWORK = IPAddr.new("2000::/3")
-        NON_PUBLIC_IPV6_NETWORKS = %w[2001:2::/48 2001:db8::/32].map { |network| IPAddr.new(network) }.freeze
+        NON_PUBLIC_IPV6_NETWORKS = T.let(
+          %w[2001:2::/48 2001:db8::/32].map { |network| IPAddr.new(network) }.freeze,
+          T::Array[IPAddr]
+        )
 
         sig { returns(String) }
         attr_reader :endpoint
@@ -468,37 +478,37 @@ def configure_image_delivery
 
         sig do
           params(
-            environment: T.untyped,
+            environment: T::Hash[String, String],
             rails_environment: T.any(String, ActiveSupport::EnvironmentInquirer),
             application_identity: ApplicationIdentity,
-            resolver: T.untyped
+            resolver: T.proc.params(host: String).returns(T::Array[String])
           ).returns(ImageDeliveryConfiguration)
         end
-        def self.fetch!(environment: ENV, rails_environment: Rails.env,
+        def self.fetch!(environment: ENV.to_h, rails_environment: Rails.env,
           application_identity: Rails.configuration.x.application_identity,
-          resolver: Resolv.method(:getaddresses))
+          resolver: ->(host) { Resolv.getaddresses(host) })
           new(environment:, rails_environment:, application_identity:, resolver:)
         end
 
         sig do
           params(
-            environment: T.untyped,
+            environment: T::Hash[String, String],
             rails_environment: T.any(String, ActiveSupport::EnvironmentInquirer),
             application_identity: ApplicationIdentity,
-            resolver: T.untyped
+            resolver: T.proc.params(host: String).returns(T::Array[String])
           ).void
         end
         def initialize(environment:, rails_environment:, application_identity:, resolver:)
           production = rails_environment.to_s == "production"
-          @endpoint = validate_url(environment.fetch("IMGPROXY_ENDPOINT") { raise Error, "IMGPROXY_ENDPOINT is required" }, "IMGPROXY_ENDPOINT", origin: false, https: production)
-          @key = validate_hex(environment.fetch("IMGPROXY_KEY") { raise Error, "IMGPROXY_KEY is required" }, "IMGPROXY_KEY")
-          @salt = validate_hex(environment.fetch("IMGPROXY_SALT") { raise Error, "IMGPROXY_SALT is required" }, "IMGPROXY_SALT")
+          @endpoint = T.let(validate_url(environment.fetch("IMGPROXY_ENDPOINT") { raise Error, "IMGPROXY_ENDPOINT is required" }, "IMGPROXY_ENDPOINT", origin: false, https: production), String)
+          @key = T.let(validate_hex(environment.fetch("IMGPROXY_KEY") { raise Error, "IMGPROXY_KEY is required" }, "IMGPROXY_KEY"), String)
+          @salt = T.let(validate_hex(environment.fetch("IMGPROXY_SALT") { raise Error, "IMGPROXY_SALT is required" }, "IMGPROXY_SALT"), String)
           source = if production
                      application_identity.canonical_origin
                    else
                      environment.fetch("IMGPROXY_SOURCE_ORIGIN") { raise Error, "IMGPROXY_SOURCE_ORIGIN is required outside production" }
                    end
-          @source_origin = validate_url(source, "imgproxy source origin", origin: true, https: production)
+          @source_origin = T.let(validate_url(source, "imgproxy source origin", origin: true, https: production), String)
           if production
             validate_public_host!(@endpoint, "IMGPROXY_ENDPOINT", resolver)
             validate_public_host!(@source_origin, "imgproxy source origin", resolver)
@@ -509,6 +519,7 @@ def configure_image_delivery
         end
 
         private
+          sig { params(value: String, name: String).returns(String) }
           def validate_hex(value, name)
             value = value.to_s
             raise Error, "#{name} must be non-empty even-length hexadecimal" unless value.match?(HEX_PATTERN)
@@ -516,6 +527,7 @@ def configure_image_delivery
             value.freeze
           end
 
+          sig { params(value: String, name: String, origin: T::Boolean, https: T::Boolean).returns(String) }
           def validate_url(value, name, origin:, https:)
             raise Error, "#{name} is required" if value.to_s.strip.empty?
 
@@ -529,6 +541,13 @@ def configure_image_delivery
             uri.to_s.delete_suffix("/").freeze
           end
 
+          sig do
+            params(
+              url: String,
+              name: String,
+              resolver: T.proc.params(host: String).returns(T::Array[String])
+            ).void
+          end
           def validate_public_host!(url, name, resolver)
             host = URI.parse(url).host
             raise Error, "#{name} host is required" if host.nil?
@@ -547,10 +566,13 @@ def configure_image_delivery
             raise Error, "#{name} host could not be resolved: #{error.message}"
           end
 
+          sig { params(address: IPAddr).returns(T::Boolean) }
           def public_address?(address)
             return NON_PUBLIC_IPV4_NETWORKS.none? { |network| network.include?(address) } if address.ipv4?
 
-            GLOBAL_IPV6_NETWORK.include?(address) && NON_PUBLIC_IPV6_NETWORKS.none? { |network| network.include?(address) }
+            return false unless GLOBAL_IPV6_NETWORK.include?(address)
+
+            NON_PUBLIC_IPV6_NETWORKS.none? { |network| network.include?(address) }
           end
       end
     RUBY
@@ -566,7 +588,11 @@ def configure_image_delivery
             @source_origin = source_origin.delete_suffix("/")
           end
 
-          sig { params(image: T.untyped).returns(String) }
+          Image = T.type_alias do
+            T.any(ActiveStorage::Attached::One, ActiveStorage::Attachment, ActiveStorage::Blob)
+          end
+
+          sig { params(image: Image).returns(String) }
           def url(image)
             path = Rails.application.routes.url_helpers.rails_storage_proxy_path(image)
             "#{@source_origin}#{path}"
@@ -2730,16 +2756,33 @@ def configure_roles
     </div>
   ERB
 
+  create_file "app/services/admin_role_grant.rb", <<~RUBY, force: true
+    class AdminRoleGrant
+      extend T::Sig
+
+      sig { params(user_id: T.nilable(T.any(String, Integer)), output: IO).returns(User) }
+      def self.call(user_id, output: $stdout)
+        identifier = case user_id
+                     when Integer
+                       user_id
+                     when String
+                       Integer(user_id, 10) if user_id.match?(/\A[1-9]\d*\z/)
+                     end
+        raise ArgumentError, "user_idを指定してください" unless identifier&.positive?
+
+        user = User.find(identifier)
+        user.grant_role!(:admin)
+        output.puts "admin role granted to user_id=\#{user.id}"
+        user
+      end
+    end
+  RUBY
+
   create_file "lib/tasks/roles.rake", <<~RAKE, force: true
     namespace :roles do
       desc "Grant the admin role to an existing User identified by users.id"
       task :grant_admin, [:user_id] => :environment do |_task, arguments|
-        user_id = Integer(arguments[:user_id], exception: false)
-        raise ArgumentError, "user_idを指定してください" unless user_id&.positive?
-
-        user = User.find(user_id)
-        user.grant_role!(:admin)
-        puts "admin role granted to user_id=\#{user.id}"
+        AdminRoleGrant.call(arguments[:user_id])
       end
     end
   RAKE
@@ -2747,11 +2790,10 @@ def configure_roles
   append_to_file "db/seeds.rb", <<~RUBY
 
     local_seeds = Rails.root.join("db/seeds.local.rb")
-    load local_seeds if local_seeds.file?
+    load local_seeds.to_s if local_seeds.file?
   RUBY
   create_file "db/seeds.local.rb.example", <<~RUBY, force: true
-    admin = User.find(Integer(ENV.fetch("ADMIN_USER_ID")))
-    admin.grant_role!(:admin)
+    AdminRoleGrant.call(ENV.fetch("ADMIN_USER_ID"))
   RUBY
   append_to_file ".gitignore", "\n/db/seeds.local.rb\n" unless File.read(".gitignore").lines.map(&:strip).include?("/db/seeds.local.rb")
 
@@ -4318,6 +4360,37 @@ def configure_profile
   RUBY
 
   if avatar_enabled
+    create_file "app/services/avatar_upload.rb", <<~'RUBY', force: true
+      require "tempfile"
+
+      class AvatarUpload < T::Struct
+        extend T::Sig
+
+        Error = Class.new(StandardError)
+
+        const :tempfile, Tempfile
+        const :size, Integer
+        const :content_type, String
+
+        sig { params(value: Object).returns(AvatarUpload) }
+        def self.coerce(value)
+          unless value.respond_to?(:tempfile) && value.respond_to?(:size) && value.respond_to?(:content_type)
+            raise Error, "upload must expose tempfile, size, and content_type"
+          end
+
+          dynamic_value = T.unsafe(value)
+          tempfile = dynamic_value.tempfile
+          size = dynamic_value.size
+          content_type = dynamic_value.content_type
+          raise Error, "upload tempfile must be a Tempfile" unless tempfile.is_a?(Tempfile)
+          raise Error, "upload size must be an Integer" unless size.is_a?(Integer)
+          raise Error, "upload content_type must be a String" unless content_type.is_a?(String)
+
+          new(tempfile:, size:, content_type:)
+        end
+      end
+    RUBY
+
     create_file "app/services/avatar_image_policy.rb", <<~'RUBY', force: true
       require "marcel"
       require "pathname"
@@ -4326,10 +4399,10 @@ def configure_profile
       class AvatarImagePolicy
         extend T::Sig
 
-        MAX_BYTES = 5 * 1024 * 1024
-        MAX_SIZE_LABEL = "5 MiB"
-        MAX_DIMENSION = 4096
-        CONTENT_TYPES = %w[image/jpeg image/png image/webp].freeze
+        MAX_BYTES = T.let(5 * 1024 * 1024, Integer)
+        MAX_SIZE_LABEL = T.let("5 MiB", String)
+        MAX_DIMENSION = T.let(4096, Integer)
+        CONTENT_TYPES = T.let(%w[image/jpeg image/png image/webp].freeze, T::Array[String])
 
         class ValidationError < StandardError
           extend T::Sig
@@ -4344,12 +4417,12 @@ def configure_profile
           end
         end
 
-        sig { params(upload: T.untyped).returns(T::Boolean) }
+        sig { params(upload: AvatarUpload).returns(T::Boolean) }
         def self.validate!(upload)
           new(upload).validate!
         end
 
-        sig { params(upload: T.untyped).void }
+        sig { params(upload: AvatarUpload).void }
         def initialize(upload)
           @upload = upload
         end
@@ -4359,7 +4432,7 @@ def configure_profile
           raise_error(:empty) if upload.size.to_i.zero?
           raise_error(:too_large) if upload.size.to_i > MAX_BYTES
 
-          path = upload.tempfile.path
+          path = T.must(upload.tempfile.path)
           actual_type = Marcel::MimeType.for(Pathname(path), name: nil, declared_type: nil)
           declared_type = upload.content_type.to_s.downcase
           raise_error(:unsupported_type) unless CONTENT_TYPES.include?(actual_type)
@@ -4382,12 +4455,15 @@ def configure_profile
         end
 
         private
+          sig { returns(AvatarUpload) }
           attr_reader :upload
 
+          sig { params(code: Symbol).returns(T.noreturn) }
           def raise_error(code)
             raise ValidationError, code
           end
 
+          sig { params(bytes: String).returns(T::Boolean) }
           def animated_png?(bytes)
             return false unless bytes.start_with?("\x89PNG\r\n\x1A\n".b)
 
@@ -4398,17 +4474,18 @@ def configure_profile
             false
           end
 
+          sig { params(bytes: String).returns(T::Boolean) }
           def animated_webp?(bytes)
             return false unless bytes.byteslice(0, 4) == "RIFF" && bytes.byteslice(8, 4) == "WEBP"
 
             offset = 12
             while offset + 8 <= bytes.bytesize
               type = bytes.byteslice(offset, 4)
-              length = bytes.byteslice(offset + 4, 4).unpack1("V")
+              length = T.must(bytes.byteslice(offset + 4, 4)).unpack1("V")
               data_start = offset + 8
               break if data_start + length > bytes.bytesize
 
-              data = bytes.byteslice(data_start, length)
+              data = T.must(bytes.byteslice(data_start, length))
               return true if %w[ANIM ANMF].include?(type)
               return true if type == "VP8X" && (data.getbyte(0).to_i & 0b0000_0010).positive?
 
@@ -4417,14 +4494,23 @@ def configure_profile
             false
           end
 
-          def each_chunk(bytes, offset:, length_bytes:, byte_order:)
+          sig do
+            params(
+              bytes: String,
+              offset: Integer,
+              length_bytes: Integer,
+              byte_order: String,
+              block: T.proc.params(type: String, data: String).void
+            ).void
+          end
+          def each_chunk(bytes, offset:, length_bytes:, byte_order:, &block)
             while offset + length_bytes + 4 <= bytes.bytesize
-              length = bytes.byteslice(offset, length_bytes).unpack1(byte_order)
-              type = bytes.byteslice(offset + length_bytes, 4)
+              length = T.must(bytes.byteslice(offset, length_bytes)).unpack1(byte_order)
+              type = T.must(bytes.byteslice(offset + length_bytes, 4))
               data_start = offset + length_bytes + 4
               break if data_start + length > bytes.bytesize
 
-              yield type, bytes.byteslice(data_start, length)
+              block.call(type, T.must(bytes.byteslice(data_start, length)))
               chunk_size = length_bytes + 4 + length
               chunk_size += 4
               offset += chunk_size
@@ -4437,11 +4523,19 @@ def configure_profile
       class AvatarUploadValidator < ActiveModel::EachValidator
         extend T::Sig
 
-        sig { params(record: T.untyped, attribute: Symbol, upload: T.untyped).void }
+        sig do
+          params(
+            record: Profile,
+            attribute: Symbol,
+            upload: Object
+          ).void
+        end
         def validate_each(record, attribute, upload)
           return if upload.blank?
 
-          AvatarImagePolicy.validate!(upload)
+          AvatarImagePolicy.validate!(AvatarUpload.coerce(upload))
+        rescue AvatarUpload::Error
+          record.errors.add(attribute, :undecodable)
         rescue AvatarImagePolicy::ValidationError => error
           record.errors.add(
             attribute,
@@ -4678,7 +4772,7 @@ def configure_profile
       class AvatarImagePolicyTest < ActiveSupport::TestCase
         test "accepts decodable static JPEG PNG and WebP images" do
           { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }.each do |format, content_type|
-            assert AvatarImagePolicy.validate!(AvatarTestImage.upload(format:, content_type:))
+            assert AvatarImagePolicy.validate!(AvatarUpload.coerce(AvatarTestImage.upload(format:, content_type:)))
           end
         end
 
@@ -4705,7 +4799,7 @@ def configure_profile
         private
           def assert_policy_error(code, upload)
             error = assert_raises(AvatarImagePolicy::ValidationError) do
-              AvatarImagePolicy.validate!(upload)
+              AvatarImagePolicy.validate!(AvatarUpload.coerce(upload))
             end
             assert_equal code, error.code
           end
@@ -7043,9 +7137,9 @@ def configure_web_push
 
       sig { params(public_key: String, private_key: String, subject: String).void }
       def initialize(public_key:, private_key:, subject:)
-        @public_key = public_key.presence || raise(Error, "VAPID_PUBLIC_KEY is blank")
-        @private_key = private_key.presence || raise(Error, "VAPID_PRIVATE_KEY is blank")
-        @subject = subject.presence || raise(Error, "VAPID_SUBJECT is blank")
+        @public_key = T.let(public_key.presence || raise(Error, "VAPID_PUBLIC_KEY is blank"), String)
+        @private_key = T.let(private_key.presence || raise(Error, "VAPID_PRIVATE_KEY is blank"), String)
+        @subject = T.let(subject.presence || raise(Error, "VAPID_SUBJECT is blank"), String)
         uri = URI.parse(@subject)
         raise Error, "VAPID_SUBJECT must use mailto or https" unless %w[mailto https].include?(uri.scheme)
       rescue URI::InvalidURIError => error
@@ -7073,17 +7167,22 @@ def configure_web_push
         params(
           subscription_id: Integer,
           expected_user_id: Integer,
-          payload: T::Hash[Symbol, T.untyped],
+          title: String,
+          body: String,
+          path: String,
+          tag: T.nilable(String),
+          icon: String,
           ttl: Integer
         ).void
       end
-      def perform(subscription_id, expected_user_id, payload, ttl)
+      def perform(subscription_id, expected_user_id, title, body, path, tag, icon, ttl)
         subscription = PushSubscription.find_by(id: subscription_id, user_id: expected_user_id)
         return unless subscription
 
+        payload = PushNotificationPayload.new(title:, body:, path:, tag:, icon:)
         WebPush.payload_send(
           endpoint: subscription.endpoint,
-          message: JSON.generate(payload),
+          message: payload.to_json,
           p256dh: subscription.p256dh,
           auth: subscription.auth,
           vapid: VapidConfiguration.fetch!.to_h,
@@ -7094,6 +7193,29 @@ def configure_web_push
         )
       rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription
         subscription&.destroy!
+      end
+    end
+  RUBY
+
+  create_file "app/services/push_notification_payload.rb", <<~RUBY, force: true
+    class PushNotificationPayload < T::Struct
+      extend T::Sig
+
+      const :title, String
+      const :body, String
+      const :path, String
+      const :tag, T.nilable(String)
+      const :icon, String
+
+      sig { params(_state: T.nilable(JSON::State)).returns(String) }
+      def to_json(_state = nil)
+        data = T.let({ path: }, T::Hash[Symbol, String])
+        options = T.let(
+          { body:, icon:, data: },
+          T::Hash[Symbol, T.any(String, T::Hash[Symbol, String])]
+        )
+        options[:tag] = T.must(tag) unless tag.nil?
+        JSON.generate(title:, options:)
       end
     end
   RUBY
@@ -7123,12 +7245,17 @@ def configure_web_push
         raise ArgumentError, "ttl must be positive" unless ttl.to_i.positive?
 
         VapidConfiguration.fetch!
-        options = { body:, icon:, data: { path: } }
-        options[:tag] = tag if tag.present?
-        payload = { title:, options: }
-
         user.push_subscriptions.find_each do |subscription|
-          PushNotificationJob.perform_later(subscription.id, user.id, payload, ttl.to_i)
+          PushNotificationJob.perform_later(
+            subscription.id,
+            user.id,
+            title,
+            body,
+            path,
+            tag,
+            icon,
+            ttl.to_i
+          )
         end
       end
     end
@@ -7182,16 +7309,16 @@ def configure_web_push
         return head :not_found unless subscription
 
         VapidConfiguration.fetch!
-        payload = {
-          title: I18n.t("web_push.test.title"),
-          options: {
-            body: I18n.t("web_push.test.body"),
-            icon: "/icon.png",
-            tag: "web-push-test",
-            data: { path: notification_path }
-          }
-        }
-        PushNotificationJob.perform_later(subscription.id, account_user.id, payload, PushNotifier::DEFAULT_TTL)
+        PushNotificationJob.perform_later(
+          subscription.id,
+          account_user.id,
+          I18n.t("web_push.test.title"),
+          I18n.t("web_push.test.body"),
+          notification_path,
+          "web-push-test",
+          "/icon.png",
+          PushNotifier::DEFAULT_TTL
+        )
         head :accepted
       rescue VapidConfiguration::Error
         render json: { error: I18n.t("web_push.errors.configuration") }, status: :service_unavailable
@@ -7573,13 +7700,13 @@ def configure_web_push
         captured = T.let(nil, T.nilable(T::Hash[Symbol, T.untyped]))
         with_vapid_env do
           with_payload_send(->(**options) { captured = options }) do
-            PushNotificationJob.perform_now(@subscription.id, users(:one).id, payload, 600)
+            PushNotificationJob.perform_now(*job_arguments(users(:one).id))
           end
         end
 
         delivered = T.must(captured)
         assert_equal @subscription.endpoint, delivered.fetch(:endpoint)
-        assert_equal payload.deep_stringify_keys, JSON.parse(delivered.fetch(:message))
+        assert_equal expected_payload.deep_stringify_keys, JSON.parse(delivered.fetch(:message))
         assert_equal 600, delivered.fetch(:ttl)
         assert_equal 5, delivered.fetch(:open_timeout)
         assert_equal 5, delivered.fetch(:read_timeout)
@@ -7590,7 +7717,7 @@ def configure_web_push
       test "does not deliver after subscription ownership changes" do
         called = T.let(false, T::Boolean)
         with_payload_send(->(**) { called = true }) do
-          PushNotificationJob.perform_now(@subscription.id, users(:two).id, payload, 600)
+          PushNotificationJob.perform_now(*job_arguments(users(:two).id))
         end
 
         assert_not called
@@ -7603,7 +7730,7 @@ def configure_web_push
         with_vapid_env do
           with_payload_send(->(**) { raise error }) do
             assert_difference("PushSubscription.count", -1) do
-              PushNotificationJob.perform_now(@subscription.id, users(:one).id, payload, 600)
+              PushNotificationJob.perform_now(*job_arguments(users(:one).id))
             end
           end
         end
@@ -7619,8 +7746,12 @@ def configure_web_push
           T.must(singleton_class).define_method(:payload_send, T.must(original_method))
         end
 
-        def payload
-          { title: "Title", options: { body: "Body", data: { path: "/account" } } }
+        def job_arguments(user_id)
+          [@subscription.id, user_id, "Title", "Body", "/account", nil, "/icon.png", 600]
+        end
+
+        def expected_payload
+          { title: "Title", options: { body: "Body", icon: "/icon.png", data: { path: "/account" } } }
         end
 
         def with_vapid_env
@@ -10613,6 +10744,18 @@ def configure_sorbet
         config/**/*.rb
         lib/**/*.rb
         test/**/*.rb
+        db/seeds.rb
+      ].freeze
+
+      STRICT_RUBY_PATHS = %w[
+        app/services/admin_role_grant.rb
+        app/services/avatar_image_policy.rb
+        app/services/avatar_upload.rb
+        app/services/push_notification_payload.rb
+        app/services/push_notifier.rb
+        app/services/vapid_configuration.rb
+        lib/application_identity.rb
+        lib/image_delivery_configuration.rb
       ].freeze
 
       APPLICATION_DSL_RBI_SOURCES = {
@@ -10630,13 +10773,27 @@ def configure_sorbet
         "user_role" => "app/models/user_role.rb"
       }.freeze
 
-      test "application and test Ruby files use typed true" do
+      test "application and test Ruby files use typed true or stricter" do
         paths = TYPED_RUBY_PATTERNS.flat_map { |pattern| Rails.root.glob(pattern) }.uniq.sort
 
         assert_predicate paths, :any?
         paths.each do |path|
-          assert_equal "# typed: true\n", path.open(&:gets), "#{path.relative_path_from(Rails.root)} must start with # typed: true"
+          assert_match(/\A# typed: (?:true|strict)\n\z/, path.open(&:gets), "#{path.relative_path_from(Rails.root)} must start with # typed: true or stricter")
         end
+      end
+
+      test "pure application services use typed strict" do
+        expected = STRICT_RUBY_PATHS.select { |path| Rails.root.join(path).exist? }
+
+        assert_predicate expected, :any?
+        expected.each do |path|
+          assert_equal "# typed: strict\n", Rails.root.join(path).open(&:gets), "#{path} must start with # typed: strict"
+        end
+      end
+
+      test "Tapioca has no unresolved constants" do
+        todo = Rails.root.join("sorbet/rbi/todo.rbi")
+        assert_not_predicate todo, :exist?, "Resolve missing constants instead of committing sorbet/rbi/todo.rbi placeholders."
       end
 
       test "application DSL RBI files exist for supported domain classes" do
@@ -10706,12 +10863,25 @@ def configure_application_typechecking
     config/**/*.rb
     lib/**/*.rb
     test/**/*.rb
+    db/seeds.rb
   ]
   paths = patterns.flat_map { |pattern| Dir.glob(pattern) }.uniq.sort
   raise "application typecheckingの対象Ruby fileが見つかりません" if paths.empty?
 
+  strict_paths = %w[
+    app/services/admin_role_grant.rb
+    app/services/avatar_image_policy.rb
+    app/services/avatar_upload.rb
+    app/services/push_notification_payload.rb
+    app/services/push_notifier.rb
+    app/services/vapid_configuration.rb
+    lib/application_identity.rb
+    lib/image_delivery_configuration.rb
+  ].select { |path| File.exist?(path) }
+
   paths.each do |path|
-    prepend_to_file path, "# typed: true\n"
+    strictness = strict_paths.include?(path) ? "strict" : "true"
+    prepend_to_file path, "# typed: #{strictness}\n"
   end
 end
 
@@ -10889,6 +11059,34 @@ def configure_sorbet_shims
       def self.relation_scope(&block); end
     end
   RBI
+
+  if VALUES.fetch("profile_features").include?("avatar")
+    create_file "sorbet/rbi/shims/boring_avatars.rbi", <<~'RBI', force: true
+      # typed: true
+
+      # boring_avatars defines these aliases on BoringAvatars, while its Rails
+      # binding signatures resolve the unqualified names in ViewHelper.
+      module BoringAvatars::Bindings::Rails::ViewHelper
+        RailsAttributeValue = T.type_alias { BoringAvatars::RailsAttributeValue }
+        Size = T.type_alias { BoringAvatars::Size }
+        Variant = T.type_alias { BoringAvatars::Variant }
+      end
+    RBI
+  end
+
+  if VALUES.fetch("additional_login_methods").include?("siwe")
+    create_file "sorbet/rbi/shims/bundler_connection_pool.rbi", <<~'RBI', force: true
+      # typed: true
+
+      # Ruby ships Bundler with a vendored connection pool. Tapioca can observe
+      # its Process fork hook while compiling HTTPX, but Bundler has no Gem RBI.
+      module Bundler
+        class ConnectionPool
+          module ForkTracker; end
+        end
+      end
+    RBI
+  end
 end
 
 def configure_database
@@ -11046,6 +11244,13 @@ after_bundle do
   run_checked "bin/annotaterb models"
   configure_config_typechecking
   run_checked "bundle exec tapioca init"
+  append_to_file "sorbet/tapioca/require.rb", <<~RUBY
+
+    require "action_policy/test_helper"
+    require "action_mailer"
+    require "mail"
+  RUBY
+  run_checked "bin/tapioca gem action_policy actionmailer mail"
   append_to_file "sorbet/config", <<~CONFIG
     --suppress-payload-superclass-redefinition-for=Net::IMAP::Literal
     --suppress-payload-superclass-redefinition-for=Net::IMAP::QuotedString
@@ -11054,6 +11259,7 @@ after_bundle do
   run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"
   configure_application_typechecking
   configure_sorbet_shims
+  remove_file "sorbet/rbi/todo.rbi"
   run_checked "bin/tapioca gems --verify"
   run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"
   run_checked "bin/tapioca check-shims"

@@ -47,7 +47,8 @@ class RailsTemplateContractTest < Minitest::Test
     manifest = generated_file_source("app/views/pwa/manifest.json.erb")
 
     assert_includes identity, "AVAILABLE_LOCALES = %i[ja en].freeze"
-    assert_includes identity, 'environment.fetch(configuration.canonical_origin_env)'
+    assert_includes identity, "canonical_origin_env = configuration[:canonical_origin_env]"
+    assert_includes identity, "environment.fetch(canonical_origin_env)"
     assert_includes identity, "canonical_origin must be an HTTP(S) origin without path"
     assert_includes identity, "def siwe_statement(locale: default_locale)"
     assert_includes identity, "URI.encode_uri_component(app_name)"
@@ -281,6 +282,7 @@ class RailsTemplateContractTest < Minitest::Test
     vapid = generated_file_source("app/services/vapid_configuration.rb")
     job = generated_file_source("app/jobs/push_notification_job.rb")
     notifier = generated_file_source("app/services/push_notifier.rb")
+    payload = generated_file_source("app/services/push_notification_payload.rb")
     controller = generated_file_source("app/controllers/push_subscriptions_controller.rb")
 
     assert_equal 'gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"', @source.lines.grep(/gem "web-push"/).first.strip
@@ -302,13 +304,18 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes job, 'rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription'
     %w[open_timeout read_timeout ssl_timeout].each { |timeout| assert_includes job, "#{timeout}: 5" }
     assert_includes notifier, 'path.start_with?("/") && !path.start_with?("//")'
-    assert_includes notifier, 'PushNotificationJob.perform_later(subscription.id, user.id, payload, ttl.to_i)'
+    assert_includes notifier, "PushNotificationJob.perform_later("
+    assert_includes notifier, "title,\n"
+    assert_includes payload, "class PushNotificationPayload < T::Struct"
+    assert_includes payload, "const :path, String"
+    assert_includes payload, "sig { params(_state: T.nilable(JSON::State)).returns(String) }"
+    assert_includes payload, "def to_json(_state = nil)"
     assert_includes controller, 'rate_limit to: 5, within: 1.minute, only: :test'
     assert_includes controller, 'head :accepted'
     assert_includes controller, 'status: :service_unavailable'
     assert_includes web_push, 'resource :push_subscription, only: %i[create destroy]'
     assert_includes web_push, 'resource :notification, only: :show'
-    assert_includes controller, 'data: { path: notification_path }'
+    assert_includes controller, '"web-push-test",'
     assert_includes web_push, 'params.expect(push_subscription: %i[browser_id endpoint p256dh auth])'
     assert_includes web_push, "PushSubscriptionsController.cache_store.clear"
     refute_includes web_push, "Rails.cache.clear"
@@ -607,6 +614,7 @@ class RailsTemplateContractTest < Minitest::Test
     roles = source_between("def configure_roles", "def configure_profile")
     view = generated_file_source("app/views/admin/users/index.html.erb")
     task = generated_file_source("lib/tasks/roles.rake")
+    service = generated_file_source("app/services/admin_role_grant.rb")
     local_seed = generated_file_source("db/seeds.local.rb.example")
 
     assert_class_tokens view, "card", "card-border"
@@ -625,13 +633,15 @@ class RailsTemplateContractTest < Minitest::Test
     refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, view)
 
     assert_includes task, 'task :grant_admin, [:user_id] => :environment'
-    assert_includes task, 'User.find(user_id)'
-    assert_includes task, 'user.grant_role!(:admin)'
+    assert_includes task, 'AdminRoleGrant.call(arguments[:user_id])'
+    refute_includes task, 'User.find'
+    assert_includes service, 'sig { params(user_id: T.nilable(T.any(String, Integer)), output: IO).returns(User) }'
+    assert_includes service, 'User.find(identifier)'
+    assert_includes service, 'user.grant_role!(:admin)'
     assert_includes roles, 'Rails.root.join("db/seeds.local.rb")'
-    assert_includes roles, 'load local_seeds if local_seeds.file?'
+    assert_includes roles, 'load local_seeds.to_s if local_seeds.file?'
     assert_includes roles, 'append_to_file ".gitignore", "\\n/db/seeds.local.rb\\n"'
-    assert_includes local_seed, 'ENV.fetch("ADMIN_USER_ID")'
-    assert_includes local_seed, 'admin.grant_role!(:admin)'
+    assert_includes local_seed, 'AdminRoleGrant.call(ENV.fetch("ADMIN_USER_ID"))'
     assert_includes roles, 'create_locale_pair("roles"'
     assert_includes roles, '"last_admin" => "The final administrator cannot delete their account"'
     assert_includes roles, 'I18n.t("admin.user_roles.create.notice")'
@@ -815,9 +825,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes profile_configuration, "attachment.variant :header_avatar, resize_to_fill: [40, 40]"
     assert_includes profile_configuration, "attachment.variant :profile_avatar, resize_to_fill: [64, 64]"
     assert_includes profile_configuration, "validates :avatar_upload, avatar_upload: true"
+    assert_includes profile_configuration, 'create_file "app/services/avatar_upload.rb"'
+    assert_includes profile_configuration, "class AvatarUpload < T::Struct"
+    assert_includes profile_configuration, "AvatarImagePolicy.validate!(AvatarUpload.coerce(upload))"
     assert_includes profile_configuration, "self.avatar = avatar_upload"
-    assert_includes profile_configuration, "MAX_BYTES = 5 * 1024 * 1024"
-    assert_includes profile_configuration, "MAX_DIMENSION = 4096"
+    assert_includes profile_configuration, "MAX_BYTES = T.let(5 * 1024 * 1024, Integer)"
+    assert_includes profile_configuration, 'MAX_DIMENSION = T.let(4096, Integer)'
     assert_includes profile_configuration, "Marcel::MimeType.for"
     assert_includes profile_configuration, 'Vips::Image.new_from_file(path, access: :sequential, fail_on: :truncated)'
     assert_includes avatar_helper_test, "profile.user_id.to_s"
@@ -1052,6 +1065,7 @@ class RailsTemplateContractTest < Minitest::Test
   def test_installs_sorbet_and_checks_types_and_rbi_files_in_the_regular_test_suite
     sorbet_test = generated_file_source("test/sorbet_test.rb")
     shim = generated_file_source("sorbet/rbi/shims/framework_bindings.rbi")
+    bundler_connection_pool_shim = generated_file_source("sorbet/rbi/shims/bundler_connection_pool.rbi")
     application_typechecking = source_between("def configure_application_typechecking", "def configure_config_typechecking")
     config_typechecking = source_between("def configure_config_typechecking", "def configure_sorbet_shims")
     shim_configuration = source_between("def configure_sorbet_shims", "def configure_database")
@@ -1068,6 +1082,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator after_bundle.index("configure_config_typechecking"),
       :<, after_bundle.index('run_checked "bundle exec tapioca init"')
     assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),
+      :<, after_bundle.index('append_to_file "sorbet/tapioca/require.rb"')
+    assert_includes after_bundle, 'require "action_mailer"'
+    assert_includes after_bundle, 'require "mail"'
+    assert_operator after_bundle.index('append_to_file "sorbet/tapioca/require.rb"'),
+      :<, after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer mail"')
+    assert_operator after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer mail"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"')
     assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),
       :<, after_bundle.index('append_to_file "sorbet/config"')
@@ -1082,6 +1102,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator after_bundle.index("configure_application_typechecking"),
       :<, after_bundle.index("configure_sorbet_shims")
     assert_operator after_bundle.index("configure_sorbet_shims"),
+      :<, after_bundle.index('remove_file "sorbet/rbi/todo.rbi"')
+    assert_operator after_bundle.index('remove_file "sorbet/rbi/todo.rbi"'),
       :<, after_bundle.index('run_checked "bin/tapioca gems --verify"')
     assert_operator after_bundle.index('run_checked "bin/tapioca gems --verify"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"')
@@ -1095,8 +1117,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes sorbet_test, '"bin/tapioca", "check-shims"'
     assert_includes sorbet_test, '"bundle", "exec", "srb", "tc"'
     assert_includes sorbet_test, "TYPED_RUBY_PATTERNS"
+    assert_includes sorbet_test, "STRICT_RUBY_PATHS"
     assert_includes sorbet_test, "APPLICATION_DSL_RBI_SOURCES"
-    assert_includes sorbet_test, 'assert_equal "# typed: true\\n"'
+    assert_includes sorbet_test, 'assert_match(/\\A# typed: (?:true|strict)\\n\\z/'
+    assert_includes sorbet_test, 'assert_equal "# typed: strict\\n"'
+    assert_includes sorbet_test, 'assert_not_predicate todo, :exist?'
     %w[
       api_credential
       application_mailer
@@ -1117,7 +1142,9 @@ class RailsTemplateContractTest < Minitest::Test
     %w[app/controllers app/helpers app/models app/policies app/services app/jobs app/mailers app/validators config lib test].each do |directory|
       assert_includes application_typechecking, "#{directory}/**/*.rb"
     end
-    assert_includes application_typechecking, 'prepend_to_file path, "# typed: true\\n"'
+    assert_includes application_typechecking, "db/seeds.rb"
+    assert_includes application_typechecking, 'strictness = strict_paths.include?(path) ? "strict" : "true"'
+    assert_includes application_typechecking, 'prepend_to_file path, "# typed: #{strictness}\\n"'
     assert_includes config_typechecking, 'prepend_to_file "config/puma.rb", "T.bind(self, Puma::DSL)'
     assert_includes config_typechecking, 'prepend_to_file "config/importmap.rb", "T.bind(self, Importmap::Map)'
     assert_includes config_typechecking, 'node.receiver.name == :CI'
@@ -1137,6 +1164,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes shim, "include Devise::Controllers::SignInOut"
     assert_includes shim, "module ApplicationHelper"
     assert_includes shim_configuration, "module AvatarHelper"
+    assert_includes shim_configuration, 'create_file "sorbet/rbi/shims/boring_avatars.rbi"'
+    assert_includes shim_configuration, "BoringAvatars::RailsAttributeValue"
+    assert_includes shim_configuration, 'create_file "sorbet/rbi/shims/bundler_connection_pool.rbi"'
+    assert_includes shim_configuration, 'VALUES.fetch("additional_login_methods").include?("siwe")'
+    assert_includes bundler_connection_pool_shim, "class ConnectionPool"
+    assert_includes bundler_connection_pool_shim, "module ForkTracker; end"
     assert_includes shim_configuration, "module Admin::MaintenanceTasksHelper"
     assert_includes @source, "T.bind(self, Admin::MaintenanceTasksController)"
     assert_includes @source, '"triggered_by_user_id" => T.must(authorization_user).id'
@@ -1164,7 +1197,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, "T::Sig::WithoutRuntime.sig { returns(T::Boolean) }"
     assert_includes challenge, ").returns([SiweChallenge, String])"
     assert_includes notifier, "user: T.nilable(User)"
-    assert_includes job, "payload: T::Hash[Symbol, T.untyped]"
+    assert_includes job, "tag: T.nilable(String)"
+    refute_includes job, "T.untyped"
+    assert_includes identity, "configuration: T::Hash[Symbol, T.nilable(String)]"
+    assert_includes identity, "environment: T::Hash[String, String]"
     assert_includes identity, "returns(T::Hash[Symbol, T.any(String, Integer)])"
   end
 
@@ -1574,6 +1610,6 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes @source, "wallet_address"
     refute_includes @source, "users.email"
     assert_includes @source, '"triggered_by_user_id" => T.must(authorization_user).id'
-    assert_includes @source, 'User.find(Integer(ENV.fetch("ADMIN_USER_ID")))'
+    assert_includes @source, 'AdminRoleGrant.call(ENV.fetch("ADMIN_USER_ID"))'
   end
 end

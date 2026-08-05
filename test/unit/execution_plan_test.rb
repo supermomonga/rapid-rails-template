@@ -65,7 +65,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_operator plan.steps.index("initialize_sorbet"), :<, plan.steps.index("prepare_test_database")
     assert_operator plan.steps.index("prepare_test_database"), :<, plan.steps.index("generate_sorbet_dsl")
     assert_operator plan.steps.index("generate_sorbet_dsl"), :<, plan.steps.index("typecheck_application")
-    assert_operator plan.steps.index("typecheck_application"), :<, plan.steps.index("verify_sorbet")
+    assert_operator plan.steps.index("typecheck_application"), :<, plan.steps.index("resolve_sorbet_todos")
+    assert_operator plan.steps.index("resolve_sorbet_todos"), :<, plan.steps.index("verify_sorbet")
     assert_operator plan.steps.index("generate_sorbet_dsl"), :<, plan.steps.index("verify_sorbet")
     assert_operator plan.steps.index("verify_sorbet"), :<, plan.steps.index("verify")
     assert_includes plan.artifacts, "package.json"
@@ -80,6 +81,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "sorbet/rbi/shims/framework_bindings.rbi"
     assert_includes plan.artifacts, "sorbet/rbi/**/*"
     assert_includes plan.artifacts, "test/sorbet_test.rb"
+    assert_includes plan.artifacts, "db/seeds.rb"
     assert_includes plan.artifacts, "test/annotations_test.rb"
     assert_includes plan.artifacts, "test/support/evidence_capture.rb"
     assert_includes plan.artifacts, "lib/tasks/evidence.rake"
@@ -93,6 +95,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/controllers/admin/users_controller.rb"
     assert_includes plan.artifacts, "app/controllers/admin/user_roles_controller.rb"
     assert_includes plan.artifacts, "app/views/admin/users/index.html.erb"
+    assert_includes plan.artifacts, "app/services/admin_role_grant.rb"
     assert_includes plan.artifacts, "lib/tasks/roles.rake"
     assert_includes plan.artifacts, "db/seeds.local.rb.example"
     assert_includes plan.artifacts, "config/locales/roles.ja.yml"
@@ -143,6 +146,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "test/models/active_storage_db_test.rb"
     assert_includes plan.artifacts, "docs/image_delivery.md"
     assert_includes plan.artifacts, "app/services/avatar_image_policy.rb"
+    assert_includes plan.artifacts, "app/services/avatar_upload.rb"
     assert_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
     assert_empty plan.production_requirements
     assert_equal plan.production_requirements, plan.to_h.fetch("production_requirements")
@@ -286,6 +290,7 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
     refute_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
     refute_includes plan.artifacts, "app/services/avatar_image_policy.rb"
+    refute_includes plan.artifacts, "app/services/avatar_upload.rb"
     refute_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
   end
 

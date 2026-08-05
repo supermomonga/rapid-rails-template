@@ -65,9 +65,9 @@ DeviseによるユーザーID＋パスワード認証は全構成で必須です
 
 `--job-operations=enable`はSolid Queue使用時だけ選択でき、Mission Control Jobs 1.1.0を`/admin/jobs`へmountします。画面は既存の管理者認証、Action Policy、admin navigationへ統合し、Mission Control独自のHTTP Basic認証は使用しません。完了ジョブはSolid Queue 1.6.0の標準設定により1日保持した後、毎時12分に公式APIでbatch削除されます。失敗ジョブはcleanup対象外で、管理者がretryまたはdiscardするまで保持されます。
 
-生成アプリケーションにはSorbetとTapiocaを常設し、`sorbet/config`、Gem RBI、Rails DSL RBI、`bin/tapioca`を生成します。controller、concern、helper、model、policy、service、job、mailer、validator、application-owned `lib`、config、testは生成時から`# typed: true`とします。migration、schemaはSorbet既定の`typed: false`に留めます。
+生成アプリケーションにはSorbetとTapiocaを常設し、`sorbet/config`、Gem RBI、Rails DSL RBI、`bin/tapioca`を生成します。controller、concern、helper、model、policy、service、job、mailer、validator、application-owned `lib`、config、test、`db/seeds.rb`は生成時から`# typed: true`以上とし、設定・通知・画像検証などの純粋なserviceは`# typed: strict`にします。migration、schemaはSorbet既定の`typed: false`に留めます。
 
-`sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`は生成物であり、手動編集しません。Rails DSL由来の型は`RAILS_ENV=test bin/tapioca dsl --environment=test`、Gem APIは`bin/tapioca gems`で更新し、アプリがRubyで定義するmethodは同じ`.rb`へinline `sig`を記述します。Tapiocaが表現できない限定的なframework wiringだけを`sorbet/rbi/shims/framework_bindings.rbi`で補います。通常の`bin/rails test`はRBIの鮮度、shimの重複、`bundle exec srb tc`を検証するため、`bin/ci`とGitHub Actionsでも同じ契約が適用されます。
+`sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`は生成物であり、手動編集しません。Rails DSL由来の型は`RAILS_ENV=test bin/tapioca dsl --environment=test`、Gem APIは`bin/tapioca gems`で更新し、アプリがRubyで定義するmethodは同じ`.rb`へinline `sig`を記述します。Tapiocaが表現できないframework wiringは`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIで不足する型aliasは`sorbet/rbi/shims/boring_avatars.rbi`、SIWEが依存するHTTPXのGem RBIから参照されるBundler同梱APIは`sorbet/rbi/shims/bundler_connection_pool.rbi`で補います。`sorbet/rbi/todo.rbi`は残さず、通常の`bin/rails test`がRBIの鮮度、shimの重複、`bundle exec srb tc`を検証するため、`bin/ci`とGitHub Actionsでも同じ契約が適用されます。
 
 リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、imgproxy、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 

@@ -496,11 +496,12 @@ append_to_file "db/seeds.rb", <<~'RUBY'
       user.password_confirmation = "password123"
     end
     user.save!
-    user.profile.update!(screen_name: login_id, display_name: format("Sample User %02d", number))
+    profile = T.must(user.profile)
+    profile.update!(screen_name: login_id, display_name: format("Sample User %02d", number))
 
     50.times do |article_index|
       article_number = article_index + 1
-      article = user.profile.articles.find_or_initialize_by(
+      article = profile.articles.find_or_initialize_by(
         title: format("Sample Article %02d-%02d", number, article_number)
       )
       article.body = format("This is article %02d by Sample User %02d.", article_number, number)

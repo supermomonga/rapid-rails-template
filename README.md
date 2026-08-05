@@ -57,7 +57,7 @@ mise run evidence-verify
 
 `--profile-features`は`screen_name`、`display_name`、`avatar`をカンマ区切りで指定します。既定では3機能すべてを選択し、`--profile-features=`と空値を指定するとProfile modelとプロフィール管理画面を生成しません。対話時はGumの複数選択を使用します。`screen_name`と`display_name`は選択時に必須かつ一意となり、User作成時にHaikunatorで自動生成されます。両方を選択した場合、`display_name`には自動生成した`screen_name`のCamelCaseを設定します。`avatar`を選択した場合、画像未設定時はUser IDから決定的に生成したBoring Avatarを表示し、設定済み画像はプロフィール編集画面から削除してBoring Avatarへ戻せます。生成seedを保存する追加columnは作りません。
 
-DeviseによるユーザーID＋パスワード認証は全構成で必須です。`--additional-login-methods`は既存Userへ後付けできる追加ログイン方法をカンマ区切りで指定し、現在は`siwe`だけを選択できます。既定値および`--additional-login-methods=`は追加方式なしです。SIWEを選択しても会員登録はユーザーID＋パスワードで行い、ログイン後の「ログイン方法」画面で1つ以上の名前付きEOA walletを追加します。アプリ内の関連・認可・監査には`users.id`を使用し、`login_id`やwallet addressを内部識別子にしません。
+DeviseによるユーザーID＋パスワード認証は全構成で必須です。`--additional-login-methods`は既存Userへ後付けできる追加ログイン方法をカンマ区切りで指定し、現在は`siwe`だけを選択できます。既定値および`--additional-login-methods=`は追加方式なしです。SIWEを選択しても会員登録はユーザーID＋パスワードで行い、ログイン後の「アカウント設定」内にある「EVMウォレットログイン」タブからEOA walletを追加します。登録名は`Wallet #<現在の登録数+1>`として自動設定され、編集画面で変更できます。解除は編集とは別画面で、現在のパスワードを確認して実行します。アプリ内の関連・認可・監査には`users.id`を使用し、`login_id`やwallet addressを内部識別子にしません。
 
 `--image-delivery`は`rails`または`imgproxy`を指定し、既定値は`rails`です。Rails配信はActive Storageのnamed variant／representation route、imgproxy配信は署名済みURLを使用します。どちらもActive Storage DBを画像storageのsource of truthとし、実行時に相互fallbackしません。imgproxyではRailsとは別のserviceと環境変数が必要です。生成アプリの`docs/image_delivery.md`にnamed variant、upload制約、起動方法、production要件を記載します。
 

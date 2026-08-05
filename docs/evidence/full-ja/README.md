@@ -1,7 +1,7 @@
 # full / ja / imgproxy エビデンス
 
-- Source fingerprint: `ac9900283776dceb9f021b14ea765098a600ec4e6a0de5249e00eee76190ed4a`
-- Base commit: `a80da703f07b26e4af80691eca1a703e43f966d3`
+- Source fingerprint: `6d575595f16acf6999b692f75893f113f5a2e65a29a3f98a9e7367407560b750`
+- Base commit: `3af706aef0a79e46f086aaab2d00b0f7df142f9a`
 - Locale: `ja`
 - Image delivery: `imgproxy`
 - Additional login methods: `siwe`
@@ -236,18 +236,30 @@
 |![Ethereumでログイン (desktop)](siwe-login-option--desktop.png)|![Ethereumでログイン (mobile)](siwe-login-option--mobile.png)|
 |![Ethereumでログイン (desktop)](siwe-login-existing-user--desktop.png)|![Ethereumでログイン (mobile)](siwe-login-existing-user--mobile.png)|
 
-## ログイン方法
+## EVMウォレットログイン
 
 |Desktop|Mobile|
 |---|---|
-|![ログイン方法 (desktop)](siwe-identities-empty--desktop.png)|![ログイン方法 (mobile)](siwe-identities-empty--mobile.png)|
-|![ログイン方法 (desktop)](siwe-identities-multiple--desktop.png)|![ログイン方法 (mobile)](siwe-identities-multiple--mobile.png)|
+|![EVMウォレットログイン (desktop)](siwe-identities-empty--desktop.png)|![EVMウォレットログイン (mobile)](siwe-identities-empty--mobile.png)|
+|![EVMウォレットログイン (desktop)](siwe-identities-multiple--desktop.png)|![EVMウォレットログイン (mobile)](siwe-identities-multiple--mobile.png)|
 
-## ウォレットを追加
+## EVMウォレットを登録
 
 |Desktop|Mobile|
 |---|---|
-|![ウォレットを追加 (desktop)](siwe-identity-add--desktop.png)|![ウォレットを追加 (mobile)](siwe-identity-add--mobile.png)|
+|![EVMウォレットを登録 (desktop)](siwe-identity-new--desktop.png)|![EVMウォレットを登録 (mobile)](siwe-identity-new--mobile.png)|
+
+## EVMウォレットログインを編集
+
+|Desktop|Mobile|
+|---|---|
+|![EVMウォレットログインを編集 (desktop)](siwe-identity-edit--desktop.png)|![EVMウォレットログインを編集 (mobile)](siwe-identity-edit--mobile.png)|
+
+## EVMウォレットログインを解除
+
+|Desktop|Mobile|
+|---|---|
+|![EVMウォレットログインを解除 (desktop)](siwe-identity-unlink--desktop.png)|![EVMウォレットログインを解除 (mobile)](siwe-identity-unlink--mobile.png)|
 
 ## ウォレット名を更新しました。
 

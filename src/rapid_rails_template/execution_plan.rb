@@ -109,6 +109,7 @@ module RapidRailsTemplate
         config/initializers/application_identity.rb
         app/controllers/concerns/localized_request.rb
         app/helpers/application_helper.rb
+        test/helpers/application_helper_test.rb
         config/locales/application.ja.yml
         config/locales/application.en.yml
         test/lib/application_identity_test.rb
@@ -179,6 +180,7 @@ module RapidRailsTemplate
         app/views/layouts/application.html.erb
         app/views/layouts/authentication.html.erb
         app/views/layouts/_with_menu.html.erb
+        app/views/layouts/_account_shell.html.erb
         app/views/layouts/account.html.erb
         app/views/layouts/admin.html.erb
         app/views/shared/_header.html.erb
@@ -265,6 +267,10 @@ module RapidRailsTemplate
           app/controllers/account/siwe_identities_controller.rb
           app/javascript/controllers/siwe_sign_in_controller.js
           app/views/account/siwe_identities/index.html.erb
+          app/views/account/siwe_identities/new.html.erb
+          app/views/account/siwe_identities/show.html.erb
+          app/views/account/siwe_identities/edit.html.erb
+          app/views/layouts/account_settings.html.erb
           config/initializers/devise_siweable.rb
           config/locales/siwe.ja.yml
           config/locales/siwe.en.yml

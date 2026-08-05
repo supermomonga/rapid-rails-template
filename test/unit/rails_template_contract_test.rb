@@ -57,12 +57,43 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "Rails.configuration.x.application_identity"
     assert_includes helper, "Rails.application.routes.url_helpers"
     assert_equal 1, helper.scan("def application_routes").size
+    assert_includes helper, "def with_tab(tabs:, size: nil, &block)"
+    assert_includes helper, "request.path.start_with?(path)"
+    assert_includes helper, "predicate.call"
+    assert_includes helper, "tab_content = capture(&block)"
+    assert_includes helper, '"z-10": active'
+    assert_includes helper, 'class: class_names("tabs tabs-lift min-w-max"'
+    assert_includes helper, 'class: "tab-content sticky [contain:inline-size] bg-base-100 border-base-300 p-3"'
+    assert_includes helper, 'tag.div(tablist, class: "overflow-x-auto")'
     assert_includes layout, '<html lang="<%= I18n.locale %>"'
     assert_includes layout, 'property="og:site_name" content="<%= application_identity.app_name %>"'
     assert_includes header, "link_to application_identity.app_name, application_routes.root_path"
     assert_includes manifest, "name: identity.app_name"
     assert_includes manifest, "lang: identity.default_locale.to_s"
     refute_match(/I18n\.t\([^)]*locale:\s*:ja/m, @source)
+  end
+
+  def test_requires_the_shared_tab_helper_for_tabbed_content
+    helper = generated_file_source("app/helpers/application_helper.rb")
+    helper_test = generated_file_source("test/helpers/application_helper_test.rb")
+    account_tabs = generated_file_source("app/views/layouts/account_settings.html.erb")
+    job_tabs = generated_file_source("app/views/layouts/mission_control/jobs/_navigation.html.erb")
+    agents = File.binread(File.expand_path("../../AGENTS.md", __dir__))
+
+    assert_includes helper, "longest_path_length"
+    assert_includes helper, "active tabs must have one longest path"
+    assert_includes helper_test, "selects the longest matching path"
+    assert_includes helper_test, "uses an explicit lambda instead of path matching"
+    assert_includes helper_test, "adds an optional daisyUI size modifier"
+    assert_includes helper_test, '.overflow-x-auto > .tabs.tabs-lift.min-w-max'
+    assert_includes helper_test, 'assert_includes fragment.at_css(".tab-active")["class"].split, "z-10"'
+    assert_includes helper_test, 'assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "sticky"'
+    assert_includes helper_test, 'assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "[contain:inline-size]"'
+    assert_includes account_tabs, "with_tab(tabs:"
+    assert_includes job_tabs, "with_tab(tabs:, size: :xs)"
+    refute_includes account_tabs, "tab-content"
+    refute_includes job_tabs, "tab-content"
+    assert_includes agents, "ApplicationHelper#with_tab"
   end
 
   def test_defines_one_complete_default_light_theme
@@ -93,15 +124,17 @@ class RailsTemplateContractTest < Minitest::Test
   def test_default_views_use_daisyui_components_and_semantic_colors
     component_expectations = {
       "app/views/layouts/authentication.html.erb" => %w[hero hero-content card card-body],
-      "app/views/layouts/account.html.erb" => %w[menu menu-title],
+      "app/views/layouts/_account_shell.html.erb" => %w[menu menu-title],
       "app/views/layouts/admin.html.erb" => %w[menu menu-title],
-      "app/views/layouts/mission_control/jobs/_navigation.html.erb" => %w[tabs tabs-lift tab-content],
       "app/views/shared/_header.html.erb" => %w[navbar dropdown menu btn],
       "app/views/shared/_flash.html.erb" => %w[alert],
       "app/views/shared/_footer.html.erb" => %w[footer footer-vertical footer-title link link-hover],
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
       "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
-      "app/views/account/siwe_identities/index.html.erb" => %w[card card-body card-title list list-row fieldset input btn alert],
+      "app/views/account/siwe_identities/index.html.erb" => %w[list list-row btn alert],
+      "app/views/account/siwe_identities/new.html.erb" => %w[btn alert],
+      "app/views/account/siwe_identities/show.html.erb" => %w[fieldset fieldset-legend input btn],
+      "app/views/account/siwe_identities/edit.html.erb" => %w[fieldset fieldset-legend input btn alert],
       "app/views/notifications/show.html.erb" => %w[card card-body card-title card-actions toggle btn alert],
       "app/views/admin/users/index.html.erb" => %w[card card-body table badge btn join join-item],
       "app/views/pages/_page.html.erb" => %w[card card-body],
@@ -132,6 +165,11 @@ class RailsTemplateContractTest < Minitest::Test
     end
 
     views = ([generated_file_source("app/views/layouts/application.html.erb")] + view_sources.values).join("\n")
+    account_settings_layout = generated_file_source("app/views/layouts/account_settings.html.erb")
+    assert_includes account_settings_layout, "with_tab(tabs:"
+    assert_includes account_settings_layout, "request.path == edit_user_registration_path"
+    assert_includes account_settings_layout, "path: account_siwe_identities_path"
+    refute_includes account_settings_layout, "tab-content"
     profile_configuration = source_between("def configure_profile", "def configure_api")
     %w[alert fieldset fieldset-legend input file-input card card-body list list-row avatar btn].each do |component|
       assert class_attributes(profile_configuration).any? { |classes| classes.include?(component) }, "profile: #{component}"
@@ -324,19 +362,19 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes layout, "content_for :title"
     assert_operator layout.index("admin_content"), :<, layout.index('render layout: "layouts/mission_control/jobs/navigation"')
     assert_equal 1, layout.scan('render layout: "layouts/mission_control/jobs/navigation"').size
-    assert_includes navigation, 'class="@container overflow-x-auto"'
-    assert_includes navigation, 'class="tabs tabs-lift min-w-max"'
-    assert_includes navigation, 'class_names("tab z-1", "tab-active": key == current_section)'
-    assert_includes navigation, '"tab-active": key == current_section'
-    assert_includes navigation, 'role="tabpanel"'
-    assert_includes navigation, 'class="sticky start-0 tab-content max-w-[100cqw] border-base-300 bg-base-100 p-3"'
-    assert_includes navigation, '<%= yield if key == current_section %>'
+    refute_includes navigation, '<nav aria-label="Job operations sections" class="overflow-x-auto">'
+    assert_includes navigation, "with_tab(tabs:, size: :xs)"
+    assert_includes navigation, "is_active: -> { key == current_section }"
+    assert_includes navigation, '<%= yield %>'
+    refute_includes navigation, "tab-content"
+    assert_includes generated_file_source("app/helpers/application_helper.rb"), "min-w-max"
+    assert_includes generated_file_source("app/helpers/application_helper.rb"), "sticky"
+    refute_includes navigation, "max-w-[100cqw]"
     refute_includes navigation, "grid-cols-[repeat(8,max-content)]"
     refute_includes navigation, "grid-rows-[auto_auto]"
     refute_includes navigation, "h-auto"
     refute_includes navigation, "row-start-2"
     refute_includes navigation, "col-[1/-1]"
-    assert_operator navigation.index('"tab-active": key == current_section'), :<, navigation.index('role="tabpanel"')
     assert_includes application_selection, 'class="card card-border border-base-300 bg-base-100"'
     assert_includes application_selection, '<% if @application.servers.many? || selectable_applications.any? %>'
     assert_includes application_selection, 'class="card-body flex-row flex-wrap items-center justify-end gap-4 py-4"'
@@ -367,6 +405,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes application_layout, "content_for?(:javascript_importmap)"
     assert_includes controller_test, "routes every engine action through the authorized base controller"
     assert_includes controller_test, "controller._process_action_callbacks.map(&:filter)"
+    assert_includes controller_test, "keeps the matching section active on queue, job, and worker details"
+    assert_includes controller_test, "assert_active_job_section"
     assert_includes controller_test, "allows admins to retry a failed Solid Queue job"
     assert_includes controller_test, "application_job_retry_path"
     assert_includes controller_test, "assert SolidQueue::ReadyExecution.exists?"
@@ -674,6 +714,7 @@ class RailsTemplateContractTest < Minitest::Test
 
     assert_includes @source, 'post "#{mapping.path_names[:sign_in]}/siwe/challenge"'
     assert_includes @source, 'post "#{mapping.path_names[:sign_in]}/siwe"'
+    assert_includes @source, "resources :siwe_identities, only: %i[index show new create edit update destroy]"
     assert_includes @source, "post :challenge, on: :collection"
     [sessions, identities].each do |controller|
       assert_includes controller, "rate_limit to: 10, within: 1.minute"
@@ -686,6 +727,9 @@ class RailsTemplateContractTest < Minitest::Test
     profile = generated_file_source("app/views/accounts/show.html.erb")
     settings = generated_file_source("app/views/devise/registrations/edit.html.erb")
     identities = generated_file_source("app/controllers/account/siwe_identities_controller.rb")
+    identity_index = generated_file_source("app/views/account/siwe_identities/index.html.erb")
+    identity_edit = generated_file_source("app/views/account/siwe_identities/edit.html.erb")
+    identity_show = generated_file_source("app/views/account/siwe_identities/show.html.erb")
 
     refute_includes profile, "login_id"
     refute_includes profile, ">ID<"
@@ -693,6 +737,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes settings, 'method: :delete, class: "btn btn-error btn-rapid"'
     assert_includes identities, "current_user.siwe_identities.find(params.expect(:id))"
     assert_includes identities, "current_user.valid_password?"
+    assert_includes identity_index, 'class="list gap-3"'
+    refute_includes identity_edit, "current_password"
+    refute_includes identity_edit, "method: :delete"
+    assert_includes identity_show, "current_password"
+    assert_includes identity_show, "method: :delete"
     assert_includes @source, 'I18n.t("accounts.destroy.last_admin")'
   end
 
@@ -1030,8 +1079,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"navigation-regular-user"'
     assert_includes evidence, 'viewport_size = VIEWPORTS.fetch(viewport)'
     assert_includes evidence, "def verify_job_operations_geometry"
-    assert_includes evidence, 'find("#job-operations-tab-failed_jobs").click'
-    assert_includes evidence, 'geometry.fetch("everyTabOwnsTabContent")'
+    assert_includes evidence, "text: /^Failed jobs/"
+    assert_includes evidence, 'geometry.fetch("tabContentCount")'
     assert_includes evidence, 'failed_geometry.fetch("tabContentRadius")'
     assert_includes evidence, "REGULAR_PRIVATE_KEY"
     assert_includes evidence, 'visit host_routes.admin_jobs_path'
@@ -1065,7 +1114,7 @@ class RailsTemplateContractTest < Minitest::Test
     header = generated_file_source("app/views/shared/_header.html.erb")
     footer = generated_file_source("app/views/shared/_footer.html.erb")
     with_menu_layout = generated_file_source("app/views/layouts/_with_menu.html.erb")
-    account_layout = generated_file_source("app/views/layouts/account.html.erb")
+    account_layout = generated_file_source("app/views/layouts/_account_shell.html.erb")
     admin_layout = generated_file_source("app/views/layouts/admin.html.erb")
     admin_navigation = source_between(
       "  admin_navigation_items = <<~ERB",
@@ -1130,15 +1179,16 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 6, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 6, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, "profile_path"
     assert_includes account_navigation, 't("navigation.dashboard")'
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
     assert_includes account_navigation, 'link_to application_routes.notification_path'
     assert_includes account_navigation, 't("navigation.notifications")'
-    assert_includes account_navigation, "account_siwe_identities_path"
+    assert_includes account_navigation, 'controller_path == "account/siwe_identities"'
+    refute_includes account_navigation, "account_siwe_identities_path"
     refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
     refute_includes account_navigation, 'allowed_to?(:index?, User)'
     refute_includes account_navigation, 'admin_users_path'
@@ -1229,6 +1279,9 @@ class RailsTemplateContractTest < Minitest::Test
     with_menu_views = %w[
       app/views/accounts/show.html.erb
       app/views/account/siwe_identities/index.html.erb
+      app/views/account/siwe_identities/new.html.erb
+      app/views/account/siwe_identities/show.html.erb
+      app/views/account/siwe_identities/edit.html.erb
       app/views/admin/users/index.html.erb
       app/views/admin/pages/index.html.erb
       app/views/admin/pages/edit.html.erb
@@ -1329,9 +1382,9 @@ class RailsTemplateContractTest < Minitest::Test
     controller = generated_file_source("app/controllers/account/siwe_identities_controller.rb")
     initializer = generated_file_source("config/initializers/devise_siweable.rb")
 
-    assert_includes identity, "before_validation :set_name_key"
     assert_includes identity, "length: { maximum: 50 }"
-    assert_includes identity, "uniqueness: { scope: :user_id"
+    refute_includes identity, "name_key"
+    refute_includes identity, "uniqueness: { scope: :user_id"
     assert_includes identity, "errors.add(:address, :readonly)"
     assert_includes challenge, "TTL = 5.minutes"
     assert_includes challenge, "SecureRandom.urlsafe_base64(32)"
@@ -1341,6 +1394,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes challenge, "update_all(consumed_at: Time.current)"
     assert_includes controller, "current_user.siwe_identities.find(params.expect(:id))"
     assert_includes controller, "current_user.valid_password?"
+    assert_includes controller, 'name: "Wallet ##{current_user.siwe_identities.count + 1}"'
+    refute_includes controller, 'params.require(:name)'
+    challenge_action = controller.match(/def challenge(?<body>.*?)def create/m)[:body]
+    refute_includes challenge_action, "valid_password?"
+    refute_includes challenge_action, "current_password"
     assert_includes initializer, "%i[challenge_token signature current_password]"
     refute_includes challenge, "request.host"
     refute_includes challenge, "params"

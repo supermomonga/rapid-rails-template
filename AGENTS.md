@@ -31,6 +31,13 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 
 - Viewを実装するときは、意図に合うdaisyUI component、part、modifierが存在するかを先に確認し、存在する場合はそれらを使用してください。daisyUI componentで表現できるUIをTailwind CSS utilityだけで再実装しません。
 - daisyUI componentの内部寸法とpaddingは既定値を優先し、`menu` itemなどへ`min-h-*`や`p-*`を追加しません。サイズ変更が必要な場合はTailwind CSS utilityより先にdaisyUIの公式size modifierまたはtheme tokenを使用し、既定値を上書きする理由を`docs/`とテストへ残してください。
+- タブ付きコンテンツは生成アプリの`ApplicationHelper#with_tab`を使用し、Viewやlayoutで`tab`と`tab-content`を直接組み立てません。active判定は各tabの`path`によるprefix判定、またはoptionalな`is_active` lambdaで指定し、block本文はhelperがactive tab直後へ配置します。横スクロール用の`overflow-x-auto`、1段表示用の`min-w-max`、tabpanel用の`sticky`もhelperが一括して生成し、個別Viewでは重複させません。tabpanelを伴わないtab形式selectorは対象外です。
+- `tabs-lift`と`tab-content`を組み合わせる画面では、DOM上の隣接だけでなく、証跡画像上でもactive tabとtabpanelが視覚的に接続していることを確認します。active tabとtabpanelの間に別行のtabが入る折り返し、孤立したtab、borderの分断・重複、tabpanelの上borderがactive tabの下へ透ける表示は不合格です。全体画像だけで判断せず、共有境界を等倍以上で確認し、computed border幅に加えてstacking order上もactive tabが共有境界を覆うことを検証します。
+- desktop証跡では、同一tablist内の全tabが同じ行に配置され、active tabの下端とtabpanelの上端が接続していることをcomputed geometryで検証します。
+- 参考画像や明示された画面要件と異なる表示を、daisyUIの既定動作やresponsive時の一般的な挙動であることを理由に許容しません。
+- visual assertionが失敗した場合、現在の出力を通すためにassertionを弱めたり削除したりしません。要件を変更する必要がある場合は、先にユーザーの承認を得てください。
+- `evidence:update`後は変更対象のdesktop・mobile画像を実際に開き、タブの段組み、active tabとtabpanelの接続、border、overflowを個別に確認してから「目視確認済み」と報告してください。
+- 狭幅でtabを1段に維持できない場合、折り返しを暗黙に許容せず、horizontal navigationや別のresponsive navigationを設計してください。
 - アイコンを使用する場合は、原則として[Heroicons](https://heroicons.com/)のSVGアイコンを利用してください。装飾目的のSVGには`aria-hidden="true"`を設定し、linkやbuttonの意味は隣接するtextまたはaccessible nameで伝えてください。
 
 responsive navigationを変更した場合は、DOM構造のテストだけで完了とせず、組み込みブラウザで最低限、390px幅の未ログインdropdown展開、390px幅のログイン後dropdown展開、390px幅のaccount menu active表示を目視します。さらに320・640・960pxでviewport内へ収まること、961pxでdesktop navigationへ切り替わること、横スクロールがないことをcomputed geometryで確認してください。

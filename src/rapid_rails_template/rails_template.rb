@@ -274,7 +274,7 @@ def configure_application_identity
       "meta" => { "description" => "%{app_name}のWebアプリケーションです。" },
       "navigation" => {
         "main" => "メインナビゲーション", "account_menu" => "アカウントメニュー", "admin_menu" => "管理メニュー", "open_account_menu" => "アカウントメニューを開く",
-        "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "login_methods" => "ログイン方法", "notifications" => "通知",
+        "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "notifications" => "通知",
         "api_credentials" => "APIキーの管理", "users" => "ユーザー管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
         "admin" => "管理画面", "sign_in" => "ログイン", "sign_up" => "アカウント作成", "sign_out" => "ログアウト"
       },
@@ -296,7 +296,7 @@ def configure_application_identity
       "meta" => { "description" => "The web application for %{app_name}." },
       "navigation" => {
         "main" => "Main navigation", "account_menu" => "Account menu", "admin_menu" => "Administration menu", "open_account_menu" => "Open account menu",
-        "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "login_methods" => "Login methods", "notifications" => "Notifications",
+        "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "notifications" => "Notifications",
         "api_credentials" => "API credentials", "users" => "Users", "pages" => "Pages", "faqs" => "FAQs",
         "admin" => "Administration", "sign_in" => "Sign in", "sign_up" => "Create account", "sign_out" => "Sign out"
       },
@@ -1277,13 +1277,11 @@ def install_siwe
         create_table :siwe_identities do |t|
           t.references :user, null: false, foreign_key: { on_delete: :cascade }
           t.string :name, null: false
-          t.string :name_key, null: false
           t.string :address, null: false
           t.timestamps null: false
         end
 
         add_index :siwe_identities, :address, unique: true
-        add_index :siwe_identities, %i[user_id name_key], unique: true
       end
     end
   RUBY
@@ -1373,10 +1371,7 @@ def install_siwe
       normalizes :name, with: ->(name) { name.to_s.strip }
       normalizes :address, with: ->(address) { address.to_s.downcase }
 
-      before_validation :set_name_key
-
       validates :name, presence: true, length: { maximum: 50 }
-      validates :name_key, presence: true, uniqueness: { scope: :user_id, case_sensitive: true }
       validates :address,
         presence: true,
         format: { with: /\A0x[0-9a-f]{40}\z/ },
@@ -1384,10 +1379,6 @@ def install_siwe
       validate :address_does_not_change, on: :update
 
       private
-        def set_name_key
-          self.name_key = name.to_s.downcase
-        end
-
         def address_does_not_change
           errors.add(:address, :readonly) if will_save_change_to_address?
         end
@@ -1586,8 +1577,9 @@ def install_siwe
   create_file "app/controllers/account/siwe_identities_controller.rb", <<~'RUBY', force: true
     module Account
       class SiweIdentitiesController < ApplicationController
-        layout "account"
+        layout "account_settings"
         before_action :authenticate_user!
+        before_action :set_siwe_identity, only: %i[show edit update destroy]
         after_action :prevent_challenge_caching, only: %i[challenge create]
         rate_limit to: 10, within: 1.minute, only: %i[challenge create],
           by: -> { "#{request.remote_ip}:#{session_binding}" }, with: -> { head :too_many_requests }
@@ -1596,9 +1588,13 @@ def install_siwe
           @siwe_identities = current_user.siwe_identities.order(:created_at)
         end
 
-        def challenge
-          return head :unauthorized unless current_user.valid_password?(params.require(:current_password))
+        def new; end
 
+        def show; end
+
+        def edit; end
+
+        def challenge
           record, raw_token = SiweChallenge.issue!(
             purpose: "link",
             user: current_user,
@@ -1622,7 +1618,10 @@ def install_siwe
               session_binding:
             )
             challenge.consume!
-            identity = current_user.siwe_identities.create!(name: params.require(:name), address: message.address)
+            identity = current_user.siwe_identities.create!(
+              name: "Wallet ##{current_user.siwe_identities.count + 1}",
+              address: message.address
+            )
           end
           render json: { redirect_url: account_siwe_identities_path, id: identity.id }, status: :created
         rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
@@ -1631,23 +1630,29 @@ def install_siwe
         end
 
         def update
-          identity = current_user.siwe_identities.find(params.expect(:id))
-          if identity.update(name: params.require(:name))
+          if @siwe_identity.update(params.expect(siwe_identity: [:name]))
             redirect_to account_siwe_identities_path, notice: t("siwe.identities.updated")
           else
-            redirect_to account_siwe_identities_path, alert: identity.errors.full_messages.to_sentence,
-              status: :see_other
+            render :edit, status: :unprocessable_content
           end
         end
 
         def destroy
-          return head :unauthorized unless current_user.valid_password?(params.require(:current_password))
+          unless current_user.valid_password?(params.require(:current_password))
+            redirect_to account_siwe_identity_path(@siwe_identity),
+              alert: t("siwe.identities.password_invalid"), status: :see_other
+            return
+          end
 
-          current_user.siwe_identities.find(params.expect(:id)).destroy!
+          @siwe_identity.destroy!
           redirect_to account_siwe_identities_path, notice: t("siwe.identities.deleted"), status: :see_other
         end
 
         private
+          def set_siwe_identity
+            @siwe_identity = current_user.siwe_identities.find(params.expect(:id))
+          end
+
           def session_binding
             session[:siwe_binding] ||= SecureRandom.hex(32)
           end
@@ -1663,7 +1668,7 @@ def install_siwe
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
-      static targets = ["error", "name", "currentPassword"]
+      static targets = ["error"]
       static values = {
         mode: String,
         challengeUrl: String,
@@ -1681,7 +1686,6 @@ def install_siwe
           const [address] = await window.ethereum.request({ method: "eth_requestAccounts" })
           const chainIdHex = await window.ethereum.request({ method: "eth_chainId" })
           const challengePayload = { address, chain_id: Number.parseInt(chainIdHex, 16) }
-          if (this.modeValue === "link") challengePayload.current_password = this.currentPasswordTarget.value
 
           const challengeResponse = await this.post(this.challengeUrlValue, challengePayload)
           if (!challengeResponse.ok) throw new Error(this.challengeErrorValue)
@@ -1691,7 +1695,6 @@ def install_siwe
             params: [challenge.message, address]
           })
           const verifyPayload = { challenge_token: challenge.challenge_token, signature }
-          if (this.modeValue === "link") verifyPayload.name = this.nameTarget.value
 
           const verificationResponse = await this.post(this.verifyUrlValue, verifyPayload)
           if (!verificationResponse.ok) throw new Error(this.verificationErrorValue)
@@ -1725,61 +1728,92 @@ def install_siwe
   create_file "app/views/account/siwe_identities/index.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("siwe.identities.title") %>
 
-    <div class="space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
-        <div class="card-body">
+    <section class="space-y-5">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p class="text-base-content/70"><%= t("siwe.identities.description") %></p>
-
-          <% if @siwe_identities.any? %>
-            <ul class="list">
-              <% @siwe_identities.each do |identity| %>
-                <li class="list-row border-base-300 border">
-                  <div class="list-col-grow space-y-3">
-                    <p class="font-semibold"><%= identity.name %></p>
-                    <p class="break-all font-mono text-sm text-base-content/70"><%= identity.address %></p>
-                    <%= form_with url: account_siwe_identity_path(identity), method: :patch, class: "flex flex-col gap-3 sm:flex-row" do |form| %>
-                      <%= form.text_field :name, value: identity.name, required: true, maxlength: 50, class: "input input-rapid w-full", aria: { label: t("siwe.identities.name") } %>
-                      <%= form.submit t("common.update"), class: "btn btn-rapid" %>
-                    <% end %>
-                    <%= form_with url: account_siwe_identity_path(identity), method: :delete, class: "flex flex-col gap-3 sm:flex-row" do |form| %>
-                      <%= form.password_field :current_password, required: true, autocomplete: "current-password", class: "input input-rapid w-full", placeholder: t("siwe.identities.current_password") %>
-                      <%= form.submit t("siwe.identities.delete"), class: "btn btn-error btn-rapid", data: { turbo_confirm: t("siwe.identities.delete_confirm") } %>
-                    <% end %>
-                  </div>
-                </li>
-              <% end %>
-            </ul>
-          <% else %>
-            <div class="alert" role="status"><span><%= t("siwe.identities.empty") %></span></div>
-          <% end %>
+          <%= link_to t("siwe.identities.add"), new_account_siwe_identity_path, class: "btn btn-primary btn-rapid" %>
         </div>
-      </section>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none"
-               data-controller="siwe-sign-in"
-               data-siwe-sign-in-mode-value="link"
-               data-siwe-sign-in-challenge-url-value="<%= challenge_account_siwe_identities_path %>"
-               data-siwe-sign-in-verify-url-value="<%= account_siwe_identities_path %>"
-               data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
-               data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
-               data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-        <div class="card-body">
-          <h2 class="card-title leading-[1.5]"><%= t("siwe.identities.add") %></h2>
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend"><%= t("siwe.identities.name") %></legend>
-            <input type="text" required maxlength="50" class="input input-rapid w-full" data-siwe-sign-in-target="name">
-          </fieldset>
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend"><%= t("siwe.identities.current_password") %></legend>
-            <input type="password" required autocomplete="current-password" class="input input-rapid w-full" data-siwe-sign-in-target="currentPassword">
-          </fieldset>
-          <div class="alert alert-error hidden" role="alert" data-siwe-sign-in-target="error"></div>
-          <div class="card-actions justify-end">
-            <button type="button" class="btn btn-primary btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.connect") %></button>
-          </div>
+        <% if @siwe_identities.any? %>
+          <ul class="list gap-3">
+            <% @siwe_identities.each do |identity| %>
+              <li class="list-row border-base-300 border">
+                <div class="list-col-grow">
+                  <p class="font-semibold"><%= identity.name %></p>
+                  <p class="break-all font-mono text-sm text-base-content/70"><%= identity.address %></p>
+                </div>
+                <div class="flex flex-wrap justify-end gap-2">
+                  <%= link_to t("common.edit"), edit_account_siwe_identity_path(identity), class: "btn btn-rapid" %>
+                  <%= link_to t("siwe.identities.delete"), account_siwe_identity_path(identity), class: "btn btn-error btn-rapid" %>
+                </div>
+              </li>
+            <% end %>
+          </ul>
+        <% else %>
+          <div class="alert" role="status"><span><%= t("siwe.identities.empty") %></span></div>
+        <% end %>
+    </section>
+  ERB
+
+  create_file "app/views/account/siwe_identities/new.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("siwe.identities.new_title") %>
+
+    <section class="space-y-5"
+             data-controller="siwe-sign-in"
+             data-siwe-sign-in-mode-value="link"
+             data-siwe-sign-in-challenge-url-value="<%= challenge_account_siwe_identities_path %>"
+             data-siwe-sign-in-verify-url-value="<%= account_siwe_identities_path %>"
+             data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
+             data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
+             data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+      <p class="text-base-content/70"><%= t("siwe.identities.new_description") %></p>
+      <div class="alert alert-error hidden" role="alert" data-siwe-sign-in-target="error"></div>
+      <div class="flex justify-end gap-2">
+        <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
+        <button type="button" class="btn btn-primary btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.connect") %></button>
+      </div>
+    </section>
+  ERB
+
+  create_file "app/views/account/siwe_identities/edit.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("siwe.identities.edit_title") %>
+
+    <section class="space-y-5">
+      <p class="break-all font-mono text-sm text-base-content/70"><%= @siwe_identity.address %></p>
+      <%= form_with model: [:account, @siwe_identity], class: "space-y-5" do |form| %>
+        <% if @siwe_identity.errors.any? %>
+          <div class="alert alert-error" role="alert"><span><%= @siwe_identity.errors.full_messages.to_sentence %></span></div>
+        <% end %>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><%= form.label :name, t("siwe.identities.name") %></legend>
+          <%= form.text_field :name, required: true, maxlength: 50, class: "input input-rapid w-full" %>
+        </fieldset>
+        <div class="flex justify-end gap-2">
+          <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
+          <%= form.submit t("common.update"), class: "btn btn-primary btn-rapid" %>
         </div>
-      </section>
-    </div>
+      <% end %>
+    </section>
+  ERB
+
+  create_file "app/views/account/siwe_identities/show.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("siwe.identities.delete_title") %>
+
+    <section class="space-y-5">
+      <p class="font-semibold"><%= @siwe_identity.name %></p>
+      <p class="break-all font-mono text-sm text-base-content/70"><%= @siwe_identity.address %></p>
+      <p class="text-base-content/70"><%= t("siwe.identities.delete_description") %></p>
+      <%= form_with url: account_siwe_identity_path(@siwe_identity), method: :delete, class: "space-y-5" do |form| %>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><%= form.label :current_password, t("siwe.identities.current_password") %></legend>
+          <%= form.password_field :current_password, required: true, autocomplete: "current-password", class: "input input-rapid w-full" %>
+        </fieldset>
+        <div class="flex justify-end gap-2">
+          <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
+          <%= form.submit t("siwe.identities.delete"), class: "btn btn-error btn-rapid", data: { turbo_confirm: t("siwe.identities.delete_confirm") } %>
+        </div>
+      <% end %>
+    </section>
   ERB
 
   create_locale_pair(
@@ -1787,14 +1821,16 @@ def install_siwe
     ja: {
       "siwe" => {
         "sign_in" => { "title" => "Ethereumでログイン", "description" => "登録済みのEOAウォレットで署名してログインします。", "connect" => "ウォレットでログイン" },
-        "identities" => { "title" => "ログイン方法", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "name" => "ウォレット名", "current_password" => "現在のパスワード", "connect" => "ウォレットを接続", "delete" => "解除", "delete_confirm" => "このウォレットを解除しますか？", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
+        "account_settings" => { "basic" => "基本設定" },
+        "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。ウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "ウォレット名", "current_password" => "現在のパスワード", "connect" => "ウォレットを接続", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "解除すると、このウォレットではログインできなくなります。", "delete" => "解除", "delete_confirm" => "このウォレットを解除しますか？", "password_invalid" => "現在のパスワードが正しくありません。", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
         "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。" }
       }
     },
     en: {
       "siwe" => {
         "sign_in" => { "title" => "Sign in with Ethereum", "description" => "Sign in with an EOA wallet already linked to your account.", "connect" => "Sign in with wallet" },
-        "identities" => { "title" => "Login methods", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add a wallet", "name" => "Wallet name", "current_password" => "Current password", "connect" => "Connect wallet", "delete" => "Unlink", "delete_confirm" => "Unlink this wallet?", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
+        "account_settings" => { "basic" => "Basic settings" },
+        "identities" => { "title" => "EVM wallet login", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add wallet", "new_title" => "Add EVM wallet", "new_description" => "Sign with the EOA wallet you want to connect. Its name will be assigned automatically after registration.", "edit_title" => "Edit EVM wallet login", "name" => "Wallet name", "current_password" => "Current password", "connect" => "Connect wallet", "delete_title" => "Unlink EVM wallet login", "delete_description" => "After unlinking, this wallet can no longer be used to sign in.", "delete" => "Unlink", "delete_confirm" => "Unlink this wallet?", "password_invalid" => "The current password is incorrect.", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
         "errors" => { "wallet_missing" => "No EOA wallet was found.", "challenge" => "Could not create an authentication request.", "verification" => "Could not verify the signature." }
       }
     }
@@ -1802,7 +1838,7 @@ def install_siwe
 
   route <<~'RUBY'
     namespace :account do
-      resources :siwe_identities, only: %i[index create update destroy] do
+      resources :siwe_identities, only: %i[index show new create edit update destroy] do
         post :challenge, on: :collection
       end
     end
@@ -1812,25 +1848,19 @@ def install_siwe
     require "test_helper"
 
     class SiweIdentityTest < ActiveSupport::TestCase
-      test "normalizes names and addresses and enforces scoped names" do
+      test "normalizes names and addresses and allows duplicate names" do
         first = users(:one).siwe_identities.create!(
           name: "  Main Wallet  ",
           address: "0xABCDEF0123456789ABCDEF0123456789ABCDEF01"
         )
 
         assert_equal "Main Wallet", first.name
-        assert_equal "main wallet", first.name_key
         assert_equal "0xabcdef0123456789abcdef0123456789abcdef01", first.address
         duplicate_name = users(:one).siwe_identities.new(
-          name: "main wallet",
+          name: "Main Wallet",
           address: "0x1111111111111111111111111111111111111111"
         )
-        assert_not duplicate_name.valid?
-        same_name_for_another_user = users(:two).siwe_identities.new(
-          name: "main wallet",
-          address: "0x2222222222222222222222222222222222222222"
-        )
-        assert_predicate same_name_for_another_user, :valid?
+        assert_predicate duplicate_name, :valid?
       end
 
       test "enforces globally unique addresses after normalization" do
@@ -2043,40 +2073,97 @@ def install_siwe
     class Account::SiweIdentitiesControllerTest < ActionDispatch::IntegrationTest
       include Devise::Test::IntegrationHelpers
 
-      test "links and unlinks multiple wallets with the current password" do
+      test "links wallets without a password or name and assigns count-based names" do
         sign_in users(:one)
-        keys = [Eth::Key.new, Eth::Key.new]
+        keys = [Eth::Key.new, Eth::Key.new, Eth::Key.new]
 
-        keys.each_with_index do |key, index|
+        keys.first(2).each do |key|
           post challenge_account_siwe_identities_url,
-            params: { address: key.address.to_s, chain_id: 1, current_password: "password123" }, as: :json
+            params: { address: key.address.to_s, chain_id: 1 }, as: :json
           assert_response :success
           challenge = response.parsed_body
 
           post account_siwe_identities_url,
-            params: { name: "Wallet #{index + 1}", challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
+            params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
           assert_response :created
         end
-        assert_equal 2, users(:one).siwe_identities.count
+        assert_equal ["Wallet #1", "Wallet #2"], users(:one).siwe_identities.order(:created_at).pluck(:name)
 
         identity = users(:one).siwe_identities.first
         delete account_siwe_identity_url(identity), params: { current_password: "password123" }
         assert_redirected_to account_siwe_identities_url
         assert_not SiweIdentity.exists?(identity.id)
+
+        key = keys.last
+        post challenge_account_siwe_identities_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
+        challenge = response.parsed_body
+        post account_siwe_identities_url,
+          params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
+        assert_response :created
+        assert_equal ["Wallet #2", "Wallet #2"], users(:one).siwe_identities.order(:created_at).pluck(:name)
       end
 
-      test "requires the current password to link and unlink a wallet" do
+      test "requires the current password only to unlink a wallet" do
         sign_in users(:one)
         key = Eth::Key.new
 
         post challenge_account_siwe_identities_url,
-          params: { address: key.address.to_s, chain_id: 1, current_password: "wrong" }, as: :json
-        assert_response :unauthorized
+          params: { address: key.address.to_s, chain_id: 1 }, as: :json
+        assert_response :success
 
         identity = users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
         delete account_siwe_identity_url(identity), params: { current_password: "wrong" }
-        assert_response :unauthorized
+        assert_redirected_to account_siwe_identity_url(identity)
+        assert_equal I18n.t("siwe.identities.password_invalid"), flash[:alert]
         assert SiweIdentity.exists?(identity.id)
+      end
+
+      test "renders separate index, new, edit, and unlink pages" do
+        sign_in users(:one)
+
+        get edit_user_registration_url
+        assert_response :success
+        assert_select '.tab-active[aria-current="page"][href=?]', edit_user_registration_path, count: 1
+        assert_select '.tab[href=?]', account_siwe_identities_path, count: 1
+        assert_select '.tabs.tabs-lift > .tab-active + .tab-content[role="tabpanel"]', count: 1
+
+        get account_siwe_identities_url
+        assert_response :success
+        assert_select "a[href=?]", new_account_siwe_identity_path, count: 1
+        assert_select "ul.list.gap-3 > li.list-row", count: 0
+        assert_select "form", count: 0
+        assert_select '.tab-active[aria-current="page"][href=?]', account_siwe_identities_path, count: 1
+        assert_select '.tabs.tabs-lift > .tab-active + .tab-content[role="tabpanel"]', count: 1
+        assert_select '.tabs.tabs-lift > .tab-content', count: 1
+        assert_select '.tab-content > .card-border.border-base-300', count: 0
+        assert_select 'nav[aria-label=?] a.menu-active[href=?]', I18n.t("navigation.account_menu"),
+          edit_user_registration_path, count: 1
+
+        get new_account_siwe_identity_url
+        assert_response :success
+        assert_select '[data-controller="siwe-sign-in"][data-siwe-sign-in-mode-value="link"]', count: 1
+        assert_select 'input[name="current_password"], input[name="name"]', count: 0
+        assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
+
+        identity = users(:one).siwe_identities.create!(
+          name: "Main",
+          address: "0xabcdef0123456789abcdef0123456789abcdef01"
+        )
+        get account_siwe_identities_url
+        assert_select "ul.list.gap-3 > li.list-row", count: 1
+        assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 1
+
+        get edit_account_siwe_identity_url(identity)
+        assert_response :success
+        assert_select 'form input[name="siwe_identity[name]"]', count: 1
+        assert_select 'form input[name="current_password"]', count: 0
+        assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
+
+        get account_siwe_identity_url(identity)
+        assert_response :success
+        assert_select 'form input[name="current_password"][type="password"]', count: 1
+        assert_select 'form input[name="siwe_identity[name]"]', count: 0
+        assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
       end
 
       test "renames only an identity owned by the current user" do
@@ -2091,15 +2178,16 @@ def install_siwe
         )
 
         patch account_siwe_identity_url(identity), params: {
-          name: "Renamed",
-          address: "0x2222222222222222222222222222222222222222"
+          siwe_identity: { name: "Renamed", address: "0x2222222222222222222222222222222222222222" }
         }
         assert_redirected_to account_siwe_identities_url
         assert_equal "Renamed", identity.reload.name
         assert_equal "0xabcdef0123456789abcdef0123456789abcdef01", identity.address
-        patch account_siwe_identity_url(other), params: { name: "Stolen" }
+        patch account_siwe_identity_url(other), params: { siwe_identity: { name: "Stolen" } }
         assert_response :not_found
         assert_equal "Other", other.reload.name
+        get account_siwe_identity_url(other)
+        assert_response :not_found
       end
 
       test "rejects an address already linked to another user" do
@@ -2108,11 +2196,10 @@ def install_siwe
         users(:two).siwe_identities.create!(name: "Other", address: key.address.to_s)
 
         post challenge_account_siwe_identities_url,
-          params: { address: key.address.to_s, chain_id: 1, current_password: "password123" }, as: :json
+          params: { address: key.address.to_s, chain_id: 1 }, as: :json
         challenge = response.parsed_body
         post account_siwe_identities_url,
           params: {
-            name: "Conflict",
             challenge_token: challenge.fetch("challenge_token"),
             signature: key.personal_sign(challenge.fetch("message"))
           }, as: :json
@@ -5390,7 +5477,7 @@ def configure_devise_views
   create_file "app/views/devise/registrations/edit.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("devise_views.registrations.edit_title") %>
     <div class="space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card bg-base-100 shadow-none">
         <div class="card-body">
           <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
             <%= render "devise/shared/error_messages", resource: resource %>
@@ -5442,7 +5529,7 @@ def configure_default_views
   avatar_enabled = profile_features.include?("avatar")
   screen_name_enabled = profile_features.include?("screen_name")
   display_name_enabled = profile_features.include?("display_name")
-  account_navigation_count = 2 + (siwe_enabled ? 1 : 0) + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) +
+  account_navigation_count = 2 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) +
     (web_push_enabled ? 1 : 0)
   account_page_description = if profile_enabled
     '<%= t("accounts.show.description_with_profile") %>'
@@ -5480,7 +5567,8 @@ def configure_default_views
   account_settings_path = "application_routes.edit_user_registration_path"
   account_navigation_items += <<~ERB
     <li>
-      <%= link_to #{account_settings_path}, class: ("menu-active" if current_page?(#{account_settings_path})), aria: { current: ("page" if current_page?(#{account_settings_path})) } do %>
+      <% account_settings_active = current_page?(#{account_settings_path}) || controller_path == "account/siwe_identities" %>
+      <%= link_to #{account_settings_path}, class: ("menu-active" if account_settings_active), aria: { current: ("page" if account_settings_active) } do %>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -5489,18 +5577,6 @@ def configure_default_views
       <% end %>
     </li>
   ERB
-  if siwe_enabled
-    account_navigation_items += <<~ERB
-      <li>
-        <%= link_to application_routes.account_siwe_identities_path, class: ("menu-active" if controller_path == "account/siwe_identities"), aria: { current: ("page" if controller_path == "account/siwe_identities") } do %>
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a2.25 2.25 0 0 0-2.25-2.25H15a3 3 0 1 0 0 6h3.75A2.25 2.25 0 0 0 21 13.5m0-1.5V6.75A2.25 2.25 0 0 0 18.75 4.5H5.25A2.25 2.25 0 0 0 3 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25h13.5A2.25 2.25 0 0 0 21 17.25V12Z" />
-          </svg>
-          <%= t("navigation.login_methods") %>
-        <% end %>
-      </li>
-    ERB
-  end
   if web_push_enabled
     account_navigation_items += <<~ERB
       <li>
@@ -5652,7 +5728,8 @@ def configure_default_views
       </summary>
     ERB
   end
-  layout_method = 'devise_controller? ? (controller_name == "registrations" && %w[edit update].include?(action_name) ? "account" : "authentication") : "application"'
+  account_settings_layout = siwe_enabled ? "account_settings" : "account"
+  layout_method = %(devise_controller? ? (controller_name == "registrations" && %w[edit update].include?(action_name) ? "#{account_settings_layout}" : "authentication") : "application")
   wallet_script = ""
   pwa_head = if pwa_enabled
     <<~ERB
@@ -5703,7 +5780,7 @@ def configure_default_views
   RUBY
   create_file "app/controllers/accounts_controller.rb", accounts_controller, force: true
 
-  create_file "app/helpers/application_helper.rb", <<~RUBY, force: true
+  create_file "app/helpers/application_helper.rb", <<~'RUBY', force: true
     module ApplicationHelper
       def application_routes
         Rails.application.routes.url_helpers
@@ -5724,6 +5801,129 @@ def configure_default_views
 
       def application_translate(key, **options)
         I18n.backend.translate(application_identity.default_locale, key, **options)
+      end
+
+      def with_tab(tabs:, size: nil, &block)
+        unless size.nil? || %i[xs sm md lg xl].include?(size)
+          raise ArgumentError, "tab size must be a daisyUI tab size"
+        end
+
+        matches = tabs.each_with_index.filter_map do |tab, index|
+          path = tab.fetch(:path).to_s
+          raise ArgumentError, "tab path must not be empty" if path.empty?
+
+          predicate = tab[:is_active]
+          active = if predicate.nil?
+            request.path.start_with?(path)
+          elsif predicate.is_a?(Proc) && predicate.lambda?
+            predicate.call
+          else
+            raise ArgumentError, "tab is_active must be a lambda"
+          end
+          { index:, path: } if active
+        end
+
+        raise ArgumentError, "exactly one active tab is required" if matches.empty?
+
+        longest_path_length = matches.map { |match| match.fetch(:path).length }.max
+        longest_matches = matches.select { |match| match.fetch(:path).length == longest_path_length }
+        raise ArgumentError, "active tabs must have one longest path" unless longest_matches.one?
+
+        active_index = longest_matches.first.fetch(:index)
+        tab_content = capture(&block)
+        items = tabs.each_with_index.flat_map do |tab, index|
+          active = index == active_index
+          link = link_to tab.fetch(:name), tab.fetch(:path), role: "tab",
+            class: class_names("tab", "tab-active": active, "z-10": active),
+            aria: { selected: active, current: ("page" if active) }
+          next [link] unless active
+
+          [link, tag.div(tab_content, role: "tabpanel",
+            class: "tab-content sticky [contain:inline-size] bg-base-100 border-base-300 p-3")]
+        end
+
+        tablist = tag.div(safe_join(items), role: "tablist",
+          class: class_names("tabs tabs-lift min-w-max", "tabs-#{size}" => size.present?))
+        tag.div(tablist, class: "overflow-x-auto")
+      end
+    end
+  RUBY
+
+  create_file "test/helpers/application_helper_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+
+    class ApplicationHelperTest < ActionView::TestCase
+      test "selects the longest matching path and captures content once" do
+        request.path = "/account/siwe_identities/1/edit"
+        capture_count = 0
+
+        html = with_tab(tabs: [
+          { name: "Account", path: "/account" },
+          { name: "Wallets", path: "/account/siwe_identities" }
+        ]) do
+          capture_count += 1
+          tag.p("Tab content")
+        end
+        fragment = Nokogiri::HTML5.fragment(html)
+
+        assert_equal 1, capture_count
+        assert_equal 1, fragment.css(".overflow-x-auto > .tabs.tabs-lift.min-w-max").size
+        assert_equal 1, fragment.css(".tabs.tabs-lift > .tab-content").size
+        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "sticky"
+        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "[contain:inline-size]"
+        assert_equal "Tab content", fragment.at_css(".tab-active + .tab-content p").text
+        assert_equal "/account/siwe_identities", fragment.at_css(".tab-active")["href"]
+        assert_includes fragment.at_css(".tab-active")["class"].split, "z-10"
+        refute_includes fragment.at_css(".tab:not(.tab-active)")["class"].split, "z-10"
+        assert_equal "true", fragment.at_css(".tab-active")["aria-selected"]
+        assert_equal "page", fragment.at_css(".tab-active")["aria-current"]
+        assert_equal ["false", "true"], fragment.css(".tab").pluck("aria-selected")
+      end
+
+      test "uses an explicit lambda instead of path matching" do
+        request.path = "/account"
+        html = with_tab(tabs: [
+          { name: "Account", path: "/account", is_active: -> { false } },
+          { name: "Dynamic", path: "/elsewhere", is_active: -> { true } }
+        ]) { tag.p("Tab content") }
+
+        assert_equal "/elsewhere", Nokogiri::HTML5.fragment(html).at_css(".tab-active")["href"]
+      end
+
+      test "rejects no match and equally long active paths" do
+        request.path = "/unmatched"
+        assert_raises(ArgumentError) do
+          with_tab(tabs: [{ name: "Account", path: "/account" }]) { "content" }
+        end
+
+        assert_raises(ArgumentError) do
+          with_tab(tabs: [
+            { name: "First", path: "/first", is_active: -> { true } },
+            { name: "Other", path: "/other", is_active: -> { true } }
+          ]) { "content" }
+        end
+      end
+
+      test "rejects empty paths and active predicates other than lambdas" do
+        assert_raises(ArgumentError) do
+          with_tab(tabs: [{ name: "Empty", path: "" }]) { "content" }
+        end
+        assert_raises(ArgumentError) do
+          with_tab(tabs: [{ name: "Invalid", path: "/invalid", is_active: true }]) { "content" }
+        end
+        assert_raises(ArgumentError) do
+          with_tab(tabs: [{ name: "Proc", path: "/proc", is_active: proc { true } }]) { "content" }
+        end
+      end
+
+      test "adds an optional daisyUI size modifier" do
+        request.path = "/compact"
+        html = with_tab(tabs: [{ name: "Compact", path: "/compact" }], size: :sm) { "content" }
+
+        assert_includes Nokogiri::HTML5.fragment(html).at_css("[role=tablist]")["class"].split, "tabs-sm"
+        assert_raises(ArgumentError) do
+          with_tab(tabs: [{ name: "Invalid", path: "/compact" }], size: :compact) { "content" }
+        end
       end
     end
   RUBY
@@ -5795,7 +5995,7 @@ def configure_default_views
   ERB
 
   create_file "app/views/shared/_account_navigation.html.erb", account_navigation_items, force: true
-  create_file "app/views/layouts/account.html.erb", <<~ERB, force: true
+  create_file "app/views/layouts/_account_shell.html.erb", <<~ERB, force: true
     <% content_for :with_menu_navigation, flush: true do %>
       <nav aria-label="<%= t('navigation.account_menu') %>">
         <ul class="menu w-full rounded-box bg-base-100">
@@ -5808,6 +6008,30 @@ def configure_default_views
       <%= yield %>
     <% end %>
   ERB
+  create_file "app/views/layouts/account.html.erb", <<~ERB, force: true
+    <%= render layout: "layouts/account_shell" do %>
+      <%= yield %>
+    <% end %>
+  ERB
+
+  if siwe_enabled
+    create_file "app/views/layouts/account_settings.html.erb", <<~'ERB', force: true
+      <% content_for :account_settings_content, flush: true do %>
+        <nav aria-label="<%= t('navigation.account_settings') %>">
+          <%= with_tab(tabs: [
+            { name: t("siwe.account_settings.basic"), path: edit_user_registration_path,
+              is_active: -> { request.path == edit_user_registration_path || request.path == user_registration_path } },
+            { name: t("siwe.identities.title"), path: account_siwe_identities_path }
+          ]) do %>
+            <%= yield %>
+          <% end %>
+        </nav>
+      <% end %>
+      <%= render layout: "layouts/account_shell" do %>
+        <%= yield :account_settings_content %>
+      <% end %>
+    ERB
+  end
 
   create_file "app/views/shared/_admin_navigation.html.erb", admin_navigation_items, force: true
   create_file "app/views/layouts/admin.html.erb", <<~ERB, force: true
@@ -7415,16 +7639,13 @@ def install_job_operations
   ERB
 
   create_file "app/views/layouts/mission_control/jobs/_navigation.html.erb", <<~'ERB', force: true
-    <nav aria-label="Job operations sections" class="@container overflow-x-auto">
-      <div role="tablist" aria-label="Job operations sections" class="tabs tabs-lift min-w-max">
-        <% navigation_sections.each do |key, (label, url)| %>
-          <%= link_to label, url, id: "job-operations-tab-#{key}", role: "tab",
-            class: class_names("tab z-1", "tab-active": key == current_section),
-            aria: { controls: "job-operations-panel-#{key}", current: ("page" if key == current_section), selected: key == current_section } %>
-          <div id="job-operations-panel-<%= key %>" role="tabpanel" aria-labelledby="job-operations-tab-<%= key %>"
-            class="sticky start-0 tab-content max-w-[100cqw] border-base-300 bg-base-100 p-3"><%= yield if key == current_section %></div>
-        <% end %>
-      </div>
+    <% tabs = navigation_sections.map do |key, (label, url)|
+         { name: label, path: url, is_active: -> { key == current_section } }
+       end %>
+    <nav aria-label="Job operations sections">
+      <%= with_tab(tabs:, size: :xs) do %>
+        <%= yield %>
+      <% end %>
     </nav>
   ERB
 
@@ -7875,14 +8096,17 @@ def install_job_operations
         assert_response :success
         assert_select "[data-mission-control-jobs-root]", count: 1
         assert_select '[data-layout="with-menu"] > div > h1', text: "Queues", count: 1
-        assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"].tabs.tabs-lift', count: 1
-        assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"] > .tab-active + .tab-content.bg-base-100.border-base-300.p-3', count: 1
+        assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] > .overflow-x-auto > [role="tablist"].tabs.tabs-lift.min-w-max', count: 1
+        assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"] > .tab-content[role="tabpanel"]', count: 1
+        assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"] > .tab-active + .tab-content.sticky.bg-base-100.border-base-300.p-3', count: 1 do |panels|
+          assert_includes panels.first["class"].split, "[contain:inline-size]"
+        end
         assert_select '.tab-content[role="tabpanel"] > [data-mission-control-jobs-root]', count: 1
         assert_select '[data-mission-control-jobs-root] nav[aria-label="Job operations sections"]', count: 0
         app_name = Rails.configuration.x.application_identity.app_name
         assert_select "title", text: "Queues | \#{app_name}", count: 1
         assert_select 'meta[property="og:title"][content=?]', "Queues | \#{app_name}", count: 1
-        assert_select 'a[role="tab"].tab.tab-active', minimum: 1
+        assert_select 'a[role="tab"].tab.tab-active.z-10', minimum: 1
         assert_select 'section[aria-label="Application selection"]', count: 0
         assert_not_includes response.body, "bulma.min.css"
         assert_not_includes response.body, "is-boxed"
@@ -7904,6 +8128,36 @@ def install_job_operations
           assert_operator controller, :<, Admin::JobOperationsController
           assert_includes controller._process_action_callbacks.map(&:filter), :authorize_job_operations!
         end
+      end
+
+      test "keeps the matching section active on queue, job, and worker details" do
+        sign_in_as(@admin)
+        active_job = RetryProbeJob.perform_later
+        solid_queue_job = SolidQueue::Job.find_by!(active_job_id: active_job.job_id)
+        application = MissionControl::Jobs.applications.first
+        server = application.servers.first
+        route_options = { application_id: application.to_param, server_id: server.to_param }
+
+        get MissionControl::Jobs::Engine.routes.url_helpers.application_queue_path(
+          **route_options, id: solid_queue_job.queue_name
+        )
+        assert_active_job_section "Queues"
+
+        solid_queue_job.ready_execution.destroy!
+        solid_queue_job.failed_with(RuntimeError.new("expected failure"))
+        get MissionControl::Jobs::Engine.routes.url_helpers.application_job_path(
+          **route_options, id: active_job.job_id
+        )
+        assert_active_job_section(/^Failed jobs/)
+
+        worker = SolidQueue::Process.create!(
+          kind: "Worker", last_heartbeat_at: Time.current, pid: Process.pid,
+          hostname: "localhost", metadata: { queues: [solid_queue_job.queue_name] }, name: "test-worker"
+        )
+        get MissionControl::Jobs::Engine.routes.url_helpers.application_worker_path(
+          **route_options, id: worker.id
+        )
+        assert_active_job_section "Workers"
       end
 
       test "allows admins to retry a failed Solid Queue job" do
@@ -7928,6 +8182,12 @@ def install_job_operations
       end
 
       private
+        def assert_active_job_section(label)
+          assert_response :success
+          assert_select 'a[role="tab"].tab-active[aria-current="page"]', text: label, count: 1
+          assert_select '[role="tablist"] > .tab-content[role="tabpanel"]', count: 1
+        end
+
         def host_translate(key)
           locale = Rails.configuration.x.application_identity.default_locale
           I18n.backend.translate(locale, key)
@@ -8793,14 +9053,21 @@ def configure_evidence_capture
               translate("siwe.identities.title"),
               viewport_name
             )
-            find('[data-siwe-sign-in-target="name"]').set("Main Wallet")
-            find('[data-siwe-sign-in-target="currentPassword"]').set(PASSWORD)
-            capture_current_page("siwe-identity-add", translate("siwe.identities.add"), viewport_name)
+            assert_account_settings_tabs_geometry
+            capture_page(
+              "siwe-identity-new",
+              translate("siwe.identities.new_title"),
+              new_account_siwe_identity_path,
+              translate("siwe.identities.new_title"),
+              viewport_name
+            )
+            assert_no_selector 'input[name="name"], input[name="current_password"]'
+            assert_account_settings_tabs_geometry
 
             main_key = Eth::Key.new(priv: PRIVATE_KEY)
             regular_key = Eth::Key.new(priv: REGULAR_PRIVATE_KEY)
-            main_identity = @user.siwe_identities.create!(name: "Main Wallet", address: main_key.address.to_s)
-            @user.siwe_identities.create!(name: "Backup Wallet", address: regular_key.address.to_s)
+            main_identity = @user.siwe_identities.create!(name: "Wallet #1", address: main_key.address.to_s)
+            @user.siwe_identities.create!(name: "Wallet #2", address: regular_key.address.to_s)
             capture_page(
               "siwe-identities-multiple",
               translate("siwe.identities.title"),
@@ -8808,8 +9075,30 @@ def configure_evidence_capture
               translate("siwe.identities.title"),
               viewport_name
             )
+            assert_account_settings_tabs_geometry
 
-            main_identity.update!(name: "Primary Wallet")
+            capture_page(
+              "siwe-identity-edit",
+              translate("siwe.identities.edit_title"),
+              edit_account_siwe_identity_path(main_identity),
+              translate("siwe.identities.edit_title"),
+              viewport_name
+            )
+            assert_no_selector 'input[name="current_password"]'
+            assert_account_settings_tabs_geometry
+            capture_page(
+              "siwe-identity-unlink",
+              translate("siwe.identities.delete_title"),
+              account_siwe_identity_path(main_identity),
+              translate("siwe.identities.delete_title"),
+              viewport_name
+            )
+            assert_selector 'input[name="current_password"]', count: 1
+            assert_no_selector 'input[name="siwe_identity[name]"]'
+            assert_account_settings_tabs_geometry
+            visit edit_account_siwe_identity_path(main_identity)
+            fill_in translate("siwe.identities.name"), with: "Primary Wallet"
+            click_button translate("common.update")
             capture_page(
               "siwe-identity-renamed",
               translate("siwe.identities.updated"),
@@ -8817,6 +9106,7 @@ def configure_evidence_capture
               translate("siwe.identities.title"),
               viewport_name
             )
+            assert_account_settings_tabs_geometry
             authenticate_with_siwe(main_key, viewport)
             capture_page(
               "siwe-login-existing-user",
@@ -8826,6 +9116,68 @@ def configure_evidence_capture
               viewport_name
             )
           end
+        end
+
+        def assert_account_settings_tabs_geometry
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const navigation = document.querySelector('nav[aria-label="アカウント設定"]')
+                const scroller = navigation.querySelector(':scope > .overflow-x-auto')
+                const tablist = scroller.querySelector(':scope > [role="tablist"]')
+                const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
+                const activeTab = tablist.querySelector(':scope > .tab-active')
+                const panel = activeTab.nextElementSibling
+                const navigationRect = navigation.getBoundingClientRect()
+                const panelRect = panel.getBoundingClientRect()
+                const activeTabRect = activeTab.getBoundingClientRect()
+                return {
+                  documentWidth: document.documentElement.scrollWidth,
+                  viewportWidth: window.innerWidth,
+                  navigationLeft: navigationRect.left,
+                  navigationRight: navigationRect.right,
+                  panelLeft: panelRect.left,
+                  panelRight: panelRect.right,
+                  activeTabBottom: activeTabRect.bottom,
+                  panelTop: panelRect.top,
+                  activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
+                  panelBorderTopWidth: parseFloat(getComputedStyle(panel).borderTopWidth),
+                  panelMarginTop: parseFloat(getComputedStyle(panel).marginTop),
+                  activeTabCoversSharedEdge: document.elementFromPoint(
+                    activeTabRect.left + activeTabRect.width / 2,
+                    panelRect.top + 0.5
+                  ) === activeTab,
+                  activeTabOwnsPanel: activeTab.nextElementSibling === panel,
+                  panelInsideTablist: panel.parentElement === tablist,
+                  panelIsTabContent: panel.classList.contains('tab-content'),
+                  panelIsSticky: panel.classList.contains('sticky'),
+                  panelContain: getComputedStyle(panel).contain,
+                  panelCount: tablist.querySelectorAll(':scope > .tab-content').length,
+                  tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
+                  scrollerScrollWidth: scroller.scrollWidth,
+                  scrollerClientWidth: scroller.clientWidth,
+                  nestedBaseBorderCount: panel.querySelectorAll('.card-border.border-base-300').length
+                }
+              }
+            JAVASCRIPT
+          end
+          assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")
+          assert_in_delta geometry.fetch("navigationLeft"), geometry.fetch("panelLeft"), 1
+          assert_operator geometry.fetch("panelRight"), :<=, geometry.fetch("navigationRight") + 1
+          assert_in_delta geometry.fetch("activeTabBottom"), geometry.fetch("panelTop"), 1.5
+          assert_in_delta 0, geometry.fetch("activeTabBorderBottomWidth"), 0.1
+          assert_in_delta 1, geometry.fetch("panelBorderTopWidth"), 0.1
+          assert_in_delta(-1, geometry.fetch("panelMarginTop"), 0.1)
+          assert geometry.fetch("activeTabCoversSharedEdge")
+          assert geometry.fetch("activeTabOwnsPanel")
+          assert geometry.fetch("panelInsideTablist")
+          assert geometry.fetch("panelIsTabContent")
+          assert geometry.fetch("panelIsSticky")
+          assert_equal "inline-size", geometry.fetch("panelContain")
+          assert_equal 1, geometry.fetch("panelCount")
+          assert_equal 1, geometry.fetch("tabRowCount")
+          assert_operator geometry.fetch("scrollerScrollWidth"), :>=, geometry.fetch("scrollerClientWidth")
+          assert_equal 0, geometry.fetch("nestedBaseBorderCount")
         end
 
         def authenticate_with_siwe(key, viewport)
@@ -9005,6 +9357,7 @@ def configure_evidence_capture
             assert_equal 200, page.status_code
             assert_selector "[data-mission-control-jobs-root]", count: 1
             assert_admin_navigation_active(host_translate("navigation.job_operations"))
+            assert_job_operations_tabs_single_row if viewport == "desktop"
             capture_current_page("admin-job-operations", "Queues", viewport)
             if viewport == "mobile"
               find("header details.dropdown > summary", visible: :visible).click
@@ -9015,9 +9368,10 @@ def configure_evidence_capture
               )
               find("header details.dropdown > summary", visible: :visible).click
             end
-            find("#job-operations-tab-failed_jobs").click
+            find('[role="tab"]', text: /^Failed jobs/).click
             assert_selector '[data-layout="with-menu"] > div > h1', text: "Failed jobs", count: 1
-            assert_selector "#job-operations-tab-failed_jobs.tab-active", count: 1
+            assert_selector ".tab-active", text: /^Failed jobs/, count: 1
+            assert_job_operations_tabs_single_row if viewport == "desktop"
             capture_current_page("admin-job-operations-failed", "Failed jobs", viewport)
           end
           if MAINTENANCE_TASKS
@@ -9443,10 +9797,13 @@ def configure_evidence_capture
                   const layout = document.querySelector('[data-layout="with-menu"]')
                   const heading = layout.querySelector(':scope > div > h1')
                   const subnavigation = layout.querySelector(':scope > div > nav[aria-label="Job operations sections"]')
-                  const tablist = subnavigation.querySelector(':scope > [role="tablist"]')
+                  const scroller = subnavigation.querySelector(':scope > .overflow-x-auto')
+                  const tablist = scroller.querySelector(':scope > [role="tablist"]')
+                  const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
                   const activeTab = tablist.querySelector(':scope > .tab-active')
                   const tabContent = activeTab.nextElementSibling
-                  const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
+                  const activeTabRect = activeTab.getBoundingClientRect()
+                  const tabContentRect = tabContent.getBoundingClientRect()
                   const root = document.querySelector("[data-mission-control-jobs-root]")
                   return {
                     documentWidth: document.documentElement.scrollWidth,
@@ -9457,18 +9814,28 @@ def configure_evidence_capture
                     rootTop: root.getBoundingClientRect().top,
                     headingBottom: heading.getBoundingClientRect().bottom,
                     subnavigationTop: subnavigation.getBoundingClientRect().top,
-                    activeTabBottom: activeTab.getBoundingClientRect().bottom,
-                    activeTabWidth: activeTab.getBoundingClientRect().width,
-                    tabContentTop: tabContent.getBoundingClientRect().top,
-                    tabContentBottom: tabContent.getBoundingClientRect().bottom,
-                    tabContentWidth: tabContent.getBoundingClientRect().width,
+                    activeTabBottom: activeTabRect.bottom,
+                    activeTabWidth: activeTabRect.width,
+                    activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
+                    tabContentTop: tabContentRect.top,
+                    tabContentBottom: tabContentRect.bottom,
+                    tabContentWidth: tabContentRect.width,
+                    tabContentBorderTopWidth: parseFloat(getComputedStyle(tabContent).borderTopWidth),
+                    tabContentMarginTop: parseFloat(getComputedStyle(tabContent).marginTop),
+                    activeTabCoversSharedEdge: document.elementFromPoint(
+                      activeTabRect.left + activeTabRect.width / 2,
+                      tabContentRect.top + 0.5
+                    ) === activeTab,
                     rootBottom: root.getBoundingClientRect().bottom,
                     activeTabOwnsTabContent: activeTab.nextElementSibling === tabContent,
                     tabContentInsideTablist: tabContent.parentElement === tablist,
                     rootInsideTabContent: root.parentElement === tabContent,
-                    everyTabOwnsTabContent: tabs.every((tab) => tab.nextElementSibling?.classList.contains("tab-content")),
-                    subnavigationScrollWidth: subnavigation.scrollWidth,
-                    subnavigationClientWidth: subnavigation.clientWidth
+                    tabContentIsSticky: tabContent.classList.contains("sticky"),
+                    tabContentContain: getComputedStyle(tabContent).contain,
+                    tabContentCount: tablist.querySelectorAll(':scope > .tab-content').length,
+                    tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
+                    scrollerScrollWidth: scroller.scrollWidth,
+                    scrollerClientWidth: scroller.clientWidth
                   }
                 }
               JAVASCRIPT
@@ -9482,47 +9849,93 @@ def configure_evidence_capture
             assert_operator geometry.fetch("subnavigationTop"), :>=, geometry.fetch("headingBottom"),
               "Mission Control Jobs heading should precede subnavigation at #{width}px"
             assert_in_delta geometry.fetch("activeTabBottom"), geometry.fetch("tabContentTop"), 1.5,
-              "Mission Control Jobs tabs should connect to tab content at #{width}px"
+              "Mission Control Jobs active tab should connect to tab content at #{width}px"
+            assert_in_delta 0, geometry.fetch("activeTabBorderBottomWidth"), 0.1,
+              "Mission Control Jobs active tab should leave its bottom border open at #{width}px"
+            assert_in_delta 1, geometry.fetch("tabContentBorderTopWidth"), 0.1,
+              "Mission Control Jobs tab content should own the shared border at #{width}px"
+            assert_in_delta(-1, geometry.fetch("tabContentMarginTop"), 0.1,
+              "Mission Control Jobs tab content should collapse the shared border at #{width}px")
+            assert geometry.fetch("activeTabCoversSharedEdge"),
+              "Mission Control Jobs active tab should cover the shared border at #{width}px"
             assert geometry.fetch("activeTabOwnsTabContent"),
               "Mission Control Jobs active tab should immediately precede its content at #{width}px"
             assert geometry.fetch("tabContentInsideTablist"),
               "Mission Control Jobs tab content should be inside the tablist at #{width}px"
             assert geometry.fetch("rootInsideTabContent"),
               "Mission Control Jobs root should be wrapped by tab content at #{width}px"
-            assert geometry.fetch("everyTabOwnsTabContent"),
-              "Mission Control Jobs should pair every tab with tab content at #{width}px"
+            assert geometry.fetch("tabContentIsSticky"),
+              "Mission Control Jobs tab content should be sticky at #{width}px"
+            assert_equal "inline-size", geometry.fetch("tabContentContain"),
+              "Mission Control Jobs tab content should use inline-size containment at #{width}px"
+            assert_equal 1, geometry.fetch("tabContentCount"),
+              "Mission Control Jobs should render only the active tab content at #{width}px"
+            assert_equal 1, geometry.fetch("tabRowCount"),
+              "Mission Control Jobs tabs should stay on one row at #{width}px"
             assert_operator geometry.fetch("rootTop"), :>=, geometry.fetch("tabContentTop"),
               "Mission Control Jobs subnavigation should precede content at #{width}px"
             assert_operator geometry.fetch("tabContentBottom"), :>=, geometry.fetch("rootBottom"),
               "Mission Control Jobs tab content should contain its body at #{width}px"
             assert_operator geometry.fetch("activeTabWidth"), :<, geometry.fetch("tabContentWidth"),
               "Mission Control Jobs active tab should not stretch across the content at #{width}px"
-            assert_operator geometry.fetch("subnavigationScrollWidth"), :>=, geometry.fetch("subnavigationClientWidth"),
-              "Mission Control Jobs subnavigation should contain its tabs at #{width}px"
+            assert_operator geometry.fetch("scrollerScrollWidth"), :>=, geometry.fetch("scrollerClientWidth"),
+              "Mission Control Jobs scroll container should contain its tabs at #{width}px"
+            if width <= 390
+              assert_operator geometry.fetch("scrollerScrollWidth"), :>, geometry.fetch("scrollerClientWidth"),
+                "Mission Control Jobs tabs should scroll horizontally at #{width}px"
+            end
 
-            find("#job-operations-tab-failed_jobs").click
+            find('[role="tab"]', text: /^Failed jobs/).click
             assert_selector '[data-layout="with-menu"] > div > h1', text: "Failed jobs", count: 1
             failed_geometry = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
-                  const activeTab = document.querySelector("#job-operations-tab-failed_jobs.tab-active")
+                  const activeTab = document.querySelector('[role="tab"].tab-active')
                   const tabContent = activeTab.nextElementSibling
+                  const activeTabRect = activeTab.getBoundingClientRect()
+                  const tabContentRect = tabContent.getBoundingClientRect()
+                  const tablist = activeTab.parentElement
+                  const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
                   const root = tabContent.querySelector("[data-mission-control-jobs-root]")
                   return {
-                    activeTabBottom: activeTab.getBoundingClientRect().bottom,
-                    tabContentTop: tabContent.getBoundingClientRect().top,
-                    tabContentBottom: tabContent.getBoundingClientRect().bottom,
+                    activeTabBottom: activeTabRect.bottom,
+                    activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
+                    tabContentTop: tabContentRect.top,
+                    tabContentBottom: tabContentRect.bottom,
+                    tabContentBorderTopWidth: parseFloat(getComputedStyle(tabContent).borderTopWidth),
+                    tabContentMarginTop: parseFloat(getComputedStyle(tabContent).marginTop),
+                    activeTabCoversSharedEdge: document.elementFromPoint(
+                      activeTabRect.left + activeTabRect.width / 2,
+                      tabContentRect.top + 0.5
+                    ) === activeTab,
                     rootBottom: root.getBoundingClientRect().bottom,
                     tabContentRadius: parseFloat(getComputedStyle(tabContent).borderStartStartRadius),
-                    activeTabOwnsTabContent: tabContent.classList.contains("tab-content")
+                    activeTabOwnsTabContent: tabContent.classList.contains("tab-content"),
+                    tabContentIsSticky: tabContent.classList.contains("sticky"),
+                    tabContentContain: getComputedStyle(tabContent).contain,
+                    tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size
                   }
                 }
               JAVASCRIPT
             end
             assert_in_delta failed_geometry.fetch("activeTabBottom"), failed_geometry.fetch("tabContentTop"), 1.5,
               "Mission Control Jobs middle tab should connect to tab content at #{width}px"
+            assert_in_delta 0, failed_geometry.fetch("activeTabBorderBottomWidth"), 0.1,
+              "Mission Control Jobs middle tab should leave its bottom border open at #{width}px"
+            assert_in_delta 1, failed_geometry.fetch("tabContentBorderTopWidth"), 0.1,
+              "Mission Control Jobs middle tab content should own the shared border at #{width}px"
+            assert_in_delta(-1, failed_geometry.fetch("tabContentMarginTop"), 0.1,
+              "Mission Control Jobs middle tab content should collapse the shared border at #{width}px")
+            assert failed_geometry.fetch("activeTabCoversSharedEdge"),
+              "Mission Control Jobs middle active tab should cover the shared border at #{width}px"
             assert failed_geometry.fetch("activeTabOwnsTabContent"),
               "Mission Control Jobs middle tab should immediately precede its content at #{width}px"
+            assert failed_geometry.fetch("tabContentIsSticky"),
+              "Mission Control Jobs middle tab content should be sticky at #{width}px"
+            assert_equal "inline-size", failed_geometry.fetch("tabContentContain"),
+              "Mission Control Jobs middle tab content should use inline-size containment at #{width}px"
+            assert_equal 1, failed_geometry.fetch("tabRowCount"),
+              "Mission Control Jobs middle tabs should stay on one row at #{width}px"
             assert_operator failed_geometry.fetch("tabContentRadius"), :>, 0,
               "Mission Control Jobs middle tab content should keep its leading corner at #{width}px"
             assert_operator failed_geometry.fetch("tabContentBottom"), :>=, failed_geometry.fetch("rootBottom"),
@@ -9531,6 +9944,27 @@ def configure_evidence_capture
         ensure
           desktop = VIEWPORTS.fetch("desktop")
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
+        def assert_job_operations_tabs_single_row
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const tablist = document.querySelector('[aria-label="Job operations sections"] > .overflow-x-auto > [role="tablist"]')
+                const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
+                const activeTab = tablist.querySelector(':scope > .tab-active')
+                const tabContent = activeTab.nextElementSibling
+                return {
+                  rowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
+                  activeTabBottom: activeTab.getBoundingClientRect().bottom,
+                  tabContentTop: tabContent.getBoundingClientRect().top
+                }
+              }
+            JAVASCRIPT
+          end
+          assert_equal 1, geometry.fetch("rowCount"), "Mission Control Jobs desktop tabs must stay on one row"
+          assert_in_delta geometry.fetch("activeTabBottom"), geometry.fetch("tabContentTop"), 1.5,
+            "Mission Control Jobs desktop active tab must connect to tab content"
         end
 
         def verify_maintenance_tasks_geometry

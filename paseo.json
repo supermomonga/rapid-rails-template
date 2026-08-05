@@ -3,11 +3,11 @@
     "setup": [
       "mise trust",
       "bundle install",
-      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" -w docs/"
+      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --watch docs/evidence/full-ja/README.md"
     ],
     "teardown": [
-      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" -w docs/",
-      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --close docs/**/*.md"
+      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --unwatch docs/evidence/full-ja/README.md",
+      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --close docs/evidence/full-ja/README.md"
     ]
   },
   "metadataGeneration": {

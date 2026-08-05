@@ -1,0 +1,502 @@
+# frozen_string_literal: true
+
+def sample_run_checked(command)
+  raise "コマンドが失敗しました: #{command}" unless run(command)
+end
+
+generate "scaffold", "Article", "title:string", "body:text", "draft:boolean"
+
+article_migrations = Dir.glob("db/migrate/*_create_articles.rb")
+raise "CreateArticles migrationが一意ではありません" unless article_migrations.one?
+
+create_file article_migrations.first, <<~RUBY, force: true
+  class CreateArticles < ActiveRecord::Migration[8.1]
+    def change
+      create_table :articles do |t|
+        t.references :profile, null: false, foreign_key: { on_delete: :cascade }
+        t.string :title, null: false
+        t.text :body, null: false
+        t.boolean :draft, null: false, default: true
+        t.timestamps
+      end
+    end
+  end
+RUBY
+
+inject_into_class "app/models/profile.rb", "Profile", "  has_many :articles, dependent: :destroy\n\n"
+
+create_file "app/models/article.rb", <<~'RUBY', force: true
+  class Article < ApplicationRecord
+    belongs_to :profile
+
+    validates :title, :body, presence: true
+  end
+RUBY
+
+create_file "app/policies/article_policy.rb", <<~'RUBY', force: true
+  class ArticlePolicy < ApplicationPolicy
+    authorize :user, optional: true
+
+    def create?
+      owner?
+    end
+
+    def update?
+      owner?
+    end
+
+    def destroy?
+      owner?
+    end
+
+    relation_scope do |relation|
+      published = relation.where(draft: false)
+      user ? published.or(relation.where(profile_id: user.profile.id)) : published
+    end
+
+    private
+
+    def owner?
+      user && record.profile_id == user.profile.id
+    end
+  end
+RUBY
+
+create_file "app/controllers/articles_controller.rb", <<~'RUBY', force: true
+  class ArticlesController < ApplicationController
+    before_action :authenticate_user!, only: %i[new create edit update destroy]
+    before_action :set_article, only: %i[edit update destroy]
+
+    def index
+      visible_articles = authorized_scope(Article.all).order(created_at: :desc, id: :desc)
+      @pagy, @articles = pagy(:offset, visible_articles, limit: 25)
+    end
+
+    def show
+      @article = authorized_scope(Article.all).find(params.expect(:id))
+    end
+
+    def new
+      @article = current_user.profile.articles.build
+      authorize! @article, to: :create?
+    end
+
+    def edit
+      authorize! @article, to: :update?
+    end
+
+    def create
+      @article = current_user.profile.articles.build(article_params)
+      authorize! @article, to: :create?
+
+    if @article.save
+      redirect_to @article, notice: I18n.t("articles.create.notice")
+      else
+        render :new, status: :unprocessable_content
+      end
+    end
+
+    def update
+      authorize! @article, to: :update?
+
+    if @article.update(article_params)
+      redirect_to @article, notice: I18n.t("articles.update.notice"), status: :see_other
+      else
+        render :edit, status: :unprocessable_content
+      end
+    end
+
+    def destroy
+      authorize! @article, to: :destroy?
+      @article.destroy!
+      redirect_to articles_path, notice: I18n.t("articles.destroy.notice"), status: :see_other
+    end
+
+    private
+
+    def set_article
+      @article = Article.find(params.expect(:id))
+    end
+
+    def article_params
+      params.expect(article: %i[title body draft])
+    end
+  end
+RUBY
+
+create_file "config/locales/articles.ja.yml", <<~'YAML', force: true
+  ja:
+    articles:
+      create:
+        notice: 記事を作成しました
+      update:
+        notice: 記事を更新しました
+      destroy:
+        notice: 記事を削除しました
+YAML
+
+create_file "config/locales/articles.en.yml", <<~'YAML', force: true
+  en:
+    articles:
+      create:
+        notice: Article was successfully created.
+      update:
+        notice: Article was successfully updated.
+      destroy:
+        notice: Article was successfully destroyed.
+YAML
+
+create_file "app/views/articles/index.html.erb", <<~'ERB', force: true
+  <% content_for :page_title, "Articles" %>
+
+  <div class="mx-auto w-full max-w-6xl space-y-6 px-5 py-10 md:py-14">
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
+      <% if user_signed_in? %>
+        <%= link_to "New article", new_article_path, class: "btn btn-primary btn-rapid" %>
+      <% end %>
+    </header>
+
+    <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <div class="card-body">
+        <div class="overflow-x-auto">
+          <table class="table table-sm table-pin-rows min-w-[780px]">
+            <thead>
+              <tr>
+                <th scope="col">Title</th>
+                <th scope="col">Author</th>
+                <th scope="col">Body</th>
+                <th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="articles">
+              <% @articles.each do |article| %>
+                <tr id="<%= dom_id article %>">
+                  <td class="whitespace-nowrap"><%= article.title %></td>
+                  <td class="whitespace-nowrap"><%= article.profile.display_name %></td>
+                  <td class="min-w-64"><%= truncate(article.body, length: 120) %></td>
+                  <td class="whitespace-nowrap">
+                    <span class="badge <%= "badge-outline" if article.draft? %>">
+                      <%= article.draft? ? "Draft" : "Published" %>
+                    </span>
+                  </td>
+                  <td class="whitespace-nowrap text-right">
+                    <%= link_to "Show this article", article, class: "btn btn-rapid" %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <% if @pagy.last > 1 %>
+      <nav aria-label="Article pagination">
+        <div class="join">
+          <% if (previous_url = @pagy.page_url(:previous)) %>
+            <%= link_to "Previous", previous_url, class: "btn join-item" %>
+          <% else %>
+            <span class="btn btn-disabled join-item" tabindex="-1" role="button" aria-disabled="true">Previous</span>
+          <% end %>
+          <span class="btn btn-active join-item" aria-current="page"><%= @pagy.page %> / <%= @pagy.last %></span>
+          <% if (next_url = @pagy.page_url(:next)) %>
+            <%= link_to "Next", next_url, class: "btn join-item" %>
+          <% else %>
+            <span class="btn btn-disabled join-item" tabindex="-1" role="button" aria-disabled="true">Next</span>
+          <% end %>
+        </div>
+      </nav>
+    <% end %>
+  </div>
+ERB
+
+create_file "app/views/articles/_article.html.erb", <<~'ERB', force: true
+  <div id="<%= dom_id article %>">
+    <ul class="list">
+      <li class="list-row">
+        <span class="text-sm text-neutral">Author</span>
+        <strong class="list-col-grow min-w-0"><%= article.profile.display_name %></strong>
+      </li>
+      <li class="list-row">
+        <span class="text-sm text-neutral">Title</span>
+        <strong class="list-col-grow min-w-0"><%= article.title %></strong>
+      </li>
+      <li class="list-row">
+        <span class="text-sm text-neutral">Body</span>
+        <p class="list-col-grow min-w-0 whitespace-pre-wrap"><%= article.body %></p>
+      </li>
+      <li class="list-row">
+        <span class="text-sm text-neutral">Status</span>
+        <div class="list-col-grow min-w-0">
+          <span class="badge <%= "badge-outline" if article.draft? %>">
+            <%= article.draft? ? "Draft" : "Published" %>
+          </span>
+        </div>
+      </li>
+    </ul>
+  </div>
+ERB
+
+create_file "app/views/articles/show.html.erb", <<~'ERB', force: true
+  <% content_for :page_title, "Article" %>
+
+  <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
+    <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
+
+    <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <div class="card-body">
+        <%= render @article %>
+        <div class="card-actions justify-end">
+          <% if allowed_to?(:update?, @article) %>
+            <%= link_to "Edit this article", edit_article_path(@article), class: "btn btn-rapid" %>
+            <%= button_to "Destroy this article", @article, method: :delete, class: "btn btn-outline btn-error btn-rapid" %>
+          <% end %>
+          <%= link_to "Back to articles", articles_path, class: "btn btn-rapid" %>
+        </div>
+      </div>
+    </section>
+  </div>
+ERB
+
+create_file "test/fixtures/articles.yml", <<~'YAML', force: true
+  one:
+    profile: one
+    title: Published article
+    body: Published body
+    draft: false
+
+  two:
+    profile: two
+    title: Draft article
+    body: Draft body
+    draft: true
+YAML
+
+create_file "test/models/article_test.rb", <<~'RUBY', force: true
+  require "test_helper"
+
+  class ArticleTest < ActiveSupport::TestCase
+    test "belongs to a profile and requires a title and body" do
+      article = Article.new(profile: profiles(:one))
+
+      assert_not article.valid?
+      assert article.errors.of_kind?(:title, :blank)
+      assert article.errors.of_kind?(:body, :blank)
+    end
+
+    test "starts as a draft" do
+      article = profiles(:one).articles.build(title: "New article", body: "New body")
+
+      assert_predicate article, :draft?
+    end
+
+    test "destroys articles with their profile" do
+      article = articles(:one)
+
+      profiles(:one).destroy!
+
+      assert_not Article.exists?(article.id)
+    end
+  end
+RUBY
+
+create_file "test/policies/article_policy_test.rb", <<~'RUBY', force: true
+  require "test_helper"
+
+  class ArticlePolicyTest < ActiveSupport::TestCase
+    test "allows only the owner to create update and destroy" do
+      owner = users(:one)
+      other = users(:two)
+      article = articles(:one)
+
+      assert ArticlePolicy.new(article, user: owner).apply(:create?)
+      assert ArticlePolicy.new(article, user: owner).apply(:update?)
+      assert ArticlePolicy.new(article, user: owner).apply(:destroy?)
+      assert_not ArticlePolicy.new(article, user: other).apply(:create?)
+      assert_not ArticlePolicy.new(article, user: other).apply(:update?)
+      assert_not ArticlePolicy.new(article, user: other).apply(:destroy?)
+    end
+
+    test "shows published articles publicly and adds the signed in users drafts" do
+      guest_scope = ArticlePolicy.new(Article, user: nil)
+        .apply_scope(Article.all, type: :active_record_relation)
+      owner_scope = ArticlePolicy.new(Article, user: users(:two))
+        .apply_scope(Article.all, type: :active_record_relation)
+
+      assert_equal [articles(:one).id], guest_scope.ids
+      assert_equal [articles(:one).id, articles(:two).id].sort, owner_scope.ids.sort
+    end
+  end
+RUBY
+
+create_file "test/controllers/articles_controller_test.rb", <<~'RUBY', force: true
+  require "test_helper"
+
+  class ArticlesControllerTest < ActionDispatch::IntegrationTest
+    include Devise::Test::IntegrationHelpers
+
+    setup do
+      @published = articles(:one)
+      @draft = articles(:two)
+    end
+
+    test "shows only published articles to guests" do
+      get articles_url
+
+      assert_response :success
+      assert_select "#article_#{@published.id}", count: 1
+      assert_select "#article_#{@draft.id}", count: 0
+
+      get article_url(@published)
+      assert_response :success
+
+      get article_url(@draft)
+      assert_response :not_found
+    end
+
+    test "shows an owner their own draft" do
+      sign_in users(:two)
+
+      get article_url(@draft)
+
+      assert_response :success
+      assert_select ".badge", text: "Draft", count: 1
+    end
+
+    test "requires authentication for write actions" do
+      get new_article_url
+      assert_redirected_to new_user_session_url
+
+      post articles_url, params: { article: { title: "Guest", body: "Body", draft: false } }
+      assert_redirected_to new_user_session_url
+
+      get edit_article_url(@published)
+      assert_redirected_to new_user_session_url
+
+      delete article_url(@published)
+      assert_redirected_to new_user_session_url
+    end
+
+    test "creates an article for the signed in profile and ignores profile_id" do
+      sign_in users(:one)
+
+      get new_article_url
+      assert_response :success
+      assert_select 'form input[name="article[profile_id]"]', count: 0
+
+      assert_difference("Article.count") do
+        post articles_url, params: {
+          article: {
+            title: "Owned article",
+            body: "Owned body",
+            draft: false,
+            profile_id: profiles(:two).id
+          }
+        }
+      end
+
+      created = Article.order(:id).last
+      assert_equal profiles(:one), created.profile
+      assert_redirected_to article_url(created)
+    end
+
+    test "allows an owner to update and destroy their article" do
+      sign_in users(:one)
+
+      patch article_url(@published), params: { article: { title: "Updated", body: "Updated body", draft: true } }
+      assert_redirected_to article_url(@published)
+      assert_equal ["Updated", "Updated body", true], @published.reload.attributes.values_at("title", "body", "draft")
+
+      assert_difference("Article.count", -1) do
+        delete article_url(@published)
+      end
+      assert_redirected_to articles_url
+    end
+
+    test "forbids another user from mutating an article" do
+      sign_in users(:one)
+
+      get edit_article_url(@draft)
+      assert_response :forbidden
+
+      assert_no_changes -> { @draft.reload.title } do
+        patch article_url(@draft), params: { article: { title: "Forbidden", body: "Body", draft: false } }
+      end
+      assert_response :forbidden
+
+      assert_no_difference("Article.count") do
+        delete article_url(@draft)
+      end
+      assert_response :forbidden
+    end
+
+    test "paginates visible articles twenty five at a time" do
+      30.times do |index|
+        profiles(:one).articles.create!(title: "Article #{index}", body: "Body", draft: false)
+      end
+
+      get articles_url
+
+      assert_response :success
+      assert_select "tbody#articles tr", count: 25
+      assert_select 'nav[aria-label="Article pagination"] .join', count: 1
+    end
+  end
+RUBY
+
+append_to_file "db/seeds.rb", <<~'RUBY'
+
+  sample_users = 10.times.map do |user_index|
+    number = user_index + 1
+    login_id = format("sample_user_%02d", number)
+    user = User.find_or_initialize_by(login_id: login_id)
+    if user.new_record?
+      user.password = "password123"
+      user.password_confirmation = "password123"
+    end
+    user.save!
+    user.profile.update!(screen_name: login_id, display_name: format("Sample User %02d", number))
+
+    50.times do |article_index|
+      article_number = article_index + 1
+      article = user.profile.articles.find_or_initialize_by(
+        title: format("Sample Article %02d-%02d", number, article_number)
+      )
+      article.body = format("This is article %02d by Sample User %02d.", article_number, number)
+      article.draft = article_number > 40
+      article.save!
+    end
+
+    user
+  end
+RUBY
+
+create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
+  require "test_helper"
+
+  class SampleSeedTest < ActiveSupport::TestCase
+    test "creates ten users with fifty articles each without duplication" do
+      2.times { load Rails.root.join("db/seeds.rb") }
+
+      sample_users = User.where(login_id: (1..10).map { |number| format("sample_user_%02d", number) }).order(:login_id)
+      assert_equal 10, sample_users.count
+
+      sample_users.each do |user|
+        assert_equal 50, user.profile.articles.count
+        assert_equal 10, user.profile.articles.where(draft: true).count
+        assert_equal 40, user.profile.articles.where(draft: false).count
+      end
+      assert_equal 500, Article.where(profile: sample_users.map(&:profile)).count
+    end
+  end
+RUBY
+
+after_bundle do
+  sample_run_checked "bin/rails db:prepare"
+  sample_run_checked "bin/annotaterb models"
+  sample_run_checked "bin/rubocop -a"
+  sample_run_checked "bin/rails db:seed"
+  sample_run_checked "IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:45678 bin/rails test"
+end

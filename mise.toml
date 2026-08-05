@@ -26,7 +26,7 @@ imgproxy_environment = {
   "IMGPROXY_SALT" => SecureRandom.hex(32),
   "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"
 }
-exec imgproxy_environment, RbConfig.ruby, File.join(root, "bootstrap.rb"),
+generated = system imgproxy_environment, RbConfig.ruby, File.join(root, "bootstrap.rb"),
   "--app-id=sample",
   "--app-name=Sample App",
   "--default-locale=ja",
@@ -44,4 +44,10 @@ exec imgproxy_environment, RbConfig.ruby, File.join(root, "bootstrap.rb"),
   "--mail=use",
   "--deployment=dokploy",
   sample
+abort "sampleアプリの生成に失敗しました" unless generated
+
+sample_template = File.join(root, "bin/sample-app-template")
+sample_template_runner = File.join(root, "bin/apply-sample-app-template")
+exec imgproxy_environment.merge("BUNDLE_GEMFILE" => File.join(sample, "Gemfile")),
+  "bundle", "exec", RbConfig.ruby, sample_template_runner, sample, sample_template
 '''

@@ -67,6 +67,8 @@ DeviseによるユーザーID＋パスワード認証は全構成で必須です
 
 リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、imgproxy、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 
+生成後はsample専用のArticle scaffoldを`/articles`へ追加し、`sample_user_01`から`sample_user_10`までの10ユーザーと、各ユーザー50件（公開40件、draft 10件）、合計500件の記事をseedします。全sampleユーザーのpasswordは`password123`です。公開済み記事は誰でも閲覧でき、ログインしたユーザーは自分のdraftを含む記事の作成・閲覧・編集・削除ができます。このArticleはscaffold templateの確認用であり、配布用`bootstrap.rb`や`rake evidence:update`の生成アプリには含めません。
+
 `rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、password基底の共通画面、SIWE、imgproxyを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
 
 `rake evidence:verify`（`mise run evidence-verify`）はブラウザを起動せず、生成元fingerprint、manifest、README、PNGの欠落・余剰・SHA-256・寸法を検証します。通常のリポジトリMinitestにも同じ検証を含むため、テンプレート変更後にエビデンスを更新し忘れるとテストが失敗します。MD内のbase commitは追跡情報であり、鮮度判定には未コミット変更も反映できる内容fingerprintを使用します。

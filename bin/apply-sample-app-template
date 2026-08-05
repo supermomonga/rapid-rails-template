@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "rails/generators"
+require "rails/generators/rails/app/app_generator"
+
+destination = File.realpath(ARGV.fetch(0))
+template = File.realpath(ARGV.fetch(1))
+
+Dir.chdir(destination) do
+  Rails::Generators::AppGenerator.apply_rails_template(template, destination)
+end

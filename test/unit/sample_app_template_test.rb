@@ -1,0 +1,64 @@
+# frozen_string_literal: true
+
+require_relative "../test_helper"
+
+class SampleAppTemplateTest < Minitest::Test
+  ROOT = File.expand_path("../..", __dir__)
+
+  def setup
+    @source = File.read(File.join(ROOT, "bin/sample-app-template"))
+    @runner = File.read(File.join(ROOT, "bin/apply-sample-app-template"))
+  end
+
+  def test_applies_the_template_through_the_rails_application_generator
+    assert_includes @runner, 'require "rails/generators/rails/app/app_generator"'
+    assert_includes @runner, "Rails::Generators::AppGenerator.apply_rails_template(template, destination)"
+    assert_includes @runner, "Dir.chdir(destination)"
+  end
+
+  def test_generates_article_scaffold_with_profile_ownership
+    assert_includes @source, 'generate "scaffold", "Article", "title:string", "body:text", "draft:boolean"'
+    assert_includes @source, "t.references :profile, null: false, foreign_key: { on_delete: :cascade }"
+    assert_includes @source, "t.string :title, null: false"
+    assert_includes @source, "t.text :body, null: false"
+    assert_includes @source, "t.boolean :draft, null: false, default: true"
+    assert_includes @source, "has_many :articles, dependent: :destroy"
+    assert_includes @source, "belongs_to :profile"
+    assert_includes @source, "params.expect(article: %i[title body draft])"
+    refute_includes @source, "params.expect(article: %i[profile_id"
+  end
+
+  def test_authorizes_owners_and_paginates_visible_articles
+    assert_includes @source, "class ArticlePolicy < ApplicationPolicy"
+    assert_includes @source, "authorize :user, optional: true"
+    assert_includes @source, "published.or(relation.where(profile_id: user.profile.id))"
+    assert_includes @source, "current_user.profile.articles.build(article_params)"
+    assert_includes @source, "pagy(:offset, visible_articles, limit: 25)"
+    assert_includes @source, 'nav aria-label="Article pagination"'
+    assert_includes @source, 'table table-sm table-pin-rows min-w-[780px]'
+    assert_includes @source, 'td class="min-w-64"'
+  end
+
+  def test_seeds_ten_users_and_fifty_articles_each
+    assert_includes @source, "sample_users = 10.times.map"
+    assert_includes @source, "50.times do |article_index|"
+    assert_includes @source, 'article.draft = article_number > 40'
+    assert_includes @source, "assert_equal 500, Article.where"
+    assert_includes @source, '2.times { load Rails.root.join("db/seeds.rb") }'
+  end
+
+  def test_prepares_formats_seeds_and_tests_the_generated_app_in_order
+    commands = [
+      'sample_run_checked "bin/rails db:prepare"',
+      'sample_run_checked "bin/annotaterb models"',
+      'sample_run_checked "bin/rubocop -a"',
+      'sample_run_checked "bin/rails db:seed"',
+      'sample_run_checked "IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:45678 bin/rails test"'
+    ]
+
+    indexes = commands.map do |command|
+      @source.index(command).then { |index| refute_nil(index, command); index }
+    end
+    assert_equal indexes.sort, indexes
+  end
+end

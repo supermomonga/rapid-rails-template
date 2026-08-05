@@ -56,7 +56,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes initializer, "action_mailer.default_url_options = identity.default_url_options"
     assert_includes concern, "I18n.with_locale(I18n.default_locale, &action)"
     assert_includes helper, "Rails.configuration.x.application_identity"
-    assert_includes helper, "Rails.application.routes.url_helpers"
+    assert_includes helper, "class Tab < T::Struct"
+    assert_includes helper, "const :is_active, T.nilable(T.proc.returns(T::Boolean)), default: nil"
+    assert_includes helper, "module ApplicationRoutes"
+    assert_includes helper, "Rails.application.routes.url_helpers.extend(ApplicationRoutes)"
+    assert_includes helper, "returns(ApplicationRoutes)"
+    assert_includes helper, "options: Object).returns(String)"
+    assert_includes helper, "block: T.proc.returns(String)"
+    refute_includes helper, "T.untyped"
     assert_equal 1, helper.scan("def application_routes").size
     assert_includes helper, "def with_tab(tabs:, size: nil, &block)"
     assert_includes helper, "request.path.start_with?(path)"
@@ -495,6 +502,8 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes helper, 'progress-\#{color}'
     assert_includes helper, 'class: "select w-full"'
     assert_includes helper, 'class: "textarea w-full"'
+    assert_includes helper, "form_builder: ActionView::Helpers::FormBuilder"
+    refute_includes helper, "T.untyped"
     assert_class_tokens tasks_index, "card", "card-border"
     assert_class_tokens task, "link", "link-hover"
     assert_class_tokens task_show, "fieldset"
@@ -1163,6 +1172,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes shim, "class DeviseController < ActionController::Base"
     assert_includes shim, "include Devise::Controllers::SignInOut"
     assert_includes shim, "module ApplicationHelper"
+    assert_includes shim, "module ApplicationHelper::ApplicationRoutes"
+    assert_includes shim, "include GeneratedUrlHelpersModule"
+    assert_includes shim, "include GeneratedPathHelpersModule"
     assert_includes shim_configuration, "module AvatarHelper"
     assert_includes shim_configuration, 'create_file "sorbet/rbi/shims/boring_avatars.rbi"'
     assert_includes shim_configuration, "BoringAvatars::RailsAttributeValue"

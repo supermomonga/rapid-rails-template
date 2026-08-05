@@ -6166,9 +6166,18 @@ def configure_default_views
     module ApplicationHelper
       extend T::Sig
 
-      Tab = T.type_alias { T::Hash[Symbol, T.untyped] }
+      class Tab < T::Struct
+        const :name, String
+        const :path, String
+        const :is_active, T.nilable(T.proc.returns(T::Boolean)), default: nil
+      end
 
-      sig { returns(T.untyped) }
+      module ApplicationRoutes
+      end
+
+      Rails.application.routes.url_helpers.extend(ApplicationRoutes)
+
+      sig { returns(ApplicationRoutes) }
       def application_routes
         Rails.application.routes.url_helpers
       end
@@ -6189,16 +6198,19 @@ def configure_default_views
         application_identity.canonical_url(request.path)
       end
 
-      sig { params(key: T.any(String, Symbol), options: T.untyped).returns(T.untyped) }
+      sig { params(key: T.any(String, Symbol), options: Object).returns(String) }
       def application_translate(key, **options)
-        I18n.backend.translate(application_identity.default_locale, key, **options)
+        translation = I18n.backend.translate(application_identity.default_locale, key, **options)
+        return translation if translation.is_a?(String)
+
+        Kernel.raise TypeError, "application translation must be a string: #{key}"
       end
 
       sig do
         params(
           tabs: T::Array[Tab],
           size: T.nilable(Symbol),
-          block: T.proc.returns(T.untyped)
+          block: T.proc.returns(String)
         ).returns(ActiveSupport::SafeBuffer)
       end
       def with_tab(tabs:, size: nil, &block)
@@ -6207,13 +6219,13 @@ def configure_default_views
         end
 
         matches = tabs.each_with_index.filter_map do |tab, index|
-          path = tab.fetch(:path).to_s
+          path = tab.path
           Kernel.raise ArgumentError, "tab path must not be empty" if path.empty?
 
-          predicate = tab[:is_active]
+          predicate = tab.is_active
           active = if predicate.nil?
             request.path.start_with?(path)
-          elsif predicate.is_a?(Proc) && predicate.lambda?
+          elsif predicate.lambda?
             predicate.call
           else
             Kernel.raise ArgumentError, "tab is_active must be a lambda"
@@ -6231,7 +6243,7 @@ def configure_default_views
         tab_content = capture(&block)
         items = tabs.each_with_index.flat_map do |tab, index|
           active = index == active_index
-          link = link_to tab.fetch(:name), tab.fetch(:path), role: "tab",
+          link = link_to tab.name, tab.path, role: "tab",
             class: class_names("tab", "tab-active": active, "z-10": active),
             aria: { selected: active, current: ("page" if active) }
           next [link] unless active
@@ -6258,8 +6270,8 @@ def configure_default_views
         capture_count = 0
 
         html = with_tab(tabs: [
-          { name: "Account", path: "/account" },
-          { name: "Wallets", path: "/account/siwe_identities" }
+          ApplicationHelper::Tab.new(name: "Account", path: "/account"),
+          ApplicationHelper::Tab.new(name: "Wallets", path: "/account/siwe_identities")
         ]) do
           capture_count += 1
           tag.p("Tab content")
@@ -6283,8 +6295,8 @@ def configure_default_views
       test "uses an explicit lambda instead of path matching" do
         request.path = "/account"
         html = with_tab(tabs: [
-          { name: "Account", path: "/account", is_active: -> { false } },
-          { name: "Dynamic", path: "/elsewhere", is_active: -> { true } }
+          ApplicationHelper::Tab.new(name: "Account", path: "/account", is_active: -> { false }),
+          ApplicationHelper::Tab.new(name: "Dynamic", path: "/elsewhere", is_active: -> { true })
         ]) { tag.p("Tab content") }
 
         assert_equal "/elsewhere", Nokogiri::HTML5.fragment(html).at_css(".tab-active")["href"]
@@ -6293,36 +6305,36 @@ def configure_default_views
       test "rejects no match and equally long active paths" do
         request.path = "/unmatched"
         assert_raises(ArgumentError) do
-          with_tab(tabs: [{ name: "Account", path: "/account" }]) { "content" }
+          with_tab(tabs: [ApplicationHelper::Tab.new(name: "Account", path: "/account")]) { "content" }
         end
 
         assert_raises(ArgumentError) do
           with_tab(tabs: [
-            { name: "First", path: "/first", is_active: -> { true } },
-            { name: "Other", path: "/other", is_active: -> { true } }
+            ApplicationHelper::Tab.new(name: "First", path: "/first", is_active: -> { true }),
+            ApplicationHelper::Tab.new(name: "Other", path: "/other", is_active: -> { true })
           ]) { "content" }
         end
       end
 
       test "rejects empty paths and active predicates other than lambdas" do
         assert_raises(ArgumentError) do
-          with_tab(tabs: [{ name: "Empty", path: "" }]) { "content" }
+          with_tab(tabs: [ApplicationHelper::Tab.new(name: "Empty", path: "")]) { "content" }
         end
         assert_raises(ArgumentError) do
-          with_tab(tabs: [{ name: "Invalid", path: "/invalid", is_active: true }]) { "content" }
-        end
-        assert_raises(ArgumentError) do
-          with_tab(tabs: [{ name: "Proc", path: "/proc", is_active: proc { true } }]) { "content" }
+          with_tab(tabs: [
+            ApplicationHelper::Tab.new(name: "Proc", path: "/proc", is_active: proc { true })
+          ]) { "content" }
         end
       end
 
       test "adds an optional daisyUI size modifier" do
         request.path = "/compact"
-        html = with_tab(tabs: [{ name: "Compact", path: "/compact" }], size: :sm) { "content" }
+        tab = ApplicationHelper::Tab.new(name: "Compact", path: "/compact")
+        html = with_tab(tabs: [tab], size: :sm) { "content" }
 
         assert_includes Nokogiri::HTML5.fragment(html).at_css("[role=tablist]")["class"].split, "tabs-sm"
         assert_raises(ArgumentError) do
-          with_tab(tabs: [{ name: "Invalid", path: "/compact" }], size: :compact) { "content" }
+          with_tab(tabs: [tab], size: :compact) { "content" }
         end
       end
     end
@@ -6419,9 +6431,9 @@ def configure_default_views
       <% content_for :account_settings_content, flush: true do %>
         <nav aria-label="<%= t('navigation.account_settings') %>">
           <%= with_tab(tabs: [
-            { name: t("siwe.account_settings.basic"), path: edit_user_registration_path,
-              is_active: -> { request.path == edit_user_registration_path || request.path == user_registration_path } },
-            { name: t("siwe.identities.title"), path: account_siwe_identities_path }
+            ApplicationHelper::Tab.new(name: t("siwe.account_settings.basic"), path: edit_user_registration_path,
+              is_active: -> { request.path == edit_user_registration_path || request.path == user_registration_path }),
+            ApplicationHelper::Tab.new(name: t("siwe.identities.title"), path: account_siwe_identities_path)
           ]) do %>
             <%= yield %>
           <% end %>
@@ -8127,7 +8139,7 @@ def install_job_operations
 
   create_file "app/views/layouts/mission_control/jobs/_navigation.html.erb", <<~'ERB', force: true
     <% tabs = navigation_sections.map do |key, (label, url)|
-         { name: label, path: url, is_active: -> { key == current_section } }
+         ApplicationHelper::Tab.new(name: label, path: url, is_active: -> { key == current_section })
        end %>
     <nav aria-label="Job operations sections">
       <%= with_tab(tabs:, size: :xs) do %>
@@ -8832,7 +8844,7 @@ def install_maintenance_tasks
 
         sig do
           params(
-            form_builder: T.untyped,
+            form_builder: ActionView::Helpers::FormBuilder,
             parameter_name: T.any(String, Symbol)
           ).returns(ActiveSupport::SafeBuffer)
         end
@@ -11006,6 +11018,11 @@ def configure_sorbet_shims
 
     module ApplicationHelper
       include ActionView::Helpers
+    end
+
+    module ApplicationHelper::ApplicationRoutes
+      include GeneratedUrlHelpersModule
+      include GeneratedPathHelpersModule
     end
 
     #{avatar_bindings}

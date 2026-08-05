@@ -6,8 +6,8 @@
   ],
   "locale": "ja",
   "image_delivery": "imgproxy",
-  "source_fingerprint": "d524e06b2c975f1c4c8c563639463a9bd03806bc804a521eb003be31d7978ec1",
-  "base_commit": "a0c72626ea362a07e8e2572a2178a8aef4b0e4f6",
+  "source_fingerprint": "ac9900283776dceb9f021b14ea765098a600ec4e6a0de5249e00eee76190ed4a",
+  "base_commit": "a80da703f07b26e4af80691eca1a703e43f966d3",
   "viewports": {
     "desktop": {
       "width": 1400,

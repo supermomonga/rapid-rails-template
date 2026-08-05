@@ -155,7 +155,26 @@ module RapidRailsTemplate
       manifest.fetch("captures").group_by { |capture| capture.fetch("title") }.each do |capture_title, captures|
         lines << "## #{capture_title}"
         lines << ""
-        captures.each do |capture|
+
+        captures_by_id = captures.group_by { |capture| capture.fetch("id") }
+        paired_captures = captures_by_id.filter_map do |_id, capture_group|
+          captures_by_viewport = capture_group.to_h { |capture| [capture.fetch("viewport"), capture] }
+          next unless captures_by_viewport.key?("desktop") && captures_by_viewport.key?("mobile")
+
+          captures_by_viewport.values_at("desktop", "mobile")
+        end
+        unless paired_captures.empty?
+          lines << "|Desktop|Mobile|"
+          lines << "|---|---|"
+          paired_captures.each do |desktop, mobile|
+            lines << "|![#{capture_title} (desktop)](#{desktop.fetch("path")})|" \
+              "![#{capture_title} (mobile)](#{mobile.fetch("path")})|"
+          end
+          lines << ""
+        end
+
+        paired_ids = paired_captures.flatten.to_h { |capture| [capture.fetch("id"), true] }
+        captures.reject { |capture| paired_ids.key?(capture.fetch("id")) }.each do |capture|
           viewport = capture.fetch("viewport")
           lines << "### #{viewport.capitalize}"
           lines << ""

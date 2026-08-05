@@ -11,6 +11,43 @@ class EvidenceTest < Minitest::Test
     end
   end
 
+  def test_renders_paired_viewports_as_a_table_and_unpaired_viewports_as_sections
+    manifest = {
+      "scenario_set" => "full",
+      "additional_login_methods" => [],
+      "locale" => "ja",
+      "image_delivery" => "skip",
+      "source_fingerprint" => "fingerprint",
+      "base_commit" => "abc123",
+      "captures" => [
+        { "id" => "login-empty", "title" => "ログイン", "viewport" => "desktop", "path" => "login-empty--desktop.png" },
+        { "id" => "login-existing", "title" => "ログイン", "viewport" => "desktop", "path" => "login-existing--desktop.png" },
+        { "id" => "login-empty", "title" => "ログイン", "viewport" => "mobile", "path" => "login-empty--mobile.png" },
+        { "id" => "login-existing", "title" => "ログイン", "viewport" => "mobile", "path" => "login-existing--mobile.png" },
+        { "id" => "navigation-open", "title" => "モバイルメニュー", "viewport" => "mobile", "path" => "navigation-open--mobile.png" }
+      ]
+    }
+
+    readme = RapidRailsTemplate::Evidence.render_variant_readme(manifest)
+
+    assert_includes readme, <<~MARKDOWN.chomp
+      ## ログイン
+
+      |Desktop|Mobile|
+      |---|---|
+      |![ログイン (desktop)](login-empty--desktop.png)|![ログイン (mobile)](login-empty--mobile.png)|
+      |![ログイン (desktop)](login-existing--desktop.png)|![ログイン (mobile)](login-existing--mobile.png)|
+    MARKDOWN
+    refute_includes readme, "### Desktop"
+    assert_includes readme, <<~MARKDOWN.chomp
+      ## モバイルメニュー
+
+      ### Mobile
+
+      ![モバイルメニュー (mobile)](navigation-open--mobile.png)
+    MARKDOWN
+  end
+
   def test_rejects_stale_source_fingerprint
     with_evidence_repository do |root|
       File.write(File.join(root, "src/rapid_rails_template/template.rb"), "changed\n")

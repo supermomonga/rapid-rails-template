@@ -2,7 +2,6 @@
   "worktree": {
     "setup": [
       "mise trust",
-      "bundle install",
       "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --watch docs/evidence/full-ja/README.md"
     ],
     "teardown": [

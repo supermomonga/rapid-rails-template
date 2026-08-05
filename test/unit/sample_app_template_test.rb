@@ -24,12 +24,17 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, "t.boolean :draft, null: false, default: true"
     assert_includes @source, "has_many :articles, dependent: :destroy"
     assert_includes @source, "belongs_to :profile"
+    assert_includes @source, "create_file \"app/models/article.rb\", <<~'RUBY', force: true\n  # typed: true"
+    assert_includes @source, "create_file \"app/policies/article_policy.rb\", <<~'RUBY', force: true\n  # typed: true"
     assert_includes @source, "params.expect(article: %i[title body draft])"
     refute_includes @source, "params.expect(article: %i[profile_id"
   end
 
   def test_authorizes_owners_and_paginates_visible_articles
     assert_includes @source, "class ArticlePolicy < ApplicationPolicy"
+    assert_includes @source, "T::Sig::WithoutRuntime.sig { returns(T::Boolean) }"
+    assert_includes @source, "scope_for :active_record_relation do |relation|"
+    assert_includes @source, "T.bind(self, ArticlePolicy)"
     assert_includes @source, "authorize :user, optional: true"
     assert_includes @source, "published.or(relation.where(profile_id: user.profile.id))"
     assert_includes @source, "current_user.profile.articles.build(article_params)"

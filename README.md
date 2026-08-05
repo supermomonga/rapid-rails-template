@@ -65,7 +65,9 @@ DeviseによるユーザーID＋パスワード認証は全構成で必須です
 
 `--job-operations=enable`はSolid Queue使用時だけ選択でき、Mission Control Jobs 1.1.0を`/admin/jobs`へmountします。画面は既存の管理者認証、Action Policy、admin navigationへ統合し、Mission Control独自のHTTP Basic認証は使用しません。完了ジョブはSolid Queue 1.6.0の標準設定により1日保持した後、毎時12分に公式APIでbatch削除されます。失敗ジョブはcleanup対象外で、管理者がretryまたはdiscardするまで保持されます。
 
-生成アプリケーションにはSorbetとTapiocaを常設し、`sorbet/config`、Gem RBI、Rails DSL RBI、`bin/tapioca`を生成します。既存ファイルはSorbet既定の`typed: false`から開始し、型検査を強めるファイルへ`# typed: true`と必要な`sig`を追加します。Gem更新後は`bin/tapioca gems`、modelやmigrationなどRails DSLの変更後は`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行してください。通常の`bin/rails test`はRBIの鮮度、shimの重複、`bundle exec srb tc`を検証するため、`bin/ci`とGitHub Actionsでも同じ契約が適用されます。
+生成アプリケーションにはSorbetとTapiocaを常設し、`sorbet/config`、Gem RBI、Rails DSL RBI、`bin/tapioca`を生成します。model、policy、service、job、mailer、validator、application-owned `lib`は生成時から`# typed: true`とし、全機能構成では31ファイルを型推論の対象にします。controller、helper、test、config、migrationはSorbet既定の`typed: false`から段階的に引き上げます。
+
+`sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`は生成物であり、手動編集しません。Rails DSL由来の型は`RAILS_ENV=test bin/tapioca dsl --environment=test`、Gem APIは`bin/tapioca gems`で更新し、アプリがRubyで定義するmethodは同じ`.rb`へinline `sig`を記述します。Tapiocaが表現できない限定的なframework wiringだけを`sorbet/rbi/shims/framework_bindings.rbi`で補います。通常の`bin/rails test`はRBIの鮮度、shimの重複、`bundle exec srb tc`を検証するため、`bin/ci`とGitHub Actionsでも同じ契約が適用されます。
 
 リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、imgproxy、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 

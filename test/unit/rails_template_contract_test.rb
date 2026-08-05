@@ -1042,6 +1042,8 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_installs_sorbet_and_checks_types_and_rbi_files_in_the_regular_test_suite
     sorbet_test = generated_file_source("test/sorbet_test.rb")
+    shim = generated_file_source("sorbet/rbi/shims/framework_bindings.rbi")
+    domain_typechecking = source_between("def configure_domain_typechecking", "def configure_sorbet_shims")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
     development_gems = source_between("gem_group :development do", "gem_group :development, :test do")
     development_and_test_gems = source_between("gem_group :development, :test do", "gem_group :test do")
@@ -1063,6 +1065,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"')
     assert_operator after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"'),
+      :<, after_bundle.index("configure_domain_typechecking")
+    assert_operator after_bundle.index("configure_domain_typechecking"),
+      :<, after_bundle.index("configure_sorbet_shims")
+    assert_operator after_bundle.index("configure_sorbet_shims"),
       :<, after_bundle.index('run_checked "bin/tapioca gems --verify"')
     assert_operator after_bundle.index('run_checked "bin/tapioca gems --verify"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"')
@@ -1075,7 +1081,58 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes sorbet_test, '{ "RAILS_ENV" => "test" }'
     assert_includes sorbet_test, '"bin/tapioca", "check-shims"'
     assert_includes sorbet_test, '"bundle", "exec", "srb", "tc"'
+    assert_includes sorbet_test, "DOMAIN_RUBY_PATTERNS"
+    assert_includes sorbet_test, "APPLICATION_DSL_RBI_SOURCES"
+    assert_includes sorbet_test, 'assert_equal "# typed: true\\n"'
+    %w[
+      api_credential
+      application_mailer
+      faq
+      footer_setting
+      page
+      profile
+      push_notification_job
+      push_subscription
+      siwe_challenge
+      siwe_identity
+      user
+      user_role
+    ].each do |dsl_rbi|
+      assert_includes sorbet_test, %Q{"#{dsl_rbi}" =>}
+    end
+    assert_includes sorbet_test, 'assert_path_exists Rails.root.join("sorbet/rbi/dsl/#{name}.rbi")'
+    %w[app/models app/policies app/services app/jobs app/mailers app/validators lib].each do |directory|
+      assert_includes domain_typechecking, "#{directory}/**/*.rb"
+    end
+    assert_includes domain_typechecking, 'prepend_to_file path, "# typed: true\\n"'
+    assert_includes shim, "class ActiveRecord::Base"
+    assert_includes shim, "extend Devise::Models"
+    assert_includes shim, "class User"
+    assert_includes shim, "include Devise::Models::DatabaseAuthenticatable"
+    assert_includes shim, "def password; end"
+    assert_includes shim, "class UserPolicy"
+    assert_includes shim, ".bind(UserPolicy)"
+    assert_includes shim, "User::PrivateRelation"
     assert_includes sorbet_test, "assert status.success?"
+  end
+
+  def test_adds_inline_signatures_to_domain_public_apis
+    user = generated_file_source("app/models/user.rb")
+    challenge = generated_file_source("app/models/siwe_challenge.rb")
+    notifier = generated_file_source("app/services/push_notifier.rb")
+    job = generated_file_source("app/jobs/push_notification_job.rb")
+    identity = generated_file_source("lib/application_identity.rb")
+
+    [challenge, notifier, job, identity].each do |source|
+      assert_includes source, "extend T::Sig"
+    end
+    assert_includes @source, "extend T::Sig"
+    assert_includes @source, "sig { params(role: T.any(String, Symbol)).returns(T::Boolean) }"
+    assert_includes @source, "T::Sig::WithoutRuntime.sig { returns(T::Boolean) }"
+    assert_includes challenge, ").returns([SiweChallenge, String])"
+    assert_includes notifier, "user: T.nilable(User)"
+    assert_includes job, "payload: T::Hash[Symbol, T.untyped]"
+    assert_includes identity, "returns(T::Hash[Symbol, T.any(String, Integer)])"
   end
 
   def test_generates_deterministic_playwright_evidence_capture
@@ -1469,7 +1526,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes challenge_action, "current_password"
     assert_includes initializer, "%i[challenge_token signature current_password]"
     refute_includes challenge, "request.host"
-    refute_includes challenge, "params"
+    refute_match(/\bparams(?:\.|\[)/, challenge)
   end
 
   def test_common_features_do_not_depend_on_legacy_authentication_identifiers

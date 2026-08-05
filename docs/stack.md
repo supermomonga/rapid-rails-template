@@ -217,13 +217,15 @@ momocop
 
 `sorbet-runtime`はruntimeで型注釈を利用できるよう全環境のapplication Gem、`tapioca`はRBI生成と検証のためdevelopment/test Gemとして追加します。テンプレートではversionを固定せず、生成アプリケーションの`Gemfile.lock`で解決versionを固定します。
 
-[Sorbetの公式導入手順](https://sorbet.org/docs/adopting)に従って`bundle exec tapioca init`を実行し、`sorbet/config`、Tapioca設定、`bin/tapioca`、Gem RBI、annotation RBI、未解決定数用RBIを生成します。test databaseを準備して`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、Active RecordなどRails DSLのRBIを同じtest環境で確定します。
+[Sorbetの公式導入手順](https://sorbet.org/docs/adopting)に従って`bundle exec tapioca init`を実行し、`sorbet/config`、Tapioca設定、`bin/tapioca`、Gem RBI、annotation RBI、未解決定数用RBIを生成します。test databaseを準備して`RAILS_ENV=test bin/tapioca dsl --environment=test`を全体へ実行し、Active Recordのschema・association・enum・scope・attachment、Active Jobのenqueue API、Action Mailerとroute helperなど、対応済みRails DSLのRBIを同じtest環境で確定します。
 
 Ruby 4.0で読み込まれる`net-imap` 0.6系の実装とSorbet payloadの間には、`Net::IMAP::Literal`と`Net::IMAP::QuotedString`の継承定義差があります。Tapiocaが生成するGem RBIを除外せず、Sorbetが案内する`--suppress-payload-superclass-redefinition-for`をこの2クラスだけに設定してpayload側との既知の衝突を解消します。
 
-既存Ruby fileはsigilを持たないSorbet既定の`typed: false`とし、構文、定数解決、`sig`整合性から検査を開始します。型推論を有効にするfileだけへ`# typed: true`と必要な`T::Sig`を追加し、一括変換や`typed: ignore`による除外は行いません。
+model、policy、service、job、mailer、validator、application-owned `lib`は生成時に`# typed: true`を先頭へ付与します。全機能構成ではこのdomain層が31ファイルとなり、公開class method、instance method、constructor、job、validator、policy predicateへinline signatureを置きます。private callbackは推論に任せます。Action Policyはgem側の`method_added` hookがSorbet runtime hookへ委譲しないため、policy predicateだけSorbet公式の`T::Sig::WithoutRuntime.sig`を使用し、静的なinline signatureを保ちます。controller、helper、test、config、migration/schemaはsigilを持たないSorbet既定の`typed: false`に残し、次段階で引き上げます。`typed: ignore`による除外は行いません。
 
-生成時と通常のRails testで、`bin/tapioca gems --verify`、`RAILS_ENV=test bin/tapioca dsl --verify --environment=test`、`bin/tapioca check-shims`、`bundle exec srb tc`を実行します。Gem更新時は`bin/tapioca gems`、model、migration、routeなどRails DSL変更時はtest database準備後に`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、更新されたRBIをcommitします。検証失敗時に古いRBIや型エラーを許容するfallbackは設けません。
+`sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`はTapioca専有の生成物として手動編集しません。アプリがRubyで定義するmethodは元の`.rb`へinline signatureを書きます。手書きRBIは`sorbet/rbi/shims/framework_bindings.rbi`だけとし、Deviseの動的なmodel組み込みとGem RBIが取得しない`password` reader、Action Policyの`relation_scope` block receiverという限定的なframework wiringを表現します。同じ定義が生成RBIへ追加された場合は`bin/tapioca check-shims`が重複として検出します。反復的な独自macroが複数classへmethodを生成するようになった場合だけcustom DSL compilerへ昇格します。
+
+生成時と通常のRails testで、`bin/tapioca gems --verify`、`RAILS_ENV=test bin/tapioca dsl --verify --environment=test`、`bin/tapioca check-shims`、`bundle exec srb tc`を実行します。`dsl --verify`はRails DSL生成物の鮮度、`check-shims`は手書き定義の重複、`srb tc`はRuby本体・inline signature・全RBIを合わせた整合性をそれぞれ保証します。Gem更新時は`bin/tapioca gems`、model、migration、routeなどRails DSL変更時はtest database準備後に`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、更新されたRBIをcommitします。検証失敗時に古いRBIや型エラーを許容するfallbackは設けません。
 
 `annotaterb`は公式の`annotate_rb:install` generatorで`.annotaterb.yml`と`lib/tasks/annotate_rb.rake`を生成します。設定は公式既定を使用し、modelに加えて対応するfixture、test、factory、serializerもschema annotationの対象とします。routes annotationは既定どおり無効とします。
 

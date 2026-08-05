@@ -162,11 +162,21 @@ def configure_application_identity
     require "uri"
 
     class ApplicationIdentity
+      extend T::Sig
+
       Error = Class.new(StandardError)
       AVAILABLE_LOCALES = %i[ja en].freeze
 
-      attr_reader :app_name, :canonical_origin, :default_locale
+      sig { returns(String) }
+      attr_reader :app_name
 
+      sig { returns(String) }
+      attr_reader :canonical_origin
+
+      sig { returns(Symbol) }
+      attr_reader :default_locale
+
+      sig { params(configuration: T.untyped, environment: T.untyped).returns(ApplicationIdentity) }
       def self.build(configuration, environment: ENV)
         canonical_origin = configuration.canonical_origin
         if configuration.canonical_origin_env.present?
@@ -181,6 +191,7 @@ def configure_application_identity
         )
       end
 
+      sig { params(app_name: T.any(String, Symbol), canonical_origin: String, default_locale: T.any(String, Symbol)).void }
       def initialize(app_name:, canonical_origin:, default_locale:)
         @app_name = app_name.to_s.strip
         raise Error, "app_name is required" if @app_name.empty?
@@ -192,20 +203,22 @@ def configure_application_identity
         freeze
       end
 
+      sig { returns(T::Hash[Symbol, T.any(String, Integer)]) }
       def default_url_options
         uri = URI.parse(canonical_origin)
-        options = { protocol: uri.scheme, host: uri.host }
+        options = { protocol: T.must(uri.scheme), host: T.must(uri.host) }
         options[:port] = uri.port unless uri.port == URI::HTTP.default_port || uri.port == URI::HTTPS.default_port
         options
       end
 
+      sig { params(path: String).returns(String) }
       def canonical_url(path)
-        path = path.to_s
         raise ArgumentError, "path must be a same-origin absolute path" unless path.start_with?("/") && !path.start_with?("//")
 
         canonical_origin + path
       end
 
+      sig { params(locale: T.any(String, Symbol)).returns(String) }
       def siwe_statement(locale: default_locale)
         locale = locale.to_s.to_sym
         raise ArgumentError, "locale must be ja or en" unless AVAILABLE_LOCALES.include?(locale)
@@ -220,7 +233,7 @@ def configure_application_identity
 
           uri = URI.parse(value.to_s)
           valid = uri.is_a?(URI::HTTP) && uri.host.present? && uri.userinfo.nil? &&
-            uri.path.empty? && uri.query.nil? && uri.fragment.nil?
+            uri.path.to_s.empty? && uri.query.nil? && uri.fragment.nil?
           raise Error, "canonical_origin must be an HTTP(S) origin without path, query, fragment, or userinfo" unless valid
 
           uri.to_s
@@ -427,6 +440,8 @@ def configure_image_delivery
       require "uri"
 
       class ImageDeliveryConfiguration
+        extend T::Sig
+
         Error = Class.new(StandardError)
         HEX_PATTERN = /\A(?:[0-9a-fA-F]{2})+\z/
         NON_PUBLIC_IPV4_NETWORKS = %w[
@@ -438,14 +453,40 @@ def configure_image_delivery
         GLOBAL_IPV6_NETWORK = IPAddr.new("2000::/3")
         NON_PUBLIC_IPV6_NETWORKS = %w[2001:2::/48 2001:db8::/32].map { |network| IPAddr.new(network) }.freeze
 
-        attr_reader :endpoint, :key, :salt, :source_origin
+        sig { returns(String) }
+        attr_reader :endpoint
 
+        sig { returns(String) }
+        attr_reader :key
+
+        sig { returns(String) }
+        attr_reader :salt
+
+        sig { returns(String) }
+        attr_reader :source_origin
+
+        sig do
+          params(
+            environment: T.untyped,
+            rails_environment: T.any(String, ActiveSupport::EnvironmentInquirer),
+            application_identity: ApplicationIdentity,
+            resolver: T.untyped
+          ).returns(ImageDeliveryConfiguration)
+        end
         def self.fetch!(environment: ENV, rails_environment: Rails.env,
           application_identity: Rails.configuration.x.application_identity,
           resolver: Resolv.method(:getaddresses))
           new(environment:, rails_environment:, application_identity:, resolver:)
         end
 
+        sig do
+          params(
+            environment: T.untyped,
+            rails_environment: T.any(String, ActiveSupport::EnvironmentInquirer),
+            application_identity: ApplicationIdentity,
+            resolver: T.untyped
+          ).void
+        end
         def initialize(environment:, rails_environment:, application_identity:, resolver:)
           production = rails_environment.to_s == "production"
           @endpoint = validate_url(environment.fetch("IMGPROXY_ENDPOINT") { raise Error, "IMGPROXY_ENDPOINT is required" }, "IMGPROXY_ENDPOINT", origin: false, https: production)
@@ -489,6 +530,7 @@ def configure_image_delivery
 
           def validate_public_host!(url, name, resolver)
             host = URI.parse(url).host
+            raise Error, "#{name} host is required" if host.nil?
             raise Error, "#{name} must not use localhost in production" if host.casecmp?("localhost")
 
             addresses = begin
@@ -515,11 +557,15 @@ def configure_image_delivery
     create_file "lib/imgproxy/active_storage_url_adapter.rb", <<~'RUBY', force: true
       module Imgproxy
         class ActiveStorageUrlAdapter < UrlAdapters::ActiveStorage
+          extend T::Sig
+
+          sig { params(source_origin: String).void }
           def initialize(source_origin:)
             super()
             @source_origin = source_origin.delete_suffix("/")
           end
 
+          sig { params(image: T.untyped).returns(String) }
           def url(image)
             path = Rails.application.routes.url_helpers.rails_storage_proxy_path(image)
             "#{@source_origin}#{path}"
@@ -1243,9 +1289,14 @@ def install_devise
         presence: true,
         format: { with: /\\A[a-z0-9][a-z0-9_]{2,31}\\z/ },
         uniqueness: { case_sensitive: true }
-      validates_presence_of :password, if: -> { new_record? || password.present? || password_confirmation.present? }
-      validates_confirmation_of :password, if: -> { new_record? || password.present? || password_confirmation.present? }
+      validates_presence_of :password, if: :password_required?
+      validates_confirmation_of :password, if: :password_required?
       validates_length_of :password, within: Devise.password_length, allow_blank: true
+
+      private
+        def password_required?
+          new_record? || password.present? || password_confirmation.present?
+        end
     end
   RUBY
 
@@ -1346,6 +1397,7 @@ def install_siwe
           extend ActiveSupport::Concern
 
           included do
+            T.bind(self, T.class_of(User))
             has_many :siwe_identities, dependent: :destroy
             has_many :siwe_challenges, dependent: :destroy
           end
@@ -1359,6 +1411,7 @@ def install_siwe
         module Routes
           private
             def devise_siwe_session(mapping, controllers)
+              T.bind(self, ActionDispatch::Routing::Mapper)
               post "#{mapping.path_names[:sign_in]}/siwe/challenge",
                 to: "#{controllers.fetch(:siwe_sessions)}#challenge",
                 as: :siwe_challenge
@@ -1416,6 +1469,8 @@ def install_siwe
     require "uri"
 
     class SiweChallenge < ApplicationRecord
+      extend T::Sig
+
       VerificationError = Class.new(StandardError)
       TTL = 5.minutes
       PURPOSES = %w[login link].freeze
@@ -1430,10 +1485,19 @@ def install_siwe
       validates :chain_id, numericality: { only_integer: true, greater_than: 0 }
       validate :user_matches_purpose
 
+      sig do
+        params(
+          purpose: String,
+          address: String,
+          chain_id: T.any(String, Integer),
+          session_binding: String,
+          user: T.nilable(User)
+        ).returns([SiweChallenge, String])
+      end
       def self.issue!(purpose:, address:, chain_id:, session_binding:, user: nil)
         now = Time.current
         where("expires_at <= ? OR consumed_at IS NOT NULL", now).delete_all
-        numeric_chain_id = Integer(chain_id, exception: false)
+        numeric_chain_id = T.let(Integer(chain_id, exception: false), T.nilable(Integer))
         raise VerificationError, "invalid chain id" unless numeric_chain_id&.positive?
 
         identity = Rails.configuration.x.application_identity
@@ -1469,23 +1533,34 @@ def install_siwe
         raise VerificationError, error.message
       end
 
+      sig { params(raw_token: String).returns(SiweChallenge) }
       def self.for_token!(raw_token)
         find_by!(token_digest: digest(raw_token.to_s))
       end
 
+      sig { params(value: String).returns(String) }
       def self.digest(value)
         Digest::SHA256.hexdigest(value.to_s)
       end
 
+      sig { params(origin: URI::Generic).returns(String) }
       def self.domain_for(origin)
         default_port = origin.scheme == "https" ? 443 : 80
-        origin.port == default_port ? origin.host : "#{origin.host}:#{origin.port}"
+        host = origin.host
+        raise VerificationError, "origin host is required" if host.nil?
+
+        origin.port == default_port ? host : "#{host}:#{origin.port}"
       end
 
+      sig { params(purpose: String).returns(String) }
       def self.path_for(purpose)
         purpose == "login" ? "/users/sign_in/siwe" : "/account/siwe_identities"
       end
 
+      sig do
+        params(signature: String, purpose: String, session_binding: String, user: T.nilable(User))
+          .returns(Siwe::Message)
+      end
       def verify!(signature:, purpose:, session_binding:, user: nil)
         raise VerificationError, "challenge purpose mismatch" unless self.purpose == purpose
         raise VerificationError, "challenge user mismatch" unless user_id == user&.id
@@ -1514,6 +1589,7 @@ def install_siwe
         raise VerificationError, error.message
       end
 
+      sig { returns(SiweChallenge) }
       def consume!
         # This conditional update is the compare-and-set that makes challenge consumption atomic.
         # rubocop:disable Rails/SkipsModelValidations
@@ -2330,6 +2406,8 @@ def configure_roles
 
   generate "action_policy:install"
   inject_into_class "app/policies/application_policy.rb", "ApplicationPolicy", <<~RUBY
+      extend T::Sig
+
       private
         def admin?
           user&.has_role?(:admin) || false
@@ -2378,8 +2456,11 @@ def configure_roles
   RUBY
 
   inject_into_class "app/models/user.rb", "User", <<~RUBY
+      extend T::Sig
+
       has_many :user_roles, dependent: :destroy
 
+      sig { params(role: T.any(String, Symbol)).returns(T::Boolean) }
       def has_role?(role)
         normalized_role = UserRole.roles[role.to_s]
         return false if normalized_role.nil?
@@ -2391,11 +2472,13 @@ def configure_roles
         end
       end
 
+      sig { params(role: T.any(String, Symbol)).returns(UserRole) }
       def grant_role!(role)
         normalized_role = UserRole.roles.fetch(role.to_s)
         user_roles.find_or_create_by!(role: normalized_role)
       end
 
+      sig { params(role: T.any(String, Symbol)).returns(T.nilable(UserRole)) }
       def revoke_role!(role)
         normalized_role = UserRole.roles.fetch(role.to_s)
         assignment = user_roles.find_by(role: normalized_role)
@@ -2404,6 +2487,7 @@ def configure_roles
         assignment.destroy!
       end
 
+      sig { returns(T::Boolean) }
       def last_admin?
         has_role?(:admin) && UserRole.admin.where.not(user_id: id).none?
       end
@@ -2440,10 +2524,12 @@ def configure_roles
 
   create_file "app/policies/user_policy.rb", <<~RUBY, force: true
     class UserPolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def index?
         admin?
       end
 
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def manage_roles?
         admin?
       end
@@ -3015,6 +3101,8 @@ def configure_content_management
 
   create_file "app/models/page.rb", <<~RUBY, force: true
     class Page < ApplicationRecord
+      extend T::Sig
+
       TITLE_KEYS = {
     #{page_title_entries}
       }.freeze
@@ -3032,6 +3120,7 @@ def configure_content_management
       validates :title, presence: true
       validate :title_matches_slug
 
+      sig { returns(String) }
       def to_param
         slug
       end
@@ -3064,6 +3153,8 @@ def configure_content_management
     require "uri"
 
     class FooterSetting < ApplicationRecord
+      extend T::Sig
+
       DEFAULT_KEY = "default"
       URL_ATTRIBUTES = %i[x_url github_url].freeze
 
@@ -3072,6 +3163,7 @@ def configure_content_management
       validates :key, inclusion: { in: [DEFAULT_KEY] }, uniqueness: true
       validate :external_urls_are_https
 
+      sig { returns(FooterSetting) }
       def self.default_record
         find_by!(key: DEFAULT_KEY)
       end
@@ -3095,10 +3187,12 @@ def configure_content_management
 
   create_file "app/policies/page_policy.rb", <<~RUBY, force: true
     class PagePolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def index?
         admin?
       end
 
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def update?
         admin?
       end
@@ -3107,18 +3201,22 @@ def configure_content_management
 
   create_file "app/policies/faq_policy.rb", <<~RUBY, force: true
     class FaqPolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def index?
         admin?
       end
 
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def create?
         admin?
       end
 
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def update?
         admin?
       end
 
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def destroy?
         admin?
       end
@@ -3127,10 +3225,12 @@ def configure_content_management
 
   create_file "app/policies/footer_setting_policy.rb", <<~RUBY, force: true
     class FooterSettingPolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def edit?
         admin?
       end
 
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def update?
         admin?
       end
@@ -4050,7 +4150,7 @@ def configure_profile
       end
       attr_accessor :avatar_upload
       validates :avatar_upload, avatar_upload: true
-      before_save :assign_avatar_upload, if: -> { avatar_upload.present? }
+      before_save :assign_avatar_upload, if: :avatar_upload_present?
     RUBY
   end
   if features.include?("screen_name")
@@ -4120,6 +4220,10 @@ def configure_profile
     <<~RUBY
 
       private
+        def avatar_upload_present?
+          avatar_upload.present?
+        end
+
         def assign_avatar_upload
           self.avatar = avatar_upload
           self.avatar_upload = nil
@@ -4142,28 +4246,37 @@ def configure_profile
       require "vips"
 
       class AvatarImagePolicy
+        extend T::Sig
+
         MAX_BYTES = 5 * 1024 * 1024
         MAX_SIZE_LABEL = "5 MiB"
         MAX_DIMENSION = 4096
         CONTENT_TYPES = %w[image/jpeg image/png image/webp].freeze
 
         class ValidationError < StandardError
+          extend T::Sig
+
+          sig { returns(Symbol) }
           attr_reader :code
 
+          sig { params(code: Symbol).void }
           def initialize(code)
             @code = code
             super(code.to_s)
           end
         end
 
+        sig { params(upload: T.untyped).returns(T::Boolean) }
         def self.validate!(upload)
           new(upload).validate!
         end
 
+        sig { params(upload: T.untyped).void }
         def initialize(upload)
           @upload = upload
         end
 
+        sig { returns(T::Boolean) }
         def validate!
           raise_error(:empty) if upload.size.to_i.zero?
           raise_error(:too_large) if upload.size.to_i > MAX_BYTES
@@ -4244,6 +4357,9 @@ def configure_profile
 
     create_file "app/validators/avatar_upload_validator.rb", <<~'RUBY', force: true
       class AvatarUploadValidator < ActiveModel::EachValidator
+        extend T::Sig
+
+        sig { params(record: T.untyped, attribute: Symbol, upload: T.untyped).void }
         def validate_each(record, attribute, upload)
           return if upload.blank?
 
@@ -4886,8 +5002,11 @@ def configure_api
     require "securerandom"
 
     class ApiCredential < ApplicationRecord
+      extend T::Sig
+
       belongs_to :user
 
+      sig { returns(T.nilable(String)) }
       attr_reader :api_secret
 
       validates :name, :api_key, :api_secret_digest, presence: true
@@ -4895,12 +5014,14 @@ def configure_api
 
       before_validation :assign_api_key, :assign_api_secret, on: :create
 
+      sig { params(candidate: String).returns(T::Boolean) }
       def authenticate_api_secret(candidate)
         return false if candidate.blank?
 
         ActiveSupport::SecurityUtils.secure_compare(api_secret_digest, digest(candidate))
       end
 
+      sig { returns(String) }
       def revoke_api_secret!
         secret = generate_api_secret
         update!(api_secret_digest: digest(secret))
@@ -4909,7 +5030,8 @@ def configure_api
 
       private
         def assign_api_key
-          self.api_key ||= "rak_" + SecureRandom.urlsafe_base64(24, false)
+          current_api_key = T.let(self[:api_key], T.nilable(String))
+          self.api_key = "rak_" + SecureRandom.urlsafe_base64(24, false) if current_api_key.nil?
         end
 
         def assign_api_secret
@@ -6707,12 +6829,15 @@ def configure_web_push
 
   create_file "app/models/push_subscription.rb", <<~RUBY, force: true
     class PushSubscription < ApplicationRecord
+      extend T::Sig
+
       belongs_to :user
 
       validates :browser_id, :endpoint, :p256dh, :auth, presence: true
       validates :browser_id, :endpoint, uniqueness: true
       validates :endpoint, format: { with: %r{\\Ahttps://[^\\s]+\\z} }
 
+      sig { params(user: User, attributes: T::Hash[Symbol, String]).returns(PushSubscription) }
       def self.register!(user:, attributes:)
         transaction do
           browser_subscription = lock.find_by(browser_id: attributes.fetch(:browser_id))
@@ -6732,10 +6857,20 @@ def configure_web_push
     require "uri"
 
     class VapidConfiguration
+      extend T::Sig
+
       Error = Class.new(StandardError)
 
-      attr_reader :public_key, :private_key, :subject
+      sig { returns(String) }
+      attr_reader :public_key
 
+      sig { returns(String) }
+      attr_reader :private_key
+
+      sig { returns(String) }
+      attr_reader :subject
+
+      sig { returns(VapidConfiguration) }
       def self.fetch!
         new(
           public_key: ENV.fetch("VAPID_PUBLIC_KEY"),
@@ -6746,6 +6881,7 @@ def configure_web_push
         raise Error, "Web Push environment is incomplete: \#{error.key}"
       end
 
+      sig { params(public_key: String, private_key: String, subject: String).void }
       def initialize(public_key:, private_key:, subject:)
         @public_key = public_key.presence || raise(Error, "VAPID_PUBLIC_KEY is blank")
         @private_key = private_key.presence || raise(Error, "VAPID_PRIVATE_KEY is blank")
@@ -6756,6 +6892,7 @@ def configure_web_push
         raise Error, "VAPID_SUBJECT is invalid: \#{error.message}"
       end
 
+      sig { returns(T::Hash[Symbol, String]) }
       def to_h
         { subject:, public_key:, private_key: }
       end
@@ -6764,12 +6901,22 @@ def configure_web_push
 
   create_file "app/jobs/push_notification_job.rb", <<~RUBY, force: true
     class PushNotificationJob < ApplicationJob
+      extend T::Sig
+
       queue_as :default
 
       retry_on WebPush::TooManyRequests, WebPush::PushServiceError,
         Net::OpenTimeout, Net::ReadTimeout, Timeout::Error,
         wait: :polynomially_longer, attempts: 5
 
+      sig do
+        params(
+          subscription_id: Integer,
+          expected_user_id: Integer,
+          payload: T::Hash[Symbol, T.untyped],
+          ttl: Integer
+        ).void
+      end
       def perform(subscription_id, expected_user_id, payload, ttl)
         subscription = PushSubscription.find_by(id: subscription_id, user_id: expected_user_id)
         return unless subscription
@@ -6793,8 +6940,21 @@ def configure_web_push
 
   create_file "app/services/push_notifier.rb", <<~RUBY, force: true
     class PushNotifier
+      extend T::Sig
+
       DEFAULT_TTL = 86_400
 
+      sig do
+        params(
+          user: T.nilable(User),
+          title: String,
+          body: String,
+          path: String,
+          tag: T.nilable(String),
+          icon: String,
+          ttl: Integer
+        ).void
+      end
       def self.deliver_later(user:, title:, body:, path:, tag: nil, icon: "/icon.png", ttl: DEFAULT_TTL)
         raise ArgumentError, "user must be persisted" unless user&.persisted?
         raise ArgumentError, "title is required" if title.blank?
@@ -7564,6 +7724,7 @@ def install_job_operations
 
   create_file "app/policies/job_operation_policy.rb", <<~RUBY, force: true
     class JobOperationPolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def manage?
         admin?
       end
@@ -8297,6 +8458,7 @@ def install_maintenance_tasks
 
   create_file "app/policies/maintenance_task_policy.rb", <<~RUBY, force: true
     class MaintenanceTaskPolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def manage?
         admin?
       end
@@ -10189,6 +10351,49 @@ def configure_sorbet
     require "open3"
 
     class SorbetTest < ActiveSupport::TestCase
+      DOMAIN_RUBY_PATTERNS = %w[
+        app/models/**/*.rb
+        app/policies/**/*.rb
+        app/services/**/*.rb
+        app/jobs/**/*.rb
+        app/mailers/**/*.rb
+        app/validators/**/*.rb
+        lib/**/*.rb
+      ].freeze
+
+      APPLICATION_DSL_RBI_SOURCES = {
+        "api_credential" => "app/models/api_credential.rb",
+        "application_mailer" => "app/mailers/application_mailer.rb",
+        "faq" => "app/models/faq.rb",
+        "footer_setting" => "app/models/footer_setting.rb",
+        "page" => "app/models/page.rb",
+        "profile" => "app/models/profile.rb",
+        "push_notification_job" => "app/jobs/push_notification_job.rb",
+        "push_subscription" => "app/models/push_subscription.rb",
+        "siwe_challenge" => "app/models/siwe_challenge.rb",
+        "siwe_identity" => "app/models/siwe_identity.rb",
+        "user" => "app/models/user.rb",
+        "user_role" => "app/models/user_role.rb"
+      }.freeze
+
+      test "application domain Ruby files use typed true" do
+        paths = DOMAIN_RUBY_PATTERNS.flat_map { |pattern| Rails.root.glob(pattern) }.uniq.sort
+
+        assert_predicate paths, :any?
+        paths.each do |path|
+          assert_equal "# typed: true\n", path.open(&:gets), "#{path.relative_path_from(Rails.root)} must start with # typed: true"
+        end
+      end
+
+      test "application DSL RBI files exist for supported domain classes" do
+        expected = APPLICATION_DSL_RBI_SOURCES.select { |_name, source| Rails.root.join(source).exist? }
+
+        assert_predicate expected, :any?
+        expected.each_key do |name|
+          assert_path_exists Rails.root.join("sorbet/rbi/dsl/#{name}.rbi")
+        end
+      end
+
       test "gem RBI files are up to date" do
         assert_command_succeeds(
           "bin/tapioca", "gems", "--verify",
@@ -10232,6 +10437,55 @@ def configure_sorbet
       end
     end
   RUBY
+end
+
+def configure_domain_typechecking
+  patterns = %w[
+    app/models/**/*.rb
+    app/policies/**/*.rb
+    app/services/**/*.rb
+    app/jobs/**/*.rb
+    app/mailers/**/*.rb
+    app/validators/**/*.rb
+    lib/**/*.rb
+  ]
+  paths = patterns.flat_map { |pattern| Dir.glob(pattern) }.uniq.sort
+  raise "domain typecheckingの対象Ruby fileが見つかりません" if paths.empty?
+
+  paths.each do |path|
+    prepend_to_file path, "# typed: true\n"
+  end
+end
+
+def configure_sorbet_shims
+  create_file "sorbet/rbi/shims/framework_bindings.rbi", <<~'RBI', force: true
+    # typed: true
+
+    class ActiveRecord::Base
+      extend Devise::Models
+    end
+
+    class User
+      include Devise::Models::DatabaseAuthenticatable
+
+      sig { returns(T.nilable(String)) }
+      def password; end
+    end
+
+    class UserPolicy
+      extend T::Sig
+
+      sig do
+        params(
+          block: T.proc
+            .bind(UserPolicy)
+            .params(relation: User::PrivateRelation)
+            .returns(User::PrivateRelation)
+        ).void
+      end
+      def self.relation_scope(&block); end
+    end
+  RBI
 end
 
 def configure_database
@@ -10394,6 +10648,8 @@ after_bundle do
   CONFIG
   run_checked "RAILS_ENV=test bin/rails db:prepare"
   run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"
+  configure_domain_typechecking
+  configure_sorbet_shims
   run_checked "bin/tapioca gems --verify"
   run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"
   run_checked "bin/tapioca check-shims"

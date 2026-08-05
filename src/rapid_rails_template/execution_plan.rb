@@ -92,6 +92,7 @@ module RapidRailsTemplate
       result << "initialize_sorbet"
       result << "prepare_test_database"
       result << "generate_sorbet_dsl"
+      result << "typecheck_domain"
       result << "verify_sorbet"
       result << "verify"
       result
@@ -109,6 +110,7 @@ module RapidRailsTemplate
         sorbet/config
         sorbet/tapioca/config.yml
         sorbet/tapioca/require.rb
+        sorbet/rbi/shims/framework_bindings.rbi
         sorbet/rbi/**/*
         test/sorbet_test.rb
         test/support/evidence_capture.rb

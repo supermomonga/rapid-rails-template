@@ -52,7 +52,7 @@ module RapidRailsTemplate
     private
 
     def build_gems
-      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
       result.concat(%w[devise devise-i18n])
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
@@ -89,6 +89,10 @@ module RapidRailsTemplate
       result << "configure_dokploy" if configuration["deployment"] == "dokploy"
       result << "prepare_database"
       result << "annotate_models"
+      result << "initialize_sorbet"
+      result << "prepare_test_database"
+      result << "generate_sorbet_dsl"
+      result << "verify_sorbet"
       result << "verify"
       result
     end
@@ -101,6 +105,12 @@ module RapidRailsTemplate
         lib/tasks/annotate_rb.rake
         bin/annotaterb
         test/annotations_test.rb
+        bin/tapioca
+        sorbet/config
+        sorbet/tapioca/config.yml
+        sorbet/tapioca/require.rb
+        sorbet/rbi/**/*
+        test/sorbet_test.rb
         test/support/evidence_capture.rb
         lib/tasks/evidence.rake
         app/models/user_role.rb

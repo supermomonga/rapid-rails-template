@@ -188,6 +188,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 - RailsアプリIDと表示用アプリ名の入力、対話的な選択、最終確認が`Gum.input`、`Gum.choose`、`Gum.confirm`を通り、キャンセル時に生成を開始しないこと。
 - 生成後にpending migrationが残らず、追加の手作業なしでRails testを起動できること。
 - 生成済みschema annotationがAnnotateRbの公式既定と一致し、通常のRails testが`--frozen`で更新忘れを非破壊検出すること。
+- SorbetとTapiocaが全構成へ常設され、通常のRails testが型エラー、Gem／Rails DSL RBIの更新忘れ、重複shimを非破壊検出すること。
 - 各選択肢について、選択したstepだけが順序どおり実行されること。
 
 Application Templateが評価される時点では`rails new`による標準ファイル生成が進んでいます。そのため、本プロジェクトは最終確認をApplication Templateの内側へ置かず、`rails new`の前段へ置きます。

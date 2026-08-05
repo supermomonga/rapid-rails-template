@@ -21,14 +21,20 @@ gem "lexxy", "~> 0.9.21"
 gem "active_storage_db"
 gem "prism"
 gem "rails-i18n"
+gem "sorbet-runtime"
 
 gem_group :development do
   gem "annotaterb"
+  gem "sorbet", require: false
   gem "ruby-lsp", require: false
   gem "ruby-lsp-rails", require: false
   gem "rubocop-rails", require: false
   gem "rubocop-thread_safety", require: false
   gem "momocop", require: false
+end
+
+gem_group :development, :test do
+  gem "tapioca", require: false
 end
 
 gem_group :test do
@@ -7567,8 +7573,6 @@ def install_job_operations
   create_file "app/controllers/admin/job_operations_controller.rb", <<~RUBY, force: true
     module Admin
       class JobOperationsController < BaseController
-        include Rails.application.routes.url_helpers
-        helper Rails.application.routes.url_helpers
         helper Admin::JobOperationsHelper
 
         before_action :authorize_job_operations!
@@ -10177,6 +10181,59 @@ def configure_annotaterb
   RUBY
 end
 
+def configure_sorbet
+  create_file "test/sorbet_test.rb", <<~'RUBY', force: true
+    # frozen_string_literal: true
+
+    require "test_helper"
+    require "open3"
+
+    class SorbetTest < ActiveSupport::TestCase
+      test "gem RBI files are up to date" do
+        assert_command_succeeds(
+          "bin/tapioca", "gems", "--verify",
+          remediation: "Run bin/tapioca gems and commit the updated RBI files."
+        )
+      end
+
+      test "Rails DSL RBI files are up to date" do
+        assert_command_succeeds(
+          "bin/tapioca", "dsl", "--verify", "--environment=test",
+          environment: { "RAILS_ENV" => "test" },
+          remediation: "Run RAILS_ENV=test bin/tapioca dsl --environment=test and commit the updated RBI files."
+        )
+      end
+
+      test "RBI shims do not duplicate generated definitions" do
+        assert_command_succeeds(
+          "bin/tapioca", "check-shims",
+          remediation: "Remove the duplicate definitions reported by bin/tapioca check-shims."
+        )
+      end
+
+      test "Sorbet type checking succeeds" do
+        assert_command_succeeds(
+          "bundle", "exec", "srb", "tc",
+          remediation: "Run bundle exec srb tc and fix the reported type errors."
+        )
+      end
+
+      private
+
+      def assert_command_succeeds(*command, environment: {}, remediation:)
+        stdout, stderr, status = Open3.capture3(environment, *command, chdir: Rails.root.to_s)
+        output = [stdout, stderr].reject(&:empty?).join("\n")
+
+        assert status.success?, <<~MESSAGE
+          #{remediation}
+
+          #{output}
+        MESSAGE
+      end
+    end
+  RUBY
+end
+
 def configure_database
   dokploy = VALUES.fetch("deployment") == "dokploy"
   production_paths = if dokploy
@@ -10309,6 +10366,7 @@ after_bundle do
   configure_common_files
   configure_evidence_capture
   configure_annotaterb
+  configure_sorbet
   configure_application_identity
   configure_image_delivery
   install_devise
@@ -10329,6 +10387,17 @@ after_bundle do
   run_checked "bin/rails db:prepare"
   run_checked "bundle binstubs annotaterb"
   run_checked "bin/annotaterb models"
+  run_checked "bundle exec tapioca init"
+  append_to_file "sorbet/config", <<~CONFIG
+    --suppress-payload-superclass-redefinition-for=Net::IMAP::Literal
+    --suppress-payload-superclass-redefinition-for=Net::IMAP::QuotedString
+  CONFIG
+  run_checked "RAILS_ENV=test bin/rails db:prepare"
+  run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"
+  run_checked "bin/tapioca gems --verify"
+  run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"
+  run_checked "bin/tapioca check-shims"
+  run_checked "bundle exec srb tc"
   run_checked "bin/rails tailwindcss:build"
   run_checked "bundle binstubs rubocop"
   run_checked "bin/rubocop -a"

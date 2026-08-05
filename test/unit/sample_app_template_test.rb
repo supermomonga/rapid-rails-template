@@ -51,6 +51,12 @@ class SampleAppTemplateTest < Minitest::Test
     commands = [
       'sample_run_checked "bin/rails db:prepare"',
       'sample_run_checked "bin/annotaterb models"',
+      'sample_run_checked "RAILS_ENV=test bin/rails db:prepare"',
+      'sample_run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"',
+      'sample_run_checked "bin/tapioca gems --verify"',
+      'sample_run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"',
+      'sample_run_checked "bin/tapioca check-shims"',
+      'sample_run_checked "bundle exec srb tc"',
       'sample_run_checked "bin/rubocop -a"',
       'sample_run_checked "bin/rails db:seed"',
       'sample_run_checked "IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:45678 bin/rails test"'

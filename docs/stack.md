@@ -25,6 +25,7 @@ I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`
 | Hotwire | `turbo-rails`、`stimulus-rails` | TurboとStimulusを使用する |
 | CSS | `tailwindcss-rails`、`daisyui` | Rails統合版Tailwind CSS 4と最新のdaisyUI 5を使用する |
 | テスト | Minitest | Rails標準のtest frameworkを維持する |
+| 型検査 | `sorbet`、`sorbet-runtime`、`tapioca` | 漸進的型付けとGem／Rails DSL RBI生成に使用する |
 | システムテスト | `capybara`、`capybara-playwright-driver` | SeleniumではなくPlaywright driverを使用する |
 | fixture/factory | `factory_bot`、`factory_bot_rails` | テストデータ生成にFactory Botを使用する |
 | ページネーション | `pagy` | ページネーションの標準実装とする |
@@ -200,18 +201,29 @@ Playwright driverはChromium・headlessへ固定し、`playwright-ruby-client`�
 
 UIエビデンスはCapybaraのroute遷移・入力・表示確認と、Playwright native pageのfull-page screenshotを組み合わせます。password基底の共通画面、SIWE固有差分、画像配信差分を重複しないscenario setとして1400×900と390×844で撮影します。共通画面は実際のDevise login form、SIWE差分はdatabase challengeと署名検証で同じUserへsessionを作成し、テスト専用認証routeは生成しません。
 
-## Schema annotation・Linter・Formatter・開発支援
+## 型検査・Schema annotation・Linter・Formatter・開発支援
 
 development groupへ次を追加します。`annotaterb`はRails generatorから読み込むため通常どおり追加し、それ以外は`require: false`とします。
 
 ```text
 annotaterb
+sorbet
 ruby-lsp
 ruby-lsp-rails
 rubocop-rails
 rubocop-thread_safety
 momocop
 ```
+
+`sorbet-runtime`はruntimeで型注釈を利用できるよう全環境のapplication Gem、`tapioca`はRBI生成と検証のためdevelopment/test Gemとして追加します。テンプレートではversionを固定せず、生成アプリケーションの`Gemfile.lock`で解決versionを固定します。
+
+[Sorbetの公式導入手順](https://sorbet.org/docs/adopting)に従って`bundle exec tapioca init`を実行し、`sorbet/config`、Tapioca設定、`bin/tapioca`、Gem RBI、annotation RBI、未解決定数用RBIを生成します。test databaseを準備して`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、Active RecordなどRails DSLのRBIを同じtest環境で確定します。
+
+Ruby 4.0で読み込まれる`net-imap` 0.6系の実装とSorbet payloadの間には、`Net::IMAP::Literal`と`Net::IMAP::QuotedString`の継承定義差があります。Tapiocaが生成するGem RBIを除外せず、Sorbetが案内する`--suppress-payload-superclass-redefinition-for`をこの2クラスだけに設定してpayload側との既知の衝突を解消します。
+
+既存Ruby fileはsigilを持たないSorbet既定の`typed: false`とし、構文、定数解決、`sig`整合性から検査を開始します。型推論を有効にするfileだけへ`# typed: true`と必要な`T::Sig`を追加し、一括変換や`typed: ignore`による除外は行いません。
+
+生成時と通常のRails testで、`bin/tapioca gems --verify`、`RAILS_ENV=test bin/tapioca dsl --verify --environment=test`、`bin/tapioca check-shims`、`bundle exec srb tc`を実行します。Gem更新時は`bin/tapioca gems`、model、migration、routeなどRails DSL変更時はtest database準備後に`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、更新されたRBIをcommitします。検証失敗時に古いRBIや型エラーを許容するfallbackは設けません。
 
 `annotaterb`は公式の`annotate_rb:install` generatorで`.annotaterb.yml`と`lib/tasks/annotate_rb.rake`を生成します。設定は公式既定を使用し、modelに加えて対応するfixture、test、factory、serializerもschema annotationの対象とします。routes annotationは既定どおり無効とします。
 

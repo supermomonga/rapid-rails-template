@@ -65,11 +65,13 @@ DeviseによるユーザーID＋パスワード認証は全構成で必須です
 
 `--job-operations=enable`はSolid Queue使用時だけ選択でき、Mission Control Jobs 1.1.0を`/admin/jobs`へmountします。画面は既存の管理者認証、Action Policy、admin navigationへ統合し、Mission Control独自のHTTP Basic認証は使用しません。完了ジョブはSolid Queue 1.6.0の標準設定により1日保持した後、毎時12分に公式APIでbatch削除されます。失敗ジョブはcleanup対象外で、管理者がretryまたはdiscardするまで保持されます。
 
+生成アプリケーションにはSorbetとTapiocaを常設し、`sorbet/config`、Gem RBI、Rails DSL RBI、`bin/tapioca`を生成します。既存ファイルはSorbet既定の`typed: false`から開始し、型検査を強めるファイルへ`# typed: true`と必要な`sig`を追加します。Gem更新後は`bin/tapioca gems`、modelやmigrationなどRails DSLの変更後は`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行してください。通常の`bin/rails test`はRBIの鮮度、shimの重複、`bundle exec srb tc`を検証するため、`bin/ci`とGitHub Actionsでも同じ契約が適用されます。
+
 リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、imgproxy、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 
 生成後はsample専用のArticle scaffoldを`/articles`へ追加し、`sample_user_01`から`sample_user_10`までの10ユーザーと、各ユーザー50件（公開40件、draft 10件）、合計500件の記事をseedします。全sampleユーザーのpasswordは`password123`です。公開済み記事は誰でも閲覧でき、ログインしたユーザーは自分のdraftを含む記事の作成・閲覧・編集・削除ができます。このArticleはscaffold templateの確認用であり、配布用`bootstrap.rb`や`rake evidence:update`の生成アプリには含めません。
 
-`rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、password基底の共通画面、SIWE、imgproxyを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
+`rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、password基底の共通画面、SIWE、imgproxyを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、Sorbet・RBI検証、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
 
 `rake evidence:verify`（`mise run evidence-verify`）はブラウザを起動せず、生成元fingerprint、manifest、README、PNGの欠落・余剰・SHA-256・寸法を検証します。通常のリポジトリMinitestにも同じ検証を含むため、テンプレート変更後にエビデンスを更新し忘れるとテストが失敗します。MD内のbase commitは追跡情報であり、鮮度判定には未コミット変更も反映できる内容fingerprintを使用します。
 

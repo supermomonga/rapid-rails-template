@@ -24,6 +24,9 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "haikunator"
     assert_includes plan.gems, "boring_avatars"
     assert_includes plan.gems, "annotaterb"
+    assert_includes plan.gems, "sorbet"
+    assert_includes plan.gems, "sorbet-runtime"
+    assert_includes plan.gems, "tapioca"
     assert_includes plan.gems, "lexxy"
     assert_includes plan.gems, "active_storage_db"
     refute_includes plan.gems, "imgproxy-rails"
@@ -58,12 +61,22 @@ class ExecutionPlanTest < Minitest::Test
     assert_operator plan.steps.index("install_annotaterb"), :<, plan.steps.index("prepare_database")
     assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("verify")
     assert_operator plan.steps.index("prepare_database"), :<, plan.steps.index("annotate_models")
-    assert_operator plan.steps.index("annotate_models"), :<, plan.steps.index("verify")
+    assert_operator plan.steps.index("annotate_models"), :<, plan.steps.index("initialize_sorbet")
+    assert_operator plan.steps.index("initialize_sorbet"), :<, plan.steps.index("prepare_test_database")
+    assert_operator plan.steps.index("prepare_test_database"), :<, plan.steps.index("generate_sorbet_dsl")
+    assert_operator plan.steps.index("generate_sorbet_dsl"), :<, plan.steps.index("verify_sorbet")
+    assert_operator plan.steps.index("verify_sorbet"), :<, plan.steps.index("verify")
     assert_includes plan.artifacts, "package.json"
     assert_includes plan.artifacts, "package-lock.json"
     assert_includes plan.artifacts, ".annotaterb.yml"
     assert_includes plan.artifacts, "lib/tasks/annotate_rb.rake"
     assert_includes plan.artifacts, "bin/annotaterb"
+    assert_includes plan.artifacts, "bin/tapioca"
+    assert_includes plan.artifacts, "sorbet/config"
+    assert_includes plan.artifacts, "sorbet/tapioca/config.yml"
+    assert_includes plan.artifacts, "sorbet/tapioca/require.rb"
+    assert_includes plan.artifacts, "sorbet/rbi/**/*"
+    assert_includes plan.artifacts, "test/sorbet_test.rb"
     assert_includes plan.artifacts, "test/annotations_test.rb"
     assert_includes plan.artifacts, "test/support/evidence_capture.rb"
     assert_includes plan.artifacts, "lib/tasks/evidence.rake"

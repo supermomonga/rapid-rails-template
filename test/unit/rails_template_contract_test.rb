@@ -361,6 +361,9 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes initializer, "username"
     refute_includes initializer, "password"
     assert_includes controller, "class JobOperationsController < BaseController"
+    refute_includes controller, "APPLICATION_ROUTES"
+    refute_includes controller, "include Rails.application.routes.url_helpers"
+    refute_includes controller, "helper Rails.application.routes.url_helpers"
     assert_includes controller, "helper Admin::JobOperationsHelper"
     assert_includes controller, "authorize! :job_operation, to: :manage?"
     refute_includes controller, "has_role?"
@@ -1035,6 +1038,44 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes annotation_test, '"--frozen"'
     assert_includes annotation_test, "assert status.success?"
     assert_includes annotation_test, "Run bin/annotaterb models"
+  end
+
+  def test_installs_sorbet_and_checks_types_and_rbi_files_in_the_regular_test_suite
+    sorbet_test = generated_file_source("test/sorbet_test.rb")
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+    development_gems = source_between("gem_group :development do", "gem_group :development, :test do")
+    development_and_test_gems = source_between("gem_group :development, :test do", "gem_group :test do")
+
+    assert_includes @source, 'gem "sorbet-runtime"'
+    assert_includes development_gems, 'gem "sorbet", require: false'
+    assert_includes development_and_test_gems, 'gem "tapioca", require: false'
+    assert_includes after_bundle, "configure_sorbet"
+    assert_operator after_bundle.index('run_checked "bin/annotaterb models"'),
+      :<, after_bundle.index('run_checked "bundle exec tapioca init"')
+    assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),
+      :<, after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"')
+    assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),
+      :<, after_bundle.index('append_to_file "sorbet/config"')
+    assert_operator after_bundle.index('append_to_file "sorbet/config"'),
+      :<, after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"')
+    assert_includes after_bundle, "--suppress-payload-superclass-redefinition-for=Net::IMAP::Literal"
+    assert_includes after_bundle, "--suppress-payload-superclass-redefinition-for=Net::IMAP::QuotedString"
+    assert_operator after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"'),
+      :<, after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"')
+    assert_operator after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"'),
+      :<, after_bundle.index('run_checked "bin/tapioca gems --verify"')
+    assert_operator after_bundle.index('run_checked "bin/tapioca gems --verify"'),
+      :<, after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"')
+    assert_operator after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"'),
+      :<, after_bundle.index('run_checked "bin/tapioca check-shims"')
+    assert_operator after_bundle.index('run_checked "bin/tapioca check-shims"'),
+      :<, after_bundle.index('run_checked "bundle exec srb tc"')
+    assert_includes sorbet_test, '"bin/tapioca", "gems", "--verify"'
+    assert_includes sorbet_test, '"bin/tapioca", "dsl", "--verify", "--environment=test"'
+    assert_includes sorbet_test, '{ "RAILS_ENV" => "test" }'
+    assert_includes sorbet_test, '"bin/tapioca", "check-shims"'
+    assert_includes sorbet_test, '"bundle", "exec", "srb", "tc"'
+    assert_includes sorbet_test, "assert status.success?"
   end
 
   def test_generates_deterministic_playwright_evidence_capture

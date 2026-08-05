@@ -92,7 +92,7 @@ module RapidRailsTemplate
       result << "initialize_sorbet"
       result << "prepare_test_database"
       result << "generate_sorbet_dsl"
-      result << "typecheck_domain"
+      result << "typecheck_application"
       result << "verify_sorbet"
       result << "verify"
       result

@@ -72,7 +72,7 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 認証生成より前にApplication Identity、ja/en locale、request locale境界、canonical originを設定します。認証Userを生成した直後にAction Policy、`UserRole`、policy、管理画面、`users.id`を受け取るadmin付与taskを生成し、全機能をDeviseの`current_user`へ接続します。固定ページ、FAQ、footer設定、Profile、API、PWA、Web Push、Solid系機能は追加ログイン方法を参照しません。Maintenance Tasks metadataには`triggered_by_user_id`を保存します。
 
-databaseとannotationを確定してからTapiocaを初期化し、test databaseを準備してtest環境のRails DSL RBIを全体生成します。その後、model、policy、service、job、mailer、validator、application-owned `lib`の先頭へ`# typed: true`を付与し、`sorbet/rbi/shims/framework_bindings.rbi`を生成してからSorbet検証へ進みます。DSL／Gem／annotation RBIは生成物として手動編集せず、アプリ定義methodはRuby本体のinline signature、限定的なframework wiringだけはshimで表現します。
+databaseとannotationを確定してからTapiocaを初期化し、test databaseを準備してtest環境のRails DSL RBIを全体生成します。その後、controller、concern、helper、model、policy、service、job、mailer、validator、application-owned `lib`、testの先頭へ`# typed: true`を付与し、`sorbet/rbi/shims/framework_bindings.rbi`を生成してからSorbet検証へ進みます。config、migration、schemaは`typed: false`に留めます。DSL／Gem／annotation RBIは生成物として手動編集せず、アプリ定義methodはRuby本体のinline signature、限定的なframework wiringだけはshimで表現します。
 
 依存関係のインストール後、公式generatorと設定APIを実行します。daisyUIをTailwind CSS 4へ登録し、Rails標準を基準とするscaffoldとcontroller View templateを配置します。Deviseのsessions・registrations Viewを常設し、SIWE選択時だけlogin導線と、アカウント設定内のEVMウォレットログインCRUD画面を追加します。ウォレットの名称変更はedit、パスワード確認を伴う解除はshowへ分離します。tabpanelを伴うタブは共通`with_tab` helperで生成し、account settingsとMission Control Jobsで同じDOM契約を使用します。各画面は主見出しを`content_for :page_title`へ1回だけ設定し、accountとadminは共通`with_menu` layoutを使用します。Tailwind CSS utilityはresponsive layoutとDESIGN固有の調整に限定し、構造化APIで表現できないRubyコード編集にはPrismを使用します。
 

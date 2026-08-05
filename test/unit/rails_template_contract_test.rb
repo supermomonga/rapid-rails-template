@@ -585,6 +585,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes roles, 'authorize :user, through: :authorization_user'
     assert_includes roles, 'helper_method :authorization_user'
     assert_includes roles, 'rescue_from ActionPolicy::Unauthorized, with: :render_forbidden'
+    assert_includes roles, 'sig { params(_error: ActionPolicy::Unauthorized).void }'
+    assert_includes roles, 'def render_forbidden(_error)'
     assert_includes roles, 'include Pagy::Method'
     assert_includes policy, 'def index?'
     assert_includes policy, 'def manage_roles?'
@@ -731,8 +733,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, "resources :siwe_identities, only: %i[index show new create edit update destroy]"
     assert_includes @source, "post :challenge, on: :collection"
     [sessions, identities].each do |controller|
-      assert_includes controller, "rate_limit to: 10, within: 1.minute"
-      assert_includes controller, 'by: -> { "#{request.remote_ip}:#{session_binding}" }'
+      assert_includes controller, "rate_limit("
+      assert_includes controller, "to: 10"
+      assert_includes controller, "within: 1.minute"
+      assert_includes controller, "T.bind(self,"
+      assert_includes controller, '"#{request.remote_ip}:#{session_binding}"'
       refute_includes controller, "skip_forgery_protection"
     end
   end
@@ -749,8 +754,8 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes profile, ">ID<"
     assert_includes settings, "current_password"
     assert_includes settings, 'method: :delete, class: "btn btn-error btn-rapid"'
-    assert_includes identities, "current_user.siwe_identities.find(params.expect(:id))"
-    assert_includes identities, "current_user.valid_password?"
+    assert_includes identities, "account_user.siwe_identities.find(params.expect(:id))"
+    assert_includes identities, "account_user.valid_password?"
     assert_includes identity_index, 'class="list gap-3"'
     refute_includes identity_edit, "current_password"
     refute_includes identity_edit, "method: :delete"
@@ -794,7 +799,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'route "resource :profile, only: %i[show edit update]"'
     assert_includes profile_configuration, 'delete "profile/avatar", to: "profiles#destroy_avatar", as: :profile_avatar'
     assert_includes profile_configuration, "def destroy_avatar"
-    assert_includes profile_configuration, ".profile.avatar.purge if"
+    assert_includes profile_configuration, "profile = T.must(account_user.profile)"
+    assert_includes profile_configuration, "profile.avatar.purge if"
     assert_includes profile_configuration, 'I18n.t("profiles.avatar.destroy.notice")'
     assert_includes profile_configuration, '"notice" => "Your avatar image was deleted."'
     assert_includes avatar_helper, "BORING_AVATAR_COLORS = %w[#ffffff #3ea8ff #f1f5f9 #0f83fd #d6e3ed].freeze"
@@ -814,7 +820,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes avatar_helper_test, "profile.user_id.to_s"
     assert_includes avatar_helper_test, "normalize_boring_avatar_ids"
     refute_includes profile_configuration, "boring_avatar_seed"
-    assert_includes @source, 'assert_equal user.profile.screen_name.camelize, user.profile.display_name'
+    assert_includes @source, 'assert_equal profile.screen_name.camelize, profile.display_name'
   end
 
   def test_configures_explicit_rails_and_imgproxy_image_delivery_boundaries
@@ -1043,7 +1049,8 @@ class RailsTemplateContractTest < Minitest::Test
   def test_installs_sorbet_and_checks_types_and_rbi_files_in_the_regular_test_suite
     sorbet_test = generated_file_source("test/sorbet_test.rb")
     shim = generated_file_source("sorbet/rbi/shims/framework_bindings.rbi")
-    domain_typechecking = source_between("def configure_domain_typechecking", "def configure_sorbet_shims")
+    application_typechecking = source_between("def configure_application_typechecking", "def configure_sorbet_shims")
+    shim_configuration = source_between("def configure_sorbet_shims", "def configure_database")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
     development_gems = source_between("gem_group :development do", "gem_group :development, :test do")
     development_and_test_gems = source_between("gem_group :development, :test do", "gem_group :test do")
@@ -1065,8 +1072,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"')
     assert_operator after_bundle.index('run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"'),
-      :<, after_bundle.index("configure_domain_typechecking")
-    assert_operator after_bundle.index("configure_domain_typechecking"),
+      :<, after_bundle.index("configure_application_typechecking")
+    assert_operator after_bundle.index("configure_application_typechecking"),
       :<, after_bundle.index("configure_sorbet_shims")
     assert_operator after_bundle.index("configure_sorbet_shims"),
       :<, after_bundle.index('run_checked "bin/tapioca gems --verify"')
@@ -1081,7 +1088,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes sorbet_test, '{ "RAILS_ENV" => "test" }'
     assert_includes sorbet_test, '"bin/tapioca", "check-shims"'
     assert_includes sorbet_test, '"bundle", "exec", "srb", "tc"'
-    assert_includes sorbet_test, "DOMAIN_RUBY_PATTERNS"
+    assert_includes sorbet_test, "TYPED_RUBY_PATTERNS"
     assert_includes sorbet_test, "APPLICATION_DSL_RBI_SOURCES"
     assert_includes sorbet_test, 'assert_equal "# typed: true\\n"'
     %w[
@@ -1101,12 +1108,23 @@ class RailsTemplateContractTest < Minitest::Test
       assert_includes sorbet_test, %Q{"#{dsl_rbi}" =>}
     end
     assert_includes sorbet_test, 'assert_path_exists Rails.root.join("sorbet/rbi/dsl/#{name}.rbi")'
-    %w[app/models app/policies app/services app/jobs app/mailers app/validators lib].each do |directory|
-      assert_includes domain_typechecking, "#{directory}/**/*.rb"
+    %w[app/controllers app/helpers app/models app/policies app/services app/jobs app/mailers app/validators lib test].each do |directory|
+      assert_includes application_typechecking, "#{directory}/**/*.rb"
     end
-    assert_includes domain_typechecking, 'prepend_to_file path, "# typed: true\\n"'
+    assert_includes application_typechecking, 'prepend_to_file path, "# typed: true\\n"'
     assert_includes shim, "class ActiveRecord::Base"
     assert_includes shim, "extend Devise::Models"
+    assert_includes shim, "class ActiveSupport::TestCase"
+    assert_includes shim, "include ActiveRecord::TestFixtures"
+    assert_includes shim, "class ActionDispatch::SystemTestCase"
+    assert_includes shim, "include GeneratedPathHelpersModule"
+    assert_includes shim, "class ApplicationController"
+    assert_includes shim, "include ActionPolicy::Controller"
+    assert_includes shim, "class DeviseController < ActionController::Base"
+    assert_includes shim, "include Devise::Controllers::SignInOut"
+    assert_includes shim, "module ApplicationHelper"
+    assert_includes shim_configuration, "module AvatarHelper"
+    assert_includes shim_configuration, "module Admin::MaintenanceTasksHelper"
     assert_includes shim, "class User"
     assert_includes shim, "include Devise::Models::DatabaseAuthenticatable"
     assert_includes shim, "def password; end"
@@ -1157,7 +1175,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'fill_in User.human_attribute_name(:login_id), with: @user.login_id'
     assert_includes evidence, '"api-credential-secret"'
     assert_includes evidence, "def with_deterministic_secure_random"
-    assert_includes evidence, "singleton_class.define_method(:urlsafe_base64, original_method)"
+    assert_includes evidence, "T.must(singleton_class).define_method(:urlsafe_base64, T.must(original_method))"
     assert_includes evidence, '"navigation-authenticated-open"'
     assert_includes evidence, '"about"'
     assert_includes evidence, '"faq"'
@@ -1198,6 +1216,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'runner = runner.sub("__WEB_PUSH__", web_push.inspect)'
     assert_includes evidence, 'runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)'
     assert_includes evidence, 'runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)'
+    assert_includes evidence, "disabled_constants = []"
+    assert_includes evidence, "node.is_a?(Prism::IfNode)"
+    assert_includes evidence, "node.location.start_line - 1"
+    assert_includes evidence, "removed_lines = Array.new(runner.lines.length, false)"
+    assert_includes evidence, "runner.lines.each_with_index.filter_map"
     assert_includes evidence, '"admin-job-operations"'
     assert_includes evidence, '"admin-job-operations-failed"'
     assert_includes evidence, '"admin-job-operations-navigation-open"'
@@ -1495,8 +1518,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes module_source, "ActionDispatch::Routing::Mapper.include(Devise::Siweable::Routes)"
     assert_includes routes, "def devise_siwe_session(mapping, controllers)"
     assert_includes siwe, 'require Rails.root.join("lib/devise/siweable")'
-    assert_includes sessions, "identity&.user&.active_for_authentication?"
-    assert_includes sessions, "sign_in(:user, identity.user, event: :authentication)"
+    assert_includes sessions, "user = SiweIdentity.includes(:user).find_by(address: message.address.downcase)&.user"
+    assert_includes sessions, "user&.active_for_authentication?"
+    assert_includes sessions, "sign_in(:user, user, event: :authentication)"
     refute_includes sessions, "find_or_create_by!"
     refute_includes sessions, "bypass_sign_in"
   end
@@ -1517,9 +1541,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes challenge, "identity.canonical_url(path_for(purpose))"
     assert_includes challenge, "strict: true"
     assert_includes challenge, "update_all(consumed_at: Time.current)"
-    assert_includes controller, "current_user.siwe_identities.find(params.expect(:id))"
-    assert_includes controller, "current_user.valid_password?"
-    assert_includes controller, 'name: "Wallet ##{current_user.siwe_identities.count + 1}"'
+    assert_includes controller, "account_user.siwe_identities.find(params.expect(:id))"
+    assert_includes controller, "account_user.valid_password?"
+    assert_includes controller, 'name: "Wallet ##{account_user.siwe_identities.count + 1}"'
     refute_includes controller, 'params.require(:name)'
     challenge_action = controller.match(/def challenge(?<body>.*?)def create/m)[:body]
     refute_includes challenge_action, "valid_password?"

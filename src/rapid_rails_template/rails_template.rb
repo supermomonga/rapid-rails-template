@@ -276,6 +276,7 @@ def configure_application_identity
       extend ActiveSupport::Concern
 
       included do
+        T.bind(self, T.any(T.class_of(ActionController::Base), T.class_of(ActionController::API)))
         around_action :use_default_locale
       end
 
@@ -354,9 +355,9 @@ def configure_application_identity
 
       test "requires the configured production environment variable" do
         configuration = ActiveSupport::OrderedOptions.new
-        configuration.app_name = "Sample App"
-        configuration.default_locale = "ja"
-        configuration.canonical_origin_env = "APPLICATION_ORIGIN"
+        configuration[:app_name] = "Sample App"
+        configuration[:default_locale] = "ja"
+        configuration[:canonical_origin_env] = "APPLICATION_ORIGIN"
 
         error = assert_raises(ApplicationIdentity::Error) { ApplicationIdentity.build(configuration, environment: {}) }
         assert_equal "APPLICATION_ORIGIN is required", error.message
@@ -740,7 +741,7 @@ def configure_image_delivery
           )
 
           url = Imgproxy.url_for(blob, resizing_type: "fill", width: 40, height: 40, enlarge: 1)
-          path = URI(url).path
+          path = T.must(URI(url).path)
           signature, processing, *encoded_source = path.delete_prefix("/").split("/")
           unsigned_path = "/#{([processing] + encoded_source).join("/")}"
           expected_signature = Base64.urlsafe_encode64(
@@ -1629,10 +1630,24 @@ def install_siwe
   create_file "app/controllers/users/siwe_sessions_controller.rb", <<~'RUBY', force: true
     module Users
       class SiweSessionsController < DeviseController
-        after_action :prevent_challenge_caching
-        rate_limit to: 10, within: 1.minute, only: %i[challenge create],
-          by: -> { "#{request.remote_ip}:#{session_binding}" }, with: -> { head :too_many_requests }
+        extend T::Sig
 
+        after_action :prevent_challenge_caching
+        rate_limit(
+          to: 10,
+          within: 1.minute,
+          only: %i[challenge create],
+          by: -> {
+            T.bind(self, Users::SiweSessionsController)
+            "#{request.remote_ip}:#{session_binding}"
+          },
+          with: -> {
+            T.bind(self, Users::SiweSessionsController)
+            head :too_many_requests
+          }
+        )
+
+        sig { void }
         def challenge
           record, raw_token = SiweChallenge.issue!(
             purpose: "login",
@@ -1645,6 +1660,7 @@ def install_siwe
           head :unprocessable_content
         end
 
+        sig { void }
         def create
           challenge = SiweChallenge.for_token!(params.require(:challenge_token))
           message = challenge.verify!(
@@ -1653,12 +1669,12 @@ def install_siwe
             session_binding:
           )
           challenge.consume!
-          identity = SiweIdentity.includes(:user).find_by(address: message.address.downcase)
-          return head :unauthorized unless identity&.user&.active_for_authentication?
+          user = SiweIdentity.includes(:user).find_by(address: message.address.downcase)&.user
+          return head :unauthorized unless user&.active_for_authentication?
 
           request.env["devise.skip_timeout"] = true
-          sign_in(:user, identity.user, event: :authentication)
-          render json: { redirect_url: after_sign_in_path_for(identity.user) }
+          sign_in(:user, user, event: :authentication)
+          render json: { redirect_url: after_sign_in_path_for(user) }
         rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, SiweChallenge::VerificationError
           head :unauthorized
         end
@@ -1678,27 +1694,45 @@ def install_siwe
   create_file "app/controllers/account/siwe_identities_controller.rb", <<~'RUBY', force: true
     module Account
       class SiweIdentitiesController < ApplicationController
+        extend T::Sig
+
         layout "account_settings"
         before_action :authenticate_user!
         before_action :set_siwe_identity, only: %i[show edit update destroy]
         after_action :prevent_challenge_caching, only: %i[challenge create]
-        rate_limit to: 10, within: 1.minute, only: %i[challenge create],
-          by: -> { "#{request.remote_ip}:#{session_binding}" }, with: -> { head :too_many_requests }
+        rate_limit(
+          to: 10,
+          within: 1.minute,
+          only: %i[challenge create],
+          by: -> {
+            T.bind(self, Account::SiweIdentitiesController)
+            "#{request.remote_ip}:#{session_binding}"
+          },
+          with: -> {
+            T.bind(self, Account::SiweIdentitiesController)
+            head :too_many_requests
+          }
+        )
 
+        sig { void }
         def index
-          @siwe_identities = current_user.siwe_identities.order(:created_at)
+          @siwe_identities = account_user.siwe_identities.order(:created_at)
         end
 
-        def new; end
-
+        sig { void }
         def show; end
 
+        sig { void }
+        def new; end
+
+        sig { void }
         def edit; end
 
+        sig { void }
         def challenge
           record, raw_token = SiweChallenge.issue!(
             purpose: "link",
-            user: current_user,
+            user: account_user,
             address: params.require(:address),
             chain_id: params.require(:chain_id),
             session_binding:
@@ -1708,28 +1742,30 @@ def install_siwe
           head :unprocessable_content
         end
 
+        sig { void }
         def create
           challenge = SiweChallenge.for_token!(params.require(:challenge_token))
-          identity = nil
+          identity = T.let(nil, T.nilable(SiweIdentity))
           SiweChallenge.transaction do
             message = challenge.verify!(
               signature: params.require(:signature),
               purpose: "link",
-              user: current_user,
+              user: account_user,
               session_binding:
             )
             challenge.consume!
-            identity = current_user.siwe_identities.create!(
-              name: "Wallet ##{current_user.siwe_identities.count + 1}",
+            identity = account_user.siwe_identities.create!(
+              name: "Wallet ##{account_user.siwe_identities.count + 1}",
               address: message.address
             )
           end
-          render json: { redirect_url: account_siwe_identities_path, id: identity.id }, status: :created
+          render json: { redirect_url: account_siwe_identities_path, id: T.must(identity).id }, status: :created
         rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
           ActiveRecord::RecordNotUnique, SiweChallenge::VerificationError
           head :unprocessable_content
         end
 
+        sig { void }
         def update
           if @siwe_identity.update(params.expect(siwe_identity: [:name]))
             redirect_to account_siwe_identities_path, notice: t("siwe.identities.updated")
@@ -1738,8 +1774,9 @@ def install_siwe
           end
         end
 
+        sig { void }
         def destroy
-          unless current_user.valid_password?(params.require(:current_password))
+          unless account_user.valid_password?(params.require(:current_password))
             redirect_to account_siwe_identity_path(@siwe_identity),
               alert: t("siwe.identities.password_invalid"), status: :see_other
             return
@@ -1750,8 +1787,13 @@ def install_siwe
         end
 
         private
+          sig { returns(User) }
+          def account_user
+            T.must(current_user)
+          end
+
           def set_siwe_identity
-            @siwe_identity = current_user.siwe_identities.find(params.expect(:id))
+            @siwe_identity = account_user.siwe_identities.find(params.expect(:id))
           end
 
           def session_binding
@@ -2190,7 +2232,7 @@ def install_siwe
         end
         assert_equal ["Wallet #1", "Wallet #2"], users(:one).siwe_identities.order(:created_at).pluck(:name)
 
-        identity = users(:one).siwe_identities.first
+        identity = T.must(users(:one).siwe_identities.first)
         delete account_siwe_identity_url(identity), params: { current_password: "password123" }
         assert_redirected_to account_siwe_identities_url
         assert_not SiweIdentity.exists?(identity.id)
@@ -2503,11 +2545,13 @@ def configure_roles
       rescue_from ActionPolicy::Unauthorized, with: :render_forbidden
 
       private
+        sig { returns(T.nilable(User)) }
         def authorization_user
           current_user
         end
 
-        def render_forbidden
+        sig { params(_error: ActionPolicy::Unauthorized).void }
+        def render_forbidden(_error)
           head :forbidden
         end
 
@@ -2552,6 +2596,9 @@ def configure_roles
   create_file "app/controllers/admin/users_controller.rb", <<~RUBY, force: true
     module Admin
       class UsersController < BaseController
+        extend T::Sig
+
+        sig { void }
         def index
           authorize! User, to: :index?
           users = authorized_scope(#{user_scope}).order(:id)
@@ -2564,8 +2611,11 @@ def configure_roles
   create_file "app/controllers/admin/user_roles_controller.rb", <<~RUBY, force: true
     module Admin
       class UserRolesController < BaseController
+        extend T::Sig
+
         before_action :set_user
 
+        sig { void }
         def create
           authorize! @user, to: :manage_roles?
           @user.grant_role!(role_param)
@@ -2574,6 +2624,7 @@ def configure_roles
           head :unprocessable_content
         end
 
+        sig { void }
         def destroy
           authorize! @user, to: :manage_roles?
           if @user == authorization_user
@@ -2991,11 +3042,11 @@ def configure_roles
         local_seeds = Rails.root.join("db/seeds.local.rb")
         FileUtils.rm_f(local_seeds)
 
-        load Rails.root.join("db/seeds.rb")
+        load Rails.root.join("db/seeds.rb").to_s
         assert_nil ENV["ROLE_LOCAL_SEED_LOADED"]
 
         File.write(local_seeds, 'ENV["ROLE_LOCAL_SEED_LOADED"] = "yes"\n')
-        load Rails.root.join("db/seeds.rb")
+        load Rails.root.join("db/seeds.rb").to_s
         assert_equal "yes", ENV["ROLE_LOCAL_SEED_LOADED"]
       ensure
         FileUtils.rm_f(local_seeds) if local_seeds
@@ -3013,6 +3064,9 @@ def configure_roles
   create_file "app/controllers/users/registrations_controller.rb", <<~RUBY, force: true
     module Users
       class RegistrationsController < Devise::RegistrationsController
+        extend T::Sig
+
+        sig { void }
         def destroy
           if resource.last_admin?
             redirect_to edit_user_registration_path, alert: I18n.t("accounts.destroy.last_admin"), status: :see_other
@@ -3241,6 +3295,7 @@ def configure_content_management
       helper_method :footer_setting
 
       private
+        sig { returns(FooterSetting) }
         def footer_setting
           @footer_setting ||= FooterSetting.default_record
         end
@@ -3249,6 +3304,8 @@ def configure_content_management
 
   create_file "app/controllers/pages_controller.rb", <<~RUBY, force: true
     class PagesController < ApplicationController
+      extend T::Sig
+
       TEMPLATES = {
         "about" => "pages/about",
         "corp" => "pages/corp",
@@ -3258,7 +3315,8 @@ def configure_content_management
         "transaction-law" => "pages/transaction-law"
       }.freeze
 
-    #{public_page_access}  def show
+    #{public_page_access}  sig { void }
+      def show
         @page = Page.find_by!(slug: params.expect(:slug))
         render template: TEMPLATES.fetch(@page.slug)
       end
@@ -3267,7 +3325,10 @@ def configure_content_management
 
   create_file "app/controllers/faqs_controller.rb", <<~RUBY, force: true
     class FaqsController < ApplicationController
-    #{public_faq_access}  def index
+      extend T::Sig
+
+    #{public_faq_access}  sig { void }
+      def index
         @faqs = Faq.published_in_display_order
       end
     end
@@ -3276,17 +3337,22 @@ def configure_content_management
   create_file "app/controllers/admin/pages_controller.rb", <<~RUBY, force: true
     module Admin
       class PagesController < BaseController
+        extend T::Sig
+
         before_action :set_page, only: %i[edit update]
 
+        sig { void }
         def index
           authorize! Page, to: :index?
           @pages = Page.order(:id)
         end
 
+        sig { void }
         def edit
           authorize! @page, to: :update?
         end
 
+        sig { void }
         def update
           authorize! @page, to: :update?
           if @page.update(page_params)
@@ -3313,18 +3379,28 @@ def configure_content_management
   create_file "app/controllers/admin/faqs_controller.rb", <<~RUBY, force: true
     module Admin
       class FaqsController < BaseController
+        extend T::Sig
+
         before_action :set_faq, only: %i[edit update destroy]
 
+        sig { void }
         def index
           authorize! Faq, to: :index?
           @faqs = Faq.order(:position, :id).with_rich_text_answer
         end
 
+        sig { void }
         def new
           @faq = Faq.new
           authorize! @faq, to: :create?
         end
 
+        sig { void }
+        def edit
+          authorize! @faq, to: :update?
+        end
+
+        sig { void }
         def create
           @faq = Faq.new(faq_params)
           authorize! @faq, to: :create?
@@ -3337,10 +3413,7 @@ def configure_content_management
           end
         end
 
-        def edit
-          authorize! @faq, to: :update?
-        end
-
+        sig { void }
         def update
           authorize! @faq, to: :update?
           if @faq.update(faq_params)
@@ -3352,6 +3425,7 @@ def configure_content_management
           end
         end
 
+        sig { void }
         def destroy
           authorize! @faq, to: :destroy?
           @faq.destroy!
@@ -3375,12 +3449,16 @@ def configure_content_management
   create_file "app/controllers/admin/footer_settings_controller.rb", <<~RUBY, force: true
     module Admin
       class FooterSettingsController < BaseController
+        extend T::Sig
+
         before_action :set_footer_setting
 
+        sig { void }
         def edit
           authorize! @footer_setting, to: :edit?
         end
 
+        sig { void }
         def update
           authorize! @footer_setting, to: :update?
           if @footer_setting.update(footer_setting_params)
@@ -3753,11 +3831,11 @@ def configure_content_management
       end
 
       test "seeds fixed pages and footer setting idempotently" do
-        load Rails.root.join("db/seeds.rb")
+        load Rails.root.join("db/seeds.rb").to_s
 
         assert_equal Page::TITLES, Page.order(:id).to_h { |page| [page.slug, page.title] }
         assert_equal FooterSetting::DEFAULT_KEY, FooterSetting.default_record.key
-        assert_no_difference(["Page.count", "FooterSetting.count"]) { load Rails.root.join("db/seeds.rb") }
+        assert_no_difference(["Page.count", "FooterSetting.count"]) { load Rails.root.join("db/seeds.rb").to_s }
       end
     end
   RUBY
@@ -4037,7 +4115,7 @@ def configure_content_management
             faq: { question: "質問", answer: "回答", position: 5, published: "1" }
           }
         end
-        faq = Faq.order(:id).last
+        faq = T.must(Faq.order(:id).last)
         assert_redirected_to admin_faqs_url
         assert faq.published?
 
@@ -4388,8 +4466,10 @@ def configure_profile
   destroy_avatar_action = if avatar_enabled
     <<~RUBY
 
+        sig { void }
         def destroy_avatar
-          #{profile_owner}.profile.avatar.purge if #{profile_owner}.profile.avatar.attached?
+          profile = T.must(account_user.profile)
+          profile.avatar.purge if profile.avatar.attached?
           redirect_to profile_path, notice: I18n.t("profiles.avatar.destroy.notice"), status: :see_other
         end
     RUBY
@@ -4398,18 +4478,23 @@ def configure_profile
   end
   create_file "app/controllers/profiles_controller.rb", <<~RUBY, force: true
     class ProfilesController < ApplicationController
+      extend T::Sig
+
       layout "account"
     #{authentication}
+      sig { void }
       def show
-        @profile = #{profile_owner}.profile
+        @profile = T.must(account_user.profile)
       end
 
+      sig { void }
       def edit
-        @profile = #{profile_owner}.profile
+        @profile = T.must(account_user.profile)
       end
 
+      sig { void }
       def update
-        @profile = #{profile_owner}.profile
+        @profile = T.must(account_user.profile)
         if @profile.update(profile_params)
           redirect_to profile_path, notice: I18n.t("profiles.update.notice"), status: :see_other
         else
@@ -4419,6 +4504,11 @@ def configure_profile
     #{destroy_avatar_action}
 
       private
+        sig { returns(User) }
+        def account_user
+          T.must(#{profile_owner})
+        end
+
         def profile_params
           params.expect(profile: [#{permitted_features}])
         end
@@ -4464,9 +4554,12 @@ def configure_profile
   if avatar_enabled
     create_file "app/helpers/avatar_helper.rb", <<~RUBY, force: true
       module AvatarHelper
+        extend T::Sig
+
         BORING_AVATAR_COLORS = %w[#ffffff #3ea8ff #f1f5f9 #0f83fd #d6e3ed].freeze
         AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze
 
+        sig { params(profile: Profile, size: Integer, alt: String).returns(String) }
         def profile_avatar(profile, size:, alt:)
           variant = AVATAR_VARIANTS.fetch(size)
           if profile.avatar.attached?
@@ -4569,10 +4662,10 @@ def configure_profile
         def insert_png_chunk(tempfile, type, data, after_ihdr: false)
           bytes = File.binread(tempfile.path)
           chunk = [data.bytesize].pack("N") + type + data + [Zlib.crc32(type + data)].pack("N")
-          offset = after_ihdr ? 33 : bytes.index("IEND") - 4
+          offset = after_ihdr ? 33 : T.must(bytes.index("IEND")) - 4
           tempfile.rewind
           tempfile.truncate(0)
-          tempfile.write(bytes.byteslice(0, offset) + chunk + bytes.byteslice(offset..))
+          tempfile.write(T.must(bytes.byteslice(0, offset)) + chunk + T.must(bytes.byteslice(offset..)))
           tempfile.rewind
         end
       end
@@ -4623,10 +4716,12 @@ def configure_profile
       require "test_helper"
 
       class AvatarHelperTest < ActionView::TestCase
+        include AvatarHelper
+
         test "generates the default avatar from the user id and Rapid Rails palette" do
           profile = profiles(:one)
           view = ApplicationController.helpers
-          expected = view.boring_avatar(
+          expected = boring_avatar(
             profile.user_id.to_s,
             variant: :beam,
             colors: AvatarHelper::BORING_AVATAR_COLORS,
@@ -4724,7 +4819,7 @@ def configure_profile
 
       test "screen_name is required and unique" do
         profile = profiles(:two)
-        profile.screen_name = nil
+        profile[:screen_name] = nil
 
         assert_not profile.valid?
         assert profile.errors.of_kind?(:screen_name, :blank)
@@ -4740,7 +4835,7 @@ def configure_profile
     profile_tests << <<~RUBY
       test "display_name is required and unique" do
         profile = profiles(:two)
-        profile.display_name = nil
+        profile[:display_name] = nil
 
         assert_not profile.valid?
         assert profile.errors.of_kind?(:display_name, :blank)
@@ -4825,9 +4920,10 @@ def configure_profile
 
       test "removes avatar blobs variants and Active Storage DB files with the user" do
         user = users(:one)
-        user.profile.avatar.attach(AvatarTestImage.upload(width: 120, height: 80))
-        user.profile.avatar.variant(:profile_avatar).processed
-        blob_ids = [user.profile.avatar.blob_id, *user.profile.avatar.blob.variant_records.map { |record| record.image.blob_id }]
+        profile = T.must(user.profile)
+        profile.avatar.attach(AvatarTestImage.upload(width: 120, height: 80))
+        profile.avatar.variant(:profile_avatar).processed
+        blob_ids = [profile.avatar.blob.id, *profile.avatar.blob.variant_records.map { |record| record.image.blob.id }]
         storage_refs = ActiveStorage::Blob.where(id: blob_ids).pluck(:key)
 
         perform_enqueued_jobs { user.destroy! }
@@ -5059,22 +5155,37 @@ def configure_api
   create_file "app/controllers/api/api_controller.rb", <<~RUBY, force: true
     module Api
       class ApiController < ActionController::API
+        extend T::Sig
+
         include ActionController::HttpAuthentication::Token::ControllerMethods
         include LocalizedRequest
 
         before_action :authenticate_api_credential!
 
-        attr_reader :current_api_credential, :current_api_user
-
-        rescue_from ActiveRecord::RecordNotFound, with: -> { head :not_found }
+        rescue_from ActiveRecord::RecordNotFound, with: -> {
+          T.bind(self, Api::ApiController)
+          head :not_found
+        }
         rescue_from ActionController::ParameterMissing do |error|
           render json: { errors: [error.message] }, status: :bad_request
         end
 
         private
+          sig { returns(ApiCredential) }
+          def current_api_credential
+            T.must(@current_api_credential)
+          end
+
+          sig { returns(User) }
+          def current_api_user
+            T.must(@current_api_user)
+          end
+
           def authenticate_api_credential!
             token = authenticate_with_http_token { |candidate, _options| candidate }
             api_key, api_secret = token.to_s.split(".", 2)
+            return head :unauthorized if api_key.empty? || api_secret.nil?
+
             credential = ApiCredential.find_by(api_key: api_key)
             return head :unauthorized unless credential&.authenticate_api_secret(api_secret)
 
@@ -5089,18 +5200,24 @@ def configure_api
   create_file "app/controllers/api/api_credentials_controller.rb", <<~RUBY, force: true
     module Api
       class ApiCredentialsController < ApiController
+        extend T::Sig
+
         before_action :set_api_credential, only: %i[show update destroy revoke]
 
+        sig { void }
         def index
           render json: current_api_user.api_credentials.order(created_at: :desc).map { |credential| credential_payload(credential) }
         end
 
+        sig { void }
         def show
           render json: credential_payload(@api_credential)
         end
 
+        sig { void }
         def create
-          credential = current_api_user.api_credentials.new(api_credential_params)
+          credential = ApiCredential.new(api_credential_params)
+          credential.user = current_api_user
           if credential.save
             render json: credential_payload(credential).merge(api_secret: credential.api_secret), status: :created
           else
@@ -5108,6 +5225,7 @@ def configure_api
           end
         end
 
+        sig { void }
         def update
           if @api_credential.update(api_credential_params)
             render json: credential_payload(@api_credential)
@@ -5116,11 +5234,13 @@ def configure_api
           end
         end
 
+        sig { void }
         def destroy
           @api_credential.destroy!
           head :no_content
         end
 
+        sig { void }
         def revoke
           secret = @api_credential.revoke_api_secret!
           render json: credential_payload(@api_credential).merge(api_secret: secret)
@@ -5146,23 +5266,31 @@ def configure_api
   devise_authentication = "  before_action :authenticate_user!\n"
   create_file "app/controllers/api_credentials_controller.rb", <<~RUBY, force: true
     class ApiCredentialsController < ApplicationController
+      extend T::Sig
+
       layout "account"
     #{devise_authentication}  before_action :set_api_credential, only: %i[show edit update destroy revoke]
 
+      sig { void }
       def index
         @api_credentials = account_user.api_credentials.order(created_at: :desc)
       end
 
+      sig { void }
       def show; end
 
+      sig { void }
       def new
-        @api_credential = account_user.api_credentials.new
+        @api_credential = account_user.api_credentials.build
       end
 
+      sig { void }
       def edit; end
 
+      sig { void }
       def create
-        @api_credential = account_user.api_credentials.new(api_credential_params)
+        @api_credential = ApiCredential.new(api_credential_params)
+        @api_credential.user = account_user
         if @api_credential.save
           @api_secret = @api_credential.api_secret
           render :show, status: :created
@@ -5171,6 +5299,7 @@ def configure_api
         end
       end
 
+      sig { void }
       def update
         if @api_credential.update(api_credential_params)
           redirect_to @api_credential
@@ -5179,19 +5308,22 @@ def configure_api
         end
       end
 
+      sig { void }
       def destroy
         @api_credential.destroy!
         redirect_to api_credentials_path, status: :see_other
       end
 
+      sig { void }
       def revoke
         @api_secret = @api_credential.revoke_api_secret!
         render :show
       end
 
       private
+        sig { returns(User) }
         def account_user
-          #{account_user}
+          T.must(#{account_user})
         end
 
         def set_api_credential
@@ -5370,7 +5502,7 @@ def configure_api
     class ApiCredentialTest < ActiveSupport::TestCase
       test "stores only the digest and invalidates the revoked secret" do
         credential = users(:one).api_credentials.create!(name: "CLI")
-        original_secret = credential.api_secret
+        original_secret = T.must(credential.api_secret)
 
         assert credential.authenticate_api_secret(original_secret)
         refute credential.authenticate_api_secret("invalid")
@@ -5436,7 +5568,7 @@ def configure_api
 
       private
         def authorization(secret = @api_secret)
-          { "Authorization" => "Bearer " + [@credential.api_key, secret].join(".") }
+          { "Authorization" => "Bearer " + [@credential.api_key, T.must(secret)].join(".") }
         end
     end
   RUBY
@@ -5901,8 +6033,11 @@ def configure_default_views
   end
 
   inject_into_class "app/controllers/application_controller.rb", "ApplicationController", <<~RUBY
+      extend T::Sig
+
       layout :application_layout
 
+      sig { returns(String) }
       def application_layout
         #{layout_method}
       end
@@ -5913,15 +6048,21 @@ def configure_default_views
   home_authentication = ""
   create_file "app/controllers/home_controller.rb", <<~RUBY, force: true
     class HomeController < ApplicationController
-    #{home_authentication}  def index; end
+      extend T::Sig
+
+    #{home_authentication}  sig { void }
+      def index; end
     end
   RUBY
 
   accounts_controller = <<~RUBY
     class AccountsController < ApplicationController
+      extend T::Sig
+
       layout "account"
       before_action :authenticate_user!
 
+      sig { void }
       def show; end
     end
   RUBY
@@ -5929,35 +6070,51 @@ def configure_default_views
 
   create_file "app/helpers/application_helper.rb", <<~'RUBY', force: true
     module ApplicationHelper
+      extend T::Sig
+
+      Tab = T.type_alias { T::Hash[Symbol, T.untyped] }
+
+      sig { returns(T.untyped) }
       def application_routes
         Rails.application.routes.url_helpers
       end
 
+      sig { returns(ApplicationIdentity) }
       def application_identity
         Rails.configuration.x.application_identity
       end
 
+      sig { returns(String) }
       def document_title
         page_title = content_for(:page_title).presence
         [page_title, application_identity.app_name].compact.join(" | ")
       end
 
+      sig { returns(String) }
       def canonical_url
         application_identity.canonical_url(request.path)
       end
 
+      sig { params(key: T.any(String, Symbol), options: T.untyped).returns(T.untyped) }
       def application_translate(key, **options)
         I18n.backend.translate(application_identity.default_locale, key, **options)
       end
 
+      sig do
+        params(
+          tabs: T::Array[Tab],
+          size: T.nilable(Symbol),
+          block: T.proc.returns(T.untyped)
+        ).returns(ActiveSupport::SafeBuffer)
+      end
       def with_tab(tabs:, size: nil, &block)
         unless size.nil? || %i[xs sm md lg xl].include?(size)
-          raise ArgumentError, "tab size must be a daisyUI tab size"
+          Kernel.raise ArgumentError, "tab size must be a daisyUI tab size"
         end
 
         matches = tabs.each_with_index.filter_map do |tab, index|
           path = tab.fetch(:path).to_s
-          raise ArgumentError, "tab path must not be empty" if path.empty?
+          Kernel.raise ArgumentError, "tab path must not be empty" if path.empty?
 
           predicate = tab[:is_active]
           active = if predicate.nil?
@@ -5965,18 +6122,18 @@ def configure_default_views
           elsif predicate.is_a?(Proc) && predicate.lambda?
             predicate.call
           else
-            raise ArgumentError, "tab is_active must be a lambda"
+            Kernel.raise ArgumentError, "tab is_active must be a lambda"
           end
           { index:, path: } if active
         end
 
-        raise ArgumentError, "exactly one active tab is required" if matches.empty?
+        Kernel.raise ArgumentError, "exactly one active tab is required" if matches.empty?
 
-        longest_path_length = matches.map { |match| match.fetch(:path).length }.max
+        longest_path_length = T.must(matches.map { |match| match.fetch(:path).length }.max)
         longest_matches = matches.select { |match| match.fetch(:path).length == longest_path_length }
-        raise ArgumentError, "active tabs must have one longest path" unless longest_matches.one?
+        Kernel.raise ArgumentError, "active tabs must have one longest path" unless longest_matches.one?
 
-        active_index = longest_matches.first.fetch(:index)
+        active_index = T.must(longest_matches.first).fetch(:index)
         tab_content = capture(&block)
         items = tabs.each_with_index.flat_map do |tab, index|
           active = index == active_index
@@ -6000,6 +6157,8 @@ def configure_default_views
     require "test_helper"
 
     class ApplicationHelperTest < ActionView::TestCase
+      include ApplicationHelper
+
       test "selects the longest matching path and captures content once" do
         request.path = "/account/siwe_identities/1/edit"
         capture_count = 0
@@ -6337,29 +6496,30 @@ def configure_default_views
 
   generated_profile_assertion = if display_name_enabled && screen_name_enabled
     <<~RUBY
-      assert_predicate user.profile, :persisted?
-      assert_match(/\\A[a-z0-9_]+\\z/, user.profile.screen_name)
-      assert_equal user.profile.screen_name.camelize, user.profile.display_name
+      assert_predicate profile, :persisted?
+      assert_match(/\\A[a-z0-9_]+\\z/, profile.screen_name)
+      assert_equal profile.screen_name.camelize, profile.display_name
     RUBY
   elsif screen_name_enabled
     <<~RUBY
-      assert_predicate user.profile, :persisted?
-      assert_match(/\\A[a-z0-9_]+\\z/, user.profile.screen_name)
+      assert_predicate profile, :persisted?
+      assert_match(/\\A[a-z0-9_]+\\z/, profile.screen_name)
     RUBY
   elsif display_name_enabled
     <<~RUBY
-      assert_predicate user.profile, :persisted?
-      assert_predicate user.profile.display_name, :present?
+      assert_predicate profile, :persisted?
+      assert_predicate profile.display_name, :present?
     RUBY
   else
     ""
   end
   generated_profile_assertion = generated_profile_assertion.lines.map { |line| "      #{line}" }.join
+  profile_binding = profile_enabled ? "      profile = T.must(user.profile)\n" : ""
   profile_setup = if display_name_enabled || screen_name_enabled
     attributes = []
     attributes << 'screen_name: "sample_user"' if screen_name_enabled
     attributes << 'display_name: "Sample User"' if display_name_enabled
-    "      user.profile.update!(#{attributes.join(', ')})\n"
+    "      profile.update!(#{attributes.join(', ')})\n"
   else
     ""
   end
@@ -6410,13 +6570,13 @@ def configure_default_views
       <<~RUBY
         patch profile_url, params: { profile: { screen_name: 'updated_user' } }
         assert_redirected_to profile_url
-        assert_equal 'updated_user', user.profile.reload.screen_name
+        assert_equal 'updated_user', profile.reload.screen_name
       RUBY
     elsif display_name_enabled
       <<~RUBY
         patch profile_url, params: { profile: { display_name: 'Updated User' } }
         assert_redirected_to profile_url
-        assert_equal 'Updated User', user.profile.reload.display_name
+        assert_equal 'Updated User', profile.reload.display_name
       RUBY
     else
       ""
@@ -6435,7 +6595,7 @@ def configure_default_views
           <<~RUBY
             patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.upload } }
             assert_redirected_to profile_url
-            assert_predicate user.profile.reload.avatar, :attached?
+            assert_predicate profile.reload.avatar, :attached?
             get edit_profile_url
             assert_select 'form[action=?] .avatar img[width="64"][height="64"]', profile_path, count: 1
             assert_select 'form[action=?][method="post"]', profile_avatar_path, count: 1 do
@@ -6443,16 +6603,16 @@ def configure_default_views
               assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm]', text: I18n.t("profiles.avatar_delete"), count: 1
             end
 
-            original_blob = user.profile.avatar.blob
+            original_blob = profile.avatar.blob
             patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.corrupt_png_upload } }
             assert_response :unprocessable_content
             error_text = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.undecodable")
             assert_select '.alert.alert-error[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
-            assert_equal original_blob, user.profile.reload.avatar.blob
+            assert_equal original_blob, profile.reload.avatar.blob
 
             delete profile_avatar_url
             assert_redirected_to profile_url
-            assert_not user.profile.reload.avatar.attached?
+            assert_not profile.reload.avatar.attached?
             follow_redirect!
             assert_select '.alert.alert-success', text: I18n.t("profiles.avatar.destroy.notice"), count: 1
             assert_select '.list .avatar svg[width="64"][height="64"]', count: 1
@@ -6631,7 +6791,7 @@ def configure_default_views
           assert_redirected_to new_user_session_url
 
           user = User.create!(login_id: "sample_user", password: "password123", password_confirmation: "password123")
-    #{generated_profile_assertion}#{profile_setup}      user.grant_role!(:admin)
+    #{profile_binding}#{generated_profile_assertion}#{profile_setup}      user.grant_role!(:admin)
           sign_in user
           get account_url
           assert_response :success
@@ -6990,8 +7150,11 @@ def configure_web_push
 
   create_file "app/controllers/push_subscriptions_controller.rb", <<~RUBY, force: true
     class PushSubscriptionsController < ApplicationController
+      extend T::Sig
+
     #{authentication_callback}  rate_limit to: 5, within: 1.minute, only: :test
 
+      sig { void }
       def vapid_public_key
         response.set_header("Cache-Control", "no-store")
         render json: { public_key: VapidConfiguration.fetch!.public_key }
@@ -6999,6 +7162,7 @@ def configure_web_push
         render json: { error: I18n.t("web_push.errors.configuration") }, status: :service_unavailable
       end
 
+      sig { void }
       def create
         PushSubscription.register!(user: account_user, attributes: subscription_params.to_h.symbolize_keys)
         head :no_content
@@ -7006,11 +7170,13 @@ def configure_web_push
         head :unprocessable_content
       end
 
+      sig { void }
       def destroy
         account_user.push_subscriptions.find_by(browser_id: browser_id_param)&.destroy!
         head :no_content
       end
 
+      sig { void }
       def test
         subscription = account_user.push_subscriptions.find_by(browser_id: browser_id_param)
         return head :not_found unless subscription
@@ -7032,8 +7198,9 @@ def configure_web_push
       end
 
       private
+        sig { returns(User) }
         def account_user
-          #{account_user}
+          T.must(#{account_user})
         end
 
         def subscription_params
@@ -7403,24 +7570,25 @@ def configure_web_push
       end
 
       test "sends the structured payload with VAPID and bounded timeouts" do
-        captured = nil
+        captured = T.let(nil, T.nilable(T::Hash[Symbol, T.untyped]))
         with_vapid_env do
           with_payload_send(->(**options) { captured = options }) do
             PushNotificationJob.perform_now(@subscription.id, users(:one).id, payload, 600)
           end
         end
 
-        assert_equal @subscription.endpoint, captured.fetch(:endpoint)
-        assert_equal payload.deep_stringify_keys, JSON.parse(captured.fetch(:message))
-        assert_equal 600, captured.fetch(:ttl)
-        assert_equal 5, captured.fetch(:open_timeout)
-        assert_equal 5, captured.fetch(:read_timeout)
-        assert_equal 5, captured.fetch(:ssl_timeout)
-        assert_equal "https://example.com", captured.dig(:vapid, :subject)
+        delivered = T.must(captured)
+        assert_equal @subscription.endpoint, delivered.fetch(:endpoint)
+        assert_equal payload.deep_stringify_keys, JSON.parse(delivered.fetch(:message))
+        assert_equal 600, delivered.fetch(:ttl)
+        assert_equal 5, delivered.fetch(:open_timeout)
+        assert_equal 5, delivered.fetch(:read_timeout)
+        assert_equal 5, delivered.fetch(:ssl_timeout)
+        assert_equal "https://example.com", delivered.dig(:vapid, :subject)
       end
 
       test "does not deliver after subscription ownership changes" do
-        called = false
+        called = T.let(false, T::Boolean)
         with_payload_send(->(**) { called = true }) do
           PushNotificationJob.perform_now(@subscription.id, users(:two).id, payload, 600)
         end
@@ -7448,7 +7616,7 @@ def configure_web_push
           singleton_class.define_method(:payload_send, replacement)
           yield
         ensure
-          singleton_class.define_method(:payload_send, original_method)
+          T.must(singleton_class).define_method(:payload_send, T.must(original_method))
         end
 
         def payload
@@ -7464,7 +7632,7 @@ def configure_web_push
           )
           yield
         ensure
-          original.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
+          T.must(original).each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
         end
     end
   RUBY
@@ -7535,7 +7703,7 @@ def configure_web_push
           )
           yield
         ensure
-          original.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
+          T.must(original).each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
         end
     end
   RUBY
@@ -7749,6 +7917,8 @@ def install_job_operations
   create_file "app/helpers/admin/job_operations_helper.rb", <<~'RUBY', force: true
     module Admin
       module JobOperationsHelper
+        extend T::Sig
+
         JOB_STATUS_CLASSES = {
           "failed" => "badge-error",
           "blocked" => "badge-warning",
@@ -7757,6 +7927,7 @@ def install_job_operations
           "in_progress" => "badge-info"
         }.freeze
 
+        sig { params(status: T.any(String, Symbol)).returns(String) }
         def job_operation_status_class(status)
           JOB_STATUS_CLASSES.fetch(status.to_s, "badge-neutral")
         end
@@ -8328,7 +8499,7 @@ def install_job_operations
         )
         assert_active_job_section "Queues"
 
-        solid_queue_job.ready_execution.destroy!
+        T.must(solid_queue_job.ready_execution).destroy!
         solid_queue_job.failed_with(RuntimeError.new("expected failure"))
         get MissionControl::Jobs::Engine.routes.url_helpers.application_job_path(
           **route_options, id: active_job.job_id
@@ -8349,7 +8520,7 @@ def install_job_operations
         sign_in_as(@admin)
         active_job = RetryProbeJob.perform_later
         solid_queue_job = SolidQueue::Job.find_by!(active_job_id: active_job.job_id)
-        solid_queue_job.ready_execution.destroy!
+        T.must(solid_queue_job.ready_execution).destroy!
         solid_queue_job.failed_with(RuntimeError.new("expected failure"))
         application = MissionControl::Jobs.applications.first
         server = application.servers.first
@@ -8494,6 +8665,8 @@ def install_maintenance_tasks
   create_file "app/helpers/admin/maintenance_tasks_helper.rb", <<~RUBY, force: true
     module Admin
       module MaintenanceTasksHelper
+        extend T::Sig
+
         STATUS_CLASSES = {
           "new" => { badge: "badge-neutral", progress: "progress-neutral" },
           "enqueued" => { badge: "badge-info", progress: "progress-info" },
@@ -8507,10 +8680,12 @@ def install_maintenance_tasks
           "errored" => { badge: "badge-error", progress: "progress-error" }
         }.freeze
 
+        sig { params(status: String).returns(ActiveSupport::SafeBuffer) }
         def status_tag(status)
           tag.span(status.capitalize, class: ["badge", STATUS_CLASSES.fetch(status).fetch(:badge)])
         end
 
+        sig { params(run: MaintenanceTasks::Run).returns(T.nilable(ActiveSupport::SafeBuffer)) }
         def progress(run)
           return unless run.started?
 
@@ -8522,6 +8697,12 @@ def install_maintenance_tasks
           end
         end
 
+        sig do
+          params(
+            form_builder: T.untyped,
+            parameter_name: T.any(String, Symbol)
+          ).returns(ActiveSupport::SafeBuffer)
+        end
         def parameter_field(form_builder, parameter_name)
           inclusion_values = resolve_inclusion_value(form_builder.object, parameter_name)
           return form_builder.select(parameter_name, inclusion_values, { prompt: "Select a value" }, class: "select w-full") if inclusion_values
@@ -8544,6 +8725,7 @@ def install_maintenance_tasks
           end
         end
 
+        sig { returns(ActiveSupport::SafeBuffer) }
         def datetime_field_help_text
           zone = if Time.zone_default.nil? || Time.zone_default.name == "UTC"
             "UTC"
@@ -8553,6 +8735,10 @@ def install_maintenance_tasks
           tag.p("Timezone: \#{zone}.", class: "label")
         end
 
+        sig do
+          params(datetime: T.any(Time, ActiveSupport::TimeWithZone))
+            .returns(ActiveSupport::SafeBuffer)
+        end
         def time_ago(datetime)
           time_tag(datetime, title: datetime.utc, class: "cursor-help") do
             time_ago_in_words(datetime) + " ago"
@@ -8949,6 +9135,7 @@ def install_maintenance_tasks
       RUNS_PATH = "\#{TASK_PATH}/runs"
       CSV_TASK_NAME = "Maintenance::CsvTestTask"
       CSV_TASK_PATH = "/admin/maintenance_tasks/tasks/\#{CGI.escapeURIComponent(CSV_TASK_NAME)}"
+      MAINTENANCE_TASK_ROUTES = MaintenanceTasks::Engine.routes.url_helpers
 
     #{controller_test_support}
       test "requires authentication" do
@@ -9008,7 +9195,7 @@ def install_maintenance_tasks
         assert_select "select.select[name=?]", "task[mode]", count: 1
         assert_select "input.checkbox[name=?]", "task[notify]", count: 1
         assert_select "input.btn.btn-primary[type=submit]", value: "Run", count: 1
-        assert_select "form[action=?]", admin_maintenance_tasks.task_runs_path(TASK_NAME), count: 1
+        assert_select "form[action=?]", MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 1
         assert_select "details.collapse.collapse-arrow", minimum: 1
         assert_select ".mockup-code", count: 1
 
@@ -9022,19 +9209,19 @@ def install_maintenance_tasks
 
         pausing_run = MaintenanceTasks::Run.create!(task_name: TASK_NAME, status: "running", job_id: "running-job")
         post "\#{RUNS_PATH}/\#{pausing_run.id}/pause"
-        assert_redirected_to admin_maintenance_tasks.task_path(TASK_NAME)
+        assert_redirected_to MAINTENANCE_TASK_ROUTES.task_path(TASK_NAME)
         assert_equal "pausing", pausing_run.reload.status
 
         resumable_run = MaintenanceTasks::Run.create!(task_name: TASK_NAME, status: "paused", job_id: "paused-job")
         assert_enqueued_with(job: MaintenanceTasks::TaskJob) do
           post "\#{RUNS_PATH}/\#{resumable_run.id}/resume"
         end
-        assert_redirected_to admin_maintenance_tasks.task_path(TASK_NAME)
+        assert_redirected_to MAINTENANCE_TASK_ROUTES.task_path(TASK_NAME)
         assert_equal "enqueued", resumable_run.reload.status
 
         cancellable_run = MaintenanceTasks::Run.create!(task_name: TASK_NAME, status: "paused", job_id: "cancel-job")
         post "\#{RUNS_PATH}/\#{cancellable_run.id}/cancel"
-        assert_redirected_to admin_maintenance_tasks.task_path(TASK_NAME)
+        assert_redirected_to MAINTENANCE_TASK_ROUTES.task_path(TASK_NAME)
         assert_equal "cancelled", cancellable_run.reload.status
       end
 
@@ -9079,7 +9266,7 @@ def install_maintenance_tasks
         end
         assert_response :redirect
 
-        run = MaintenanceTasks::Run.order(:id).last
+        run = T.must(MaintenanceTasks::Run.order(:id).last)
         assert_predicate run.job_id, :present?
         assert_equal "enqueued", run.status
         assert_equal @admin.id, run.metadata.fetch("triggered_by_user_id")
@@ -9215,7 +9402,7 @@ def configure_evidence_capture
             user.password = PASSWORD
             user.password_confirmation = PASSWORD
           end
-          @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
+          T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
 
           VIEWPORTS.each do |viewport_name, viewport|
             Capybara.reset_sessions!
@@ -9412,8 +9599,9 @@ def configure_evidence_capture
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
             prepare_guest_data
             authenticate
-            @user.profile.avatar.purge if @user.profile.avatar.attached?
-            @user.profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
+            profile = T.must(@user.profile)
+            profile.avatar.purge if profile.avatar.attached?
+            profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
             capture_page(
               "image-delivery-home-avatar",
               "画像配信（ホーム）",
@@ -9473,7 +9661,7 @@ def configure_evidence_capture
             user.password = PASSWORD
             user.password_confirmation = PASSWORD
           end
-          @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
+          T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
         end
 
         def capture_guest_pages(viewport)
@@ -9500,8 +9688,9 @@ def configure_evidence_capture
         end
 
         def prepare_authenticated_data
-          @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
-          @user.profile.avatar.purge if @user.profile.avatar.attached?
+          profile = T.must(@user.profile)
+          profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
+          profile.avatar.purge if profile.avatar.attached?
           @user.grant_role!(:admin)
           if MAINTENANCE_TASKS
             MaintenanceTasks::Run.delete_all
@@ -9520,8 +9709,10 @@ def configure_evidence_capture
           assert_account_navigation_scope
           capture_avatar_states(viewport)
           capture_page("account-settings", "アカウント設定", edit_user_registration_path, translate("devise_views.registrations.edit_title"), viewport)
-          capture_page("notifications", "通知", notification_path, translate("web_push.page.title"), viewport)
-          capture_enabled_web_push(viewport) if WEB_PUSH
+          if WEB_PUSH
+            capture_page("notifications", "通知", notification_path, translate("web_push.page.title"), viewport)
+            capture_enabled_web_push(viewport)
+          end
 
           @user.api_credentials.destroy_all
           capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, translate("api_credentials.title"), viewport)
@@ -9651,7 +9842,7 @@ def configure_evidence_capture
           capture_page("profile-boring-avatar", "プロフィール（自動生成アバター）", profile_path, translate("profiles.title"), viewport)
           capture_page("profile-edit-boring-avatar", "プロフィール編集（自動生成アバター）", edit_profile_path, translate("profiles.edit_title"), viewport)
 
-          @user.profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
+          T.must(@user.profile).update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
           capture_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport)
           assert_avatar_image_geometry(40)
           capture_page("profile-uploaded-avatar", "プロフィール（画像アバター）", profile_path, translate("profiles.title"), viewport)
@@ -10218,7 +10409,7 @@ def configure_evidence_capture
           end
           yield
         ensure
-          singleton_class.define_method(:urlsafe_base64, original_method)
+          T.must(singleton_class).define_method(:urlsafe_base64, T.must(original_method))
         end
 
         def capture_current_page(identifier, title, viewport)
@@ -10254,6 +10445,63 @@ def configure_evidence_capture
   runner = runner.sub("__WEB_PUSH__", web_push.inspect)
   runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)
   runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)
+  disabled_constants = []
+  disabled_methods = []
+  unless additional_login_methods.include?("siwe")
+    disabled_constants << :ADDITIONAL_LOGIN_METHODS
+    disabled_methods.concat(%i[
+      capture_siwe_scenarios
+      assert_account_settings_tabs_geometry
+      authenticate_with_siwe
+      browser_post_json
+    ])
+  end
+  unless web_push
+    disabled_constants << :WEB_PUSH
+    disabled_methods.concat(%i[capture_enabled_web_push install_web_push_stub])
+  end
+  unless job_operations
+    disabled_constants << :JOB_OPERATIONS
+    disabled_methods.concat(%i[verify_job_operations_geometry assert_job_operations_tabs_single_row])
+  end
+  unless maintenance_tasks
+    disabled_constants << :MAINTENANCE_TASKS
+    disabled_methods << :verify_maintenance_tasks_geometry
+  end
+
+  unless disabled_constants.empty? && disabled_methods.empty?
+    require "prism"
+    result = Prism.parse(runner)
+    raise "evidence capture runnerをRubyとして解析できません: #{result.errors.map(&:message).join(', ')}" unless result.success?
+
+    contains_disabled_constant = lambda do |node|
+      queue = [node]
+      found = false
+      until queue.empty? || found
+        current = queue.shift
+        found = current.is_a?(Prism::ConstantReadNode) && disabled_constants.include?(current.name)
+        queue.concat(current.compact_child_nodes) unless found
+      end
+      found
+    end
+    removals = []
+    queue = [result.value]
+    until queue.empty?
+      node = queue.shift
+      remove = (node.is_a?(Prism::DefNode) && disabled_methods.include?(node.name)) ||
+        (node.is_a?(Prism::IfNode) && contains_disabled_constant.call(node.predicate))
+      if remove
+        removals << [node.location.start_line - 1, node.location.end_line - 1]
+      else
+        queue.concat(node.compact_child_nodes)
+      end
+    end
+    removed_lines = Array.new(runner.lines.length, false)
+    removals.each do |start_line, end_line|
+      (start_line..end_line).each { |line| removed_lines[line] = true }
+    end
+    runner = runner.lines.each_with_index.filter_map { |line, index| line unless removed_lines.fetch(index) }.join
+  end
   create_file "test/support/evidence_capture.rb", runner, force: true
   create_file "lib/tasks/evidence.rake", <<~'RAKE', force: true
     # frozen_string_literal: true
@@ -10351,7 +10599,9 @@ def configure_sorbet
     require "open3"
 
     class SorbetTest < ActiveSupport::TestCase
-      DOMAIN_RUBY_PATTERNS = %w[
+      TYPED_RUBY_PATTERNS = %w[
+        app/controllers/**/*.rb
+        app/helpers/**/*.rb
         app/models/**/*.rb
         app/policies/**/*.rb
         app/services/**/*.rb
@@ -10359,6 +10609,7 @@ def configure_sorbet
         app/mailers/**/*.rb
         app/validators/**/*.rb
         lib/**/*.rb
+        test/**/*.rb
       ].freeze
 
       APPLICATION_DSL_RBI_SOURCES = {
@@ -10376,8 +10627,8 @@ def configure_sorbet
         "user_role" => "app/models/user_role.rb"
       }.freeze
 
-      test "application domain Ruby files use typed true" do
-        paths = DOMAIN_RUBY_PATTERNS.flat_map { |pattern| Rails.root.glob(pattern) }.uniq.sort
+      test "application and test Ruby files use typed true" do
+        paths = TYPED_RUBY_PATTERNS.flat_map { |pattern| Rails.root.glob(pattern) }.uniq.sort
 
         assert_predicate paths, :any?
         paths.each do |path|
@@ -10426,7 +10677,7 @@ def configure_sorbet
       private
 
       def assert_command_succeeds(*command, environment: {}, remediation:)
-        stdout, stderr, status = Open3.capture3(environment, *command, chdir: Rails.root.to_s)
+        stdout, stderr, status = T.unsafe(Open3).capture3(environment, *command, chdir: Rails.root.to_s)
         output = [stdout, stderr].reject(&:empty?).join("\n")
 
         assert status.success?, <<~MESSAGE
@@ -10439,8 +10690,10 @@ def configure_sorbet
   RUBY
 end
 
-def configure_domain_typechecking
+def configure_application_typechecking
   patterns = %w[
+    app/controllers/**/*.rb
+    app/helpers/**/*.rb
     app/models/**/*.rb
     app/policies/**/*.rb
     app/services/**/*.rb
@@ -10448,9 +10701,10 @@ def configure_domain_typechecking
     app/mailers/**/*.rb
     app/validators/**/*.rb
     lib/**/*.rb
+    test/**/*.rb
   ]
   paths = patterns.flat_map { |pattern| Dir.glob(pattern) }.uniq.sort
-  raise "domain typecheckingの対象Ruby fileが見つかりません" if paths.empty?
+  raise "application typecheckingの対象Ruby fileが見つかりません" if paths.empty?
 
   paths.each do |path|
     prepend_to_file path, "# typed: true\n"
@@ -10458,18 +10712,121 @@ def configure_domain_typechecking
 end
 
 def configure_sorbet_shims
-  create_file "sorbet/rbi/shims/framework_bindings.rbi", <<~'RBI', force: true
+  avatar_bindings = if VALUES.fetch("profile_features").include?("avatar")
+    <<~RBI
+      module AvatarHelper
+        include ActionView::Helpers
+
+        sig do
+          params(
+            name: String,
+            variant: Symbol,
+            colors: T::Array[String],
+            size: Integer,
+            svg_attributes: T.untyped
+          ).returns(String)
+        end
+        def boring_avatar(name, variant:, colors:, size:, **svg_attributes); end
+      end
+
+      class Vips::Image
+        sig { params(width: Integer, height: Integer, bands: Integer).returns(Vips::Image) }
+        def self.black(width, height, bands:); end
+
+        sig { params(images: T::Array[Vips::Image], across: Integer).returns(Vips::Image) }
+        def self.arrayjoin(images, across:); end
+      end
+    RBI
+  else
+    ""
+  end
+  maintenance_bindings = if VALUES.fetch("maintenance_tasks") == "enable"
+    <<~RBI
+      module Admin::MaintenanceTasksHelper
+        include ActionView::Helpers
+        include MaintenanceTasks::TasksHelper
+      end
+    RBI
+  else
+    ""
+  end
+
+  create_file "sorbet/rbi/shims/framework_bindings.rbi", <<~RBI, force: true
     # typed: true
 
     class ActiveRecord::Base
       extend Devise::Models
     end
 
+    class ActiveSupport::TestCase
+      include ActiveRecord::TestFixtures
+    end
+
+    class ActionDispatch::SystemTestCase
+      include GeneratedUrlHelpersModule
+      include GeneratedPathHelpersModule
+    end
+
+    class ApplicationController
+      include ActionPolicy::Controller
+      include Devise::Controllers::Helpers
+
+      sig { returns(T.nilable(User)) }
+      def current_user; end
+
+      sig { void }
+      def authenticate_user!; end
+    end
+
+    class DeviseController < ActionController::Base
+      include Devise::Controllers::Helpers
+      include Devise::Controllers::SignInOut
+      include GeneratedUrlHelpersModule
+      include GeneratedPathHelpersModule
+
+      sig { returns(T.nilable(User)) }
+      def current_user; end
+    end
+
+    module ApplicationHelper
+      include ActionView::Helpers
+    end
+
+    #{avatar_bindings}
+    #{maintenance_bindings}
+
     class User
+      include Devise::Models::Authenticatable
       include Devise::Models::DatabaseAuthenticatable
 
       sig { returns(T.nilable(String)) }
       def password; end
+    end
+
+    class ActiveStorage::Attached::One
+      sig { returns(ActiveStorage::Blob) }
+      def blob; end
+
+      sig do
+        params(transformations: T.untyped)
+          .returns(T.any(ActiveStorage::Variant, ActiveStorage::VariantWithRecord))
+      end
+      def variant(transformations); end
+    end
+
+    class ActionDispatch::IntegrationTest
+      sig do
+        params(
+          type: Symbol,
+          with: T.class_of(ApplicationPolicy),
+          block: T.proc.void
+        ).void
+      end
+      def assert_have_authorized_scope(type:, with:, &block); end
+    end
+
+    module ContentManagementAuthenticationTestSupport
+      include Devise::Test::IntegrationHelpers
     end
 
     class UserPolicy
@@ -10648,7 +11005,7 @@ after_bundle do
   CONFIG
   run_checked "RAILS_ENV=test bin/rails db:prepare"
   run_checked "RAILS_ENV=test bin/tapioca dsl --environment=test"
-  configure_domain_typechecking
+  configure_application_typechecking
   configure_sorbet_shims
   run_checked "bin/tapioca gems --verify"
   run_checked "RAILS_ENV=test bin/tapioca dsl --verify --environment=test"

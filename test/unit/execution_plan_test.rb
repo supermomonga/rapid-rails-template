@@ -64,8 +64,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_operator plan.steps.index("annotate_models"), :<, plan.steps.index("initialize_sorbet")
     assert_operator plan.steps.index("initialize_sorbet"), :<, plan.steps.index("prepare_test_database")
     assert_operator plan.steps.index("prepare_test_database"), :<, plan.steps.index("generate_sorbet_dsl")
-    assert_operator plan.steps.index("generate_sorbet_dsl"), :<, plan.steps.index("typecheck_domain")
-    assert_operator plan.steps.index("typecheck_domain"), :<, plan.steps.index("verify_sorbet")
+    assert_operator plan.steps.index("generate_sorbet_dsl"), :<, plan.steps.index("typecheck_application")
+    assert_operator plan.steps.index("typecheck_application"), :<, plan.steps.index("verify_sorbet")
     assert_operator plan.steps.index("generate_sorbet_dsl"), :<, plan.steps.index("verify_sorbet")
     assert_operator plan.steps.index("verify_sorbet"), :<, plan.steps.index("verify")
     assert_includes plan.artifacts, "package.json"

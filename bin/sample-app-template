@@ -35,6 +35,13 @@ create_file "app/models/article.rb", <<~'RUBY', force: true
   end
 RUBY
 
+create_file "app/helpers/articles_helper.rb", <<~'RUBY', force: true
+  # typed: true
+
+  module ArticlesHelper
+  end
+RUBY
+
 create_file "app/policies/article_policy.rb", <<~'RUBY', force: true
   # typed: true
 
@@ -59,61 +66,75 @@ create_file "app/policies/article_policy.rb", <<~'RUBY', force: true
     scope_for :active_record_relation do |relation|
       T.bind(self, ArticlePolicy)
       published = relation.where(draft: false)
-      user ? published.or(relation.where(profile_id: user.profile.id)) : published
+      policy_user = user
+      policy_user ? published.or(relation.where(profile_id: T.must(policy_user.profile).id)) : published
     end
 
     private
 
     def owner?
-      !user.nil? && record.profile_id == user.profile.id
+      policy_user = user
+      !policy_user.nil? && record.profile_id == T.must(policy_user.profile).id
     end
   end
 RUBY
 
 create_file "app/controllers/articles_controller.rb", <<~'RUBY', force: true
+  # typed: true
+
   class ArticlesController < ApplicationController
+    extend T::Sig
+
     before_action :authenticate_user!, only: %i[new create edit update destroy]
     before_action :set_article, only: %i[edit update destroy]
 
+    sig { void }
     def index
       visible_articles = authorized_scope(Article.all).order(created_at: :desc, id: :desc)
       @pagy, @articles = pagy(:offset, visible_articles, limit: 25)
     end
 
+    sig { void }
     def show
       @article = authorized_scope(Article.all).find(params.expect(:id))
     end
 
+    sig { void }
     def new
-      @article = current_user.profile.articles.build
+      @article = T.must(account_user.profile).articles.build
       authorize! @article, to: :create?
     end
 
+    sig { void }
     def edit
       authorize! @article, to: :update?
     end
 
+    sig { void }
     def create
-      @article = current_user.profile.articles.build(article_params)
+      @article = Article.new(article_params)
+      @article.profile = T.must(account_user.profile)
       authorize! @article, to: :create?
 
-    if @article.save
-      redirect_to @article, notice: I18n.t("articles.create.notice")
+      if @article.save
+        redirect_to @article, notice: I18n.t("articles.create.notice")
       else
         render :new, status: :unprocessable_content
       end
     end
 
+    sig { void }
     def update
       authorize! @article, to: :update?
 
-    if @article.update(article_params)
-      redirect_to @article, notice: I18n.t("articles.update.notice"), status: :see_other
+      if @article.update(article_params)
+        redirect_to @article, notice: I18n.t("articles.update.notice"), status: :see_other
       else
         render :edit, status: :unprocessable_content
       end
     end
 
+    sig { void }
     def destroy
       authorize! @article, to: :destroy?
       @article.destroy!
@@ -121,6 +142,10 @@ create_file "app/controllers/articles_controller.rb", <<~'RUBY', force: true
     end
 
     private
+
+    def account_user
+      T.must(current_user)
+    end
 
     def set_article
       @article = Article.find(params.expect(:id))
@@ -283,6 +308,8 @@ create_file "test/fixtures/articles.yml", <<~'YAML', force: true
 YAML
 
 create_file "test/models/article_test.rb", <<~'RUBY', force: true
+  # typed: true
+
   require "test_helper"
 
   class ArticleTest < ActiveSupport::TestCase
@@ -311,6 +338,8 @@ create_file "test/models/article_test.rb", <<~'RUBY', force: true
 RUBY
 
 create_file "test/policies/article_policy_test.rb", <<~'RUBY', force: true
+  # typed: true
+
   require "test_helper"
 
   class ArticlePolicyTest < ActiveSupport::TestCase
@@ -340,14 +369,16 @@ create_file "test/policies/article_policy_test.rb", <<~'RUBY', force: true
 RUBY
 
 create_file "test/controllers/articles_controller_test.rb", <<~'RUBY', force: true
+  # typed: true
+
   require "test_helper"
 
   class ArticlesControllerTest < ActionDispatch::IntegrationTest
     include Devise::Test::IntegrationHelpers
 
     setup do
-      @published = articles(:one)
-      @draft = articles(:two)
+      @published = T.let(articles(:one), Article)
+      @draft = T.let(articles(:two), Article)
     end
 
     test "shows only published articles to guests" do
@@ -405,7 +436,7 @@ create_file "test/controllers/articles_controller_test.rb", <<~'RUBY', force: tr
         }
       end
 
-      created = Article.order(:id).last
+      created = T.must(Article.order(:id).last)
       assert_equal profiles(:one), created.profile
       assert_redirected_to article_url(created)
     end
@@ -482,21 +513,25 @@ append_to_file "db/seeds.rb", <<~'RUBY'
 RUBY
 
 create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
+  # typed: true
+
   require "test_helper"
 
   class SampleSeedTest < ActiveSupport::TestCase
     test "creates ten users with fifty articles each without duplication" do
-      2.times { load Rails.root.join("db/seeds.rb") }
+      2.times { load Rails.root.join("db/seeds.rb").to_s }
 
       sample_users = User.where(login_id: (1..10).map { |number| format("sample_user_%02d", number) }).order(:login_id)
       assert_equal 10, sample_users.count
 
       sample_users.each do |user|
-        assert_equal 50, user.profile.articles.count
-        assert_equal 10, user.profile.articles.where(draft: true).count
-        assert_equal 40, user.profile.articles.where(draft: false).count
+        articles = T.must(user.profile).articles
+        assert_equal 50, articles.count
+        assert_equal 10, articles.where(draft: true).count
+        assert_equal 40, articles.where(draft: false).count
       end
-      assert_equal 500, Article.where(profile: sample_users.map(&:profile)).count
+      profiles = sample_users.map { |user| T.must(user.profile) }
+      assert_equal 500, Article.where(profile: profiles).count
     end
   end
 RUBY

@@ -25,7 +25,10 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, "has_many :articles, dependent: :destroy"
     assert_includes @source, "belongs_to :profile"
     assert_includes @source, "create_file \"app/models/article.rb\", <<~'RUBY', force: true\n  # typed: true"
+    assert_includes @source, "create_file \"app/helpers/articles_helper.rb\", <<~'RUBY', force: true\n  # typed: true"
     assert_includes @source, "create_file \"app/policies/article_policy.rb\", <<~'RUBY', force: true\n  # typed: true"
+    assert_includes @source, "create_file \"app/controllers/articles_controller.rb\", <<~'RUBY', force: true\n  # typed: true"
+    assert_includes @source, "create_file \"test/controllers/articles_controller_test.rb\", <<~'RUBY', force: true\n  # typed: true"
     assert_includes @source, "params.expect(article: %i[title body draft])"
     refute_includes @source, "params.expect(article: %i[profile_id"
   end
@@ -36,8 +39,9 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, "scope_for :active_record_relation do |relation|"
     assert_includes @source, "T.bind(self, ArticlePolicy)"
     assert_includes @source, "authorize :user, optional: true"
-    assert_includes @source, "published.or(relation.where(profile_id: user.profile.id))"
-    assert_includes @source, "current_user.profile.articles.build(article_params)"
+    assert_includes @source, "published.or(relation.where(profile_id: T.must(policy_user.profile).id))"
+    assert_includes @source, "@article = Article.new(article_params)"
+    assert_includes @source, "@article.profile = T.must(account_user.profile)"
     assert_includes @source, "pagy(:offset, visible_articles, limit: 25)"
     assert_includes @source, 'nav aria-label="Article pagination"'
     assert_includes @source, 'table table-sm table-pin-rows min-w-[780px]'
@@ -49,7 +53,9 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, "50.times do |article_index|"
     assert_includes @source, 'article.draft = article_number > 40'
     assert_includes @source, "assert_equal 500, Article.where"
-    assert_includes @source, '2.times { load Rails.root.join("db/seeds.rb") }'
+    assert_includes @source, "profiles = sample_users.map { |user| T.must(user.profile) }"
+    assert_includes @source, '2.times { load Rails.root.join("db/seeds.rb").to_s }'
+    assert_includes @source, "created = T.must(Article.order(:id).last)"
   end
 
   def test_prepares_formats_seeds_and_tests_the_generated_app_in_order

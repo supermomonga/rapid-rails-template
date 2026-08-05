@@ -178,9 +178,11 @@ module RapidRailsTemplate
         app/controllers/accounts_controller.rb
         app/views/layouts/application.html.erb
         app/views/layouts/authentication.html.erb
+        app/views/layouts/_with_menu.html.erb
         app/views/layouts/account.html.erb
         app/views/layouts/admin.html.erb
         app/views/shared/_header.html.erb
+        app/views/shared/_account_navigation.html.erb
         app/views/shared/_admin_navigation.html.erb
         app/views/shared/_flash.html.erb
         app/views/shared/_footer.html.erb

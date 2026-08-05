@@ -65,11 +65,13 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 
 ### 標準View構成
 
-生成アプリケーションには、共通application layout、認証用sub-layout、account用sub-layout、admin用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。全Viewは`data-theme="rapid-rails"`配下でdaisyUI componentとsemantic colorを使用します。
+生成アプリケーションには、共通application layout、認証用sub-layout、メニュー付き画面用の`with_menu` partial layout、account用sub-layout、admin用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。全Viewは`data-theme="rapid-rails"`配下でdaisyUI componentとsemantic colorを使用します。
 
 Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`、guest向けdesktopの`button`群、guest向けmobileと認証後の`dropdown` + `menu dropdown-content`、footerは内側幅をheaderと共有する`footer`と`footer-title`、homeの導入部は`hero`、情報ブロックは`card`、FAQはnativeの`details`を使う`collapse`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`file-input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
 
 Rails 8.1.3の`bin/rails app:templates:copy`で取得した標準ERB templateを基準に、`generate scaffold`用の6 Viewと`generate controller NAME ACTION`用のViewをdaisyUI向けに上書きします。生成アプリケーションの`lib/templates/erb/scaffold`と`lib/templates/erb/controller`へ変更したtemplateだけを配置し、mailerやRuby generator templateの未変更copyは配置しません。scaffoldの一覧は`table table-sm table-pin-rows`を`overflow-x-auto`で囲み、詳細・編集画面は`card`、属性表示は`list`、formは属性型に対応する`input`、`textarea`、`file-input`、`checkbox`を使用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。
+
+全生成Viewの主見出しは`content_for :page_title`へ文字列を1回だけ設定し、Viewまたは`with_menu` layoutの`h1`とdocument titleから再利用します。document titleと`og:title`は通常ページで「page title | application name」、`page_title`を持たない公開homeだけapplication nameとします。主見出し直前のeyebrowは置かず、カードや機能紹介など主見出しではないsection headingは維持します。
 
 account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`、Web Push使用時の通知には`bell`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目だけを表示します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
@@ -85,8 +87,9 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。
 - Wallet SIWEではsessionの`new`、`create`、`destroy`だけを公開し、login Viewをtheme化する。署名UIはStimulus controllerとして生成し、Turbo遷移ごとのconnect/disconnect lifecycleへ従う。accountは`show`をプロフィール、`edit`をwallet addressとアカウント削除UIを持つアカウント設定とし、`destroy`でUserと従属Sessionを削除する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
-- headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。accountとadminのsub-layoutは同じ`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`の2ペインgridを共有し、header・account・admin・footerの左右content boundaryを一致させる。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
+- headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
 - account sub-layoutの左ペインにはユーザー向けmenuだけを表示し、管理項目を混在させない。admin sub-layoutの左ペインには見出し「管理画面」と、ユーザー管理、固定ページ管理、FAQ管理、外部リンク設定の管理menuだけを表示し、account項目を混在させない。現在のControllerに対応するlinkは`menu-active`と`aria-current="page"`で示す。
+- 複数Viewで共通する階層メニューは個別Viewへ複製せず、その画面群の機能単位nested layoutで1回だけ定義する。`with_menu`が主見出しを描画してからnested layoutを本文blockとして受け取るため、表示順は主見出し、subnavigation、本文となる。`tabs-lift`を使用するnested layoutはdaisyUI公式のscrollable tabs構造に従い、外側を`overflow-x-auto`、内側を`tabs tabs-lift min-w-max`とし、すべての`tab`直後へ対応する`tab-content`を交互に置く。activeなtabpanelだけがpartial layoutの本文blockを受け取り、`sticky start-0`とscroll containerの表示幅を上限とする。固定列grid、row/column強制、component既定heightの上書きは行わない。
 - `640px`以下をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱う。desktopとmobileの両方で1columnへ縮退できることを必須とする。44pxのtouch targetを満たすためにcomponent itemへ一律の`min-h-*`を追加せず、必要な場合はdaisyUIの公式size modifierまたはtheme tokenでcomponent全体として調整する。
 
 ### Action Text、固定ページ、FAQ、footer設定
@@ -249,7 +252,7 @@ productionではPuma pluginを有効化せず、`bin/jobs`をworkerプロセス�
 
 `MissionControl::Jobs.base_controller_class`には`Admin::JobOperationsController`を設定します。このcontrollerは既存`Admin::BaseController`を継承し、全engine actionを`JobOperationPolicy#manage?`で認可します。Deviseの`current_user`とWallet SIWEの`Current.user`は既存Action Policy contextを再利用し、controller内でroleを直接判定しません。Mission Control標準のHTTP Basic認証は明示的に無効化し、環境変数やcredentialsによる別系統の認証は追加しません。
 
-Mission Controlの公式ViewはBulma classを出力するため、Rails 8.1 Enginesの公式View lookup順序を利用し、Mission Control Jobs 1.1.0向けのhost Viewでlayout、application/server選択、section tab、flash、queue、状態別job、filter、worker、定期task、詳細、paginationをshadowします。Bulma stylesheetや専用CSSは生成せず、既存Tailwind CSS 4／daisyUI 5の`tabs`、`card`、`table`、`badge`、`btn`、`fieldset`、`alert`、`collapse`、`mockup-code`、`join`へ統一します。engineのroute、controller、adapter、英語label、retry/discard/pause/resume/run操作は変更しません。通常画面ではhost Importmap、engine画面ではMission Control Importmapだけを出力し、専用layoutから既存admin layoutへnested renderします。admin navigationとdocument titleは生成アプリの既定localeに従うja/enです。
+Mission Controlの公式ViewはBulma classを出力するため、Rails 8.1 Enginesの公式View lookup順序を利用し、Mission Control Jobs 1.1.0向けのhost Viewでlayout、application/server選択、section tab、flash、queue、状態別job、filter、worker、定期task、詳細、paginationをshadowします。Bulma stylesheetや専用CSSは生成せず、既存Tailwind CSS 4／daisyUI 5の`tabs`、`tab-content`、`card`、`table`、`badge`、`btn`、`fieldset`、`alert`、`collapse`、`mockup-code`、`join`へ統一します。engineのroute、controller、adapter、英語label、retry/discard/pause/resume/run操作は変更しません。専用layoutはQueues、Failed jobs、Workersなどのsection tabをpartial layoutとして1回だけrenderし、active tabの直後へengine本文blockをtabpanelとして渡します。各engine Viewは実際の画面名を`page_title`へ設定します。application/server選択はsection階層ではないためtab content本文内に残します。通常画面ではhost Importmap、engine画面ではMission Control Importmapだけを出力し、専用layoutから既存admin layoutへnested renderします。admin navigationは生成アプリの既定localeに従い、document titleはengineのpage titleとapplication nameを組み合わせます。
 
 Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Control Jobsはqueueとjobの監視・retry/discard、Maintenance Tasksは運用taskの開始・進捗管理を担当し、`/admin/jobs`と`/admin/maintenance_tasks`のroute、policy、navigationを独立させます。
 

@@ -95,6 +95,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/layouts/authentication.html.erb" => %w[hero hero-content card card-body],
       "app/views/layouts/account.html.erb" => %w[menu menu-title],
       "app/views/layouts/admin.html.erb" => %w[menu menu-title],
+      "app/views/layouts/mission_control/jobs/_navigation.html.erb" => %w[tabs tabs-lift tab-content],
       "app/views/shared/_header.html.erb" => %w[navbar dropdown menu btn],
       "app/views/shared/_flash.html.erb" => %w[alert],
       "app/views/shared/_footer.html.erb" => %w[footer footer-vertical footer-title link link-hover],
@@ -319,8 +320,25 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes policy, "def manage?"
     assert_includes policy, "admin?"
     assert_includes layout, 'render template: "layouts/admin"'
+    refute_includes layout, "with_menu_subnavigation"
+    assert_includes layout, '<%= render layout: "layouts/mission_control/jobs/navigation" do %>'
+    refute_includes layout, "content_for :page_title"
+    refute_includes layout, "content_for :title"
+    assert_operator layout.index("admin_content"), :<, layout.index('render layout: "layouts/mission_control/jobs/navigation"')
+    assert_equal 1, layout.scan('render layout: "layouts/mission_control/jobs/navigation"').size
+    assert_includes navigation, 'class="@container overflow-x-auto"'
     assert_includes navigation, 'class="tabs tabs-lift min-w-max"'
+    assert_includes navigation, 'class_names("tab z-1", "tab-active": key == current_section)'
     assert_includes navigation, '"tab-active": key == current_section'
+    assert_includes navigation, 'role="tabpanel"'
+    assert_includes navigation, 'class="sticky start-0 tab-content max-w-[100cqw] border-base-300 bg-base-100 p-3"'
+    assert_includes navigation, '<%= yield if key == current_section %>'
+    refute_includes navigation, "grid-cols-[repeat(8,max-content)]"
+    refute_includes navigation, "grid-rows-[auto_auto]"
+    refute_includes navigation, "h-auto"
+    refute_includes navigation, "row-start-2"
+    refute_includes navigation, "col-[1/-1]"
+    assert_operator navigation.index('"tab-active": key == current_section'), :<, navigation.index('role="tabpanel"')
     assert_includes application_selection, 'class="card card-border border-base-300 bg-base-100"'
     assert_includes application_selection, '<% if @application.servers.many? || selectable_applications.any? %>'
     assert_includes application_selection, 'class="card-body flex-row flex-wrap items-center justify-end gap-4 py-4"'
@@ -328,12 +346,15 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes application_selection, "Back to main app"
     refute_includes application_selection, "main_app.root_path"
     assert_includes jobs_index, 'class="card card-border overflow-x-auto border-base-300 bg-base-100"'
+    assert_includes jobs_index, '<% content_for :page_title, "#{jobs_status.titleize} jobs" %>'
     assert_includes jobs_index, 'class="table"'
     assert_includes jobs_index, 'class: "btn btn-error"'
     assert_includes jobs_index, 'class: "btn btn-warning"'
     assert_includes job_show, 'class="mockup-code overflow-x-auto"'
+    assert_includes job_show, '<% content_for :page_title, job_title(@job) %>'
     assert_includes job_show, 'class="collapse collapse-arrow card card-border border-base-300 bg-base-100"'
     assert_includes queues_index, 'class: "btn btn-sm btn-warning"'
+    assert_includes queues_index, '<% content_for :page_title, "Queues" %>'
     assert_includes pagination, 'class="join"'
     assert_includes helper, '"failed" => "badge-error"'
     assert_includes helper, '"finished" => "badge-success"'
@@ -980,11 +1001,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '320 => "row"'
     assert_includes evidence, '640 => "column"'
     assert_includes evidence, 'assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")'
-    assert_includes evidence, "def verify_admin_layout_geometry"
-    assert_includes evidence, "[320, 640, 960, 961].each"
-    assert_includes evidence, 'visit admin_pages_path'
-    assert_includes evidence, '"admin layout should use one column at #{width}px"'
-    assert_includes evidence, '"admin layout should use two columns at #{width}px"'
+    assert_includes evidence, "def verify_with_menu_layout_geometry"
+    assert_includes evidence, '{ "account" => account_path, "admin" => admin_pages_path }.each'
+    assert_includes evidence, "[320, 390, 640, 960, 961].each"
+    assert_includes evidence, "visit path"
+    assert_includes evidence, '"#{area} with-menu layout should use one column at #{width}px"'
+    assert_includes evidence, '"#{area} with-menu layout should use two columns at #{width}px"'
     assert_includes evidence, "def assert_admin_navigation_active"
     assert_includes evidence, "def assert_account_navigation_scope"
     assert_includes evidence, 'translate("navigation.account_menu")'
@@ -994,10 +1016,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)'
     assert_includes evidence, 'runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)'
     assert_includes evidence, '"admin-job-operations"'
+    assert_includes evidence, '"admin-job-operations-failed"'
     assert_includes evidence, '"admin-job-operations-navigation-open"'
     assert_includes evidence, '"navigation-regular-user"'
     assert_includes evidence, 'viewport_size = VIEWPORTS.fetch(viewport)'
     assert_includes evidence, "def verify_job_operations_geometry"
+    assert_includes evidence, 'find("#job-operations-tab-failed_jobs").click'
+    assert_includes evidence, 'geometry.fetch("everyTabOwnsTabContent")'
+    assert_includes evidence, 'failed_geometry.fetch("tabContentRadius")'
     assert_includes evidence, "REGULAR_PRIVATE_KEY"
     assert_includes evidence, 'visit host_routes.admin_jobs_path'
     assert_includes evidence, '"admin-maintenance-tasks"'
@@ -1029,11 +1055,12 @@ class RailsTemplateContractTest < Minitest::Test
   def test_default_views_use_component_parts_instead_of_reimplementing_them
     header = generated_file_source("app/views/shared/_header.html.erb")
     footer = generated_file_source("app/views/shared/_footer.html.erb")
+    with_menu_layout = generated_file_source("app/views/layouts/_with_menu.html.erb")
     account_layout = generated_file_source("app/views/layouts/account.html.erb")
     admin_layout = generated_file_source("app/views/layouts/admin.html.erb")
     admin_navigation = source_between(
       "  admin_navigation_items = <<~ERB",
-      "  account_navigation_for_layout = account_navigation_items.lines"
+      "  signed_in_condition = devise"
     )
     authentication_layout = generated_file_source("app/views/layouts/authentication.html.erb")
     home = generated_file_source("app/views/home/index.html.erb")
@@ -1060,15 +1087,32 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes footer, "<aside"
     refute_includes footer, "Rails 8.1 / Tailwind CSS 4 / daisyUI 5"
 
+    assert_class_tokens with_menu_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
+    assert_includes with_menu_layout, 'data-layout="with-menu"'
+    assert_includes with_menu_layout, 'min-[961px]:grid-cols-[220px_minmax(0,1fr)]'
+    assert_includes with_menu_layout, '<%= yield :with_menu_navigation %>'
+    assert_includes with_menu_layout, '<h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>'
+    assert_equal 1, with_menu_layout.scan("<%= yield %>").size
+    assert_operator with_menu_layout.index("content_for(:page_title)"), :<, with_menu_layout.index("<%= yield %>")
+    refute_includes with_menu_layout, "with_menu_subnavigation"
+    refute_includes with_menu_layout, "tab-content"
+    assert_includes with_menu_layout, '<% content_for :content, flush: true do %>'
+    assert_includes with_menu_layout, '<%= render template: "layouts/application" %>'
+    %w[account admin controller_path layout_name].each { |consumer_detail| refute_includes with_menu_layout, consumer_detail }
+
     assert_class_tokens account_layout, "menu"
     assert_class_tokens account_layout, "menu-title"
-    assert_class_tokens account_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
-    refute_includes account_layout, "max-w-5xl"
+    assert_includes account_layout, '<% content_for :with_menu_navigation, flush: true do %>'
+    assert_includes account_layout, '<%= render "shared/account_navigation" %>'
+    assert_includes account_layout, '<%= render layout: "layouts/with_menu" do %>'
+    refute_includes account_layout, "grid-cols"
     assert_class_tokens admin_layout, "menu"
     assert_class_tokens admin_layout, "menu-title"
-    assert_class_tokens admin_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
-    assert_includes admin_layout, 'data-layout="admin"'
-    assert_includes admin_layout, 'min-[961px]:grid-cols-[220px_minmax(0,1fr)]'
+    assert_includes admin_layout, '<% content_for :with_menu_navigation, flush: true do %>'
+    assert_includes admin_layout, '<%= render "shared/admin_navigation" %>'
+    assert_includes admin_layout, '<%= render layout: "layouts/with_menu" do %>'
+    assert_includes admin_layout, '<%= content_for?(:admin_content) ? yield(:admin_content) : yield %>'
+    refute_includes admin_layout, "grid-cols"
     assert_includes admin_layout, "application_translate('navigation.admin_menu')"
     assert_includes admin_layout, 'application_translate("navigation.admin")'
     assert_includes @source, 'layout "admin"'
@@ -1105,6 +1149,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'controller_path.start_with?("mission_control/jobs/")'
     assert_includes @source, 'controller_path.start_with?("maintenance_tasks/")'
     assert_includes header, 'application_translate("navigation.admin")'
+    assert_includes header, '<%= render "shared/account_navigation" %>'
     refute_includes @source, '<li class="menu-title"><span>管理</span></li>'.b
     assert_includes header, 'data: { turbo_method: :delete }'
     assert_includes @source, 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'
@@ -1137,5 +1182,91 @@ class RailsTemplateContractTest < Minitest::Test
 
     assert_equal 4, guest_navigation.scan("<<~ERB").size
     refute_includes guest_navigation, "\\\\n'"
+  end
+
+  def test_regular_views_do_not_define_with_menu_layout_content
+    ordinary_views = %w[
+      app/views/accounts/show.html.erb
+      app/views/admin/users/index.html.erb
+      app/views/admin/pages/index.html.erb
+      app/views/mission_control/jobs/queues/index.html.erb
+      app/views/maintenance_tasks/tasks/index.html.erb
+    ]
+
+    ordinary_views.each do |path|
+      view = generated_file_source(path)
+      refute_includes view, "with_menu_navigation", path
+      refute_includes view, "with_menu_subnavigation", path
+      assert_includes view, "content_for :page_title", path
+      refute_includes view, "<h1", path
+    end
+  end
+
+  def test_page_titles_use_one_content_for_contract_across_generated_views
+    application_helper = generated_file_source("app/helpers/application_helper.rb")
+    home = generated_file_source("app/views/home/index.html.erb")
+    public_views = %w[
+      lib/templates/erb/scaffold/index.html.erb.tt
+      lib/templates/erb/scaffold/show.html.erb.tt
+      lib/templates/erb/scaffold/new.html.erb.tt
+      lib/templates/erb/scaffold/edit.html.erb.tt
+      lib/templates/erb/controller/view.html.erb.tt
+      app/views/pages/_page.html.erb
+      app/views/faqs/index.html.erb
+      app/views/devise/sessions/new.html.erb
+      app/views/devise/registrations/new.html.erb
+      app/views/devise/passwords/new.html.erb
+      app/views/devise/passwords/edit.html.erb
+      app/views/sessions/new.html.erb
+    ]
+    with_menu_views = %w[
+      app/views/accounts/show.html.erb
+      app/views/accounts/edit.html.erb
+      app/views/admin/users/index.html.erb
+      app/views/admin/pages/index.html.erb
+      app/views/admin/pages/edit.html.erb
+      app/views/admin/faqs/index.html.erb
+      app/views/admin/faqs/new.html.erb
+      app/views/admin/faqs/edit.html.erb
+      app/views/admin/footer_settings/edit.html.erb
+      app/views/profiles/show.html.erb
+      app/views/profiles/edit.html.erb
+      app/views/api_credentials/index.html.erb
+      app/views/api_credentials/show.html.erb
+      app/views/api_credentials/new.html.erb
+      app/views/api_credentials/edit.html.erb
+      app/views/devise/registrations/edit.html.erb
+      app/views/notifications/show.html.erb
+      app/views/maintenance_tasks/tasks/index.html.erb
+      app/views/maintenance_tasks/tasks/show.html.erb
+      app/views/mission_control/jobs/queues/index.html.erb
+      app/views/mission_control/jobs/queues/show.html.erb
+      app/views/mission_control/jobs/jobs/index.html.erb
+      app/views/mission_control/jobs/jobs/show.html.erb
+      app/views/mission_control/jobs/recurring_tasks/index.html.erb
+      app/views/mission_control/jobs/recurring_tasks/show.html.erb
+      app/views/mission_control/jobs/workers/index.html.erb
+      app/views/mission_control/jobs/workers/show.html.erb
+    ]
+
+    assert_includes application_helper, "page_title = content_for(:page_title).presence"
+    refute_includes application_helper, "content_for(:title)"
+    refute_includes @source, "content_for :title"
+    refute_includes @source, "eyebrow"
+    refute_includes home, "content_for :page_title"
+    refute_includes home, "content_for :title"
+
+    public_views.each do |path|
+      view = generated_file_source(path)
+      assert_includes view, "content_for :page_title", path
+      assert_includes view, "content_for(:page_title)", path
+      assert_includes view, "<h1", path
+    end
+
+    with_menu_views.each do |path|
+      view = generated_file_source(path)
+      assert_includes view, "content_for :page_title", path
+      refute_includes view, "<h1", path
+    end
   end
 end

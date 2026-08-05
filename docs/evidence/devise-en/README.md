@@ -1,7 +1,7 @@
 # Devise / en / rails エビデンス
 
-- Source fingerprint: `03604c2d545e45468b8af7eda8f2f624244b7dbbfc24fa4ea28ccb588aa93ea3`
-- Base commit: `75248ae269b4b2d30b0027b8d1b1080f6530ebea`
+- Source fingerprint: `5dadd5a9b470af23b57686bde488826ccad018cf065a3634e08b5d56ea2e59ad`
+- Base commit: `42ed4db39d4adedd2dd238532214508f3b8d89d0`
 - Locale: `en`
 - Image delivery: `rails`
 - 更新: `rake evidence:update`
@@ -266,15 +266,25 @@
 
 ![ユーザー管理 (mobile)](admin-users--mobile.png)
 
-## Job operations
+## Queues
 
 ### Desktop
 
-![Job operations (desktop)](admin-job-operations--desktop.png)
+![Queues (desktop)](admin-job-operations--desktop.png)
 
 ### Mobile
 
-![Job operations (mobile)](admin-job-operations--mobile.png)
+![Queues (mobile)](admin-job-operations--mobile.png)
+
+## Failed jobs
+
+### Desktop
+
+![Failed jobs (desktop)](admin-job-operations-failed--desktop.png)
+
+### Mobile
+
+![Failed jobs (mobile)](admin-job-operations-failed--mobile.png)
 
 ## 運用タスク
 
@@ -352,11 +362,11 @@
 
 ![モバイルメニュー（未ログイン） (mobile)](navigation-guest-open--mobile.png)
 
-## Job operationsのモバイルメニュー
+## Queuesのモバイルメニュー
 
 ### Mobile
 
-![Job operationsのモバイルメニュー (mobile)](admin-job-operations-navigation-open--mobile.png)
+![Queuesのモバイルメニュー (mobile)](admin-job-operations-navigation-open--mobile.png)
 
 ## 運用タスクのモバイルメニュー
 

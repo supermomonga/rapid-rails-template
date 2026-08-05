@@ -280,7 +280,7 @@ def configure_application_identity
       },
       "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営会社", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
       "home" => {
-        "title" => "ホーム", "badge" => "Railsアプリケーションテンプレート", "heading" => "迷わず始められる、モダンなRails開発環境。",
+        "badge" => "Railsアプリケーションテンプレート", "heading" => "迷わず始められる、モダンなRails開発環境。",
         "description" => "Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。",
         "start_devise" => "無料で始める", "start_wallet" => "ウォレットで始める", "features_link" => "構成を見る", "starter" => "スターターキット", "features_title" => "最初から揃う開発基盤",
         "features" => { "rails" => { "title" => "Railsネイティブ", "description" => "Generator APIを中心に、安全な初期構成を生成します。" }, "ui" => { "title" => "読みやすいUI", "description" => "daisyUIとsemantic colorで、読みやすい画面を用意します。" }, "production" => { "title" => "本番運用対応", "description" => "SQLiteとLitestreamを前提に、運用経路まで設計します。" } }
@@ -290,7 +290,7 @@ def configure_application_identity
         "edit" => { "title" => "アカウント設定", "information" => "アカウント情報", "wallet_address" => "ウォレットアドレス", "danger_title" => "アカウントの削除", "danger_description" => "この操作は取り消せません。このアカウントのすべてのセッションも削除されます。", "delete" => "アカウントを削除", "confirm" => "本当に削除しますか？" },
         "destroy" => { "notice" => "アカウントを削除しました", "last_admin" => "最後の管理者はアカウントを削除できません" }
       },
-      "wallet_siwe" => { "title" => "ウォレットでログイン", "eyebrow" => "Ethereumでログイン", "description" => "EVM互換ウォレットで署名し、アカウントを安全に確認します。", "connect" => "ウォレットを接続", "note" => "署名要求に秘密鍵や送金は必要ありません。", "statement" => "Login to %{app_name}", "errors" => { "wallet_missing" => "EVM互換ウォレットが見つかりません", "nonce" => "nonceを取得できません", "verification" => "署名を検証できません" } },
+      "wallet_siwe" => { "title" => "ウォレットでログイン", "description" => "EVM互換ウォレットで署名し、アカウントを安全に確認します。", "connect" => "ウォレットを接続", "note" => "署名要求に秘密鍵や送金は必要ありません。", "statement" => "Login to %{app_name}", "errors" => { "wallet_missing" => "EVM互換ウォレットが見つかりません", "nonce" => "nonceを取得できません", "verification" => "署名を検証できません" } },
       "common" => { "edit" => "編集", "delete" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
     },
     en: {
@@ -303,7 +303,7 @@ def configure_application_identity
       },
       "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Company", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
       "home" => {
-        "title" => "Home", "badge" => "Rails application template", "heading" => "A modern Rails environment without the guesswork.",
+        "badge" => "Rails application template", "heading" => "A modern Rails environment without the guesswork.",
         "description" => "Build on Rails 8.1 defaults with reproducible authentication, UI, testing, and deployment foundations.",
         "start_devise" => "Get started", "start_wallet" => "Start with a wallet", "features_link" => "View features", "starter" => "Starter kit", "features_title" => "A complete development foundation",
         "features" => { "rails" => { "title" => "Rails native", "description" => "Generate a safe baseline centered on the Generator API." }, "ui" => { "title" => "Readable UI", "description" => "Start with readable screens built with daisyUI and semantic colors." }, "production" => { "title" => "Production ready", "description" => "Include an operational path designed for SQLite and Litestream." } }
@@ -313,7 +313,7 @@ def configure_application_identity
         "edit" => { "title" => "Account settings", "information" => "Account information", "wallet_address" => "Wallet address", "danger_title" => "Delete account", "danger_description" => "This action cannot be undone. All sessions for this account will also be deleted.", "delete" => "Delete account", "confirm" => "Are you sure you want to delete your account?" },
         "destroy" => { "notice" => "Your account was deleted.", "last_admin" => "The last administrator cannot delete their account." }
       },
-      "wallet_siwe" => { "title" => "Sign in with your wallet", "eyebrow" => "Sign in with Ethereum", "description" => "Sign with an EVM-compatible wallet to verify your account securely.", "connect" => "Connect wallet", "note" => "The signature request does not require your private key or a transfer.", "statement" => "Sign in to %{app_name}", "errors" => { "wallet_missing" => "No EVM-compatible wallet was found", "nonce" => "Could not obtain a nonce", "verification" => "Could not verify the signature" } },
+      "wallet_siwe" => { "title" => "Sign in with your wallet", "description" => "Sign with an EVM-compatible wallet to verify your account securely.", "connect" => "Connect wallet", "note" => "The signature request does not require your private key or a transfer.", "statement" => "Sign in to %{app_name}", "errors" => { "wallet_missing" => "No EVM-compatible wallet was found", "nonce" => "Could not obtain a nonce", "verification" => "Could not verify the signature" } },
       "common" => { "edit" => "Edit", "delete" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
     }
   )
@@ -366,8 +366,9 @@ def configure_application_identity
           identity = Rails.configuration.x.application_identity
           assert_response :success
           assert_select "html[lang=?]", identity.default_locale.to_s, count: 1
-          assert_select "title", text: /\#{Regexp.escape(identity.app_name)}/, count: 1
+          assert_select "title", text: identity.app_name, count: 1
           assert_select 'meta[property="og:site_name"][content=?]', identity.app_name, count: 1
+          assert_select 'meta[property="og:title"][content=?]', identity.app_name, count: 1
           assert_select 'link[rel="canonical"][href=?]', identity.canonical_url("/"), count: 1
           assert_equal previous_locale, I18n.locale
         end
@@ -1029,11 +1030,11 @@ def configure_generator_view_templates
   ERB
 
   create_file "lib/templates/erb/scaffold/index.html.erb.tt", <<~ERB, force: true
-    <%% content_for :title, "<%= human_name.pluralize %>" %>
+    <%% content_for :page_title, "<%= human_name.pluralize %>" %>
 
     <div class="mx-auto w-full max-w-6xl space-y-6 px-5 py-10 md:py-14">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <h1 class="text-2xl font-bold leading-[1.5]"><%= human_name.pluralize %></h1>
+        <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
         <%%= link_to "New <%= human_name.downcase %>", <%= new_helper(type: :path) %>, class: "btn btn-primary btn-rapid" %>
       </header>
 
@@ -1102,10 +1103,10 @@ def configure_generator_view_templates
   ERB
 
   create_file "lib/templates/erb/scaffold/show.html.erb.tt", <<~ERB, force: true
-    <%% content_for :title, "<%= human_name %>" %>
+    <%% content_for :page_title, "<%= human_name %>" %>
 
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
-      <h1 class="text-2xl font-bold leading-[1.5]"><%= human_name %></h1>
+      <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
@@ -1121,11 +1122,11 @@ def configure_generator_view_templates
   ERB
 
   create_file "lib/templates/erb/scaffold/new.html.erb.tt", <<~ERB, force: true
-    <%% content_for :title, "New <%= human_name.downcase %>" %>
+    <%% content_for :page_title, "New <%= human_name.downcase %>" %>
 
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <h1 class="text-2xl font-bold leading-[1.5]">New <%= human_name.downcase %></h1>
+        <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
         <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
       </header>
 
@@ -1138,11 +1139,11 @@ def configure_generator_view_templates
   ERB
 
   create_file "lib/templates/erb/scaffold/edit.html.erb.tt", <<~ERB, force: true
-    <%% content_for :title, "Editing <%= human_name.downcase %>" %>
+    <%% content_for :page_title, "Editing <%= human_name.downcase %>" %>
 
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <h1 class="text-2xl font-bold leading-[1.5]">Editing <%= human_name.downcase %></h1>
+        <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
         <div class="flex flex-col gap-3 sm:flex-row">
           <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, class: "btn btn-rapid" %>
           <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
@@ -1158,12 +1159,12 @@ def configure_generator_view_templates
   ERB
 
   create_file "lib/templates/erb/controller/view.html.erb.tt", <<~ERB, force: true
-    <%% content_for :title, "<%= class_name %>#<%= @action %>" %>
+    <%% content_for :page_title, "<%= class_name %>#<%= @action %>" %>
 
     <div class="mx-auto w-full max-w-[820px] px-5 py-10 md:py-14">
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
-          <h1 class="card-title text-2xl leading-[1.5]"><%= class_name %>#<%= @action %></h1>
+          <h1 class="card-title text-2xl leading-[1.5]"><%%= content_for(:page_title) %></h1>
           <p class="text-neutral">Find me in <%= @path %></p>
         </div>
       </section>
@@ -1447,7 +1448,7 @@ def install_wallet_siwe
 
         get account_url
         assert_response :success
-        assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
+        assert_select '[data-layout="with-menu"].mx-auto.w-full.max-w-6xl.px-5', count: 1
         account_menu = I18n.t("navigation.account_menu")
         assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
         assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
@@ -1678,12 +1679,10 @@ def configure_roles
   RUBY
 
   create_file "app/views/admin/users/index.html.erb", <<~ERB, force: true
-    <% content_for :title, t("admin.users.title") %>
+    <% content_for :page_title, t("admin.users.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary"><%= t("admin.users.eyebrow") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("admin.users.title") %></h1>
-        <p class="mt-2 text-sm text-neutral"><%= t("admin.users.description") %></p>
+        <p class="text-sm text-neutral"><%= t("admin.users.description") %></p>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -1778,7 +1777,7 @@ def configure_roles
     ja: {
       "roles" => { "errors" => { "last_admin" => "最後の管理者roleは解除できません" } },
       "admin" => {
-        "users" => { "eyebrow" => "管理", "title" => "ユーザー管理", "description" => "固定roleをユーザーへ付与または解除します。", "identifier" => { "email" => "メールアドレス", "wallet_address" => "ウォレットアドレス" }, "role" => "Role", "admin" => "管理者", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "管理者roleを解除しますか？", "grant" => "管理者にする", "pagination" => "ユーザー一覧のページング" },
+        "users" => { "title" => "ユーザー管理", "description" => "固定roleをユーザーへ付与または解除します。", "identifier" => { "email" => "メールアドレス", "wallet_address" => "ウォレットアドレス" }, "role" => "Role", "admin" => "管理者", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "管理者roleを解除しますか？", "grant" => "管理者にする", "pagination" => "ユーザー一覧のページング" },
         "user_roles" => { "create" => { "notice" => "管理者roleを付与しました" }, "destroy" => { "notice" => "管理者roleを解除しました", "self_forbidden" => "自分自身の管理者roleは解除できません" } }
       },
       "accounts" => { "destroy" => { "last_admin" => "最後の管理者はアカウントを削除できません" } }
@@ -1786,7 +1785,7 @@ def configure_roles
     en: {
       "roles" => { "errors" => { "last_admin" => "The final administrator role cannot be revoked" } },
       "admin" => {
-        "users" => { "eyebrow" => "Administration", "title" => "User management", "description" => "Grant or revoke the fixed role for each user.", "identifier" => { "email" => "Email address", "wallet_address" => "Wallet address" }, "role" => "Role", "admin" => "Administrator", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role?", "grant" => "Make administrator", "pagination" => "User list pagination" },
+        "users" => { "title" => "User management", "description" => "Grant or revoke the fixed role for each user.", "identifier" => { "email" => "Email address", "wallet_address" => "Wallet address" }, "role" => "Role", "admin" => "Administrator", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role?", "grant" => "Make administrator", "pagination" => "User list pagination" },
         "user_roles" => { "create" => { "notice" => "Administrator role granted" }, "destroy" => { "notice" => "Administrator role revoked", "self_forbidden" => "You cannot revoke your own administrator role" } }
       },
       "accounts" => { "destroy" => { "last_admin" => "The final administrator cannot delete their account" } }
@@ -2010,10 +2009,10 @@ def configure_roles
           get admin_users_url
         end
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="admin"] nav[aria-label=?] li.menu-title', I18n.t("navigation.admin_menu"), text: I18n.t("navigation.admin"), count: 1
-        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.account_menu"), count: 0
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_users_path, text: I18n.t("navigation.users"), count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?] li.menu-title', I18n.t("navigation.admin_menu"), text: I18n.t("navigation.admin"), count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.account_menu"), count: 0
+        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_users_path, text: I18n.t("navigation.users"), count: 1
         assert_select 'header li.menu-title', text: I18n.t("navigation.admin"), count: 1
         assert_select 'header a[href=?]', account_path, count: 0
         assert_select "table.table.table-sm.table-pin-rows"
@@ -2548,10 +2547,8 @@ def configure_content_management
     ja: {
       "content_management" => {
         "pages" => { "about" => "%{app_name}について", "corp" => "運営会社", "manual" => "使い方", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
-        "sections" => { "about" => "概要", "company" => "会社情報", "guides" => "ガイド", "legal" => "法的情報" },
         "faqs" => { "title" => "よくある質問", "empty" => "現在、公開中のよくある質問はありません。" },
         "admin" => {
-          "eyebrow" => "管理画面",
           "pages" => { "title" => "固定ページ管理", "page" => "ページ", "url" => "URL", "actions" => "操作", "body" => "本文", "edit_description" => "固定ページの本文を編集します。" },
           "faqs" => { "title" => "FAQ管理", "add" => "FAQを追加", "edit" => "FAQを編集", "question" => "質問", "answer" => "回答", "position" => "表示順", "publication" => "公開設定", "publish" => "公開する", "status" => "状態", "published" => "公開", "unpublished" => "非公開", "empty" => "FAQはまだ登録されていません。", "confirm" => "FAQを削除しますか？" },
           "footer_settings" => { "title" => "外部リンク設定", "description" => "空欄のリンクはfooterに表示されません。" }
@@ -2567,10 +2564,8 @@ def configure_content_management
     en: {
       "content_management" => {
         "pages" => { "about" => "About %{app_name}", "corp" => "Company", "manual" => "Guides", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
-        "sections" => { "about" => "About", "company" => "Company", "guides" => "Guides", "legal" => "Legal" },
         "faqs" => { "title" => "Frequently asked questions", "empty" => "There are no published frequently asked questions." },
         "admin" => {
-          "eyebrow" => "Administration",
           "pages" => { "title" => "Manage pages", "page" => "Page", "url" => "URL", "actions" => "Actions", "body" => "Body", "edit_description" => "Edit the body of this page." },
           "faqs" => { "title" => "Manage FAQs", "add" => "Add FAQ", "edit" => "Edit FAQ", "question" => "Question", "answer" => "Answer", "position" => "Position", "publication" => "Publication", "publish" => "Publish", "status" => "Status", "published" => "Published", "unpublished" => "Unpublished", "empty" => "No FAQs have been created.", "confirm" => "Delete this FAQ?" },
           "footer_settings" => { "title" => "External links", "description" => "Blank links are not displayed in the footer." }
@@ -2612,30 +2607,28 @@ def configure_content_management
   YAML
 
   create_file "app/views/pages/_page.html.erb", <<~ERB, force: true
-    <% content_for :title, @page.title %>
+    <% content_for :page_title, @page.title %>
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header>
-        <p class="text-sm font-semibold text-primary"><%= section %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @page.title %></h1>
+        <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body"><%= @page.content %></div>
       </section>
     </div>
   ERB
-  create_file "app/views/pages/about.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.about\") %>\n", force: true
-  create_file "app/views/pages/corp.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.company\") %>\n", force: true
-  create_file "app/views/pages/manual.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.guides\") %>\n", force: true
-  create_file "app/views/pages/terms.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.legal\") %>\n", force: true
-  create_file "app/views/pages/privacy.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.legal\") %>\n", force: true
-  create_file "app/views/pages/transaction-law.html.erb", "<%= render \"pages/page\", section: t(\"content_management.sections.legal\") %>\n", force: true
+  create_file "app/views/pages/about.html.erb", "<%= render \"pages/page\" %>\n", force: true
+  create_file "app/views/pages/corp.html.erb", "<%= render \"pages/page\" %>\n", force: true
+  create_file "app/views/pages/manual.html.erb", "<%= render \"pages/page\" %>\n", force: true
+  create_file "app/views/pages/terms.html.erb", "<%= render \"pages/page\" %>\n", force: true
+  create_file "app/views/pages/privacy.html.erb", "<%= render \"pages/page\" %>\n", force: true
+  create_file "app/views/pages/transaction-law.html.erb", "<%= render \"pages/page\" %>\n", force: true
 
   create_file "app/views/faqs/index.html.erb", <<~ERB, force: true
-    <% content_for :title, t("content_management.faqs.title") %>
+    <% content_for :page_title, t("content_management.faqs.title") %>
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header>
-        <p class="text-sm font-semibold text-primary"><%= t("content_management.sections.guides") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.faqs.title") %></h1>
+        <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       </header>
       <% if @faqs.any? %>
         <div class="space-y-3">
@@ -2653,12 +2646,8 @@ def configure_content_management
   ERB
 
   create_file "app/views/admin/pages/index.html.erb", <<~ERB, force: true
-    <% content_for :title, t("content_management.admin.pages.title") %>
+    <% content_for :page_title, t("content_management.admin.pages.title") %>
     <div class="space-y-6">
-      <header>
-        <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.pages.title") %></h1>
-      </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
           <div class="overflow-x-auto">
@@ -2681,12 +2670,10 @@ def configure_content_management
   ERB
 
   create_file "app/views/admin/pages/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, @page.title %>
+    <% content_for :page_title, @page.title %>
     <div class="max-w-[820px] space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @page.title %></h1>
-        <p class="mt-2 text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
+        <p class="text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
@@ -2739,13 +2726,9 @@ def configure_content_management
   ERB
 
   create_file "app/views/admin/faqs/index.html.erb", <<~ERB, force: true
-    <% content_for :title, t("content_management.admin.faqs.title") %>
+    <% content_for :page_title, t("content_management.admin.faqs.title") %>
     <div class="space-y-6">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
-          <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.faqs.title") %></h1>
-        </div>
         <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: "btn btn-rapid" %>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -2780,28 +2763,24 @@ def configure_content_management
   ERB
 
   create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
-    <% content_for :title, t("content_management.admin.faqs.add") %>
+    <% content_for :page_title, t("content_management.admin.faqs.add") %>
     <div class="max-w-[820px] space-y-6">
-      <header><p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.faqs.add") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, t("content_management.admin.faqs.edit") %>
+    <% content_for :page_title, t("content_management.admin.faqs.edit") %>
     <div class="max-w-[820px] space-y-6">
-      <header><p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.faqs.edit") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/footer_settings/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, t("content_management.admin.footer_settings.title") %>
+    <% content_for :page_title, t("content_management.admin.footer_settings.title") %>
     <div class="max-w-[820px] space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary"><%= t("content_management.admin.eyebrow") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("content_management.admin.footer_settings.title") %></h1>
-        <p class="mt-2 text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
+        <p class="text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
       </header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
@@ -3044,6 +3023,9 @@ def configure_content_management
 
           assert_response :success
           assert_select "h1", text: title, count: 1
+          document_title = "\#{title} | \#{Rails.configuration.x.application_identity.app_name}"
+          assert_select "title", text: document_title, count: 1
+          assert_select 'meta[property="og:title"][content=?]', document_title, count: 1
           assert_equal "pages/\#{slug}", PagesController::TEMPLATES.fetch(slug)
         end
       end
@@ -3166,8 +3148,8 @@ def configure_content_management
 
         get edit_admin_page_url(page)
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_pages_path, text: I18n.t("navigation.pages"), count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_pages_path, text: I18n.t("navigation.pages"), count: 1
         assert_select "lexxy-editor", count: 1
 
         patch admin_page_url(page), params: {
@@ -3196,8 +3178,8 @@ def configure_content_management
 
         get new_admin_faq_url
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', admin_faqs_path, text: I18n.t("navigation.faqs"), count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_faqs_path, text: I18n.t("navigation.faqs"), count: 1
         assert_select "lexxy-editor", count: 1
 
         assert_difference("Faq.count", 1) do
@@ -3244,8 +3226,8 @@ def configure_content_management
 
         get edit_admin_footer_setting_url
         assert_response :success
-        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', edit_admin_footer_setting_path, text: I18n.t("content_management.admin.footer_settings.title"), count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', edit_admin_footer_setting_path, text: I18n.t("content_management.admin.footer_settings.title"), count: 1
 
         patch admin_footer_setting_url, params: {
           footer_setting: { x_url: " https://social.example/x ", github_url: "" }
@@ -3582,7 +3564,7 @@ def configure_profile
 
   profile_locale_ja = {
     "profiles" => {
-      "title" => "プロフィール", "edit_title" => "プロフィール編集", "eyebrow" => "プロフィール", "edit" => "プロフィールを編集",
+      "title" => "プロフィール", "edit_title" => "プロフィール編集", "edit" => "プロフィールを編集",
       "screen_name_hint" => "小文字の英数字とアンダースコアが使えます。", "current_avatar" => "現在のアバター", "avatar_label" => "アバター", "avatar_hint" => "静止画JPEG、PNG、WebP（5 MiB以下、幅・高さ4096px以下）を選択してください。",
       "avatar_delete_title" => "アバター画像の削除", "avatar_delete_description" => "設定済みの画像を削除し、IDから生成したアバターへ戻します。", "avatar_delete" => "設定済み画像を削除", "avatar_delete_confirm" => "設定済みのアバター画像を削除しますか？",
       "update" => { "notice" => "プロフィールを更新しました" }, "avatar" => { "destroy" => { "notice" => "アバター画像を削除しました" } }
@@ -3598,7 +3580,7 @@ def configure_profile
   }
   profile_locale_en = {
     "profiles" => {
-      "title" => "Profile", "edit_title" => "Edit profile", "eyebrow" => "Profile", "edit" => "Edit profile",
+      "title" => "Profile", "edit_title" => "Edit profile", "edit" => "Edit profile",
       "screen_name_hint" => "Use lowercase letters, numbers, and underscores.", "current_avatar" => "Current avatar", "avatar_label" => "Avatar", "avatar_hint" => "Choose a static JPEG, PNG, or WebP up to 5 MiB and 4096px on either side.",
       "avatar_delete_title" => "Delete avatar image", "avatar_delete_description" => "Delete the uploaded image and return to the avatar generated from your ID.", "avatar_delete" => "Delete uploaded image", "avatar_delete_confirm" => "Delete the uploaded avatar image?",
       "update" => { "notice" => "Your profile was updated." }, "avatar" => { "destroy" => { "notice" => "Your avatar image was deleted." } }
@@ -4100,13 +4082,8 @@ def configure_profile
     ""
   end
   create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
-    <% content_for :title, t("profiles.title") %>
+    <% content_for :page_title, t("profiles.title") %>
     <div class="space-y-6">
-      <header>
-        <p class="text-sm font-semibold text-primary"><%= t("profiles.eyebrow") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("profiles.title") %></h1>
-      </header>
-
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
           <ul class="list">
@@ -4120,13 +4097,8 @@ def configure_profile
   ERB
 
   create_file "app/views/profiles/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, t("profiles.edit_title") %>
+    <% content_for :page_title, t("profiles.edit_title") %>
     <div class="space-y-6">
-      <header>
-        <p class="text-sm font-semibold text-primary"><%= t("profiles.eyebrow") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("profiles.edit_title") %></h1>
-      </header>
-
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body">
           <%= render "form", profile: @profile %>
@@ -4379,13 +4351,13 @@ def configure_api
   create_locale_pair("api_credentials",
     ja: {
       "api_credentials" => {
-        "title" => "APIキーの管理", "description" => "アプリケーションからAPIへ接続するためのcredentialを管理します。", "new" => "APIキーを作成", "edit" => "APIキーを編集", "details" => "APIキー詳細", "eyebrow" => "API credential", "name_hint" => "利用用途が分かる名前を入力してください。", "api_key" => "API key", "last_used" => "最終利用", "show" => "詳細", "empty" => "APIキーはまだありません。", "api_key_label" => "%{name}のAPI key", "secret_once" => "API Secretはこの画面で一度だけ表示されます。", "information" => "Credential情報", "revoke" => "API Secretを再発行", "revoke_confirm" => "現在のAPI Secretは無効になります。再発行しますか？", "delete_confirm" => "このAPIキーを削除しますか？", "back" => "APIキー一覧へ"
+        "title" => "APIキーの管理", "description" => "アプリケーションからAPIへ接続するためのcredentialを管理します。", "new" => "APIキーを作成", "edit" => "APIキーを編集", "name_hint" => "利用用途が分かる名前を入力してください。", "api_key" => "API key", "last_used" => "最終利用", "show" => "詳細", "empty" => "APIキーはまだありません。", "api_key_label" => "%{name}のAPI key", "secret_once" => "API Secretはこの画面で一度だけ表示されます。", "information" => "Credential情報", "revoke" => "API Secretを再発行", "revoke_confirm" => "現在のAPI Secretは無効になります。再発行しますか？", "delete_confirm" => "このAPIキーを削除しますか？", "back" => "APIキー一覧へ"
       },
       "activerecord" => { "attributes" => { "api_credential" => { "name" => "名前" } } }
     },
     en: {
       "api_credentials" => {
-        "title" => "API credentials", "description" => "Manage credentials used by applications to connect to the API.", "new" => "Create API credential", "edit" => "Edit API credential", "details" => "API credential details", "eyebrow" => "API credential", "name_hint" => "Enter a name that describes how this credential is used.", "api_key" => "API key", "last_used" => "Last used", "show" => "Details", "empty" => "There are no API credentials yet.", "api_key_label" => "%{name} API key", "secret_once" => "The API Secret is shown only once on this screen.", "information" => "Credential information", "revoke" => "Reissue API Secret", "revoke_confirm" => "The current API Secret will be invalidated. Reissue it?", "delete_confirm" => "Delete this API credential?", "back" => "Back to API credentials"
+        "title" => "API credentials", "description" => "Manage credentials used by applications to connect to the API.", "new" => "Create API credential", "edit" => "Edit API credential", "name_hint" => "Enter a name that describes how this credential is used.", "api_key" => "API key", "last_used" => "Last used", "show" => "Details", "empty" => "There are no API credentials yet.", "api_key_label" => "%{name} API key", "secret_once" => "The API Secret is shown only once on this screen.", "information" => "Credential information", "revoke" => "Reissue API Secret", "revoke_confirm" => "The current API Secret will be invalidated. Reissue it?", "delete_confirm" => "Delete this API credential?", "back" => "Back to API credentials"
       },
       "activerecord" => { "attributes" => { "api_credential" => { "name" => "Name" } } }
     }
@@ -4426,13 +4398,11 @@ def configure_api
   ERB
 
   create_file "app/views/api_credentials/index.html.erb", <<~ERB, force: true
-    <% content_for :title, t("api_credentials.title") %>
+    <% content_for :page_title, t("api_credentials.title") %>
     <div class="space-y-6">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p>
-          <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("api_credentials.title") %></h1>
-          <p class="mt-2 text-sm text-neutral"><%= t("api_credentials.description") %></p>
+          <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
         </div>
         <%= link_to t("api_credentials.new"), new_api_credential_path, class: "btn btn-primary btn-rapid" %>
       </header>
@@ -4469,13 +4439,8 @@ def configure_api
   ERB
 
   create_file "app/views/api_credentials/show.html.erb", <<~ERB, force: true
-    <% content_for :title, t("api_credentials.details") %>
+    <% content_for :page_title, @api_credential.name %>
     <div class="space-y-6">
-      <header>
-        <p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= @api_credential.name %></h1>
-      </header>
-
       <% if @api_secret.present? %>
         <div class="alert alert-warning alert-vertical grid-cols-1 justify-items-stretch" role="status">
           <p class="font-bold"><%= t("api_credentials.secret_once") %></p>
@@ -4516,17 +4481,15 @@ def configure_api
   ERB
 
   create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
-    <% content_for :title, t("api_credentials.new") %>
+    <% content_for :page_title, t("api_credentials.new") %>
     <div class="space-y-6">
-      <header><p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("api_credentials.new") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
   create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, t("api_credentials.edit") %>
+    <% content_for :page_title, t("api_credentials.edit") %>
     <div class="space-y-6">
-      <header><p class="text-sm font-semibold text-primary"><%= t("api_credentials.eyebrow") %></p><h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("api_credentials.edit") %></h1></header>
       <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
@@ -4693,18 +4656,18 @@ def configure_devise_views
     ja: {
       "devise_views" => {
         "links" => { "sign_in" => "ログイン画面へ", "sign_up" => "アカウントを作成", "forgot_password" => "パスワードをお忘れですか？" },
-        "sessions" => { "title" => "ログイン", "eyebrow" => "おかえりなさい", "description" => "登録済みのメールアドレスとパスワードを入力してください。", "remember_me" => "ログイン状態を保持する", "submit" => "ログイン" },
-        "registrations" => { "new_title" => "アカウント作成", "new_eyebrow" => "はじめましょう", "new_description" => "利用を始めるためのアカウントを作成します。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" },
-        "passwords" => { "new_title" => "パスワード再設定", "new_eyebrow" => "パスワード再設定", "new_description" => "再設定用リンクをメールで送信します。", "send" => "再設定メールを送信", "edit_title" => "新しいパスワード", "edit_eyebrow" => "パスワードを選択", "change" => "パスワードを変更" },
+        "sessions" => { "title" => "ログイン", "description" => "登録済みのメールアドレスとパスワードを入力してください。", "remember_me" => "ログイン状態を保持する", "submit" => "ログイン" },
+        "registrations" => { "new_title" => "アカウント作成", "new_description" => "利用を始めるためのアカウントを作成します。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" },
+        "passwords" => { "new_title" => "パスワード再設定", "new_description" => "再設定用リンクをメールで送信します。", "send" => "再設定メールを送信", "edit_title" => "新しいパスワード", "change" => "パスワードを変更" },
         "mailer" => { "greeting" => "%{recipient}さん", "confirmation" => "以下のリンクから%{app_name}のメールアドレスを確認してください。", "confirm" => "メールアドレスを確認", "reset" => "以下のリンクから%{app_name}のパスワードを変更できます。", "reset_link" => "パスワードを変更", "unlock" => "以下のリンクから%{app_name}のアカウントロックを解除できます。", "unlock_link" => "アカウントロックを解除", "email_changed" => "%{app_name}のメールアドレスが変更されたことをお知らせします。", "password_changed" => "%{app_name}のパスワードが変更されたことをお知らせします。" }
       }
     },
     en: {
       "devise_views" => {
         "links" => { "sign_in" => "Back to sign in", "sign_up" => "Create an account", "forgot_password" => "Forgot your password?" },
-        "sessions" => { "title" => "Sign in", "eyebrow" => "Welcome back", "description" => "Enter your registered email address and password.", "remember_me" => "Keep me signed in", "submit" => "Sign in" },
-        "registrations" => { "new_title" => "Create account", "new_eyebrow" => "Get started", "new_description" => "Create an account to get started.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" },
-        "passwords" => { "new_title" => "Reset password", "new_eyebrow" => "Password reset", "new_description" => "We will email you a password reset link.", "send" => "Send reset email", "edit_title" => "New password", "edit_eyebrow" => "Choose a password", "change" => "Change password" },
+        "sessions" => { "title" => "Sign in", "description" => "Enter your registered email address and password.", "remember_me" => "Keep me signed in", "submit" => "Sign in" },
+        "registrations" => { "new_title" => "Create account", "new_description" => "Create an account to get started.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" },
+        "passwords" => { "new_title" => "Reset password", "new_description" => "We will email you a password reset link.", "send" => "Send reset email", "edit_title" => "New password", "change" => "Change password" },
         "mailer" => { "greeting" => "Hello %{recipient}", "confirmation" => "Confirm your email address for %{app_name} using the link below.", "confirm" => "Confirm email address", "reset" => "Change your %{app_name} password using the link below.", "reset_link" => "Change password", "unlock" => "Unlock your %{app_name} account using the link below.", "unlock_link" => "Unlock account", "email_changed" => "This is a notice that your %{app_name} email address was changed.", "password_changed" => "This is a notice that your %{app_name} password was changed." }
       }
     }
@@ -4741,10 +4704,9 @@ def configure_devise_views
   ERB
 
   create_file "app/views/devise/sessions/new.html.erb", <<~ERB, force: true
-    <% content_for :title, t("devise_views.sessions.title") %>
+    <% content_for :page_title, t("devise_views.sessions.title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary"><%= t("devise_views.sessions.eyebrow") %></p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.sessions.title") %></h1>
+      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       <p class="mt-2 text-sm text-neutral"><%= t("devise_views.sessions.description") %></p>
     </header>
 
@@ -4770,10 +4732,9 @@ def configure_devise_views
   ERB
 
   create_file "app/views/devise/registrations/new.html.erb", <<~ERB, force: true
-    <% content_for :title, t("devise_views.registrations.new_title") %>
+    <% content_for :page_title, t("devise_views.registrations.new_title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary"><%= t("devise_views.registrations.new_eyebrow") %></p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.registrations.new_title") %></h1>
+      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       <p class="mt-2 text-sm text-neutral"><%= t("devise_views.registrations.new_description") %></p>
     </header>
 
@@ -4801,13 +4762,8 @@ def configure_devise_views
   ERB
 
   create_file "app/views/devise/registrations/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, t("devise_views.registrations.edit_title") %>
+    <% content_for :page_title, t("devise_views.registrations.edit_title") %>
     <div class="space-y-6">
-      <header>
-        <p class="text-sm font-semibold text-primary"><%= t("devise_views.registrations.edit_title") %></p>
-        <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.registrations.edit_title") %></h1>
-      </header>
-
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
         <div class="card-body p-5 sm:p-6">
           <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
@@ -4847,10 +4803,9 @@ def configure_devise_views
   ERB
 
   create_file "app/views/devise/passwords/new.html.erb", <<~ERB, force: true
-    <% content_for :title, t("devise_views.passwords.new_title") %>
+    <% content_for :page_title, t("devise_views.passwords.new_title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary"><%= t("devise_views.passwords.new_eyebrow") %></p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.passwords.new_title") %></h1>
+      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       <p class="mt-2 text-sm text-neutral"><%= t("devise_views.passwords.new_description") %></p>
     </header>
 
@@ -4867,10 +4822,9 @@ def configure_devise_views
   ERB
 
   create_file "app/views/devise/passwords/edit.html.erb", <<~ERB, force: true
-    <% content_for :title, t("devise_views.passwords.edit_title") %>
+    <% content_for :page_title, t("devise_views.passwords.edit_title") %>
     <header class="mb-8">
-      <p class="text-sm font-semibold text-primary"><%= t("devise_views.passwords.edit_eyebrow") %></p>
-      <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("devise_views.passwords.edit_title") %></h1>
+      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
     </header>
 
     <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
@@ -5060,9 +5014,6 @@ def configure_default_views
       </li>
     ERB
   end
-  account_navigation_for_layout = account_navigation_items.lines.map { |line| "                #{line}" }.join
-  account_navigation_for_dropdown = account_navigation_items.lines.map { |line| "          #{line}" }.join
-  admin_navigation_for_layout = admin_navigation_items.lines.map { |line| "                #{line}" }.join
   signed_in_condition = devise ? "user_signed_in?" : "authenticated?"
   admin_controller_conditions = ['controller_path.start_with?("admin/")']
   admin_controller_conditions << 'controller_path.start_with?("mission_control/jobs/")' if job_operations_enabled
@@ -5235,7 +5186,7 @@ def configure_default_views
       end
 
       def document_title
-        page_title = content_for(:title).presence
+        page_title = content_for(:page_title).presence
         [page_title, application_identity.app_name].compact.join(" | ")
       end
 
@@ -5302,37 +5253,47 @@ def configure_default_views
     <%= render template: "layouts/application" %>
   ERB
 
-  create_file "app/views/layouts/account.html.erb", <<~ERB, force: true
-    <% content_for :content do %>
-      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="account">
-        <aside class="h-fit">
-          <nav aria-label="<%= t('navigation.account_menu') %>">
-            <ul class="menu w-full rounded-box bg-base-100">
-              <li class="menu-title"><span><%= t("navigation.dashboard") %></span></li>
-    #{account_navigation_for_layout}          </ul>
-          </nav>
-        </aside>
-        <div class="min-w-0"><%= yield %></div>
+  create_file "app/views/layouts/_with_menu.html.erb", <<~ERB, force: true
+    <% content_for :content, flush: true do %>
+      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="with-menu">
+        <aside class="h-fit"><%= yield :with_menu_navigation %></aside>
+        <div class="min-w-0">
+          <h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
+          <%= yield %>
+        </div>
       </div>
     <% end %>
     <%= render template: "layouts/application" %>
   ERB
 
+  create_file "app/views/shared/_account_navigation.html.erb", account_navigation_items, force: true
+  create_file "app/views/layouts/account.html.erb", <<~ERB, force: true
+    <% content_for :with_menu_navigation, flush: true do %>
+      <nav aria-label="<%= t('navigation.account_menu') %>">
+        <ul class="menu w-full rounded-box bg-base-100">
+          <li class="menu-title"><span><%= t("navigation.dashboard") %></span></li>
+          <%= render "shared/account_navigation" %>
+        </ul>
+      </nav>
+    <% end %>
+    <%= render layout: "layouts/with_menu" do %>
+      <%= yield %>
+    <% end %>
+  ERB
+
   create_file "app/views/shared/_admin_navigation.html.erb", admin_navigation_items, force: true
   create_file "app/views/layouts/admin.html.erb", <<~ERB, force: true
-    <% content_for :content do %>
-      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="admin"#{maintenance_tasks_enabled ? ' data-maintenance-tasks-shell="<%= controller_path.start_with?("maintenance_tasks/") %>"' : ""}>
-        <aside class="h-fit">
-          <nav aria-label="<%= application_translate('navigation.admin_menu') %>">
-            <ul class="menu w-full rounded-box bg-base-100">
-              <li class="menu-title"><span><%= application_translate("navigation.admin") %></span></li>
-    #{admin_navigation_for_layout}          </ul>
-          </nav>
-        </aside>
-        <div class="min-w-0"><%= content_for?(:admin_content) ? yield(:admin_content) : yield %></div>
-      </div>
+    <% content_for :with_menu_navigation, flush: true do %>
+      <nav aria-label="<%= application_translate('navigation.admin_menu') %>">
+        <ul class="menu w-full rounded-box bg-base-100">
+          <li class="menu-title"><span><%= application_translate("navigation.admin") %></span></li>
+          <%= render "shared/admin_navigation" %>
+        </ul>
+      </nav>
     <% end %>
-    <%= render template: "layouts/application" %>
+    <%= render layout: "layouts/with_menu" do %>
+      <%= content_for?(:admin_content) ? yield(:admin_content) : yield %>
+    <% end %>
   ERB
 
   create_file "app/views/shared/_header.html.erb", <<~ERB, force: true
@@ -5349,7 +5310,8 @@ def configure_default_views
                 <li class="menu-title"><span><%= application_translate("navigation.admin") %></span></li>
                 <%= render "shared/admin_navigation" %>
               <% else %>
-    #{account_navigation_for_dropdown}            <% end %>
+                <%= render "shared/account_navigation" %>
+              <% end %>
               <li class="border-t border-base-300"><%= link_to t("navigation.sign_out"), #{logout_path}, data: { turbo_method: :delete } %></li>
               </ul>
             </details>
@@ -5418,7 +5380,6 @@ def configure_default_views
   ERB
 
   create_file "app/views/home/index.html.erb", <<~ERB, force: true
-    <% content_for :title, t("home.title") %>
     <div class="mx-auto w-full max-w-[820px] space-y-8 px-5 py-10 md:py-14">
       <section class="hero rounded-box border border-base-300 bg-base-100">
         <div class="hero-content w-full max-w-none flex-col items-start gap-6 p-6 sm:p-8 md:p-10">
@@ -5455,12 +5416,10 @@ def configure_default_views
   ERB
 
   create_file "app/views/accounts/show.html.erb", <<~ERB, force: true
-    <% content_for :title, t("accounts.show.title") %>
+    <% content_for :page_title, t("accounts.show.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary">Account</p>
-        <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("accounts.show.title") %></h1>
-        <p class="mt-2 text-sm text-neutral">#{account_page_description}</p>
+        <p class="text-sm text-neutral">#{account_page_description}</p>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -5477,13 +5436,8 @@ def configure_default_views
 
   unless devise
     create_file "app/views/accounts/edit.html.erb", <<~ERB, force: true
-      <% content_for :title, t("accounts.edit.title") %>
+      <% content_for :page_title, t("accounts.edit.title") %>
       <div class="space-y-6">
-        <header>
-          <p class="text-sm font-semibold text-primary">Account settings</p>
-          <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("accounts.edit.title") %></h1>
-        </header>
-
         <section class="card card-border border-base-300 bg-base-100 shadow-none">
           <div class="card-body p-5 sm:p-6">
             <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.edit.information") %></h2>
@@ -5516,15 +5470,14 @@ def configure_default_views
     configure_devise_views
   else
     create_file "app/views/sessions/new.html.erb", <<~ERB, force: true
-      <% content_for :title, t("wallet_siwe.title") %>
+      <% content_for :page_title, t("wallet_siwe.title") %>
       <div data-controller="siwe-sign-in"
            data-siwe-sign-in-statement-value="<%= application_identity.siwe_statement %>"
            data-siwe-sign-in-wallet-missing-value="<%= t('wallet_siwe.errors.wallet_missing') %>"
            data-siwe-sign-in-nonce-error-value="<%= t('wallet_siwe.errors.nonce') %>"
            data-siwe-sign-in-verification-error-value="<%= t('wallet_siwe.errors.verification') %>">
         <header class="mb-8">
-          <p class="text-sm font-semibold text-primary"><%= t("wallet_siwe.eyebrow") %></p>
-          <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("wallet_siwe.title") %></h1>
+          <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
           <p class="mt-2 text-sm text-neutral"><%= t("wallet_siwe.description") %></p>
         </header>
         <button type="button" class="btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" data-action="click->siwe-sign-in#signIn"><%= t("wallet_siwe.connect") %></button>
@@ -5624,7 +5577,7 @@ def configure_default_views
     <<~RUBY
       get profile_url
       assert_response :success
-      assert_select '[data-layout="account"] .list > .list-row', count: #{profile_features.length}
+      assert_select '[data-layout="with-menu"] .list > .list-row', count: #{profile_features.length}
       assert_select 'a[href=?]', edit_profile_path, text: I18n.t("profiles.edit"), count: 1
       #{avatar_enabled ? "assert_select '.list .avatar svg[width=\"64\"][height=\"64\"]', count: 1\n      assert_select '.avatar-placeholder', count: 0" : ""}
 
@@ -5781,6 +5734,9 @@ def configure_default_views
         test "renders public and authentication pages with the custom theme" do
           get root_url
           assert_response :success
+          app_name = Rails.configuration.x.application_identity.app_name
+          assert_select "title", text: app_name, count: 1
+          assert_select 'meta[property="og:title"][content=?]', app_name, count: 1
           assert_select 'html[data-theme="rapid-rails"]'
           assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label=?]', I18n.t("navigation.main")
           assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
@@ -5795,9 +5751,16 @@ def configure_default_views
           assert_select 'footer.footer.mx-auto.w-full.max-w-6xl.px-5', count: 1
           refute_includes response.body, 'Rails 8.1 / Tailwind CSS 4 / daisyUI 5'
 
-          [new_user_session_url, new_user_registration_url, new_user_password_url].each do |url|
+          [
+            [new_user_session_url, I18n.t("devise_views.sessions.title")],
+            [new_user_registration_url, I18n.t("devise_views.registrations.new_title")],
+            [new_user_password_url, I18n.t("devise_views.passwords.new_title")]
+          ].each do |url, page_title|
             get url
             assert_response :success
+            assert_select "h1", text: page_title, count: 1
+            assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
+            assert_select 'meta[property="og:title"][content=?]', "\#{page_title} | \#{app_name}", count: 1
             assert_select '[data-layout="authentication"].hero > .hero-content .card > .card-body'
             assert_select 'form fieldset.fieldset', minimum: 1
             assert_select 'form fieldset.fieldset > legend.fieldset-legend > label', minimum: 1
@@ -5817,7 +5780,12 @@ def configure_default_views
           sign_in user
           get account_url
           assert_response :success
-          assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
+          page_title = I18n.t("accounts.show.title")
+          app_name = Rails.configuration.x.application_identity.app_name
+          assert_select '[data-layout="with-menu"] > div > h1', text: page_title, count: 1
+          assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
+          assert_select 'meta[property="og:title"][content=?]', "\#{page_title} | \#{app_name}", count: 1
+          assert_select '[data-layout="with-menu"].mx-auto.w-full.max-w-6xl.px-5', count: 1
     #{profile_trigger_assertion}
           assert_select 'header ul.menu.dropdown-content > li > a', count: #{account_navigation_count + 1}
     #{profile_identity_assertion}      assert_select 'header ul.menu.dropdown-content a[data-turbo-method="delete"][href=?]', destroy_user_session_path, count: 1
@@ -5840,7 +5808,10 @@ def configure_default_views
 
           get edit_user_registration_url
           assert_response :success
-          assert_select '[data-layout="account"].mx-auto.w-full.max-w-6xl.px-5', count: 1
+          page_title = I18n.t("devise_views.registrations.edit_title")
+          assert_select '[data-layout="with-menu"] > div > h1', text: page_title, count: 1
+          assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
+          assert_select '[data-layout="with-menu"].mx-auto.w-full.max-w-6xl.px-5', count: 1
           assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
           assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
           assert_select 'nav[aria-label=?] a[href=?]', account_menu, root_path, count: 0
@@ -5863,6 +5834,9 @@ def configure_default_views
         test "renders public and wallet login pages with the custom theme" do
           get root_url
           assert_response :success
+          app_name = Rails.configuration.x.application_identity.app_name
+          assert_select "title", text: app_name, count: 1
+          assert_select 'meta[property="og:title"][content=?]', app_name, count: 1
           assert_select 'html[data-theme="rapid-rails"]'
           assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label=?]', I18n.t("navigation.main")
           assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
@@ -5876,6 +5850,10 @@ def configure_default_views
 
           get new_session_url
           assert_response :success
+          page_title = I18n.t("wallet_siwe.title")
+          assert_select "h1", text: page_title, count: 1
+          assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
+          assert_select 'meta[property="og:title"][content=?]', "\#{page_title} | \#{app_name}", count: 1
           assert_select '[data-layout="authentication"].hero > .hero-content .card > .card-body'
           assert_select '[data-controller="siwe-sign-in"]'
           assert_select '[data-action="click->siwe-sign-in#signIn"].btn.btn-block.btn-rapid'
@@ -6474,12 +6452,10 @@ def configure_web_push
   JAVASCRIPT
 
   create_file "app/views/notifications/show.html.erb", <<~ERB, force: true
-    <% content_for :title, t("web_push.page.title") %>
+    <% content_for :page_title, t("web_push.page.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm font-semibold text-primary"><%= t("web_push.page.eyebrow") %></p>
-        <h1 class="mt-2 text-2xl font-bold leading-[1.5]"><%= t("web_push.page.title") %></h1>
-        <p class="mt-2 text-sm text-neutral"><%= t("web_push.page.description") %></p>
+        <p class="text-sm text-neutral"><%= t("web_push.page.description") %></p>
       </header>
 
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
@@ -6725,7 +6701,7 @@ def configure_web_push
         setup do
           @user = users(:one)
           sign_in @user
-          Rails.cache.clear
+        PushSubscriptionsController.cache_store.clear
           configure_vapid
         end
     RUBY
@@ -6779,7 +6755,9 @@ def configure_web_push
         get notification_url
 
         assert_response :success
-        assert_select "h1", text: I18n.t("web_push.page.title"), count: 1
+        page_title = I18n.t("web_push.page.title")
+        assert_select "h1", text: page_title, count: 1
+        assert_select "title", text: "\#{page_title} | \#{Rails.configuration.x.application_identity.app_name}", count: 1
         assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', I18n.t("navigation.account_menu"), notification_path, count: 1
         assert_select '[data-push-subscription-target="toggle"]', count: 1
         assert_select '[data-push-subscription-target="testButton"]', count: 1
@@ -6882,7 +6860,7 @@ def configure_web_push
       "web_push" => {
         "errors" => { "configuration" => "Web Pushのサーバー設定が完了していません。" },
         "test" => { "title" => "テスト通知", "body" => "Web Pushは正常に設定されています。" },
-        "page" => { "title" => "通知", "eyebrow" => "通知", "description" => "このブラウザで受け取る通知を管理します。", "card_title" => "Web Push通知", "card_description" => "アプリからの更新を、このブラウザへ通知します。", "receive" => "通知を受け取る", "toggle_label" => "このブラウザのWeb Push通知を切り替える", "send_test" => "テスト通知を送信" },
+        "page" => { "title" => "通知", "description" => "このブラウザで受け取る通知を管理します。", "card_title" => "Web Push通知", "card_description" => "アプリからの更新を、このブラウザへ通知します。", "receive" => "通知を受け取る", "toggle_label" => "このブラウザのWeb Push通知を切り替える", "send_test" => "テスト通知を送信" },
         "client" => { "unsupported" => "このブラウザはWeb Pushに対応していません。", "test_failed" => "テスト通知を送信できませんでした。", "test_sent" => "テスト通知を送信しました。", "blocked" => "通知がブロックされています。ブラウザの設定から許可してください。", "off" => "このブラウザでは通知が無効です。", "unsubscribe_failed" => "Web Push購読を解除できませんでした。", "reconciled" => "VAPID鍵の変更に合わせて通知を再登録しました。", "on" => "このブラウザでは通知が有効です。", "denied" => "通知が許可されていません。ブラウザの設定を確認してください。", "enabled" => "このブラウザの通知を有効にしました。", "disabled" => "このブラウザの通知を無効にしました。", "public_key_failed" => "VAPID公開鍵を取得できませんでした。", "save_failed" => "Web Push購読を保存できませんでした。", "delete_failed" => "Web Push購読を削除できませんでした。", "csrf_missing" => "CSRF tokenが見つかりません。", "request_failed" => "Web Pushリクエストに失敗しました。", "operation_failed" => "Web Pushの処理に失敗しました。" }
       }
     },
@@ -6890,7 +6868,7 @@ def configure_web_push
       "web_push" => {
         "errors" => { "configuration" => "The Web Push server configuration is incomplete." },
         "test" => { "title" => "Test notification", "body" => "Web Push is configured correctly." },
-        "page" => { "title" => "Notifications", "eyebrow" => "Notifications", "description" => "Manage notifications received by this browser.", "card_title" => "Web Push notifications", "card_description" => "Receive application updates in this browser.", "receive" => "Receive notifications", "toggle_label" => "Toggle Web Push notifications for this browser", "send_test" => "Send test notification" },
+        "page" => { "title" => "Notifications", "description" => "Manage notifications received by this browser.", "card_title" => "Web Push notifications", "card_description" => "Receive application updates in this browser.", "receive" => "Receive notifications", "toggle_label" => "Toggle Web Push notifications for this browser", "send_test" => "Send test notification" },
         "client" => { "unsupported" => "This browser does not support Web Push.", "test_failed" => "Could not send the test notification.", "test_sent" => "The test notification was sent.", "blocked" => "Notifications are blocked. Allow them in your browser settings.", "off" => "Notifications are disabled in this browser.", "unsubscribe_failed" => "Could not remove the Web Push subscription.", "reconciled" => "Notifications were re-registered for the new VAPID key.", "on" => "Notifications are enabled in this browser.", "denied" => "Notifications are not allowed. Check your browser settings.", "enabled" => "Notifications were enabled for this browser.", "disabled" => "Notifications were disabled for this browser.", "public_key_failed" => "Could not obtain the VAPID public key.", "save_failed" => "Could not save the Web Push subscription.", "delete_failed" => "Could not delete the Web Push subscription.", "csrf_missing" => "The CSRF token was not found.", "request_failed" => "The Web Push request failed.", "operation_failed" => "The Web Push operation failed." }
       }
     }
@@ -6979,17 +6957,17 @@ def install_job_operations
   RUBY
 
   create_file "app/views/layouts/mission_control/jobs/application.html.erb", <<~'ERB', force: true
-    <% content_for :title, application_translate("job_operations.title") %>
     <% content_for :javascript_importmap do %>
       <%= javascript_importmap_tags "application", importmap: MissionControl::Jobs.importmap %>
     <% end %>
-    <% content_for :admin_content do %>
-      <div class="min-w-0 space-y-6" data-mission-control-jobs-root>
-        <%= render "layouts/mission_control/jobs/application_selection" %>
-        <%= render "layouts/mission_control/jobs/flash" %>
-        <%= render "layouts/mission_control/jobs/navigation" %>
-        <%= yield %>
-      </div>
+    <% content_for :admin_content, flush: true do %>
+      <%= render layout: "layouts/mission_control/jobs/navigation" do %>
+        <div class="min-w-0 space-y-6" data-mission-control-jobs-root>
+          <%= render "layouts/mission_control/jobs/application_selection" %>
+          <%= render "layouts/mission_control/jobs/flash" %>
+          <%= yield %>
+        </div>
+      <% end %>
     <% end %>
     <%= render template: "layouts/admin" %>
   ERB
@@ -7038,11 +7016,14 @@ def install_job_operations
   ERB
 
   create_file "app/views/layouts/mission_control/jobs/_navigation.html.erb", <<~'ERB', force: true
-    <nav aria-label="Job operations sections" class="overflow-x-auto">
-      <div role="tablist" class="tabs tabs-lift min-w-max">
+    <nav aria-label="Job operations sections" class="@container overflow-x-auto">
+      <div role="tablist" aria-label="Job operations sections" class="tabs tabs-lift min-w-max">
         <% navigation_sections.each do |key, (label, url)| %>
-          <%= link_to label, url, role: "tab", class: class_names("tab", "tab-active": key == current_section),
-            aria: { current: ("page" if key == current_section) } %>
+          <%= link_to label, url, id: "job-operations-tab-#{key}", role: "tab",
+            class: class_names("tab z-1", "tab-active": key == current_section),
+            aria: { controls: "job-operations-panel-#{key}", current: ("page" if key == current_section), selected: key == current_section } %>
+          <div id="job-operations-panel-<%= key %>" role="tabpanel" aria-labelledby="job-operations-tab-<%= key %>"
+            class="sticky start-0 tab-content max-w-[100cqw] border-base-300 bg-base-100 p-3"><%= yield if key == current_section %></div>
         <% end %>
       </div>
     </nav>
@@ -7068,11 +7049,7 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/queues/index.html.erb", <<~'ERB', force: true
     <% navigation(title: "Queues", section: :queues) %>
-
-    <header>
-      <p class="text-sm font-semibold text-primary">Job operations</p>
-      <h1 class="mt-1 text-2xl font-bold leading-[1.5]">Queues</h1>
-    </header>
+    <% content_for :page_title, "Queues" %>
 
     <% if @queues.empty? %>
       <div class="alert" role="status"><span>There are no queues.</span></div>
@@ -7111,15 +7088,12 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/queues/show.html.erb", <<~'ERB', force: true
     <% navigation(title: "Queue #{@queue.name}", section: :queues) %>
+    <% content_for :page_title, @queue.name %>
 
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <p class="text-sm font-semibold text-primary">Queue</p>
-        <div class="mt-1 flex flex-wrap items-center gap-3">
-          <h1 class="break-all text-2xl font-bold leading-[1.5]"><%= @queue.name %></h1>
-          <% if @queue.paused? %><span class="badge badge-warning">Paused</span><% end %>
-        </div>
-        <p class="mt-2 text-sm text-base-content/70"><%= pluralize @queue.size, "pending job" %></p>
+        <% if @queue.paused? %><span class="badge badge-warning">Paused</span><% end %>
+        <p class="text-sm text-base-content/70"><%= pluralize @queue.size, "pending job" %></p>
       </div>
       <% if queue_pausing_supported? %>
         <% if @queue.active? %>
@@ -7155,14 +7129,9 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/jobs/index.html.erb", <<~'ERB', force: true
     <% navigation(title: "#{jobs_status.titleize} jobs", section: "#{jobs_status}_jobs".to_sym) %>
+    <% content_for :page_title, "#{jobs_status.titleize} jobs" %>
 
-    <header>
-      <p class="text-sm font-semibold text-primary">Job operations</p>
-      <div class="mt-1 flex flex-wrap items-center gap-3">
-        <h1 class="text-2xl font-bold leading-[1.5]"><%= jobs_status.titleize %> jobs</h1>
-        <span class="badge <%= job_operation_status_class(jobs_status) %>"><%= jobs_status %></span>
-      </div>
-    </header>
+    <span class="badge <%= job_operation_status_class(jobs_status) %>"><%= jobs_status %></span>
 
     <% unless @jobs_page.empty? && !active_filters? %>
       <section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">
@@ -7258,15 +7227,10 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/jobs/show.html.erb", <<~'ERB', force: true
     <% navigation(title: "Job #{@job.job_id}", section: navigation_section_for_status(@job.status)) %>
+    <% content_for :page_title, job_title(@job) %>
 
     <header class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <p class="text-sm font-semibold text-primary">Job</p>
-        <div class="mt-1 flex min-w-0 flex-wrap items-center gap-3">
-          <h1 class="break-all text-2xl font-bold leading-[1.5]"><%= job_title(@job) %></h1>
-          <span class="badge <%= job_operation_status_class(@job.status) %>"><%= @job.status %></span>
-        </div>
-      </div>
+      <span class="badge <%= job_operation_status_class(@job.status) %>"><%= @job.status %></span>
       <div class="flex flex-wrap justify-end gap-2">
         <% if @job.failed? %>
           <%= button_to "Discard", application_job_discard_path(@application, @job.job_id, params: jobs_filter_param), class: "btn btn-error", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
@@ -7323,8 +7287,7 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/recurring_tasks/index.html.erb", <<~'ERB', force: true
     <% navigation(title: "Recurring tasks", section: :recurring_tasks) %>
-
-    <header><p class="text-sm font-semibold text-primary">Job operations</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">Recurring tasks</h1></header>
+    <% content_for :page_title, "Recurring tasks" %>
 
     <% if @recurring_tasks.empty? %>
       <div class="alert" role="status"><span>There are no recurring tasks.</span></div>
@@ -7351,11 +7314,11 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/recurring_tasks/show.html.erb", <<~'ERB', force: true
     <% navigation(title: @recurring_task.id, section: :recurring_tasks) %>
+    <% content_for :page_title, @recurring_task.id %>
 
-    <header class="flex flex-wrap items-start justify-between gap-4">
-      <div><p class="text-sm font-semibold text-primary">Recurring task</p><h1 class="mt-1 break-all text-2xl font-bold leading-[1.5]"><%= @recurring_task.id %></h1></div>
+    <div class="flex justify-end">
       <% if @recurring_task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, @recurring_task.id), class: "btn btn-warning", method: :put %><% end %>
-    </header>
+    </div>
 
     <section class="card card-border overflow-x-auto border-base-300 bg-base-100">
       <div class="card-body p-0"><table class="table"><tbody>
@@ -7380,8 +7343,8 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/workers/index.html.erb", <<~'ERB', force: true
     <% navigation(title: "Workers", section: :workers) %>
+    <% content_for :page_title, "Workers" %>
 
-    <header><p class="text-sm font-semibold text-primary">Job operations</p><h1 class="mt-1 text-2xl font-bold leading-[1.5]">Workers</h1></header>
     <% if @workers_page.empty? %>
       <div class="alert" role="status"><span>There are no workers.</span></div>
     <% else %>
@@ -7394,8 +7357,9 @@ def install_job_operations
 
   create_file "app/views/mission_control/jobs/workers/show.html.erb", <<~'ERB', force: true
     <% navigation(title: "Worker #{@worker.id}", section: :workers) %>
+    <% content_for :page_title, "worker #{@worker.id}" %>
 
-    <header><p class="text-sm font-semibold text-primary">Worker</p><h1 class="mt-1 break-all text-2xl font-bold leading-[1.5]">worker <%= @worker.id %></h1><p class="mt-2 text-base-content/70"><%= @worker.name %> · <%= @worker.hostname %></p></header>
+    <p class="text-base-content/70"><%= @worker.name %> · <%= @worker.hostname %></p>
 
     <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100" open><summary class="collapse-title text-lg font-semibold">Configuration</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.configuration) %></code></pre></div></div></details>
 
@@ -7413,12 +7377,10 @@ def install_job_operations
   create_locale_pair(
     "job_operations",
     ja: {
-      "navigation" => { "job_operations" => "ジョブ運用" },
-      "job_operations" => { "title" => "ジョブ運用" }
+      "navigation" => { "job_operations" => "ジョブ運用" }
     },
     en: {
-      "navigation" => { "job_operations" => "Job operations" },
-      "job_operations" => { "title" => "Job operations" }
+      "navigation" => { "job_operations" => "Job operations" }
     }
   )
 
@@ -7549,13 +7511,20 @@ def install_job_operations
 
         assert_response :success
         assert_select "[data-mission-control-jobs-root]", count: 1
-        assert_select '[role="tablist"].tabs.tabs-lift', count: 1
+        assert_select '[data-layout="with-menu"] > div > h1', text: "Queues", count: 1
+        assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"].tabs.tabs-lift', count: 1
+        assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"] > .tab-active + .tab-content.bg-base-100.border-base-300.p-3', count: 1
+        assert_select '.tab-content[role="tabpanel"] > [data-mission-control-jobs-root]', count: 1
+        assert_select '[data-mission-control-jobs-root] nav[aria-label="Job operations sections"]', count: 0
+        app_name = Rails.configuration.x.application_identity.app_name
+        assert_select "title", text: "Queues | \#{app_name}", count: 1
+        assert_select 'meta[property="og:title"][content=?]', "Queues | \#{app_name}", count: 1
         assert_select 'a[role="tab"].tab.tab-active', minimum: 1
         assert_select 'section[aria-label="Application selection"]', count: 0
         assert_not_includes response.body, "bulma.min.css"
         assert_not_includes response.body, "is-boxed"
-        assert_select '[data-layout="admin"] nav[aria-label=?]', host_translate("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_jobs_path,
+        assert_select '[data-layout="with-menu"] nav[aria-label=?]', host_translate("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_jobs_path,
           text: host_translate("navigation.job_operations"), count: 1
       end
 
@@ -7718,8 +7687,7 @@ def install_maintenance_tasks
   RUBY
 
   create_file "app/views/layouts/maintenance_tasks/admin.html.erb", <<~ERB, force: true
-    <% content_for :title, (content_for(:page_title).presence || t("maintenance_tasks.title")) %>
-    <% content_for :admin_content do %>
+    <% content_for :admin_content, flush: true do %>
       <div class="min-w-0 space-y-8" data-controller="maintenance-tasks-refresh" data-maintenance-tasks-root>
         <%= yield %>
       </div>
@@ -7801,11 +7769,6 @@ def install_maintenance_tasks
   create_file "app/views/maintenance_tasks/tasks/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("maintenance_tasks.title") %>
 
-    <header>
-      <p class="text-sm font-semibold text-primary">Operations</p>
-      <h1 class="mt-1 text-2xl font-bold leading-[1.5]"><%= t("maintenance_tasks.title") %></h1>
-    </header>
-
     <%= tag.div(data: { refresh: (defined?(@refresh) && @refresh) || "" }, class: "space-y-8") do %>
       <% if @available_tasks.empty? %>
         <section class="card card-border border-base-300 bg-base-100">
@@ -7863,11 +7826,6 @@ def install_maintenance_tasks
 
   create_file "app/views/maintenance_tasks/tasks/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, @task %>
-
-    <header>
-      <p class="text-sm font-semibold text-primary">Maintenance task</p>
-      <h1 class="mt-1 break-all text-2xl font-bold leading-[1.5]"><%= @task %></h1>
-    </header>
 
     <section class="card card-border border-base-300 bg-base-100">
       <div class="card-body">
@@ -8264,14 +8222,18 @@ def install_maintenance_tasks
         assert_response :success
         assert_nil response.headers["Content-Security-Policy"]
         assert_select "[data-maintenance-tasks-root]", count: 1
-        assert_select "header h1", text: I18n.t("maintenance_tasks.title"), count: 1
+        page_title = I18n.t("maintenance_tasks.title")
+        app_name = Rails.configuration.x.application_identity.app_name
+        assert_select '[data-layout="with-menu"] > div > h1', text: page_title, count: 1
+        assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
+        assert_select '[data-layout="with-menu"] .tab-content', count: 0
         assert_select ".card.card-border", minimum: 1
         assert_select ".badge.badge-neutral", text: "New", count: 2
         assert_select 'link[href*="bulma"]', count: 0
-        assert_select '[data-layout="admin"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="admin"] a[href=?]', Rails.application.routes.url_helpers.admin_users_path,
+        assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
+        assert_select '[data-layout="with-menu"] a[href=?]', Rails.application.routes.url_helpers.admin_users_path,
           text: I18n.t("navigation.users"), minimum: 1
-        assert_select '[data-layout="admin"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_maintenance_tasks_path,
+        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_maintenance_tasks_path,
           text: I18n.t("navigation.maintenance_tasks"), count: 1
 
         get TASK_PATH
@@ -8462,7 +8424,7 @@ def configure_evidence_capture
           capture_guest_pages(viewport_name)
           authenticate
           prepare_authenticated_data
-          verify_admin_layout_geometry if viewport_name == "desktop"
+          verify_with_menu_layout_geometry if viewport_name == "desktop"
           verify_job_operations_geometry if viewport_name == "desktop" && JOB_OPERATIONS
           verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
           capture_authenticated_pages(viewport_name)
@@ -8652,15 +8614,20 @@ def configure_evidence_capture
             assert_equal 200, page.status_code
             assert_selector "[data-mission-control-jobs-root]", count: 1
             assert_admin_navigation_active(host_translate("navigation.job_operations"))
-            capture_current_page("admin-job-operations", host_translate("job_operations.title"), viewport)
+            capture_current_page("admin-job-operations", "Queues", viewport)
             if viewport == "mobile"
               find("header details.dropdown > summary", visible: :visible).click
               capture_current_page(
                 "admin-job-operations-navigation-open",
-                "#{host_translate('job_operations.title')}のモバイルメニュー",
+                "Queuesのモバイルメニュー",
                 viewport
               )
+              find("header details.dropdown > summary", visible: :visible).click
             end
+            find("#job-operations-tab-failed_jobs").click
+            assert_selector '[data-layout="with-menu"] > div > h1', text: "Failed jobs", count: 1
+            assert_selector "#job-operations-tab-failed_jobs.tab-active", count: 1
+            capture_current_page("admin-job-operations-failed", "Failed jobs", viewport)
           end
           if MAINTENANCE_TASKS
             visit host_routes.admin_maintenance_tasks_path
@@ -8979,17 +8946,17 @@ def configure_evidence_capture
         end
 
         def assert_admin_navigation_active(label)
-          assert_selector %([data-layout="admin"] nav[aria-label="#{host_translate("navigation.admin_menu")}"])
-          assert_selector %([data-layout="admin"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] li.menu-title), text: host_translate("navigation.admin"), count: 1
-          assert_no_selector %([data-layout="admin"] nav[aria-label="#{host_translate("navigation.account_menu")}"])
-          assert_selector '[data-layout="admin"] a.menu-active[aria-current="page"]', text: label, count: 1
+          assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"])
+          assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] li.menu-title), text: host_translate("navigation.admin"), count: 1
+          assert_no_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.account_menu")}"])
+          assert_selector '[data-layout="with-menu"] a.menu-active[aria-current="page"]', text: label, count: 1
           assert_selector 'header li.menu-title', text: host_translate("navigation.admin"), count: 1, visible: :all
           assert_no_selector %(header a[href="\#{account_path}"]), visible: :all
         end
 
         def assert_account_navigation_scope
-          assert_selector %([data-layout="account"] nav[aria-label="#{translate("navigation.account_menu")}"])
-          assert_no_selector %([data-layout="account"] nav[aria-label="#{translate("navigation.admin_menu")}"])
+          assert_selector %([data-layout="with-menu"] nav[aria-label="#{translate("navigation.account_menu")}"])
+          assert_no_selector %([data-layout="with-menu"] nav[aria-label="#{translate("navigation.admin_menu")}"])
           assert_no_selector 'header li.menu-title', text: translate("navigation.admin"), visible: :all
           assert_no_selector %(header a[href="\#{admin_users_path}"]), visible: :all
         end
@@ -9035,38 +9002,40 @@ def configure_evidence_capture
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
-        def verify_admin_layout_geometry
-          [320, 640, 960, 961].each do |width|
-            page.current_window.resize_to(width, 900)
-            visit admin_pages_path
-            geometry = page.driver.with_playwright_page do |playwright_page|
-              playwright_page.evaluate(<<~JAVASCRIPT)
-                () => {
-                  const layout = document.querySelector('[data-layout="admin"]')
-                  const sidebar = layout.querySelector(':scope > aside').getBoundingClientRect()
-                  const content = layout.querySelector(':scope > div').getBoundingClientRect()
-                  return {
-                    documentWidth: document.documentElement.scrollWidth,
-                    viewportWidth: window.innerWidth,
-                    sidebarTop: sidebar.top,
-                    sidebarBottom: sidebar.bottom,
-                    sidebarRight: sidebar.right,
-                    contentTop: content.top,
-                    contentLeft: content.left
+        def verify_with_menu_layout_geometry
+          { "account" => account_path, "admin" => admin_pages_path }.each do |area, path|
+            [320, 390, 640, 960, 961].each do |width|
+              page.current_window.resize_to(width, 900)
+              visit path
+              geometry = page.driver.with_playwright_page do |playwright_page|
+                playwright_page.evaluate(<<~JAVASCRIPT)
+                  () => {
+                    const layout = document.querySelector('[data-layout="with-menu"]')
+                    const sidebar = layout.querySelector(':scope > aside').getBoundingClientRect()
+                    const content = layout.querySelector(':scope > div').getBoundingClientRect()
+                    return {
+                      documentWidth: document.documentElement.scrollWidth,
+                      viewportWidth: window.innerWidth,
+                      sidebarTop: sidebar.top,
+                      sidebarBottom: sidebar.bottom,
+                      sidebarRight: sidebar.right,
+                      contentTop: content.top,
+                      contentLeft: content.left
+                    }
                   }
-                }
-              JAVASCRIPT
-            end
+                JAVASCRIPT
+              end
 
-            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
-              "admin layout horizontal overflow at #{width}px"
-            if width < 961
-              assert_operator geometry.fetch("contentTop"), :>=, geometry.fetch("sidebarBottom"),
-                "admin layout should use one column at #{width}px"
-            else
-              assert_in_delta geometry.fetch("sidebarTop"), geometry.fetch("contentTop"), 0.5
-              assert_operator geometry.fetch("contentLeft"), :>=, geometry.fetch("sidebarRight"),
-                "admin layout should use two columns at #{width}px"
+              assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+                "#{area} with-menu layout horizontal overflow at #{width}px"
+              if width < 961
+                assert_operator geometry.fetch("contentTop"), :>=, geometry.fetch("sidebarBottom"),
+                  "#{area} with-menu layout should use one column at #{width}px"
+              else
+                assert_in_delta geometry.fetch("sidebarTop"), geometry.fetch("contentTop"), 0.5
+                assert_operator geometry.fetch("contentLeft"), :>=, geometry.fetch("sidebarRight"),
+                  "#{area} with-menu layout should use two columns at #{width}px"
+              end
             end
           end
         ensure
@@ -9085,13 +9054,35 @@ def configure_evidence_capture
             geometry = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
+                  const layout = document.querySelector('[data-layout="with-menu"]')
+                  const heading = layout.querySelector(':scope > div > h1')
+                  const subnavigation = layout.querySelector(':scope > div > nav[aria-label="Job operations sections"]')
+                  const tablist = subnavigation.querySelector(':scope > [role="tablist"]')
+                  const activeTab = tablist.querySelector(':scope > .tab-active')
+                  const tabContent = activeTab.nextElementSibling
+                  const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
                   const root = document.querySelector("[data-mission-control-jobs-root]")
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
                     rootWidth: root.getBoundingClientRect().width,
                     rootScrollWidth: root.scrollWidth,
-                    rootClientWidth: root.clientWidth
+                    rootClientWidth: root.clientWidth,
+                    rootTop: root.getBoundingClientRect().top,
+                    headingBottom: heading.getBoundingClientRect().bottom,
+                    subnavigationTop: subnavigation.getBoundingClientRect().top,
+                    activeTabBottom: activeTab.getBoundingClientRect().bottom,
+                    activeTabWidth: activeTab.getBoundingClientRect().width,
+                    tabContentTop: tabContent.getBoundingClientRect().top,
+                    tabContentBottom: tabContent.getBoundingClientRect().bottom,
+                    tabContentWidth: tabContent.getBoundingClientRect().width,
+                    rootBottom: root.getBoundingClientRect().bottom,
+                    activeTabOwnsTabContent: activeTab.nextElementSibling === tabContent,
+                    tabContentInsideTablist: tabContent.parentElement === tablist,
+                    rootInsideTabContent: root.parentElement === tabContent,
+                    everyTabOwnsTabContent: tabs.every((tab) => tab.nextElementSibling?.classList.contains("tab-content")),
+                    subnavigationScrollWidth: subnavigation.scrollWidth,
+                    subnavigationClientWidth: subnavigation.clientWidth
                   }
                 }
               JAVASCRIPT
@@ -9102,6 +9093,54 @@ def configure_evidence_capture
             assert_operator geometry.fetch("rootWidth"), :>, 0,
               "Mission Control Jobs content should be visible at #{width}px"
             assert_operator geometry.fetch("rootScrollWidth"), :>=, geometry.fetch("rootClientWidth")
+            assert_operator geometry.fetch("subnavigationTop"), :>=, geometry.fetch("headingBottom"),
+              "Mission Control Jobs heading should precede subnavigation at #{width}px"
+            assert_in_delta geometry.fetch("activeTabBottom"), geometry.fetch("tabContentTop"), 1.5,
+              "Mission Control Jobs tabs should connect to tab content at #{width}px"
+            assert geometry.fetch("activeTabOwnsTabContent"),
+              "Mission Control Jobs active tab should immediately precede its content at #{width}px"
+            assert geometry.fetch("tabContentInsideTablist"),
+              "Mission Control Jobs tab content should be inside the tablist at #{width}px"
+            assert geometry.fetch("rootInsideTabContent"),
+              "Mission Control Jobs root should be wrapped by tab content at #{width}px"
+            assert geometry.fetch("everyTabOwnsTabContent"),
+              "Mission Control Jobs should pair every tab with tab content at #{width}px"
+            assert_operator geometry.fetch("rootTop"), :>=, geometry.fetch("tabContentTop"),
+              "Mission Control Jobs subnavigation should precede content at #{width}px"
+            assert_operator geometry.fetch("tabContentBottom"), :>=, geometry.fetch("rootBottom"),
+              "Mission Control Jobs tab content should contain its body at #{width}px"
+            assert_operator geometry.fetch("activeTabWidth"), :<, geometry.fetch("tabContentWidth"),
+              "Mission Control Jobs active tab should not stretch across the content at #{width}px"
+            assert_operator geometry.fetch("subnavigationScrollWidth"), :>=, geometry.fetch("subnavigationClientWidth"),
+              "Mission Control Jobs subnavigation should contain its tabs at #{width}px"
+
+            find("#job-operations-tab-failed_jobs").click
+            assert_selector '[data-layout="with-menu"] > div > h1', text: "Failed jobs", count: 1
+            failed_geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const activeTab = document.querySelector("#job-operations-tab-failed_jobs.tab-active")
+                  const tabContent = activeTab.nextElementSibling
+                  const root = tabContent.querySelector("[data-mission-control-jobs-root]")
+                  return {
+                    activeTabBottom: activeTab.getBoundingClientRect().bottom,
+                    tabContentTop: tabContent.getBoundingClientRect().top,
+                    tabContentBottom: tabContent.getBoundingClientRect().bottom,
+                    rootBottom: root.getBoundingClientRect().bottom,
+                    tabContentRadius: parseFloat(getComputedStyle(tabContent).borderStartStartRadius),
+                    activeTabOwnsTabContent: tabContent.classList.contains("tab-content")
+                  }
+                }
+              JAVASCRIPT
+            end
+            assert_in_delta failed_geometry.fetch("activeTabBottom"), failed_geometry.fetch("tabContentTop"), 1.5,
+              "Mission Control Jobs middle tab should connect to tab content at #{width}px"
+            assert failed_geometry.fetch("activeTabOwnsTabContent"),
+              "Mission Control Jobs middle tab should immediately precede its content at #{width}px"
+            assert_operator failed_geometry.fetch("tabContentRadius"), :>, 0,
+              "Mission Control Jobs middle tab content should keep its leading corner at #{width}px"
+            assert_operator failed_geometry.fetch("tabContentBottom"), :>=, failed_geometry.fetch("rootBottom"),
+              "Mission Control Jobs middle tab content should contain its body at #{width}px"
           end
         ensure
           desktop = VIEWPORTS.fetch("desktop")
@@ -9119,7 +9158,7 @@ def configure_evidence_capture
             geometry = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
-                  const shell = document.querySelector('[data-maintenance-tasks-shell="true"]')
+                  const shell = document.querySelector('[data-layout="with-menu"]')
                   const sidebar = shell.querySelector(":scope > aside").getBoundingClientRect()
                   const content = shell.querySelector(":scope > div").getBoundingClientRect()
                   const activeIcon = shell.querySelector('a.menu-active svg').getBoundingClientRect()

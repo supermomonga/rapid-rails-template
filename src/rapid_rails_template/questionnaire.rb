@@ -11,7 +11,7 @@ module RapidRailsTemplate
       Question.new(:job_operations, "管理者向けジョブ運用画面を使用しますか？", %w[enable disable], "enable", ->(a) { a["web_push"] == "use" || a["active_job"] == "solid_queue" }, false),
       Question.new(:maintenance_tasks, "管理者向け運用タスクを使用しますか？", %w[enable disable], "enable", ->(a) { a["web_push"] == "use" || a["active_job"] == "solid_queue" }, false),
       Question.new(:solid_cache, "Solid Cacheを使用しますか？", %w[use skip], "use", nil, false),
-      Question.new(:account_authentication, "アカウント管理方法を選択してください。", %w[devise wallet_siwe], "devise", nil, false),
+      Question.new(:additional_login_methods, "追加するログイン方法を選択してください。", Configuration::ADDITIONAL_LOGIN_METHODS, [], nil, true),
       Question.new(:profile_features, "プロフィール機能を選択してください。", Configuration::PROFILE_FEATURES, Configuration::PROFILE_FEATURES, nil, true),
       Question.new(:image_delivery, "画像配信方式を選択してください。", %w[rails imgproxy], "rails", nil, false),
       Question.new(:api, "API機能を有効にしますか？", %w[enable disable], "enable", nil, false),

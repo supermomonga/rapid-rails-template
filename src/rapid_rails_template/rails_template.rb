@@ -7,12 +7,10 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache account_authentication profile_features image_delivery api action_cable mail deployment default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods profile_features image_delivery api action_cable mail deployment default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
-WEB3_URL = "https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"
-WEB3_SHA256 = "f03340295d792adb763c777eaa96039aa831c2402bd7cbc970db44931fa736b8"
 
 gem "pagy"
 gem "active_link_to"
@@ -40,9 +38,9 @@ gem_group :test do
   gem "factory_bot_rails"
 end
 
-gem "devise" if VALUES.fetch("account_authentication") == "devise"
-gem "devise-i18n" if VALUES.fetch("account_authentication") == "devise"
-gem "siwe-rb", "~> 0.2.0" if VALUES.fetch("account_authentication") == "wallet_siwe"
+gem "devise", "~> 5.0.4"
+gem "devise-i18n"
+gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_methods").include?("siwe")
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
 gem "imgproxy-rails", "~> 0.3.0" if VALUES.fetch("image_delivery") == "imgproxy"
@@ -82,7 +80,7 @@ def remove_ruby_call_statement(path, call_name, first_argument)
   File.binwrite(path, source.byteslice(0, line_start) + source.byteslice(line_end..))
 end
 
-def configure_devise_registration_route
+def configure_devise_routes
   require "prism"
   path = "config/routes.rb"
   source = File.binread(path)
@@ -105,7 +103,9 @@ def configure_devise_registration_route
   actual = source.byteslice(call.location.start_offset, call.location.length)
   raise "#{path}のdevise_for(:users)が想定外の構造です: #{actual}" unless actual == "devise_for :users"
 
-  replacement = 'devise_for :users, controllers: { registrations: "users/registrations" }'
+  controllers = ['registrations: "users/registrations"']
+  controllers << 'siwe_sessions: "users/siwe_sessions"' if VALUES.fetch("additional_login_methods").include?("siwe")
+  replacement = "devise_for :users, controllers: { #{controllers.join(', ')} }"
   File.binwrite(
     path,
     source.byteslice(0, call.location.start_offset) + replacement + source.byteslice(call.location.end_offset..)
@@ -205,7 +205,7 @@ def configure_application_identity
         raise ArgumentError, "locale must be ja or en" unless AVAILABLE_LOCALES.include?(locale)
 
         encoded_app_name = URI.encode_uri_component(app_name).gsub("%20", " ")
-        I18n.t("wallet_siwe.statement", locale:, app_name: encoded_app_name)
+        I18n.t("siwe.statement", locale:, app_name: encoded_app_name)
       end
 
       private
@@ -274,7 +274,7 @@ def configure_application_identity
       "meta" => { "description" => "%{app_name}のWebアプリケーションです。" },
       "navigation" => {
         "main" => "メインナビゲーション", "account_menu" => "アカウントメニュー", "admin_menu" => "管理メニュー", "open_account_menu" => "アカウントメニューを開く",
-        "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "notifications" => "通知",
+        "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "login_methods" => "ログイン方法", "notifications" => "通知",
         "api_credentials" => "APIキーの管理", "users" => "ユーザー管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
         "admin" => "管理画面", "sign_in" => "ログイン", "sign_up" => "アカウント作成", "sign_out" => "ログアウト"
       },
@@ -282,22 +282,21 @@ def configure_application_identity
       "home" => {
         "badge" => "Railsアプリケーションテンプレート", "heading" => "迷わず始められる、モダンなRails開発環境。",
         "description" => "Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。",
-        "start_devise" => "無料で始める", "start_wallet" => "ウォレットで始める", "features_link" => "構成を見る", "starter" => "スターターキット", "features_title" => "最初から揃う開発基盤",
+        "start_devise" => "無料で始める", "features_link" => "構成を見る", "starter" => "スターターキット", "features_title" => "最初から揃う開発基盤",
         "features" => { "rails" => { "title" => "Railsネイティブ", "description" => "Generator APIを中心に、安全な初期構成を生成します。" }, "ui" => { "title" => "読みやすいUI", "description" => "daisyUIとsemantic colorで、読みやすい画面を用意します。" }, "production" => { "title" => "本番運用対応", "description" => "SQLiteとLitestreamを前提に、運用経路まで設計します。" } }
       },
       "accounts" => {
         "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "サイドメニューから利用設定を管理できます。", "action_with_profile" => "サイドメニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
-        "edit" => { "title" => "アカウント設定", "information" => "アカウント情報", "wallet_address" => "ウォレットアドレス", "danger_title" => "アカウントの削除", "danger_description" => "この操作は取り消せません。このアカウントのすべてのセッションも削除されます。", "delete" => "アカウントを削除", "confirm" => "本当に削除しますか？" },
         "destroy" => { "notice" => "アカウントを削除しました", "last_admin" => "最後の管理者はアカウントを削除できません" }
       },
-      "wallet_siwe" => { "title" => "ウォレットでログイン", "description" => "EVM互換ウォレットで署名し、アカウントを安全に確認します。", "connect" => "ウォレットを接続", "note" => "署名要求に秘密鍵や送金は必要ありません。", "statement" => "Login to %{app_name}", "errors" => { "wallet_missing" => "EVM互換ウォレットが見つかりません", "nonce" => "nonceを取得できません", "verification" => "署名を検証できません" } },
+      "siwe" => { "statement" => "Login to %{app_name}" },
       "common" => { "edit" => "編集", "delete" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
     },
     en: {
       "meta" => { "description" => "The web application for %{app_name}." },
       "navigation" => {
         "main" => "Main navigation", "account_menu" => "Account menu", "admin_menu" => "Administration menu", "open_account_menu" => "Open account menu",
-        "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "notifications" => "Notifications",
+        "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "login_methods" => "Login methods", "notifications" => "Notifications",
         "api_credentials" => "API credentials", "users" => "Users", "pages" => "Pages", "faqs" => "FAQs",
         "admin" => "Administration", "sign_in" => "Sign in", "sign_up" => "Create account", "sign_out" => "Sign out"
       },
@@ -305,15 +304,14 @@ def configure_application_identity
       "home" => {
         "badge" => "Rails application template", "heading" => "A modern Rails environment without the guesswork.",
         "description" => "Build on Rails 8.1 defaults with reproducible authentication, UI, testing, and deployment foundations.",
-        "start_devise" => "Get started", "start_wallet" => "Start with a wallet", "features_link" => "View features", "starter" => "Starter kit", "features_title" => "A complete development foundation",
+        "start_devise" => "Get started", "features_link" => "View features", "starter" => "Starter kit", "features_title" => "A complete development foundation",
         "features" => { "rails" => { "title" => "Rails native", "description" => "Generate a safe baseline centered on the Generator API." }, "ui" => { "title" => "Readable UI", "description" => "Start with readable screens built with daisyUI and semantic colors." }, "production" => { "title" => "Production ready", "description" => "Include an operational path designed for SQLite and Litestream." } }
       },
       "accounts" => {
         "show" => { "title" => "Dashboard", "description" => "Review the state of your application.", "description_with_profile" => "Review your profile and application state.", "next_step" => "Next step", "action" => "Manage your preferences from the side menu.", "action_with_profile" => "Manage your profile and preferences from the side menu.", "back_home" => "Back to home" },
-        "edit" => { "title" => "Account settings", "information" => "Account information", "wallet_address" => "Wallet address", "danger_title" => "Delete account", "danger_description" => "This action cannot be undone. All sessions for this account will also be deleted.", "delete" => "Delete account", "confirm" => "Are you sure you want to delete your account?" },
         "destroy" => { "notice" => "Your account was deleted.", "last_admin" => "The last administrator cannot delete their account." }
       },
-      "wallet_siwe" => { "title" => "Sign in with your wallet", "description" => "Sign with an EVM-compatible wallet to verify your account securely.", "connect" => "Connect wallet", "note" => "The signature request does not require your private key or a transfer.", "statement" => "Sign in to %{app_name}", "errors" => { "wallet_missing" => "No EVM-compatible wallet was found", "nonce" => "Could not obtain a nonce", "verification" => "Could not verify the signature" } },
+      "siwe" => { "statement" => "Sign in to %{app_name}" },
       "common" => { "edit" => "Edit", "delete" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
     }
   )
@@ -1188,301 +1186,1035 @@ end
 def install_devise
   generate "devise:install"
   generate "devise", "User"
-  generate "devise:views", "-v", "sessions", "registrations", "passwords", "mailer"
-  create_file "test/fixtures/users.yml", <<~YAML, force: true
+
+  user_migrations = Dir.glob("db/migrate/*_devise_create_users.rb")
+  raise "DeviseCreateUsers migrationが一意ではありません" unless user_migrations.one?
+
+  create_file user_migrations.first, <<~'RUBY', force: true
+    class DeviseCreateUsers < ActiveRecord::Migration[8.1]
+      def change
+        create_table :users do |t|
+          t.string :login_id, null: false
+          t.string :encrypted_password, null: false, default: ""
+          t.datetime :remember_created_at
+          t.timestamps null: false
+        end
+
+        add_index :users, :login_id, unique: true
+      end
+    end
+  RUBY
+
+  devise_modules = %w[database_authenticatable registerable rememberable]
+  devise_modules << "siweable" if VALUES.fetch("additional_login_methods").include?("siwe")
+  devise_declaration = devise_modules.map { |name| ":#{name}" }.join(", ")
+  create_file "app/models/user.rb", <<~RUBY, force: true
+    class User < ApplicationRecord
+      devise #{devise_declaration}, authentication_keys: [:login_id]
+
+      normalizes :login_id, with: ->(login_id) { login_id.to_s.strip.downcase }
+
+      validates :login_id,
+        presence: true,
+        format: { with: /\\A[a-z0-9][a-z0-9_]{2,31}\\z/ },
+        uniqueness: { case_sensitive: true }
+      validates_presence_of :password, if: -> { new_record? || password.present? || password_confirmation.present? }
+      validates_confirmation_of :password, if: -> { new_record? || password.present? || password_confirmation.present? }
+      validates_length_of :password, within: Devise.password_length, allow_blank: true
+    end
+  RUBY
+
+  initializer_marker = "Devise.setup do |config|\n"
+  devise_initializer = File.binread("config/initializers/devise.rb")
+  raise "Devise initializerのsetup blockが一意ではありません" unless devise_initializer.scan(initializer_marker).one?
+  inject_into_file "config/initializers/devise.rb", after: initializer_marker do
+    <<~RUBY
+      config.authentication_keys = [:login_id]
+      config.case_insensitive_keys = [:login_id]
+      config.strip_whitespace_keys = [:login_id]
+
+    RUBY
+  end
+
+  generate "devise:views", "-v", "sessions", "registrations"
+  configure_devise_routes
+  create_file "test/fixtures/users.yml", <<~'YAML', force: true
     one:
-      email: one@example.com
+      login_id: user_one
       encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
 
     two:
-      email: two@example.com
+      login_id: user_two
       encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
   YAML
+  create_file "test/models/user_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+
+    class UserTest < ActiveSupport::TestCase
+      test "normalizes and validates the login id" do
+        user = User.new(login_id: "  Sample_User  ", password: "password123", password_confirmation: "password123")
+
+        assert user.valid?
+        assert_equal "sample_user", user.login_id
+        assert_not User.new(login_id: "_invalid", password: "password123").valid?
+      end
+    end
+  RUBY
 end
 
-def install_wallet_siwe
-  generate "authentication", "--api"
-  remove_ruby_call_statement("Gemfile", :gem, "bcrypt")
-  remove_ruby_call_statement("config/routes.rb", :resources, "passwords")
-  remove_ruby_call_statement("config/routes.rb", :resource, "session")
-  remove_file "app/controllers/passwords_controller.rb"
-  remove_file "app/mailers/passwords_mailer.rb" if File.exist?("app/mailers/passwords_mailer.rb")
-  remove_dir "app/views/passwords_mailer" if Dir.exist?("app/views/passwords_mailer")
+def install_siwe
+  generate "migration", "CreateSiweIdentities"
+  generate "migration", "CreateSiweChallenges"
 
-  user_migration = Dir.glob("db/migrate/*_create_users.rb")
-  raise "CreateUsers migrationが一意ではありません" unless user_migration.one?
+  identity_migrations = Dir.glob("db/migrate/*_create_siwe_identities.rb")
+  challenge_migrations = Dir.glob("db/migrate/*_create_siwe_challenges.rb")
+  raise "CreateSiweIdentities migrationが一意ではありません" unless identity_migrations.one?
+  raise "CreateSiweChallenges migrationが一意ではありません" unless challenge_migrations.one?
 
-  create_file user_migration.first, <<~RUBY, force: true
-    class CreateUsers < ActiveRecord::Migration[8.1]
+  create_file identity_migrations.first, <<~'RUBY', force: true
+    class CreateSiweIdentities < ActiveRecord::Migration[8.1]
       def change
-        create_table :users do |t|
-          t.string :wallet_address, null: false
-          t.timestamps
+        create_table :siwe_identities do |t|
+          t.references :user, null: false, foreign_key: { on_delete: :cascade }
+          t.string :name, null: false
+          t.string :name_key, null: false
+          t.string :address, null: false
+          t.timestamps null: false
         end
-        add_index :users, :wallet_address, unique: true
+
+        add_index :siwe_identities, :address, unique: true
+        add_index :siwe_identities, %i[user_id name_key], unique: true
+      end
+    end
+  RUBY
+  create_file challenge_migrations.first, <<~'RUBY', force: true
+    class CreateSiweChallenges < ActiveRecord::Migration[8.1]
+      def change
+        create_table :siwe_challenges do |t|
+          t.references :user, null: true, foreign_key: { on_delete: :cascade }
+          t.string :purpose, null: false
+          t.string :token_digest, null: false
+          t.string :session_digest, null: false
+          t.string :address, null: false
+          t.integer :chain_id, null: false
+          t.text :message, null: false
+          t.string :nonce, null: false
+          t.datetime :expires_at, null: false
+          t.datetime :consumed_at
+          t.timestamps null: false
+        end
+
+        add_index :siwe_challenges, :token_digest, unique: true
+        add_index :siwe_challenges, :expires_at
+        add_index :siwe_challenges, :consumed_at
+        add_check_constraint :siwe_challenges, "purpose IN ('login', 'link')", name: "siwe_challenges_purpose"
+        add_check_constraint :siwe_challenges, "chain_id > 0", name: "siwe_challenges_positive_chain_id"
+        add_check_constraint :siwe_challenges,
+          "(purpose = 'login' AND user_id IS NULL) OR (purpose = 'link' AND user_id IS NOT NULL)",
+          name: "siwe_challenges_user_matches_purpose"
       end
     end
   RUBY
 
-  create_file "app/models/user.rb", <<~RUBY, force: true
-    class User < ApplicationRecord
-      has_many :sessions, dependent: :destroy
+  create_file "lib/devise/models/siweable.rb", <<~'RUBY', force: true
+    module Devise
+      module Models
+        module Siweable
+          extend ActiveSupport::Concern
 
-      normalizes :wallet_address, with: ->(address) { address.to_s.downcase }
-      validates :wallet_address, presence: true,
-        format: { with: /\\A0x[0-9a-f]{40}\\z/ },
-        uniqueness: { case_sensitive: false }
+          included do
+            has_many :siwe_identities, dependent: :destroy
+            has_many :siwe_challenges, dependent: :destroy
+          end
+        end
+      end
+    end
+  RUBY
+  create_file "lib/devise/siweable/routes.rb", <<~'RUBY', force: true
+    module Devise
+      module Siweable
+        module Routes
+          private
+            def devise_siwe_session(mapping, controllers)
+              post "#{mapping.path_names[:sign_in]}/siwe/challenge",
+                to: "#{controllers.fetch(:siwe_sessions)}#challenge",
+                as: :siwe_challenge
+              post "#{mapping.path_names[:sign_in]}/siwe",
+                to: "#{controllers.fetch(:siwe_sessions)}#create",
+                as: :siwe
+            end
+        end
+      end
+    end
+  RUBY
+  create_file "lib/devise/siweable.rb", <<~'RUBY', force: true
+    require "devise"
+    require_relative "models/siweable"
+    require_relative "siweable/routes"
+
+    Devise.add_module(
+      :siweable,
+      model: "devise/models/siweable",
+      controller: :siwe_sessions,
+      route: :siwe_session
+    )
+    ActionDispatch::Routing::Mapper.include(Devise::Siweable::Routes)
+  RUBY
+  create_file "config/initializers/devise_siweable.rb", <<~'RUBY', force: true
+    require Rails.root.join("lib/devise/siweable")
+
+    Rails.application.config.filter_parameters += %i[challenge_token signature current_password]
+  RUBY
+
+  create_file "app/models/siwe_identity.rb", <<~'RUBY', force: true
+    class SiweIdentity < ApplicationRecord
+      belongs_to :user
+
+      normalizes :name, with: ->(name) { name.to_s.strip }
+      normalizes :address, with: ->(address) { address.to_s.downcase }
+
+      before_validation :set_name_key
+
+      validates :name, presence: true, length: { maximum: 50 }
+      validates :name_key, presence: true, uniqueness: { scope: :user_id, case_sensitive: true }
+      validates :address,
+        presence: true,
+        format: { with: /\A0x[0-9a-f]{40}\z/ },
+        uniqueness: { case_sensitive: true }
+      validate :address_does_not_change, on: :update
+
+      private
+        def set_name_key
+          self.name_key = name.to_s.downcase
+        end
+
+        def address_does_not_change
+          errors.add(:address, :readonly) if will_save_change_to_address?
+        end
     end
   RUBY
 
-  create_file "app/controllers/concerns/authentication.rb", <<~RUBY, force: true
-    module Authentication
-      extend ActiveSupport::Concern
+  create_file "app/models/siwe_challenge.rb", <<~'RUBY', force: true
+    require "digest"
+    require "securerandom"
+    require "uri"
 
-      included do
-        before_action :require_authentication
-        helper_method :authenticated?
+    class SiweChallenge < ApplicationRecord
+      VerificationError = Class.new(StandardError)
+      TTL = 5.minutes
+      PURPOSES = %w[login link].freeze
+      EOA_VERIFICATION = Siwe::Config.new.freeze
+
+      belongs_to :user, optional: true
+
+      validates :purpose, inclusion: { in: PURPOSES }
+      validates :token_digest, :session_digest, :address, :message, :nonce, :expires_at, presence: true
+      validates :token_digest, uniqueness: true
+      validates :address, format: { with: /\A0x[0-9a-f]{40}\z/ }
+      validates :chain_id, numericality: { only_integer: true, greater_than: 0 }
+      validate :user_matches_purpose
+
+      def self.issue!(purpose:, address:, chain_id:, session_binding:, user: nil)
+        now = Time.current
+        where("expires_at <= ? OR consumed_at IS NOT NULL", now).delete_all
+        numeric_chain_id = Integer(chain_id, exception: false)
+        raise VerificationError, "invalid chain id" unless numeric_chain_id&.positive?
+
+        identity = Rails.configuration.x.application_identity
+        origin = URI.parse(identity.canonical_origin)
+        nonce = Siwe.generate_nonce
+        expires_at = now + TTL
+        siwe_message = Siwe::Message.new(
+          domain: domain_for(origin),
+          address:,
+          uri: identity.canonical_url(path_for(purpose)),
+          chain_id: numeric_chain_id,
+          nonce:,
+          issued_at: now.utc.iso8601,
+          expiration_time: expires_at.utc.iso8601,
+          statement: identity.siwe_statement
+        )
+        raw_token = SecureRandom.urlsafe_base64(32)
+        challenge = create!(
+          user:,
+          purpose:,
+          token_digest: digest(raw_token),
+          session_digest: digest(session_binding),
+          address: siwe_message.address.downcase,
+          chain_id: numeric_chain_id,
+          message: siwe_message.prepare_message,
+          nonce:,
+          expires_at:,
+          created_at: now,
+          updated_at: now
+        )
+        [challenge, raw_token]
+      rescue Siwe::Error, ArgumentError => error
+        raise VerificationError, error.message
       end
 
-      class_methods do
-        def allow_unauthenticated_access(**options)
-          skip_before_action :require_authentication, **options
+      def self.for_token!(raw_token)
+        find_by!(token_digest: digest(raw_token.to_s))
+      end
+
+      def self.digest(value)
+        Digest::SHA256.hexdigest(value.to_s)
+      end
+
+      def self.domain_for(origin)
+        default_port = origin.scheme == "https" ? 443 : 80
+        origin.port == default_port ? origin.host : "#{origin.host}:#{origin.port}"
+      end
+
+      def self.path_for(purpose)
+        purpose == "login" ? "/users/sign_in/siwe" : "/account/siwe_identities"
+      end
+
+      def verify!(signature:, purpose:, session_binding:, user: nil)
+        raise VerificationError, "challenge purpose mismatch" unless self.purpose == purpose
+        raise VerificationError, "challenge user mismatch" unless user_id == user&.id
+        raise VerificationError, "challenge expired" unless consumed_at.nil? && expires_at.future?
+        actual_session_digest = self.class.digest(session_binding)
+        unless ActiveSupport::SecurityUtils.secure_compare(session_digest, actual_session_digest)
+          raise VerificationError, "challenge session mismatch"
         end
+
+        identity = Rails.configuration.x.application_identity
+        origin = URI.parse(identity.canonical_origin)
+        parsed = Siwe::Message.parse(message)
+        parsed.verify!(
+          signature:,
+          domain: self.class.domain_for(origin),
+          nonce:,
+          uri: identity.canonical_url(self.class.path_for(purpose)),
+          chain_id:,
+          config: EOA_VERIFICATION,
+          strict: true
+        )
+        verify_server_fields!(parsed, identity)
+
+        parsed
+      rescue Siwe::Error, ArgumentError => error
+        raise VerificationError, error.message
+      end
+
+      def consume!
+        # This conditional update is the compare-and-set that makes challenge consumption atomic.
+        # rubocop:disable Rails/SkipsModelValidations
+        consumed = self.class.where(id:, consumed_at: nil).where("expires_at > ?", Time.current)
+          .update_all(consumed_at: Time.current)
+        # rubocop:enable Rails/SkipsModelValidations
+        raise VerificationError, "challenge already consumed" unless consumed == 1
+
+        reload
       end
 
       private
-        def authenticated?
-          resume_session
+        def verify_server_fields!(parsed, identity)
+          expected = {
+            scheme: nil,
+            statement: identity.siwe_statement,
+            version: "1",
+            issued_at: created_at.utc.iso8601,
+            expiration_time: expires_at.utc.iso8601,
+            not_before: nil,
+            request_id: nil,
+            resources: nil
+          }
+          expected.each do |field, value|
+            raise VerificationError, "challenge #{field} mismatch" unless parsed.public_send(field) == value
+          end
+          raise VerificationError, "challenge address mismatch" unless parsed.address.downcase == address
         end
 
-        def require_authentication
-          resume_session || request_authentication
+        def user_matches_purpose
+          valid = (purpose == "login" && user_id.nil?) || (purpose == "link" && user_id.present?)
+          errors.add(:user, :invalid) unless valid
+        end
+    end
+  RUBY
+
+  create_file "app/controllers/users/siwe_sessions_controller.rb", <<~'RUBY', force: true
+    module Users
+      class SiweSessionsController < DeviseController
+        after_action :prevent_challenge_caching
+        rate_limit to: 10, within: 1.minute, only: %i[challenge create],
+          by: -> { "#{request.remote_ip}:#{session_binding}" }, with: -> { head :too_many_requests }
+
+        def challenge
+          record, raw_token = SiweChallenge.issue!(
+            purpose: "login",
+            address: params.require(:address),
+            chain_id: params.require(:chain_id),
+            session_binding:
+          )
+          render json: { challenge_token: raw_token, message: record.message }
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordInvalid, SiweChallenge::VerificationError
+          head :unprocessable_content
         end
 
-        def resume_session
-          Current.session ||= find_session_by_cookie
+        def create
+          challenge = SiweChallenge.for_token!(params.require(:challenge_token))
+          message = challenge.verify!(
+            signature: params.require(:signature),
+            purpose: "login",
+            session_binding:
+          )
+          challenge.consume!
+          identity = SiweIdentity.includes(:user).find_by(address: message.address.downcase)
+          return head :unauthorized unless identity&.user&.active_for_authentication?
+
+          request.env["devise.skip_timeout"] = true
+          sign_in(:user, identity.user, event: :authentication)
+          render json: { redirect_url: after_sign_in_path_for(identity.user) }
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, SiweChallenge::VerificationError
+          head :unauthorized
         end
 
-        def find_session_by_cookie
-          Session.find_by(id: cookies.signed[:session_id]) if cookies.signed[:session_id]
+        private
+          def session_binding
+            session[:siwe_binding] ||= SecureRandom.hex(32)
+          end
+
+          def prevent_challenge_caching
+            response.set_header("Cache-Control", "no-store")
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/account/siwe_identities_controller.rb", <<~'RUBY', force: true
+    module Account
+      class SiweIdentitiesController < ApplicationController
+        layout "account"
+        before_action :authenticate_user!
+        after_action :prevent_challenge_caching, only: %i[challenge create]
+        rate_limit to: 10, within: 1.minute, only: %i[challenge create],
+          by: -> { "#{request.remote_ip}:#{session_binding}" }, with: -> { head :too_many_requests }
+
+        def index
+          @siwe_identities = current_user.siwe_identities.order(:created_at)
         end
 
-        def request_authentication
-          session[:return_to_after_authenticating] = request.url
-          redirect_to new_session_path
+        def challenge
+          return head :unauthorized unless current_user.valid_password?(params.require(:current_password))
+
+          record, raw_token = SiweChallenge.issue!(
+            purpose: "link",
+            user: current_user,
+            address: params.require(:address),
+            chain_id: params.require(:chain_id),
+            session_binding:
+          )
+          render json: { challenge_token: raw_token, message: record.message }
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordInvalid, SiweChallenge::VerificationError
+          head :unprocessable_content
         end
 
-        def after_authentication_url
-          session.delete(:return_to_after_authenticating) || root_url
+        def create
+          challenge = SiweChallenge.for_token!(params.require(:challenge_token))
+          identity = nil
+          SiweChallenge.transaction do
+            message = challenge.verify!(
+              signature: params.require(:signature),
+              purpose: "link",
+              user: current_user,
+              session_binding:
+            )
+            challenge.consume!
+            identity = current_user.siwe_identities.create!(name: params.require(:name), address: message.address)
+          end
+          render json: { redirect_url: account_siwe_identities_path, id: identity.id }, status: :created
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+          ActiveRecord::RecordNotUnique, SiweChallenge::VerificationError
+          head :unprocessable_content
         end
 
-        def start_new_session_for(user)
-          user.sessions.create!(user_agent: request.user_agent, ip_address: request.remote_ip).tap do |record|
-            Current.session = record
-            cookies.signed.permanent[:session_id] = { value: record.id, httponly: true, same_site: :lax }
+        def update
+          identity = current_user.siwe_identities.find(params.expect(:id))
+          if identity.update(name: params.require(:name))
+            redirect_to account_siwe_identities_path, notice: t("siwe.identities.updated")
+          else
+            redirect_to account_siwe_identities_path, alert: identity.errors.full_messages.to_sentence,
+              status: :see_other
           end
         end
 
-        def terminate_session
-          Current.session&.destroy!
-          cookies.delete(:session_id)
+        def destroy
+          return head :unauthorized unless current_user.valid_password?(params.require(:current_password))
+
+          current_user.siwe_identities.find(params.expect(:id)).destroy!
+          redirect_to account_siwe_identities_path, notice: t("siwe.identities.deleted"), status: :see_other
         end
-    end
-  RUBY
 
-  create_file "app/controllers/sessions_controller.rb", <<~RUBY, force: true
-    class SessionsController < ApplicationController
-      allow_unauthenticated_access only: %i[new nonce create]
-      rate_limit to: 10, within: 3.minutes, only: %i[nonce create], with: -> { head :too_many_requests }
+        private
+          def session_binding
+            session[:siwe_binding] ||= SecureRandom.hex(32)
+          end
 
-      def new; end
-
-      def nonce
-        value = Siwe.generate_nonce
-        session[:siwe_nonce] = value
-        session[:siwe_nonce_issued_at] = Time.current.to_i
-        render json: { nonce: value }
-      end
-
-      def create
-        nonce = session.delete(:siwe_nonce)
-        issued_at = session.delete(:siwe_nonce_issued_at)
-        return head :unauthorized if nonce.blank? || issued_at.blank?
-        return head :unauthorized if Time.current.to_i - issued_at.to_i > 5.minutes.to_i
-
-        message = Siwe::Message.parse(params.require(:message))
-        message.verify!(signature: params.require(:signature), domain: request.host_with_port, nonce: nonce)
-        expected_statement = Rails.configuration.x.application_identity.siwe_statement
-        valid_message = message.uri == request.base_url && message.chain_id.to_i.positive? &&
-          message.statement == expected_statement
-        return head :unauthorized unless valid_message
-        user = User.find_or_create_by!(wallet_address: message.address.downcase)
-        start_new_session_for(user)
-        render json: { redirect_url: after_authentication_url }
-      rescue Siwe::Error, ActionController::ParameterMissing, ActiveRecord::RecordInvalid
-        head :unauthorized
-      end
-
-      def destroy
-        terminate_session
-        redirect_to new_session_path, status: :see_other
+          def prevent_challenge_caching
+            response.set_header("Cache-Control", "no-store")
+          end
       end
     end
   RUBY
-  create_file "config/initializers/siwe.rb", "require \"siwe\"\n"
 
-  create_file "test/support/siwe_test_request.rb", <<~RUBY, force: true
-    module SiweTestRequest
-      private
-        def siwe_test_headers(key)
-          address_groups = key.address.to_s.delete_prefix("0x").scan(/.{4}/).first(4)
-          { "REMOTE_ADDR" => "2001:db8::\#{address_groups.join(":")}" }
-        end
-    end
-
-    class ActiveSupport::TestCase
-      include SiweTestRequest
-    end
-  RUBY
-  append_to_file "test/test_helper.rb", <<~RUBY
-
-    require_relative "support/siwe_test_request"
-  RUBY
-
-  create_file "app/javascript/controllers/siwe_sign_in_controller.js", <<~JAVASCRIPT
+  create_file "app/javascript/controllers/siwe_sign_in_controller.js", <<~'JAVASCRIPT', force: true
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
-      static targets = ["error"]
+      static targets = ["error", "name", "currentPassword"]
       static values = {
-        statement: String,
+        mode: String,
+        challengeUrl: String,
+        verifyUrl: String,
         walletMissing: String,
-        nonceError: String,
+        challengeError: String,
         verificationError: String
       }
 
-      async signIn() {
-        this.errorTarget.classList.add("hidden")
-        this.errorTarget.textContent = ""
+      async authenticate() {
+        this.hideError()
 
         try {
           if (!window.ethereum) throw new Error(this.walletMissingValue)
-          const web3 = new window.Web3(window.ethereum)
-          await window.ethereum.request({ method: "eth_requestAccounts" })
-          const [address] = await web3.eth.getAccounts()
-          const chainId = Number(await web3.eth.getChainId())
-          const nonceResponse = await fetch("/session/nonce", { headers: { Accept: "application/json" } })
-          if (!nonceResponse.ok) throw new Error(this.nonceErrorValue)
-          const { nonce } = await nonceResponse.json()
-          const domain = window.location.host
-          const uri = window.location.origin
-          const issuedAt = new Date().toISOString()
-          const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${this.statementValue}\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`
-          const signature = await web3.eth.personal.sign(message, address, "")
-          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
-          const response = await fetch("/session", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, Accept: "application/json" },
-            body: JSON.stringify({ message, signature })
+          const [address] = await window.ethereum.request({ method: "eth_requestAccounts" })
+          const chainIdHex = await window.ethereum.request({ method: "eth_chainId" })
+          const challengePayload = { address, chain_id: Number.parseInt(chainIdHex, 16) }
+          if (this.modeValue === "link") challengePayload.current_password = this.currentPasswordTarget.value
+
+          const challengeResponse = await this.post(this.challengeUrlValue, challengePayload)
+          if (!challengeResponse.ok) throw new Error(this.challengeErrorValue)
+          const challenge = await challengeResponse.json()
+          const signature = await window.ethereum.request({
+            method: "personal_sign",
+            params: [challenge.message, address]
           })
-          if (!response.ok) throw new Error(this.verificationErrorValue)
-          window.location.assign((await response.json()).redirect_url)
-        } catch (exception) {
-          this.errorTarget.textContent = exception.message
-          this.errorTarget.classList.remove("hidden")
+          const verifyPayload = { challenge_token: challenge.challenge_token, signature }
+          if (this.modeValue === "link") verifyPayload.name = this.nameTarget.value
+
+          const verificationResponse = await this.post(this.verifyUrlValue, verifyPayload)
+          if (!verificationResponse.ok) throw new Error(this.verificationErrorValue)
+          window.location.assign((await verificationResponse.json()).redirect_url)
+        } catch (error) {
+          this.showError(error.message)
         }
+      }
+
+      post(url, body) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+        return fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, Accept: "application/json" },
+          body: JSON.stringify(body)
+        })
+      }
+
+      hideError() {
+        this.errorTarget.classList.add("hidden")
+        this.errorTarget.textContent = ""
+      }
+
+      showError(message) {
+        this.errorTarget.textContent = message
+        this.errorTarget.classList.remove("hidden")
       }
     }
   JAVASCRIPT
-  route "resource :session, only: %i[new create destroy]"
-  route "get 'session/nonce', to: 'sessions#nonce'"
-  get WEB3_URL, "public/vendor/web3-4.16.0.min.js"
-  actual_web3_sha256 = Digest::SHA256.file("public/vendor/web3-4.16.0.min.js").hexdigest
-  raise "Web3.jsのSHA-256が一致しません" unless actual_web3_sha256 == WEB3_SHA256
-  remove_file "test/controllers/passwords_controller_test.rb" if File.exist?("test/controllers/passwords_controller_test.rb")
-  create_file "test/models/user_test.rb", <<~RUBY, force: true
-    require 'test_helper'
 
-    class UserTest < ActiveSupport::TestCase
-      test 'normalizes wallet addresses across chains' do
-        user = User.new(wallet_address: '0xABCDEF0123456789ABCDEF0123456789ABCDEF01')
+  create_file "app/views/account/siwe_identities/index.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("siwe.identities.title") %>
 
-        assert user.valid?
-        assert_equal '0xabcdef0123456789abcdef0123456789abcdef01', user.wallet_address
+    <div class="space-y-6">
+      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+        <div class="card-body">
+          <p class="text-base-content/70"><%= t("siwe.identities.description") %></p>
+
+          <% if @siwe_identities.any? %>
+            <ul class="list">
+              <% @siwe_identities.each do |identity| %>
+                <li class="list-row border-base-300 border">
+                  <div class="list-col-grow space-y-3">
+                    <p class="font-semibold"><%= identity.name %></p>
+                    <p class="break-all font-mono text-sm text-base-content/70"><%= identity.address %></p>
+                    <%= form_with url: account_siwe_identity_path(identity), method: :patch, class: "flex flex-col gap-3 sm:flex-row" do |form| %>
+                      <%= form.text_field :name, value: identity.name, required: true, maxlength: 50, class: "input input-rapid w-full", aria: { label: t("siwe.identities.name") } %>
+                      <%= form.submit t("common.update"), class: "btn btn-rapid" %>
+                    <% end %>
+                    <%= form_with url: account_siwe_identity_path(identity), method: :delete, class: "flex flex-col gap-3 sm:flex-row" do |form| %>
+                      <%= form.password_field :current_password, required: true, autocomplete: "current-password", class: "input input-rapid w-full", placeholder: t("siwe.identities.current_password") %>
+                      <%= form.submit t("siwe.identities.delete"), class: "btn btn-error btn-rapid", data: { turbo_confirm: t("siwe.identities.delete_confirm") } %>
+                    <% end %>
+                  </div>
+                </li>
+              <% end %>
+            </ul>
+          <% else %>
+            <div class="alert" role="status"><span><%= t("siwe.identities.empty") %></span></div>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="card card-border border-base-300 bg-base-100 shadow-none"
+               data-controller="siwe-sign-in"
+               data-siwe-sign-in-mode-value="link"
+               data-siwe-sign-in-challenge-url-value="<%= challenge_account_siwe_identities_path %>"
+               data-siwe-sign-in-verify-url-value="<%= account_siwe_identities_path %>"
+               data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
+               data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
+               data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+        <div class="card-body">
+          <h2 class="card-title leading-[1.5]"><%= t("siwe.identities.add") %></h2>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend"><%= t("siwe.identities.name") %></legend>
+            <input type="text" required maxlength="50" class="input input-rapid w-full" data-siwe-sign-in-target="name">
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend"><%= t("siwe.identities.current_password") %></legend>
+            <input type="password" required autocomplete="current-password" class="input input-rapid w-full" data-siwe-sign-in-target="currentPassword">
+          </fieldset>
+          <div class="alert alert-error hidden" role="alert" data-siwe-sign-in-target="error"></div>
+          <div class="card-actions justify-end">
+            <button type="button" class="btn btn-primary btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.connect") %></button>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_locale_pair(
+    "siwe",
+    ja: {
+      "siwe" => {
+        "sign_in" => { "title" => "Ethereumでログイン", "description" => "登録済みのEOAウォレットで署名してログインします。", "connect" => "ウォレットでログイン" },
+        "identities" => { "title" => "ログイン方法", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "name" => "ウォレット名", "current_password" => "現在のパスワード", "connect" => "ウォレットを接続", "delete" => "解除", "delete_confirm" => "このウォレットを解除しますか？", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
+        "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。" }
+      }
+    },
+    en: {
+      "siwe" => {
+        "sign_in" => { "title" => "Sign in with Ethereum", "description" => "Sign in with an EOA wallet already linked to your account.", "connect" => "Sign in with wallet" },
+        "identities" => { "title" => "Login methods", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add a wallet", "name" => "Wallet name", "current_password" => "Current password", "connect" => "Connect wallet", "delete" => "Unlink", "delete_confirm" => "Unlink this wallet?", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
+        "errors" => { "wallet_missing" => "No EOA wallet was found.", "challenge" => "Could not create an authentication request.", "verification" => "Could not verify the signature." }
+      }
+    }
+  )
+
+  route <<~'RUBY'
+    namespace :account do
+      resources :siwe_identities, only: %i[index create update destroy] do
+        post :challenge, on: :collection
       end
     end
   RUBY
-  account_navigation_count = 2 + (VALUES.fetch("profile_features").any? ? 1 : 0) +
-    (VALUES.fetch("api") == "enable" ? 1 : 0) + (VALUES.fetch("web_push") == "use" ? 1 : 0)
-  create_file "test/fixtures/users.yml", <<~YAML, force: true
-    one:
-      wallet_address: 0x1111111111111111111111111111111111111111
 
-    two:
-      wallet_address: 0x2222222222222222222222222222222222222222
-  YAML
-  create_file "test/controllers/sessions_controller_test.rb", <<~RUBY, force: true
-    require 'test_helper'
-    require 'eth'
+  create_file "test/models/siwe_identity_test.rb", <<~'RUBY', force: true
+    require "test_helper"
 
-    class SessionsControllerTest < ActionDispatch::IntegrationTest
-      test 'creates one user per wallet address after a valid SIWE signature' do
+    class SiweIdentityTest < ActiveSupport::TestCase
+      test "normalizes names and addresses and enforces scoped names" do
+        first = users(:one).siwe_identities.create!(
+          name: "  Main Wallet  ",
+          address: "0xABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        )
+
+        assert_equal "Main Wallet", first.name
+        assert_equal "main wallet", first.name_key
+        assert_equal "0xabcdef0123456789abcdef0123456789abcdef01", first.address
+        duplicate_name = users(:one).siwe_identities.new(
+          name: "main wallet",
+          address: "0x1111111111111111111111111111111111111111"
+        )
+        assert_not duplicate_name.valid?
+        same_name_for_another_user = users(:two).siwe_identities.new(
+          name: "main wallet",
+          address: "0x2222222222222222222222222222222222222222"
+        )
+        assert_predicate same_name_for_another_user, :valid?
+      end
+
+      test "enforces globally unique addresses after normalization" do
+        users(:one).siwe_identities.create!(
+          name: "Main",
+          address: "0xABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        )
+        duplicate = users(:two).siwe_identities.new(
+          name: "Other",
+          address: "0xabcdef0123456789abcdef0123456789abcdef01"
+        )
+
+        assert_not duplicate.valid?
+        assert_predicate duplicate.errors[:address], :any?
+      end
+
+      test "requires a valid wallet name and address" do
+        identity = users(:one).siwe_identities.new(name: " ", address: "not-an-address")
+
+        assert_not identity.valid?
+        assert identity.errors.added?(:name, :blank)
+        assert identity.errors.added?(:address, :invalid, value: "not-an-address")
+        identity.name = "a" * 51
+        assert_not identity.valid?
+        assert identity.errors.added?(:name, :too_long, count: 50)
+      end
+
+      test "does not allow an address to change" do
+        identity = users(:one).siwe_identities.create!(
+          name: "Main",
+          address: "0xabcdef0123456789abcdef0123456789abcdef01"
+        )
+
+        assert_not identity.update(address: "0x1111111111111111111111111111111111111111")
+      end
+    end
+  RUBY
+
+  create_file "test/models/siwe_challenge_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+    require "eth"
+
+    class SiweChallengeTest < ActiveSupport::TestCase
+      self.use_transactional_tests = false
+
+      setup { SiweChallenge.delete_all }
+      teardown { SiweChallenge.delete_all }
+
+      test "verifies and consumes a challenge exactly once" do
         key = Eth::Key.new
-        get session_nonce_url, headers: siwe_test_headers(key)
-        nonce = response.parsed_body.fetch('nonce')
-        message = Siwe::Message.new(
-          domain: 'www.example.com',
+        challenge, = SiweChallenge.issue!(
+          purpose: "login",
           address: key.address.to_s,
-          uri: 'http://www.example.com',
           chain_id: 1,
-          nonce: nonce,
-          issued_at: Time.current.iso8601,
-          statement: Rails.configuration.x.application_identity.siwe_statement
-        ).prepare_message
+          session_binding: "browser"
+        )
 
-        assert_difference('User.count', 1) do
-          post session_url, params: { message: message, signature: key.personal_sign(message) },
-            headers: siwe_test_headers(key), as: :json
+        message = challenge.verify!(
+          signature: key.personal_sign(challenge.message),
+          purpose: "login",
+          session_binding: "browser"
+        )
+        assert_equal key.address.to_s.downcase, message.address.downcase
+        challenge.consume!
+        assert_raises(SiweChallenge::VerificationError) { challenge.consume! }
+      end
+
+      test "stores only a token digest and keeps parallel tab challenges independent" do
+        key = Eth::Key.new
+        first, first_token = issue(key, session_binding: "browser")
+        second, second_token = issue(key, session_binding: "browser")
+
+        assert_not_equal first_token, second_token
+        assert_not_equal first_token, first.token_digest
+        assert_equal first, SiweChallenge.for_token!(first_token)
+        assert_equal second, SiweChallenge.for_token!(second_token)
+        [first, second].each do |challenge|
+          challenge.verify!(signature: key.personal_sign(challenge.message), purpose: "login", session_binding: "browser")
+          challenge.consume!
+        end
+      end
+
+      test "allows only one concurrent consumer" do
+        challenge, = issue(Eth::Key.new, session_binding: "browser")
+        ready = Queue.new
+        start = Queue.new
+        results = Queue.new
+        threads = 2.times.map do
+          Thread.new do
+            ActiveRecord::Base.connection_pool.with_connection do
+              contender = SiweChallenge.find(challenge.id)
+              ready << true
+              start.pop
+              contender.consume!
+              results << :consumed
+            rescue SiweChallenge::VerificationError
+              results << :rejected
+            end
+          end
+        end
+        2.times { ready.pop }
+        2.times { start << true }
+        threads.each(&:join)
+
+        assert_equal %i[consumed rejected], 2.times.map { results.pop }.sort
+      end
+
+      test "rejects expired, wrong purpose, user, browser, and signature" do
+        key = Eth::Key.new
+        challenge, = issue(key, session_binding: "browser")
+        signature = key.personal_sign(challenge.message)
+
+        assert_verification_error { challenge.verify!(signature:, purpose: "link", session_binding: "browser") }
+        assert_verification_error do
+          challenge.verify!(signature:, purpose: "login", user: users(:one), session_binding: "browser")
+        end
+        assert_verification_error { challenge.verify!(signature:, purpose: "login", session_binding: "other") }
+        assert_verification_error do
+          challenge.verify!(signature: Eth::Key.new.personal_sign(challenge.message), purpose: "login", session_binding: "browser")
+        end
+        travel_to(challenge.expires_at) do
+          assert_verification_error { challenge.verify!(signature:, purpose: "login", session_binding: "browser") }
+        end
+      end
+
+      test "rejects changes to every server-authored message field" do
+        mutations = {
+          scheme: "https",
+          domain: "evil.example",
+          statement: "Different statement",
+          uri: "https://evil.example/users/sign_in/siwe",
+          chain_id: 11_155_111,
+          issued_at: 1.minute.ago.utc.iso8601,
+          expiration_time: 1.day.from_now.utc.iso8601,
+          not_before: 1.minute.ago.utc.iso8601,
+          request_id: "attacker-controlled",
+          resources: ["https://evil.example/resource"]
+        }
+
+        mutations.each do |field, value|
+          key = Eth::Key.new
+          challenge, = issue(key, session_binding: "browser")
+          parsed = Siwe::Message.parse(challenge.message)
+          altered = Siwe::Message.new(**parsed.to_h.merge(field => value)).prepare_message
+          challenge.update!(message: altered)
+
+          assert_verification_error(field) do
+            challenge.verify!(
+              signature: key.personal_sign(altered),
+              purpose: "login",
+              session_binding: "browser"
+            )
+          end
+        end
+
+        challenge, = issue(Eth::Key.new, session_binding: "browser")
+        other_key = Eth::Key.new
+        parsed = Siwe::Message.parse(challenge.message)
+        altered = Siwe::Message.new(**parsed.to_h.merge(address: other_key.address.to_s)).prepare_message
+        challenge.update!(message: altered)
+        assert_verification_error(:address) do
+          challenge.verify!(signature: other_key.personal_sign(altered), purpose: "login", session_binding: "browser")
+        end
+      end
+
+      test "accepts arbitrary positive EIP-155 chain ids and rejects invalid values" do
+        key = Eth::Key.new
+        challenge, = issue(key, chain_id: 11_155_111, session_binding: "browser")
+
+        assert_equal 11_155_111, challenge.chain_id
+        assert_verification_error { issue(key, chain_id: 0, session_binding: "browser") }
+        assert_verification_error { issue(key, chain_id: "invalid", session_binding: "browser") }
+      end
+
+      test "removes expired and consumed challenges when issuing a new challenge" do
+        key = Eth::Key.new
+        expired, = issue(key, session_binding: "expired")
+        consumed, = issue(key, session_binding: "consumed")
+        expired.update!(expires_at: 1.minute.ago)
+        consumed.consume!
+
+        issue(key, session_binding: "current")
+
+        assert_not SiweChallenge.exists?(expired.id)
+        assert_not SiweChallenge.exists?(consumed.id)
+      end
+
+      private
+        def issue(key, chain_id: 1, session_binding:)
+          SiweChallenge.issue!(
+            purpose: "login",
+            address: key.address.to_s,
+            chain_id:,
+            session_binding:
+          )
+        end
+
+        def assert_verification_error(label = nil, &block)
+          return assert_raises(SiweChallenge::VerificationError, label.to_s, &block) if label
+
+          assert_raises(SiweChallenge::VerificationError, &block)
+        end
+    end
+  RUBY
+
+  create_file "test/controllers/account/siwe_identities_controller_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+    require "eth"
+
+    class Account::SiweIdentitiesControllerTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
+
+      test "links and unlinks multiple wallets with the current password" do
+        sign_in users(:one)
+        keys = [Eth::Key.new, Eth::Key.new]
+
+        keys.each_with_index do |key, index|
+          post challenge_account_siwe_identities_url,
+            params: { address: key.address.to_s, chain_id: 1, current_password: "password123" }, as: :json
+          assert_response :success
+          challenge = response.parsed_body
+
+          post account_siwe_identities_url,
+            params: { name: "Wallet #{index + 1}", challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
+          assert_response :created
+        end
+        assert_equal 2, users(:one).siwe_identities.count
+
+        identity = users(:one).siwe_identities.first
+        delete account_siwe_identity_url(identity), params: { current_password: "password123" }
+        assert_redirected_to account_siwe_identities_url
+        assert_not SiweIdentity.exists?(identity.id)
+      end
+
+      test "requires the current password to link and unlink a wallet" do
+        sign_in users(:one)
+        key = Eth::Key.new
+
+        post challenge_account_siwe_identities_url,
+          params: { address: key.address.to_s, chain_id: 1, current_password: "wrong" }, as: :json
+        assert_response :unauthorized
+
+        identity = users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
+        delete account_siwe_identity_url(identity), params: { current_password: "wrong" }
+        assert_response :unauthorized
+        assert SiweIdentity.exists?(identity.id)
+      end
+
+      test "renames only an identity owned by the current user" do
+        sign_in users(:one)
+        identity = users(:one).siwe_identities.create!(
+          name: "Main",
+          address: "0xabcdef0123456789abcdef0123456789abcdef01"
+        )
+        other = users(:two).siwe_identities.create!(
+          name: "Other",
+          address: "0x1111111111111111111111111111111111111111"
+        )
+
+        patch account_siwe_identity_url(identity), params: {
+          name: "Renamed",
+          address: "0x2222222222222222222222222222222222222222"
+        }
+        assert_redirected_to account_siwe_identities_url
+        assert_equal "Renamed", identity.reload.name
+        assert_equal "0xabcdef0123456789abcdef0123456789abcdef01", identity.address
+        patch account_siwe_identity_url(other), params: { name: "Stolen" }
+        assert_response :not_found
+        assert_equal "Other", other.reload.name
+      end
+
+      test "rejects an address already linked to another user" do
+        sign_in users(:one)
+        key = Eth::Key.new
+        users(:two).siwe_identities.create!(name: "Other", address: key.address.to_s)
+
+        post challenge_account_siwe_identities_url,
+          params: { address: key.address.to_s, chain_id: 1, current_password: "password123" }, as: :json
+        challenge = response.parsed_body
+        post account_siwe_identities_url,
+          params: {
+            name: "Conflict",
+            challenge_token: challenge.fetch("challenge_token"),
+            signature: key.personal_sign(challenge.fetch("message"))
+          }, as: :json
+
+        assert_response :unprocessable_content
+        assert_equal users(:two), SiweIdentity.find_by!(address: key.address.to_s.downcase).user
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/users/siwe_sessions_controller_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+    require "eth"
+
+    class Users::SiweSessionsControllerTest < ActionDispatch::IntegrationTest
+      test "signs in the existing user without creating another user" do
+        key = Eth::Key.new
+        users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
+
+        post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
+        assert_response :success
+        challenge = response.parsed_body
+
+        assert_no_difference "User.count" do
+          post user_siwe_url,
+            params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
         end
         assert_response :success
-
         get account_url
         assert_response :success
-        assert_select '[data-layout="with-menu"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-        account_menu = I18n.t("navigation.account_menu")
-        assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
-        assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
-        assert_select 'nav[aria-label=?] a[href=?]', account_menu, root_path, count: 0
-        assert_select '.badge', text: 'ID', count: 0
+      end
 
-        get edit_account_url
-        assert_response :success
-        assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', account_menu, edit_account_path, count: 1
-        assert_select '.list .badge', text: 'ID', count: 1
-        assert_select '.list p.font-semibold', text: key.address.to_s.downcase, count: 1
-        assert_select '.card-actions form[action=?][method="post"]', account_path, count: 1 do
-          assert_select 'input[name="_method"][value="delete"]', count: 1
-          assert_select 'button.btn.btn-error[data-turbo-confirm]', text: I18n.t("accounts.edit.delete"), count: 1
-        end
+      test "does not create a user for an unlinked wallet" do
+        key = Eth::Key.new
+        post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
+        challenge = response.parsed_body
 
-        assert_difference(['User.count', 'Session.count'], -1) do
-          delete account_url
+        assert_no_difference "User.count" do
+          post user_siwe_url,
+            params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
         end
-        assert_redirected_to root_url
-        follow_redirect!
-        assert_select '.alert.alert-success', text: I18n.t("accounts.destroy.notice"), count: 1
+        assert_response :unauthorized
+      end
+
+      test "binds a challenge to its browser session and ignores the Host header" do
+        key = Eth::Key.new
+        users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
+        issuer = open_session
+        attacker = open_session
+
+        issuer.post user_siwe_challenge_url,
+          params: { address: key.address.to_s, chain_id: 1 },
+          headers: { "Host" => "evil.example" },
+          as: :json
+        assert_equal "no-store", issuer.response.headers["Cache-Control"]
+        challenge = issuer.response.parsed_body
+        assert_includes challenge.fetch("message"), Rails.configuration.x.application_identity.canonical_origin
+        assert_not_includes challenge.fetch("message"), "evil.example"
+
+        attacker.post user_siwe_url,
+          params: {
+            challenge_token: challenge.fetch("challenge_token"),
+            signature: key.personal_sign(challenge.fetch("message"))
+          }, as: :json
+        assert_equal 401, attacker.response.status
+      end
+
+      test "rejects an inactive linked user" do
+        key = Eth::Key.new
+        users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
+        post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
+        challenge = response.parsed_body
+        original = User.instance_method(:active_for_authentication?)
+        User.class_eval { define_method(:active_for_authentication?) { false } }
+
+        assert_no_difference "User.count" do
+          post user_siwe_url,
+            params: {
+              challenge_token: challenge.fetch("challenge_token"),
+              signature: key.personal_sign(challenge.fetch("message"))
+            }, as: :json
+        end
+        assert_response :unauthorized
+      ensure
+        User.class_eval { define_method(:active_for_authentication?, original) } if original
       end
     end
   RUBY
 end
-
 def configure_roles
-  devise = VALUES.fetch("account_authentication") == "devise"
-  identifier_attribute = devise ? "email" : "wallet_address"
-  identifier_key = devise ? "email" : "wallet_address"
-  identifier_environment = devise ? "ADMIN_EMAIL" : "ADMIN_WALLET_ADDRESS"
-  authentication_callback = devise ? "    before_action :authenticate_user!\n" : ""
-  authorization_user = devise ? "current_user" : "Current.user"
+  profile_name_attribute = if VALUES.fetch("profile_features").include?("screen_name")
+    "screen_name"
+  elsif VALUES.fetch("profile_features").include?("display_name")
+    "display_name"
+  end
+  user_scope = profile_name_attribute ? "User.includes(:user_roles, :profile)" : "User.includes(:user_roles)"
+  profile_header = profile_name_attribute ? '<th scope="col"><%= t("admin.users.profile_name") %></th>' : ""
+  profile_cell = if profile_name_attribute
+    "<td><%= user.profile&.#{profile_name_attribute}.presence || t(\"common.not_set\") %></td>"
+  else
+    ""
+  end
 
   generate "action_policy:install"
   inject_into_class "app/policies/application_policy.rb", "ApplicationPolicy", <<~RUBY
@@ -1576,7 +2308,7 @@ def configure_roles
 
       private
         def authorization_user
-          #{authorization_user}
+          current_user
         end
 
         def render_forbidden
@@ -1614,7 +2346,8 @@ def configure_roles
     module Admin
       class BaseController < ApplicationController
         layout "admin"
-    #{authentication_callback}  end
+        before_action :authenticate_user!
+      end
     end
   RUBY
 
@@ -1623,7 +2356,7 @@ def configure_roles
       class UsersController < BaseController
         def index
           authorize! User, to: :index?
-          users = authorized_scope(User.all).includes(:user_roles).order(:id)
+          users = authorized_scope(#{user_scope}).order(:id)
           @pagy, @users = pagy(:offset, users, limit: 25)
         end
       end
@@ -1692,7 +2425,7 @@ def configure_roles
               <thead>
                 <tr>
                   <th scope="col">ID</th>
-                  <th scope="col"><%= t("admin.users.identifier.#{identifier_key}") %></th>
+                  #{profile_header}
                   <th scope="col"><%= t("admin.users.role") %></th>
                   <th scope="col"><span class="sr-only"><%= t("common.actions") %></span></th>
                 </tr>
@@ -1701,7 +2434,7 @@ def configure_roles
                 <% @users.each do |user| %>
                   <tr>
                     <td><%= user.id %></td>
-                    <td class="break-all"><%= user.#{identifier_attribute} %></td>
+                    #{profile_cell}
                     <td>
                       <% if user.has_role?(:admin) %>
                         <span class="badge"><%= t("admin.users.admin") %></span>
@@ -1750,14 +2483,14 @@ def configure_roles
 
   create_file "lib/tasks/roles.rake", <<~RAKE, force: true
     namespace :roles do
-      desc "Grant the admin role to an existing User identified by #{identifier_attribute}"
-      task :grant_admin, [:identifier] => :environment do |_task, arguments|
-        identifier = arguments[:identifier].to_s.strip
-        raise ArgumentError, "identifierを指定してください" if identifier.empty?
+      desc "Grant the admin role to an existing User identified by users.id"
+      task :grant_admin, [:user_id] => :environment do |_task, arguments|
+        user_id = Integer(arguments[:user_id], exception: false)
+        raise ArgumentError, "user_idを指定してください" unless user_id&.positive?
 
-        user = User.find_by!(#{identifier_attribute}: identifier.downcase)
+        user = User.find(user_id)
         user.grant_role!(:admin)
-        puts "admin role granted to #{identifier_attribute}=\#{user.#{identifier_attribute}}"
+        puts "admin role granted to user_id=\#{user.id}"
       end
     end
   RAKE
@@ -1768,7 +2501,7 @@ def configure_roles
     load local_seeds if local_seeds.file?
   RUBY
   create_file "db/seeds.local.rb.example", <<~RUBY, force: true
-    admin = User.find_by!(#{identifier_attribute}: ENV.fetch("#{identifier_environment}").downcase)
+    admin = User.find(Integer(ENV.fetch("ADMIN_USER_ID")))
     admin.grant_role!(:admin)
   RUBY
   append_to_file ".gitignore", "\n/db/seeds.local.rb\n" unless File.read(".gitignore").lines.map(&:strip).include?("/db/seeds.local.rb")
@@ -1777,7 +2510,7 @@ def configure_roles
     ja: {
       "roles" => { "errors" => { "last_admin" => "最後の管理者roleは解除できません" } },
       "admin" => {
-        "users" => { "title" => "ユーザー管理", "description" => "固定roleをユーザーへ付与または解除します。", "identifier" => { "email" => "メールアドレス", "wallet_address" => "ウォレットアドレス" }, "role" => "Role", "admin" => "管理者", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "管理者roleを解除しますか？", "grant" => "管理者にする", "pagination" => "ユーザー一覧のページング" },
+        "users" => { "title" => "ユーザー管理", "description" => "内部ユーザーIDを基準に固定roleを付与または解除します。", "profile_name" => "表示名", "role" => "Role", "admin" => "管理者", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "管理者roleを解除しますか？", "grant" => "管理者にする", "pagination" => "ユーザー一覧のページング" },
         "user_roles" => { "create" => { "notice" => "管理者roleを付与しました" }, "destroy" => { "notice" => "管理者roleを解除しました", "self_forbidden" => "自分自身の管理者roleは解除できません" } }
       },
       "accounts" => { "destroy" => { "last_admin" => "最後の管理者はアカウントを削除できません" } }
@@ -1785,7 +2518,7 @@ def configure_roles
     en: {
       "roles" => { "errors" => { "last_admin" => "The final administrator role cannot be revoked" } },
       "admin" => {
-        "users" => { "title" => "User management", "description" => "Grant or revoke the fixed role for each user.", "identifier" => { "email" => "Email address", "wallet_address" => "Wallet address" }, "role" => "Role", "admin" => "Administrator", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role?", "grant" => "Make administrator", "pagination" => "User list pagination" },
+        "users" => { "title" => "User management", "description" => "Grant or revoke fixed roles by internal user ID.", "profile_name" => "Display name", "role" => "Role", "admin" => "Administrator", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role?", "grant" => "Make administrator", "pagination" => "User list pagination" },
         "user_roles" => { "create" => { "notice" => "Administrator role granted" }, "destroy" => { "notice" => "Administrator role revoked", "self_forbidden" => "You cannot revoke your own administrator role" } }
       },
       "accounts" => { "destroy" => { "last_admin" => "The final administrator cannot delete their account" } }
@@ -1894,95 +2627,42 @@ def configure_roles
     end
   RUBY
 
-  controller_test_support = if devise
-    <<~RUBY
-        include Devise::Test::IntegrationHelpers
+  controller_test_support = <<~RUBY
+      include Devise::Test::IntegrationHelpers
 
-        setup do
-          @admin = User.create!(email: "role-admin@example.com", password: "password123", password_confirmation: "password123")
-          @regular = User.create!(email: "role-regular@example.com", password: "password123", password_confirmation: "password123")
-          @admin.grant_role!(:admin)
+      setup do
+        @admin = User.create!(login_id: "role_admin", password: "password123", password_confirmation: "password123")
+        @regular = User.create!(login_id: "role_regular", password: "password123", password_confirmation: "password123")
+        @admin.grant_role!(:admin)
+      end
+
+      private
+        def sign_in_as(user, _key = nil)
+          sign_in user
         end
 
-        private
-          def sign_in_as(user, _key = nil)
-            sign_in user
+        def create_additional_users(count)
+          count.times do |index|
+            User.create!(
+              login_id: "role_page_\#{index}",
+              password: "password123",
+              password_confirmation: "password123"
+            )
           end
-
-          def create_additional_users(count)
-            count.times do |index|
-              User.create!(
-                email: "role-page-\#{index}@example.com",
-                password: "password123",
-                password_confirmation: "password123"
-              )
-            end
-          end
-    RUBY
-  else
-    <<~RUBY
-        require "eth"
-
-        setup do
-          @admin, @admin_key = create_wallet_user
-          @regular, @regular_key = create_wallet_user
-          @admin.grant_role!(:admin)
         end
+  RUBY
 
-        private
-          def create_wallet_user
-            key = Eth::Key.new
-            [User.create!(wallet_address: key.address.to_s), key]
-          end
+  account_deletion_test = <<~RUBY
+    test "refuses deletion of the last admin account" do
+      sign_in_as(@admin)
 
-          def sign_in_as(_user, key)
-            get session_nonce_url, headers: siwe_test_headers(key)
-            nonce = response.parsed_body.fetch("nonce")
-            message = Siwe::Message.new(
-              domain: "www.example.com",
-              address: key.address.to_s,
-              uri: "http://www.example.com",
-              chain_id: 1,
-              nonce: nonce,
-              issued_at: Time.current.iso8601,
-              statement: Rails.configuration.x.application_identity.siwe_statement
-            ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) },
-              headers: siwe_test_headers(key), as: :json
-            assert_response :success
-          end
+      delete user_registration_url
 
-          def create_additional_users(count)
-            count.times { |index| User.create!(wallet_address: format("0x%040x", index + 100)) }
-          end
-    RUBY
-  end
-
-  account_deletion_test = if devise
-    <<~RUBY
-      test "refuses deletion of the last admin account" do
-        sign_in_as(@admin)
-
-        delete user_registration_url
-
-        assert_redirected_to edit_user_registration_url
-        assert User.exists?(@admin.id)
-        assert @admin.reload.has_role?(:admin)
-      end
-    RUBY
-  else
-    <<~RUBY
-      test "refuses deletion of the last admin account" do
-        sign_in_as(@admin, @admin_key)
-
-        delete account_url
-
-        assert_redirected_to edit_account_url
-        assert User.exists?(@admin.id)
-        assert @admin.reload.has_role?(:admin)
-      end
-    RUBY
-  end
+      assert_redirected_to edit_user_registration_url
+      assert User.exists?(@admin.id)
+      assert @admin.reload.has_role?(:admin)
+    end
+  RUBY
 
   create_file "test/controllers/admin/users_controller_test.rb", <<~RUBY, force: true
     require "test_helper"
@@ -1992,18 +2672,18 @@ def configure_roles
       test "requires authentication" do
         get admin_users_url
 
-        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+        assert_redirected_to new_user_session_url
       end
 
       test "denies regular users" do
-        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+        sign_in_as(@regular)
         get admin_users_url
 
         assert_response :forbidden
       end
 
       test "authorizes scopes and renders the admin list" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         assert_have_authorized_scope(type: :active_record_relation, with: UserPolicy) do
           get admin_users_url
@@ -2023,7 +2703,7 @@ def configure_roles
 
       test "paginates the admin list" do
         create_additional_users(25)
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         get admin_users_url
 
@@ -2040,7 +2720,7 @@ def configure_roles
     class Admin::UserRolesControllerTest < ActionDispatch::IntegrationTest
     #{controller_test_support}
       test "allows an admin to grant and revoke another users role" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         assert_difference("UserRole.count", 1) do
           post admin_user_roles_url(@regular), params: { role: "admin" }
@@ -2054,7 +2734,7 @@ def configure_roles
       end
 
       test "denies role changes by regular users" do
-        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+        sign_in_as(@regular)
 
         assert_no_difference("UserRole.count") do
           post admin_user_roles_url(@regular), params: { role: "admin" }
@@ -2063,7 +2743,7 @@ def configure_roles
       end
 
       test "refuses self revocation" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         assert_no_difference("UserRole.count") do
           delete admin_user_role_url(@admin, "admin")
@@ -2073,7 +2753,7 @@ def configure_roles
       end
 
       test "rejects unknown roles" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         post admin_user_roles_url(@regular), params: { role: "unknown" }
 
@@ -2097,16 +2777,15 @@ def configure_roles
 
       test "grants admin idempotently to an existing user" do
         user = users(:two)
-        identifier = user.#{identifier_attribute}
 
-        assert_difference("UserRole.count", 1) { invoke(identifier) }
-        assert_no_difference("UserRole.count") { invoke(identifier) }
+        assert_difference("UserRole.count", 1) { invoke(user.id) }
+        assert_no_difference("UserRole.count") { invoke(user.id) }
         assert user.reload.has_role?(:admin)
       end
 
       test "does not create an unknown user" do
         assert_no_difference("User.count") do
-          assert_raises(ActiveRecord::RecordNotFound) { invoke("missing-#{identifier_attribute}") }
+          assert_raises(ActiveRecord::RecordNotFound) { invoke(999_999) }
         end
       end
 
@@ -2133,27 +2812,23 @@ def configure_roles
     end
   RUBY
 
-  if devise
-    configure_devise_registration_route
-    create_file "app/controllers/users/registrations_controller.rb", <<~RUBY, force: true
-      module Users
-        class RegistrationsController < Devise::RegistrationsController
-          def destroy
-            if resource.last_admin?
-              redirect_to edit_user_registration_path, alert: I18n.t("accounts.destroy.last_admin"), status: :see_other
-              return
-            end
-
-            super
+  create_file "app/controllers/users/registrations_controller.rb", <<~RUBY, force: true
+    module Users
+      class RegistrationsController < Devise::RegistrationsController
+        def destroy
+          if resource.last_admin?
+            redirect_to edit_user_registration_path, alert: I18n.t("accounts.destroy.last_admin"), status: :see_other
+            return
           end
+
+          super
         end
       end
-    RUBY
-  end
+    end
+  RUBY
 end
 
 def configure_content_management
-  devise = VALUES.fetch("account_authentication") == "devise"
   page_title_keys = {
     "about" => "content_management.pages.about",
     "corp" => "content_management.pages.corp",
@@ -2163,8 +2838,8 @@ def configure_content_management
     "transaction-law" => "content_management.pages.transaction_law"
   }.freeze
   page_title_entries = page_title_keys.map { |slug, key| "    #{slug.inspect} => #{key.inspect}" }.join(",\n")
-  public_page_access = devise ? "" : "  allow_unauthenticated_access only: :show\n\n"
-  public_faq_access = devise ? "" : "  allow_unauthenticated_access only: :index\n\n"
+  public_page_access = ""
+  public_faq_access = ""
 
   generate "model", "Page", "slug:string", "title:string"
   generate "model", "Faq", "question:string", "position:integer", "published:boolean"
@@ -2805,71 +3480,34 @@ def configure_content_management
     </div>
   ERB
 
-  content_authentication_support = if devise
-    <<~RUBY
-      module ContentManagementAuthenticationTestSupport
-        extend ActiveSupport::Concern
+  content_authentication_support = <<~RUBY
+    module ContentManagementAuthenticationTestSupport
+      extend ActiveSupport::Concern
 
-        included do
-          include Devise::Test::IntegrationHelpers
+      included do
+        include Devise::Test::IntegrationHelpers
+      end
+
+      private
+        def setup_content_management_users
+          @admin = User.create!(
+            login_id: "content_admin",
+            password: "password123",
+            password_confirmation: "password123"
+          )
+          @regular = User.create!(
+            login_id: "content_regular",
+            password: "password123",
+            password_confirmation: "password123"
+          )
+          @admin.grant_role!(:admin)
         end
 
-        private
-          def setup_content_management_users
-            @admin = User.create!(
-              email: "content-admin@example.com",
-              password: "password123",
-              password_confirmation: "password123"
-            )
-            @regular = User.create!(
-              email: "content-regular@example.com",
-              password: "password123",
-              password_confirmation: "password123"
-            )
-            @admin.grant_role!(:admin)
-          end
-
-          def sign_in_content_user(user, _key = nil)
-            sign_in user
-          end
-      end
-    RUBY
-  else
-    <<~RUBY
-      require "eth"
-
-      module ContentManagementAuthenticationTestSupport
-        private
-          def setup_content_management_users
-            @admin, @admin_key = create_content_wallet_user
-            @regular, @regular_key = create_content_wallet_user
-            @admin.grant_role!(:admin)
-          end
-
-          def create_content_wallet_user
-            key = Eth::Key.new
-            [User.create!(wallet_address: key.address.to_s), key]
-          end
-
-          def sign_in_content_user(_user, key)
-            get session_nonce_url, headers: siwe_test_headers(key)
-            nonce = response.parsed_body.fetch("nonce")
-            message = Siwe::Message.new(
-              domain: "www.example.com",
-              address: key.address.to_s,
-              uri: "http://www.example.com",
-              chain_id: 1,
-              nonce: nonce,
-              issued_at: Time.current.iso8601,
-              statement: Rails.configuration.x.application_identity.siwe_statement
-            ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) },
-              headers: siwe_test_headers(key), as: :json
-            assert_response :success
-          end
-      end
-    RUBY
-  end
+        def sign_in_content_user(user, _key = nil)
+          sign_in user
+        end
+    end
+  RUBY
   create_file "test/support/content_management_authentication.rb", content_authentication_support, force: true
 
   create_file "test/models/page_test.rb", <<~RUBY, force: true
@@ -3135,15 +3773,15 @@ def configure_content_management
 
       test "requires authentication and denies regular users" do
         get admin_pages_url
-        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+        assert_redirected_to new_user_session_url
 
-        sign_in_content_user(@regular, #{devise ? "nil" : "@regular_key"})
+        sign_in_content_user(@regular)
         get admin_pages_url
         assert_response :forbidden
       end
 
       test "allows an admin to edit only page content with Lexxy" do
-        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_content_user(@admin)
         page = pages(:about)
 
         get edit_admin_page_url(page)
@@ -3174,7 +3812,7 @@ def configure_content_management
       setup { setup_content_management_users }
 
       test "allows an admin to create update and destroy a FAQ" do
-        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_content_user(@admin)
 
         get new_admin_faq_url
         assert_response :success
@@ -3203,7 +3841,7 @@ def configure_content_management
       end
 
       test "denies regular users" do
-        sign_in_content_user(@regular, #{devise ? "nil" : "@regular_key"})
+        sign_in_content_user(@regular)
 
         get admin_faqs_url
 
@@ -3222,7 +3860,7 @@ def configure_content_management
       setup { setup_content_management_users }
 
       test "allows an admin to update HTTPS links" do
-        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_content_user(@admin)
 
         get edit_admin_footer_setting_url
         assert_response :success
@@ -3239,7 +3877,7 @@ def configure_content_management
       end
 
       test "renders validation errors for unsafe links" do
-        sign_in_content_user(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_content_user(@admin)
 
         patch admin_footer_setting_url, params: {
           footer_setting: { x_url: "http://social.example/x", github_url: "https://code.example/repository" }
@@ -3251,7 +3889,7 @@ def configure_content_management
       end
 
       test "denies regular users" do
-        sign_in_content_user(@regular, #{devise ? "nil" : "@regular_key"})
+        sign_in_content_user(@regular)
 
         get edit_admin_footer_setting_url
 
@@ -3263,7 +3901,6 @@ end
 
 def configure_profile
   features = VALUES.fetch("profile_features")
-  devise = VALUES.fetch("account_authentication") == "devise"
   avatar_enabled = features.include?("avatar")
   attributes = ["user:references"]
   attributes << "screen_name:string" if features.include?("screen_name")
@@ -3517,8 +4154,8 @@ def configure_profile
 
   RUBY
 
-  profile_owner = devise ? "current_user" : "Current.user"
-  authentication = devise ? "  before_action :authenticate_user!\n" : ""
+  profile_owner = "current_user"
+  authentication = "  before_action :authenticate_user!\n"
   permitted_features = features.map { |feature| feature == "avatar" ? ":avatar_upload" : ":#{feature}" }.join(", ")
   destroy_avatar_action = if avatar_enabled
     <<~RUBY
@@ -4109,7 +4746,6 @@ def configure_profile
 end
 
 def configure_api
-  devise = VALUES.fetch("account_authentication") == "devise"
   generate "model", "ApiCredential", "user:references", "name:string", "api_key:string:uniq", "api_secret_digest:string", "last_used_at:datetime"
   remove_file "test/fixtures/api_credentials.yml"
 
@@ -4272,8 +4908,8 @@ def configure_api
     end
   RUBY
 
-  account_user = devise ? "current_user" : "Current.user"
-  devise_authentication = devise ? "  before_action :authenticate_user!\n" : ""
+  account_user = "current_user"
+  devise_authentication = "  before_action :authenticate_user!\n"
   create_file "app/controllers/api_credentials_controller.rb", <<~RUBY, force: true
     class ApiCredentialsController < ApplicationController
       layout "account"
@@ -4571,38 +5207,14 @@ def configure_api
     end
   RUBY
 
-  web_test_authentication = if devise
-    <<~RUBY
-          include Devise::Test::IntegrationHelpers
+  web_test_authentication = <<~RUBY
+        include Devise::Test::IntegrationHelpers
 
-          setup do
-            @user = users(:one)
-            sign_in @user
-          end
-    RUBY
-  else
-    <<~RUBY
-          require "eth"
-
-          setup do
-            key = Eth::Key.new
-            get session_nonce_url, headers: siwe_test_headers(key)
-            nonce = response.parsed_body.fetch("nonce")
-            message = Siwe::Message.new(
-              domain: "www.example.com",
-              address: key.address.to_s,
-              uri: "http://www.example.com",
-              chain_id: 1,
-              nonce: nonce,
-              issued_at: Time.current.iso8601,
-              statement: Rails.configuration.x.application_identity.siwe_statement
-            ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) },
-              headers: siwe_test_headers(key), as: :json
-            @user = User.find_by!(wallet_address: key.address.to_s.downcase)
-          end
-    RUBY
-  end
+        setup do
+          @user = users(:one)
+          sign_in @user
+        end
+  RUBY
   create_file "test/controllers/api_credentials_controller_test.rb", <<~RUBY, force: true
     require "test_helper"
 
@@ -4652,28 +5264,27 @@ def configure_api
 end
 
 def configure_devise_views
-  create_locale_pair("devise_views",
+  create_locale_pair(
+    "devise_views",
     ja: {
       "devise_views" => {
-        "links" => { "sign_in" => "ログイン画面へ", "sign_up" => "アカウントを作成", "forgot_password" => "パスワードをお忘れですか？" },
-        "sessions" => { "title" => "ログイン", "description" => "登録済みのメールアドレスとパスワードを入力してください。", "remember_me" => "ログイン状態を保持する", "submit" => "ログイン" },
-        "registrations" => { "new_title" => "アカウント作成", "new_description" => "利用を始めるためのアカウントを作成します。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" },
-        "passwords" => { "new_title" => "パスワード再設定", "new_description" => "再設定用リンクをメールで送信します。", "send" => "再設定メールを送信", "edit_title" => "新しいパスワード", "change" => "パスワードを変更" },
-        "mailer" => { "greeting" => "%{recipient}さん", "confirmation" => "以下のリンクから%{app_name}のメールアドレスを確認してください。", "confirm" => "メールアドレスを確認", "reset" => "以下のリンクから%{app_name}のパスワードを変更できます。", "reset_link" => "パスワードを変更", "unlock" => "以下のリンクから%{app_name}のアカウントロックを解除できます。", "unlock_link" => "アカウントロックを解除", "email_changed" => "%{app_name}のメールアドレスが変更されたことをお知らせします。", "password_changed" => "%{app_name}のパスワードが変更されたことをお知らせします。" }
-      }
+        "links" => { "sign_in" => "ログイン画面へ", "sign_up" => "アカウントを作成" },
+        "sessions" => { "title" => "ログイン", "description" => "登録済みのユーザーIDとパスワードを入力してください。", "remember_me" => "ログイン状態を保持する", "submit" => "ログイン", "siwe_divider" => "または" },
+        "registrations" => { "new_title" => "アカウント作成", "new_description" => "ユーザーIDとパスワードでアカウントを作成します。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" }
+      },
+      "activerecord" => { "attributes" => { "user" => { "login_id" => "ユーザーID" } } }
     },
     en: {
       "devise_views" => {
-        "links" => { "sign_in" => "Back to sign in", "sign_up" => "Create an account", "forgot_password" => "Forgot your password?" },
-        "sessions" => { "title" => "Sign in", "description" => "Enter your registered email address and password.", "remember_me" => "Keep me signed in", "submit" => "Sign in" },
-        "registrations" => { "new_title" => "Create account", "new_description" => "Create an account to get started.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" },
-        "passwords" => { "new_title" => "Reset password", "new_description" => "We will email you a password reset link.", "send" => "Send reset email", "edit_title" => "New password", "change" => "Change password" },
-        "mailer" => { "greeting" => "Hello %{recipient}", "confirmation" => "Confirm your email address for %{app_name} using the link below.", "confirm" => "Confirm email address", "reset" => "Change your %{app_name} password using the link below.", "reset_link" => "Change password", "unlock" => "Unlock your %{app_name} account using the link below.", "unlock_link" => "Unlock account", "email_changed" => "This is a notice that your %{app_name} email address was changed.", "password_changed" => "This is a notice that your %{app_name} password was changed." }
-      }
+        "links" => { "sign_in" => "Back to sign in", "sign_up" => "Create an account" },
+        "sessions" => { "title" => "Sign in", "description" => "Enter your registered user ID and password.", "remember_me" => "Keep me signed in", "submit" => "Sign in", "siwe_divider" => "or" },
+        "registrations" => { "new_title" => "Create account", "new_description" => "Create an account with a user ID and password.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" }
+      },
+      "activerecord" => { "attributes" => { "user" => { "login_id" => "User ID" } } }
     }
   )
 
-  create_file "app/views/devise/shared/_error_messages.html.erb", <<~ERB, force: true
+  create_file "app/views/devise/shared/_error_messages.html.erb", <<~'ERB', force: true
     <% if resource.errors.any? %>
       <div class="alert alert-error mb-6" role="alert">
         <div>
@@ -4688,7 +5299,7 @@ def configure_devise_views
     <% end %>
   ERB
 
-  create_file "app/views/devise/shared/_links.html.erb", <<~ERB, force: true
+  create_file "app/views/devise/shared/_links.html.erb", <<~'ERB', force: true
     <div class="divider"></div>
     <ul class="menu menu-sm w-full">
       <% if controller_name != "sessions" %>
@@ -4697,26 +5308,40 @@ def configure_devise_views
       <% if devise_mapping.registerable? && controller_name != "registrations" %>
         <li><%= link_to t("devise_views.links.sign_up"), new_registration_path(resource_name) %></li>
       <% end %>
-      <% if devise_mapping.recoverable? && controller_name != "passwords" && controller_name != "registrations" %>
-        <li><%= link_to t("devise_views.links.forgot_password"), new_password_path(resource_name) %></li>
-      <% end %>
     </ul>
   ERB
 
+  siwe_sign_in = if VALUES.fetch("additional_login_methods").include?("siwe")
+    <<~'ERB'
+      <div class="divider"><%= t("devise_views.sessions.siwe_divider") %></div>
+      <div data-controller="siwe-sign-in"
+           data-siwe-sign-in-mode-value="login"
+           data-siwe-sign-in-challenge-url-value="<%= user_siwe_challenge_path %>"
+           data-siwe-sign-in-verify-url-value="<%= user_siwe_path %>"
+           data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
+           data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
+           data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+        <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.sign_in.connect") %></button>
+        <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+      </div>
+    ERB
+  else
+    ""
+  end
   create_file "app/views/devise/sessions/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("devise_views.sessions.title") %>
     <header class="mb-8">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-      <p class="mt-2 text-sm text-neutral"><%= t("devise_views.sessions.description") %></p>
+      <p class="mt-2 text-sm text-base-content/70"><%= t("devise_views.sessions.description") %></p>
     </header>
 
     <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "space-y-5" }) do |f| %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
-        <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
+        <legend class="fieldset-legend"><%= f.label :login_id %></legend>
+        <%= f.text_field :login_id, autofocus: true, autocomplete: "username", required: true, class: "input input-rapid w-full" %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
+        <legend class="fieldset-legend"><%= f.label :password %></legend>
         <%= f.password_field :password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
       </fieldset>
       <% if devise_mapping.rememberable? %>
@@ -4725,156 +5350,91 @@ def configure_devise_views
           <span><%= t("devise_views.sessions.remember_me") %></span>
         </label>
       <% end %>
-      <%= f.submit t("devise_views.sessions.submit"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+      <%= f.submit t("devise_views.sessions.submit"), class: "btn btn-primary btn-block btn-rapid" %>
     <% end %>
 
+    #{siwe_sign_in}
     <%= render "devise/shared/links" %>
   ERB
 
-  create_file "app/views/devise/registrations/new.html.erb", <<~ERB, force: true
+  create_file "app/views/devise/registrations/new.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("devise_views.registrations.new_title") %>
     <header class="mb-8">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-      <p class="mt-2 text-sm text-neutral"><%= t("devise_views.registrations.new_description") %></p>
+      <p class="mt-2 text-sm text-base-content/70"><%= t("devise_views.registrations.new_description") %></p>
     </header>
 
     <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "space-y-5" }) do |f| %>
       <%= render "devise/shared/error_messages", resource: resource %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
-        <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
+        <legend class="fieldset-legend"><%= f.label :login_id %></legend>
+        <%= f.text_field :login_id, autofocus: true, autocomplete: "username", required: true, minlength: 3, maxlength: 32, pattern: "[a-zA-Z0-9][a-zA-Z0-9_]{2,31}", class: "input input-rapid w-full" %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
+        <legend class="fieldset-legend"><%= f.label :password %></legend>
         <%= f.password_field :password, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
         <% if @minimum_password_length %>
-          <p class="label text-sm text-neutral"><%= t("devise_views.registrations.minimum_password", count: @minimum_password_length) %></p>
+          <p class="label"><%= t("devise_views.registrations.minimum_password", count: @minimum_password_length) %></p>
         <% end %>
       </fieldset>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation %></legend>
+        <legend class="fieldset-legend"><%= f.label :password_confirmation %></legend>
         <%= f.password_field :password_confirmation, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
       </fieldset>
-      <%= f.submit t("devise_views.registrations.create"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+      <%= f.submit t("devise_views.registrations.create"), class: "btn btn-primary btn-block btn-rapid" %>
     <% end %>
 
     <%= render "devise/shared/links" %>
   ERB
 
-  create_file "app/views/devise/registrations/edit.html.erb", <<~ERB, force: true
+  create_file "app/views/devise/registrations/edit.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("devise_views.registrations.edit_title") %>
     <div class="space-y-6">
       <section class="card card-border border-base-300 bg-base-100 shadow-none">
-        <div class="card-body p-5 sm:p-6">
+        <div class="card-body">
           <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
             <%= render "devise/shared/error_messages", resource: resource %>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
-              <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
+              <legend class="fieldset-legend"><%= f.label :login_id %></legend>
+              <%= f.text_field :login_id, autofocus: true, autocomplete: "username", required: true, minlength: 3, maxlength: 32, pattern: "[a-zA-Z0-9][a-zA-Z0-9_]{2,31}", class: "input input-rapid w-full" %>
             </fieldset>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
+              <legend class="fieldset-legend"><%= f.label :password %></legend>
               <%= f.password_field :password, autocomplete: "new-password", class: "input input-rapid w-full" %>
-              <p class="label text-sm text-neutral"><%= t("devise_views.registrations.password_hint") %></p>
+              <p class="label"><%= t("devise_views.registrations.password_hint") %></p>
             </fieldset>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation %></legend>
+              <legend class="fieldset-legend"><%= f.label :password_confirmation %></legend>
               <%= f.password_field :password_confirmation, autocomplete: "new-password", class: "input input-rapid w-full" %>
             </fieldset>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :current_password %></legend>
+              <legend class="fieldset-legend"><%= f.label :current_password %></legend>
               <%= f.password_field :current_password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
             </fieldset>
-            <%= f.submit t("devise_views.registrations.update"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
+            <%= f.submit t("devise_views.registrations.update"), class: "btn btn-primary btn-block btn-rapid" %>
           <% end %>
         </div>
       </section>
 
       <section class="card card-border border-error bg-base-100 shadow-none">
-        <div class="card-body p-5 sm:p-6">
-          <h2 class="card-title text-base leading-[1.5]"><%= t("devise_views.registrations.delete_title") %></h2>
-          <p class="text-sm text-neutral"><%= t("devise_views.registrations.delete_description") %></p>
-          <div class="card-actions mt-2 justify-start">
-            <%= button_to t("devise_views.registrations.delete"), registration_path(resource_name), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("devise_views.registrations.delete_confirm") } %>
+        <div class="card-body">
+          <h2 class="card-title leading-[1.5]"><%= t("devise_views.registrations.delete_title") %></h2>
+          <p class="text-base-content/70"><%= t("devise_views.registrations.delete_description") %></p>
+          <div class="card-actions justify-start">
+            <%= button_to t("devise_views.registrations.delete"), registration_path(resource_name), method: :delete, class: "btn btn-error btn-rapid", data: { turbo_confirm: t("devise_views.registrations.delete_confirm") } %>
           </div>
         </div>
       </section>
     </div>
   ERB
-
-  create_file "app/views/devise/passwords/new.html.erb", <<~ERB, force: true
-    <% content_for :page_title, t("devise_views.passwords.new_title") %>
-    <header class="mb-8">
-      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-      <p class="mt-2 text-sm text-neutral"><%= t("devise_views.passwords.new_description") %></p>
-    </header>
-
-    <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "space-y-5" }) do |f| %>
-      <%= render "devise/shared/error_messages", resource: resource %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :email %></legend>
-        <%= f.email_field :email, autofocus: true, autocomplete: "email", required: true, class: "input input-rapid w-full" %>
-      </fieldset>
-      <%= f.submit t("devise_views.passwords.send"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
-    <% end %>
-
-    <%= render "devise/shared/links" %>
-  ERB
-
-  create_file "app/views/devise/passwords/edit.html.erb", <<~ERB, force: true
-    <% content_for :page_title, t("devise_views.passwords.edit_title") %>
-    <header class="mb-8">
-      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-    </header>
-
-    <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
-      <%= render "devise/shared/error_messages", resource: resource %>
-      <%= f.hidden_field :reset_password_token %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password %></legend>
-        <%= f.password_field :password, autofocus: true, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
-      </fieldset>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= f.label :password_confirmation %></legend>
-        <%= f.password_field :password_confirmation, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
-      </fieldset>
-      <%= f.submit t("devise_views.passwords.change"), class: "btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" %>
-    <% end %>
-
-    <%= render "devise/shared/links" %>
-  ERB
-
-  mailer_prefix = '<p><%= t("devise_views.mailer.greeting", recipient: @email) %></p>'
-  create_file "app/views/devise/mailer/confirmation_instructions.html.erb", <<~ERB, force: true
-    #{mailer_prefix}
-    <p><%= t("devise_views.mailer.confirmation", app_name: Rails.configuration.x.application_identity.app_name) %></p>
-    <p><%= link_to t("devise_views.mailer.confirm"), confirmation_url(@resource, confirmation_token: @token) %></p>
-  ERB
-  create_file "app/views/devise/mailer/reset_password_instructions.html.erb", <<~ERB, force: true
-    #{mailer_prefix}
-    <p><%= t("devise_views.mailer.reset", app_name: Rails.configuration.x.application_identity.app_name) %></p>
-    <p><%= link_to t("devise_views.mailer.reset_link"), edit_password_url(@resource, reset_password_token: @token) %></p>
-  ERB
-  create_file "app/views/devise/mailer/unlock_instructions.html.erb", <<~ERB, force: true
-    #{mailer_prefix}
-    <p><%= t("devise_views.mailer.unlock", app_name: Rails.configuration.x.application_identity.app_name) %></p>
-    <p><%= link_to t("devise_views.mailer.unlock_link"), unlock_url(@resource, unlock_token: @token) %></p>
-  ERB
-  create_file "app/views/devise/mailer/email_changed.html.erb", <<~ERB, force: true
-    #{mailer_prefix}
-    <p><%= t("devise_views.mailer.email_changed", app_name: Rails.configuration.x.application_identity.app_name) %></p>
-  ERB
-  create_file "app/views/devise/mailer/password_change.html.erb", <<~ERB, force: true
-    #{mailer_prefix}
-    <p><%= t("devise_views.mailer.password_changed", app_name: Rails.configuration.x.application_identity.app_name) %></p>
-  ERB
 end
 
 def configure_default_views
-  devise = VALUES.fetch("account_authentication") == "devise"
+  siwe_enabled = VALUES.fetch("additional_login_methods").include?("siwe")
   pwa_enabled = VALUES.fetch("pwa") == "use"
   web_push_enabled = VALUES.fetch("web_push") == "use"
   job_operations_enabled = VALUES.fetch("job_operations") == "enable"
+  solid_queue_enabled = VALUES.fetch("active_job") == "solid_queue"
   maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
   profile_features = VALUES.fetch("profile_features")
@@ -4882,7 +5442,8 @@ def configure_default_views
   avatar_enabled = profile_features.include?("avatar")
   screen_name_enabled = profile_features.include?("screen_name")
   display_name_enabled = profile_features.include?("display_name")
-  account_navigation_count = 2 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) + (web_push_enabled ? 1 : 0)
+  account_navigation_count = 2 + (siwe_enabled ? 1 : 0) + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) +
+    (web_push_enabled ? 1 : 0)
   account_page_description = if profile_enabled
     '<%= t("accounts.show.description_with_profile") %>'
   else
@@ -4893,11 +5454,7 @@ def configure_default_views
   else
     '<%= t("accounts.show.action") %>'
   end
-  home_action = if devise
-    '<%= link_to t("home.start_devise"), new_user_registration_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
-  else
-    '<%= link_to t("home.start_wallet"), new_session_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
-  end
+  home_action = '<%= link_to t("home.start_devise"), new_user_registration_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
   account_navigation_items = <<~ERB
     <li>
       <%= link_to application_routes.account_path, class: ("menu-active" if current_page?(application_routes.account_path)), aria: { current: ("page" if current_page?(application_routes.account_path)) } do %>
@@ -4920,7 +5477,7 @@ def configure_default_views
       </li>
     ERB
   end
-  account_settings_path = devise ? "application_routes.edit_user_registration_path" : "application_routes.edit_account_path"
+  account_settings_path = "application_routes.edit_user_registration_path"
   account_navigation_items += <<~ERB
     <li>
       <%= link_to #{account_settings_path}, class: ("menu-active" if current_page?(#{account_settings_path})), aria: { current: ("page" if current_page?(#{account_settings_path})) } do %>
@@ -4932,6 +5489,18 @@ def configure_default_views
       <% end %>
     </li>
   ERB
+  if siwe_enabled
+    account_navigation_items += <<~ERB
+      <li>
+        <%= link_to application_routes.account_siwe_identities_path, class: ("menu-active" if controller_path == "account/siwe_identities"), aria: { current: ("page" if controller_path == "account/siwe_identities") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a2.25 2.25 0 0 0-2.25-2.25H15a3 3 0 1 0 0 6h3.75A2.25 2.25 0 0 0 21 13.5m0-1.5V6.75A2.25 2.25 0 0 0 18.75 4.5H5.25A2.25 2.25 0 0 0 3 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25h13.5A2.25 2.25 0 0 0 21 17.25V12Z" />
+          </svg>
+          <%= t("navigation.login_methods") %>
+        <% end %>
+      </li>
+    ERB
+  end
   if web_push_enabled
     account_navigation_items += <<~ERB
       <li>
@@ -5014,33 +5583,21 @@ def configure_default_views
       </li>
     ERB
   end
-  signed_in_condition = devise ? "user_signed_in?" : "authenticated?"
+  signed_in_condition = "user_signed_in?"
   admin_controller_conditions = ['controller_path.start_with?("admin/")']
   admin_controller_conditions << 'controller_path.start_with?("mission_control/jobs/")' if job_operations_enabled
   admin_controller_conditions << 'controller_path.start_with?("maintenance_tasks/")' if maintenance_tasks_enabled
   admin_controller_condition = admin_controller_conditions.join(" || ")
-  profile_owner = devise ? "current_user.profile" : "Current.user.profile"
-  logout_path = devise ? "application_routes.destroy_user_session_path" : "application_routes.session_path"
-  guest_desktop_navigation = if devise
-    <<~ERB
-      <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-ghost btn-rapid" %>
-      <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
-    ERB
-  else
-    <<~ERB
-      <%= link_to t("navigation.sign_in"), application_routes.new_session_path, class: "btn btn-ghost btn-rapid" %>
-    ERB
-  end
-  guest_mobile_navigation = if devise
-    <<~ERB
-      <li><%= link_to t("navigation.sign_in"), application_routes.new_user_session_path %></li>
-      <li><%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path %></li>
-    ERB
-  else
-    <<~ERB
-      <li><%= link_to t("navigation.sign_in"), application_routes.new_session_path %></li>
-    ERB
-  end
+  profile_owner = "current_user.profile"
+  logout_path = "application_routes.destroy_user_session_path"
+  guest_desktop_navigation = <<~ERB
+    <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-ghost btn-rapid" %>
+    <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
+  ERB
+  guest_mobile_navigation = <<~ERB
+    <li><%= link_to t("navigation.sign_in"), application_routes.new_user_session_path %></li>
+    <li><%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path %></li>
+  ERB
   profile_identity = if display_name_enabled || screen_name_enabled
     display_name = if display_name_enabled
       <<~ERB
@@ -5095,12 +5652,8 @@ def configure_default_views
       </summary>
     ERB
   end
-  layout_method = if devise
-    'devise_controller? ? (controller_name == "registrations" && %w[edit update].include?(action_name) ? "account" : "authentication") : "application"'
-  else
-    'controller_path == "sessions" ? "authentication" : "application"'
-  end
-  wallet_script = devise ? "" : "    <script src=\"/vendor/web3-4.16.0.min.js\" defer></script>\n"
+  layout_method = 'devise_controller? ? (controller_name == "registrations" && %w[edit update].include?(action_name) ? "account" : "authentication") : "application"'
+  wallet_script = ""
   pwa_head = if pwa_enabled
     <<~ERB
       <meta name="theme-color" content="#3ea8ff">
@@ -5133,46 +5686,21 @@ def configure_default_views
 
   RUBY
 
-  home_authentication = devise ? "" : "  allow_unauthenticated_access only: :index\n\n"
+  home_authentication = ""
   create_file "app/controllers/home_controller.rb", <<~RUBY, force: true
     class HomeController < ApplicationController
     #{home_authentication}  def index; end
     end
   RUBY
 
-  accounts_controller = if devise
-    <<~RUBY
-      class AccountsController < ApplicationController
-        layout "account"
-        before_action :authenticate_user!
+  accounts_controller = <<~RUBY
+    class AccountsController < ApplicationController
+      layout "account"
+      before_action :authenticate_user!
 
-        def show; end
-      end
-    RUBY
-  else
-    <<~RUBY
-      class AccountsController < ApplicationController
-        layout "account"
-
-        def show; end
-
-        def edit; end
-
-        def destroy
-          user = Current.user
-          if user.last_admin?
-            redirect_to edit_account_path, alert: I18n.t("accounts.destroy.last_admin"), status: :see_other
-            return
-          end
-
-          user.destroy!
-          cookies.delete(:session_id)
-          Current.session = nil
-          redirect_to root_path, notice: I18n.t("accounts.destroy.notice"), status: :see_other
-        end
-      end
-    RUBY
-  end
+      def show; end
+    end
+  RUBY
   create_file "app/controllers/accounts_controller.rb", accounts_controller, force: true
 
   create_file "app/helpers/application_helper.rb", <<~RUBY, force: true
@@ -5201,7 +5729,7 @@ def configure_default_views
   RUBY
 
   route 'root "home#index"'
-  route devise ? "resource :account, only: :show" : "resource :account, only: %i[show edit destroy]"
+  route "resource :account, only: :show"
 
   create_file "app/views/layouts/application.html.erb", <<~ERB, force: true
     <!DOCTYPE html>
@@ -5434,59 +5962,7 @@ def configure_default_views
     </div>
   ERB
 
-  unless devise
-    create_file "app/views/accounts/edit.html.erb", <<~ERB, force: true
-      <% content_for :page_title, t("accounts.edit.title") %>
-      <div class="space-y-6">
-        <section class="card card-border border-base-300 bg-base-100 shadow-none">
-          <div class="card-body p-5 sm:p-6">
-            <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.edit.information") %></h2>
-            <ul class="list mt-3">
-              <li class="list-row px-0">
-                <span class="badge badge-outline">ID</span>
-                <div class="list-col-grow min-w-0">
-                  <p class="text-xs text-neutral"><%= t("accounts.edit.wallet_address") %></p>
-                  <p class="mt-1 break-all font-semibold"><%= Current.user.wallet_address %></p>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </section>
-
-        <section class="card card-border border-error bg-base-100 shadow-none">
-          <div class="card-body p-5 sm:p-6">
-            <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.edit.danger_title") %></h2>
-            <p class="text-sm text-neutral"><%= t("accounts.edit.danger_description") %></p>
-            <div class="card-actions mt-2 justify-start">
-              <%= button_to t("accounts.edit.delete"), account_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("accounts.edit.confirm") } %>
-            </div>
-          </div>
-        </section>
-      </div>
-    ERB
-  end
-
-  if devise
-    configure_devise_views
-  else
-    create_file "app/views/sessions/new.html.erb", <<~ERB, force: true
-      <% content_for :page_title, t("wallet_siwe.title") %>
-      <div data-controller="siwe-sign-in"
-           data-siwe-sign-in-statement-value="<%= application_identity.siwe_statement %>"
-           data-siwe-sign-in-wallet-missing-value="<%= t('wallet_siwe.errors.wallet_missing') %>"
-           data-siwe-sign-in-nonce-error-value="<%= t('wallet_siwe.errors.nonce') %>"
-           data-siwe-sign-in-verification-error-value="<%= t('wallet_siwe.errors.verification') %>">
-        <header class="mb-8">
-          <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-          <p class="mt-2 text-sm text-neutral"><%= t("wallet_siwe.description") %></p>
-        </header>
-        <button type="button" class="btn btn-primary btn-block btn-rapid hover:border-secondary hover:bg-secondary" data-action="click->siwe-sign-in#signIn"><%= t("wallet_siwe.connect") %></button>
-        <p class="alert alert-error mt-5 hidden" data-siwe-sign-in-target="error" role="alert"></p>
-        <div class="divider"></div>
-        <div class="alert alert-info alert-soft text-sm" role="note"><span><%= t("wallet_siwe.note") %></span></div>
-      </div>
-    ERB
-  end
+  configure_devise_views
 
   generated_profile_assertion = if display_name_enabled && screen_name_enabled
     <<~RUBY
@@ -5655,6 +6131,20 @@ def configure_default_views
         end
     RUBY
   else
+    solid_queue_cleanup_assertion = if solid_queue_enabled
+      <<~RUBY
+        recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
+          .fetch("production").fetch("clear_solid_queue_finished_jobs")
+        assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
+        assert_equal "every hour at minute 12", recurring.fetch("schedule")
+        assert_equal 1, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") }
+      RUBY
+    else
+      <<~RUBY
+        assert_not Rails.root.join("config/recurring.yml").exist?
+        assert_equal 0, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") }
+      RUBY
+    end
     <<~RUBY
 
         test "does not expose Mission Control Jobs when the feature is disabled" do
@@ -5680,11 +6170,7 @@ def configure_default_views
             test/models/solid_queue_cleanup_test.rb
           ].each { |path| assert_not Rails.root.join(path).exist?, path }
           assert_no_match(/gem ["']mission_control-jobs["']/, Rails.root.join("Gemfile").read)
-          recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
-            .fetch("production").fetch("clear_solid_queue_finished_jobs")
-          assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
-          assert_equal "every hour at minute 12", recurring.fetch("schedule")
-          assert_equal 1, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") }
+          #{solid_queue_cleanup_assertion.lines.map { |line| "          #{line}" }.join}
           assert_raises(ActionController::RoutingError) do
             Rails.application.routes.recognize_path("/admin/jobs", method: :get)
           end
@@ -5723,8 +6209,7 @@ def configure_default_views
     RUBY
   end
 
-  default_pages_test = if devise
-    <<~RUBY
+  default_pages_test = <<~RUBY
       require "test_helper"
       require "stringio"
 
@@ -5753,8 +6238,7 @@ def configure_default_views
 
           [
             [new_user_session_url, I18n.t("devise_views.sessions.title")],
-            [new_user_registration_url, I18n.t("devise_views.registrations.new_title")],
-            [new_user_password_url, I18n.t("devise_views.passwords.new_title")]
+            [new_user_registration_url, I18n.t("devise_views.registrations.new_title")]
           ].each do |url, page_title|
             get url
             assert_response :success
@@ -5775,7 +6259,7 @@ def configure_default_views
           get account_url
           assert_redirected_to new_user_session_url
 
-          user = User.create!(email: "sample@example.com", password: "password123", password_confirmation: "password123")
+          user = User.create!(login_id: "sample_user", password: "password123", password_confirmation: "password123")
     #{generated_profile_assertion}#{profile_setup}      user.grant_role!(:admin)
           sign_in user
           get account_url
@@ -5826,52 +6310,7 @@ def configure_default_views
     #{job_operations_route_test}#{maintenance_route_test}
       end
     RUBY
-  else
-    <<~RUBY
-      require "test_helper"
 
-      class DefaultPagesTest < ActionDispatch::IntegrationTest
-        test "renders public and wallet login pages with the custom theme" do
-          get root_url
-          assert_response :success
-          app_name = Rails.configuration.x.application_identity.app_name
-          assert_select "title", text: app_name, count: 1
-          assert_select 'meta[property="og:title"][content=?]', app_name, count: 1
-          assert_select 'html[data-theme="rapid-rails"]'
-          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label=?]', I18n.t("navigation.main")
-          assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
-          assert_select 'header ul.menu.dropdown-content > li > a', count: 1
-          assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
-          assert_select 'header ul.menu.dropdown-content .divider, header ul.menu.dropdown-content .btn', count: 0
-          assert_select 'header a[href=?].btn.btn-ghost.btn-rapid', new_session_path, count: 1
-          assert_select '.hero > .hero-content', count: 1
-          assert_select 'footer.footer.mx-auto.w-full.max-w-6xl.px-5', count: 1
-          refute_includes response.body, 'Rails 8.1 / Tailwind CSS 4 / daisyUI 5'
-
-          get new_session_url
-          assert_response :success
-          page_title = I18n.t("wallet_siwe.title")
-          assert_select "h1", text: page_title, count: 1
-          assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
-          assert_select 'meta[property="og:title"][content=?]', "\#{page_title} | \#{app_name}", count: 1
-          assert_select '[data-layout="authentication"].hero > .hero-content .card > .card-body'
-          assert_select '[data-controller="siwe-sign-in"]'
-          assert_select '[data-action="click->siwe-sign-in#signIn"].btn.btn-block.btn-rapid'
-          assert_select '[data-siwe-sign-in-target="error"]'
-          assert_select '.divider + .alert.alert-info.alert-soft', count: 1
-        end
-
-        test "protects account and does not expose unimplemented session actions" do
-          get account_url
-          assert_redirected_to new_session_url
-          get edit_account_url
-          assert_redirected_to new_session_url
-          assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path("/session/edit", method: :get) }
-        end
-    #{job_operations_route_test}#{maintenance_route_test}
-      end
-    RUBY
-  end
   create_file "test/integration/default_pages_test.rb", default_pages_test, force: true
 end
 
@@ -5981,9 +6420,8 @@ def configure_pwa
 end
 
 def configure_web_push
-  devise = VALUES.fetch("account_authentication") == "devise"
-  authentication_callback = devise ? "  before_action :authenticate_user!\n" : ""
-  account_user = devise ? "current_user" : "Current.user"
+  authentication_callback = "  before_action :authenticate_user!\n"
+  account_user = "current_user"
 
   require "web-push"
   environment "config.action_controller.cache_store = :memory_store", env: "test"
@@ -6693,46 +7131,17 @@ def configure_web_push
     end
   RUBY
 
-  controller_test_support = if devise
-    <<~RUBY
-        include Devise::Test::IntegrationHelpers
-        include ActiveJob::TestHelper
+  controller_test_support = <<~RUBY
+      include Devise::Test::IntegrationHelpers
+      include ActiveJob::TestHelper
 
-        setup do
-          @user = users(:one)
-          sign_in @user
-        PushSubscriptionsController.cache_store.clear
-          configure_vapid
-        end
-    RUBY
-  else
-    <<~RUBY
-        require "eth"
-        include ActiveJob::TestHelper
-
-        setup do
-          @user = users(:one)
-          Rails.cache.clear
-          key = Eth::Key.new(priv: "1".rjust(64, "0"))
-          get session_nonce_url, headers: siwe_test_headers(key)
-          nonce = response.parsed_body.fetch("nonce")
-          @user.update!(wallet_address: key.address.to_s)
-          message = Siwe::Message.new(
-            domain: "www.example.com",
-            address: key.address.to_s,
-            uri: "http://www.example.com",
-            chain_id: 1,
-            nonce:,
-            issued_at: Time.current.iso8601,
-            statement: Rails.configuration.x.application_identity.siwe_statement
-          ).prepare_message
-          post session_url, params: { message:, signature: key.personal_sign(message) },
-            headers: siwe_test_headers(key), as: :json
-          assert_response :success
-          configure_vapid
-        end
-    RUBY
-  end
+      setup do
+        @user = users(:one)
+        sign_in @user
+        Rails.cache.clear
+        configure_vapid
+      end
+  RUBY
   create_file "test/controllers/push_subscriptions_controller_test.rb", <<~RUBY, force: true
     require "test_helper"
 
@@ -6743,12 +7152,12 @@ def configure_web_push
       end
 
       test "requires authentication" do
-        #{devise ? "sign_out @user" : "delete session_url"}
+        sign_out @user
         get vapid_public_key_push_subscription_url
 
-        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+        assert_redirected_to new_user_session_url
         get notification_url
-        assert_redirected_to #{devise ? "new_user_session_url" : "new_session_url"}
+        assert_redirected_to new_user_session_url
       end
 
       test "renders the dedicated notification settings page" do
@@ -6887,22 +7296,12 @@ def install_solid_components
 end
 
 def install_job_operations
-  devise = VALUES.fetch("account_authentication") == "devise"
   production_worker = if VALUES.fetch("deployment") == "dokploy"
     "Dokployでは既存の`worker: bin/jobs --mode async`がworker、dispatcher、schedulerを起動します。cleanup専用processは追加しません。"
   else
     "このテンプレートはproduction worker processを設定しません。利用環境に合わせてSolid Queue worker、dispatcher、schedulerの起動と監視を別途構成してください。"
   end
-  authentication_route_bridge = if devise
-    ""
-  else
-    <<~RUBY
-      def new_session_path
-        Rails.application.routes.url_helpers.new_session_path
-      end
-
-    RUBY
-  end
+  authentication_route_bridge = ""
 
   environment "config.mission_control.jobs.adapters = [:solid_queue]"
   environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "test"
@@ -7427,56 +7826,20 @@ def install_job_operations
     end
   RUBY
 
-  controller_test_support = if devise
-    <<~RUBY
-        include Devise::Test::IntegrationHelpers
+  controller_test_support = <<~RUBY
+      include Devise::Test::IntegrationHelpers
 
-        setup do
-          @admin = User.create!(email: "jobs-admin@example.com", password: "password123", password_confirmation: "password123")
-          @regular = User.create!(email: "jobs-regular@example.com", password: "password123", password_confirmation: "password123")
-          @admin.grant_role!(:admin)
+      setup do
+        @admin = User.create!(login_id: "jobs_admin", password: "password123", password_confirmation: "password123")
+        @regular = User.create!(login_id: "jobs_regular", password: "password123", password_confirmation: "password123")
+        @admin.grant_role!(:admin)
+      end
+
+      private
+        def sign_in_as(user, _key = nil)
+          sign_in user
         end
-
-        private
-          def sign_in_as(user, _key = nil)
-            sign_in user
-          end
-    RUBY
-  else
-    <<~RUBY
-        require "eth"
-
-        setup do
-          @admin, @admin_key = create_wallet_user
-          @regular, @regular_key = create_wallet_user
-          @admin.grant_role!(:admin)
-        end
-
-        private
-          def create_wallet_user
-            key = Eth::Key.new
-            [User.create!(wallet_address: key.address.to_s), key]
-          end
-
-          def sign_in_as(_user, key)
-            get session_nonce_url, headers: siwe_test_headers(key)
-            nonce = response.parsed_body.fetch("nonce")
-            message = Siwe::Message.new(
-              domain: "www.example.com",
-              address: key.address.to_s,
-              uri: "http://www.example.com",
-              chain_id: 1,
-              nonce: nonce,
-              issued_at: Time.current.iso8601,
-              statement: Rails.configuration.x.application_identity.siwe_statement
-            ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) },
-              headers: siwe_test_headers(key), as: :json
-            assert_response :success
-          end
-    RUBY
-  end
-
+  RUBY
   create_file "test/controllers/admin/job_operations_controller_test.rb", <<~RUBY, force: true
     require "test_helper"
 
@@ -7493,11 +7856,11 @@ def install_job_operations
       test "requires authentication" do
         get admin_jobs_url
 
-        assert_redirected_to #{devise ? "new_user_session_url" : "Rails.application.routes.url_helpers.new_session_path"}
+        assert_redirected_to new_user_session_url
       end
 
       test "denies regular users" do
-        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+        sign_in_as(@regular)
 
         get admin_jobs_url
 
@@ -7505,7 +7868,7 @@ def install_job_operations
       end
 
       test "renders the console for admins inside the admin layout" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         get admin_jobs_url
 
@@ -7544,7 +7907,7 @@ def install_job_operations
       end
 
       test "allows admins to retry a failed Solid Queue job" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
         active_job = RetryProbeJob.perform_later
         solid_queue_job = SolidQueue::Job.find_by!(active_job_id: active_job.job_id)
         solid_queue_job.ready_execution.destroy!
@@ -7620,24 +7983,12 @@ def install_job_operations
 end
 
 def install_maintenance_tasks
-  devise = VALUES.fetch("account_authentication") == "devise"
-  identifier_type = devise ? "email" : "wallet_address"
-  identifier_expression = devise ? "authorization_user.email" : "authorization_user.wallet_address"
   production_worker = if VALUES.fetch("deployment") == "dokploy"
     "Dokployでは既存の`worker: bin/jobs --mode async`がMaintenance Taskも処理します。専用workerは追加しません。"
   else
     "このテンプレートはproduction worker processを設定しません。利用環境に合わせてSolid Queue workerの起動と監視を別途構成してください。"
   end
-  authentication_route_bridge = if devise
-    ""
-  else
-    <<~RUBY
-      def new_session_path
-        Rails.application.routes.url_helpers.new_session_path
-      end
-
-    RUBY
-  end
+  authentication_route_bridge = ""
 
   generate "maintenance_tasks:install"
   configure_maintenance_tasks_route
@@ -7655,8 +8006,7 @@ def install_maintenance_tasks
 
     MaintenanceTasks.metadata = lambda do
       {
-        "triggered_by_type" => "#{identifier_type}",
-        "triggered_by_identifier" => #{identifier_expression}
+        "triggered_by_user_id" => authorization_user.id
       }
     end
   RUBY
@@ -8065,7 +8415,7 @@ def install_maintenance_tasks
 
     `bin/rails generate maintenance_tasks:task NAME`を実行し、`app/tasks/maintenance/`へ生成されたTaskへ、再実行可能で小さな単位の処理を実装してください。ブラウザから任意のRubyコードを入力・実行する機能はありません。
 
-    実行履歴、status、cursor、job ID、arguments、metadata、error class/message/backtraceは`maintenance_tasks_runs`へGem標準形式で保存されます。実行者はRun metadataの`triggered_by_type`と`triggered_by_identifier`へ実行時点の#{identifier_type}をスナップショットとして保存します。User recordとの関連は持たないため、User削除後も履歴は維持されます。
+    実行履歴、status、cursor、job ID、arguments、metadata、error class/message/backtraceは`maintenance_tasks_runs`へGem標準形式で保存されます。実行者はRun metadataの`triggered_by_user_id`へ実行時点の内部User IDをスナップショットとして保存します。User recordとの関連は持たないため、User削除後も履歴は維持されます。
 
     ## Worker
 
@@ -8128,59 +8478,21 @@ def install_maintenance_tasks
     end
   RUBY
 
-  controller_test_support = if devise
-    <<~RUBY
-        include ActiveJob::TestHelper
-        include Devise::Test::IntegrationHelpers
+  controller_test_support = <<~RUBY
+      include ActiveJob::TestHelper
+      include Devise::Test::IntegrationHelpers
 
-        setup do
-          @admin = User.create!(email: "maintenance-admin@example.com", password: "password123", password_confirmation: "password123")
-          @regular = User.create!(email: "maintenance-regular@example.com", password: "password123", password_confirmation: "password123")
-          @admin.grant_role!(:admin)
+      setup do
+        @admin = User.create!(login_id: "maintenance_admin", password: "password123", password_confirmation: "password123")
+        @regular = User.create!(login_id: "maintenance_regular", password: "password123", password_confirmation: "password123")
+        @admin.grant_role!(:admin)
+      end
+
+      private
+        def sign_in_as(user, _key = nil)
+          sign_in user
         end
-
-        private
-          def sign_in_as(user, _key = nil)
-            sign_in user
-          end
-    RUBY
-  else
-    <<~RUBY
-        require "eth"
-
-        include ActiveJob::TestHelper
-
-        setup do
-          @admin, @admin_key = create_wallet_user
-          @regular, @regular_key = create_wallet_user
-          @admin.grant_role!(:admin)
-        end
-
-        private
-          def create_wallet_user
-            key = Eth::Key.new
-            [User.create!(wallet_address: key.address.to_s), key]
-          end
-
-          def sign_in_as(_user, key)
-            get session_nonce_url, headers: siwe_test_headers(key)
-            nonce = response.parsed_body.fetch("nonce")
-            message = Siwe::Message.new(
-              domain: "www.example.com",
-              address: key.address.to_s,
-              uri: "http://www.example.com",
-              chain_id: 1,
-              nonce: nonce,
-              issued_at: Time.current.iso8601,
-              statement: Rails.configuration.x.application_identity.siwe_statement
-            ).prepare_message
-            post session_url, params: { message: message, signature: key.personal_sign(message) },
-              headers: siwe_test_headers(key), as: :json
-            assert_response :success
-          end
-    RUBY
-  end
-
+  RUBY
   create_file "test/controllers/admin/maintenance_tasks_controller_test.rb", <<~RUBY, force: true
     require "test_helper"
     require "cgi"
@@ -8196,11 +8508,11 @@ def install_maintenance_tasks
       test "requires authentication" do
         get admin_maintenance_tasks_url
 
-        assert_redirected_to #{devise ? "new_user_session_url" : "Rails.application.routes.url_helpers.new_session_path"}
+        assert_redirected_to new_user_session_url
       end
 
       test "denies every engine operation to regular users" do
-        sign_in_as(@regular, #{devise ? "nil" : "@regular_key"})
+        sign_in_as(@regular)
 
         get admin_maintenance_tasks_url
         assert_response :forbidden
@@ -8216,7 +8528,7 @@ def install_maintenance_tasks
       end
 
       test "renders the task list and details for admins" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         get admin_maintenance_tasks_url
         assert_response :success
@@ -8260,7 +8572,7 @@ def install_maintenance_tasks
       end
 
       test "preserves pause, resume, and cancel operations" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         pausing_run = MaintenanceTasks::Run.create!(task_name: TASK_NAME, status: "running", job_id: "running-job")
         post "\#{RUNS_PATH}/\#{pausing_run.id}/pause"
@@ -8281,7 +8593,7 @@ def install_maintenance_tasks
       end
 
       test "renders daisyUI run controls, progress, and errors" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
         now = Time.current
         MaintenanceTasks::Run.create!(
           task_name: TASK_NAME,
@@ -8314,7 +8626,7 @@ def install_maintenance_tasks
       end
 
       test "enqueues and executes a task while preserving standard run history" do
-        sign_in_as(@admin, #{devise ? "nil" : "@admin_key"})
+        sign_in_as(@admin)
 
         assert_enqueued_with(job: MaintenanceTasks::TaskJob) do
           post RUNS_PATH
@@ -8324,8 +8636,7 @@ def install_maintenance_tasks
         run = MaintenanceTasks::Run.order(:id).last
         assert_predicate run.job_id, :present?
         assert_equal "enqueued", run.status
-        assert_equal "#{identifier_type}", run.metadata.fetch("triggered_by_type")
-        assert_equal @admin.#{devise ? "email" : "wallet_address"}, run.metadata.fetch("triggered_by_identifier")
+        assert_equal @admin.id, run.metadata.fetch("triggered_by_user_id")
 
         perform_enqueued_jobs
 
@@ -8372,7 +8683,7 @@ def configure_common_files
 end
 
 def configure_evidence_capture
-  authentication = VALUES.fetch("account_authentication") == "devise" ? "devise" : "siwe"
+  additional_login_methods = VALUES.fetch("additional_login_methods")
   image_delivery = VALUES.fetch("image_delivery")
   web_push = VALUES.fetch("web_push") == "use"
   job_operations = VALUES.fetch("job_operations") == "enable"
@@ -8391,7 +8702,8 @@ def configure_evidence_capture
 
       include ActiveJob::TestHelper
 
-      AUTHENTICATION = __AUTHENTICATION__
+      SCENARIO_SET = "full"
+      ADDITIONAL_LOGIN_METHODS = __ADDITIONAL_LOGIN_METHODS__
       IMAGE_DELIVERY = __IMAGE_DELIVERY__
       LOCALE = I18n.default_locale.to_s
       WEB_PUSH = __WEB_PUSH__
@@ -8402,7 +8714,7 @@ def configure_evidence_capture
         Capybara.server_port = 45_678
         Capybara.app_host = "http://127.0.0.1:45678"
       end
-      require "eth" if AUTHENTICATION == "siwe"
+      require "eth" if ADDITIONAL_LOGIN_METHODS.include?("siwe")
       VIEWPORTS = {
         "desktop" => { "width" => 1400, "height" => 900 },
         "mobile" => { "width" => 390, "height" => 844 }
@@ -8416,26 +8728,15 @@ def configure_evidence_capture
         raise "EVIDENCE_OUTPUT_DIR must be an existing empty directory" unless @output_directory.directory? && @output_directory.children.empty?
 
         @captures = []
-        VIEWPORTS.each do |viewport_name, viewport|
-          page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
-          install_web_push_stub if WEB_PUSH
-          prepare_guest_data
-          verify_footer_geometry if viewport_name == "desktop"
-          capture_guest_pages(viewport_name)
-          authenticate
-          prepare_authenticated_data
-          verify_with_menu_layout_geometry if viewport_name == "desktop"
-          verify_job_operations_geometry if viewport_name == "desktop" && JOB_OPERATIONS
-          verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
-          capture_authenticated_pages(viewport_name)
-          capture_regular_user_navigation(viewport_name)
-          Capybara.reset_sessions!
-        end
+        capture_common_scenarios
+        capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")
+        capture_image_delivery_scenarios if IMAGE_DELIVERY == "imgproxy"
 
         File.write(
           @output_directory.join("captures.json"),
           JSON.pretty_generate(
-            "authentication" => AUTHENTICATION,
+            "scenario_set" => SCENARIO_SET,
+            "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
             "locale" => LOCALE,
             "image_delivery" => IMAGE_DELIVERY,
             "viewports" => VIEWPORTS,
@@ -8445,8 +8746,153 @@ def configure_evidence_capture
       end
 
       private
-        def devise?
-          AUTHENTICATION == "devise"
+        def capture_common_scenarios
+          VIEWPORTS.each do |viewport_name, viewport|
+            page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
+            install_web_push_stub if WEB_PUSH
+            prepare_guest_data
+            verify_footer_geometry if viewport_name == "desktop"
+            capture_guest_pages(viewport_name)
+            authenticate
+            prepare_authenticated_data
+            verify_with_menu_layout_geometry if viewport_name == "desktop"
+            verify_job_operations_geometry if viewport_name == "desktop" && JOB_OPERATIONS
+            verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
+            capture_authenticated_pages(viewport_name)
+            capture_regular_user_navigation(viewport_name)
+            Capybara.reset_sessions!
+          end
+        end
+
+        def capture_siwe_scenarios
+          @user = User.find_or_create_by!(login_id: "evidence_user") do |user|
+            user.password = PASSWORD
+            user.password_confirmation = PASSWORD
+          end
+          @user.profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
+
+          VIEWPORTS.each do |viewport_name, viewport|
+            Capybara.reset_sessions!
+            page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
+            @user.siwe_identities.delete_all
+
+            capture_page(
+              "siwe-login-option",
+              translate("siwe.sign_in.title"),
+              new_user_session_path,
+              translate("devise_views.sessions.title"),
+              viewport_name
+            )
+            assert_selector '[data-controller="siwe-sign-in"][data-siwe-sign-in-mode-value="login"]'
+
+            authenticate
+            capture_page(
+              "siwe-identities-empty",
+              translate("siwe.identities.title"),
+              account_siwe_identities_path,
+              translate("siwe.identities.title"),
+              viewport_name
+            )
+            find('[data-siwe-sign-in-target="name"]').set("Main Wallet")
+            find('[data-siwe-sign-in-target="currentPassword"]').set(PASSWORD)
+            capture_current_page("siwe-identity-add", translate("siwe.identities.add"), viewport_name)
+
+            main_key = Eth::Key.new(priv: PRIVATE_KEY)
+            regular_key = Eth::Key.new(priv: REGULAR_PRIVATE_KEY)
+            main_identity = @user.siwe_identities.create!(name: "Main Wallet", address: main_key.address.to_s)
+            @user.siwe_identities.create!(name: "Backup Wallet", address: regular_key.address.to_s)
+            capture_page(
+              "siwe-identities-multiple",
+              translate("siwe.identities.title"),
+              account_siwe_identities_path,
+              translate("siwe.identities.title"),
+              viewport_name
+            )
+
+            main_identity.update!(name: "Primary Wallet")
+            capture_page(
+              "siwe-identity-renamed",
+              translate("siwe.identities.updated"),
+              account_siwe_identities_path,
+              translate("siwe.identities.title"),
+              viewport_name
+            )
+            authenticate_with_siwe(main_key, viewport)
+            capture_page(
+              "siwe-login-existing-user",
+              translate("siwe.sign_in.title"),
+              account_path,
+              translate("accounts.show.title"),
+              viewport_name
+            )
+          end
+        end
+
+        def authenticate_with_siwe(key, viewport)
+          Capybara.reset_sessions!
+          page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
+          visit new_user_session_path
+          challenge_response = browser_post_json(
+            "/users/sign_in/siwe/challenge",
+            { address: key.address.to_s, chain_id: 1 }
+          )
+          assert_equal 200, challenge_response.fetch("status")
+          challenge = challenge_response.fetch("body")
+          verify_response = browser_post_json(
+            "/users/sign_in/siwe",
+            {
+              challenge_token: challenge.fetch("challenge_token"),
+              signature: key.personal_sign(challenge.fetch("message"))
+            }
+          )
+          assert_equal 200, verify_response.fetch("status")
+        end
+
+        def browser_post_json(path, payload)
+          page.evaluate_async_script(<<~JAVASCRIPT, path, payload)
+            const [path, payload, done] = arguments
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+            const headers = {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+            if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+            fetch(path, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers,
+              body: JSON.stringify(payload)
+            }).then(async (response) => {
+              done({ status: response.status, body: await response.json() })
+            }).catch((error) => done({ status: 0, error: error.message }))
+          JAVASCRIPT
+        end
+
+        def capture_image_delivery_scenarios
+          VIEWPORTS.each do |viewport_name, viewport|
+            Capybara.reset_sessions!
+            page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
+            prepare_guest_data
+            authenticate
+            @user.profile.avatar.purge if @user.profile.avatar.attached?
+            @user.profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
+            capture_page(
+              "image-delivery-home-avatar",
+              "画像配信（ホーム）",
+              root_path,
+              translate("home.heading"),
+              viewport_name
+            )
+            assert_avatar_image_geometry(40)
+            capture_page(
+              "image-delivery-profile-avatar",
+              "画像配信（プロフィール）",
+              profile_path,
+              translate("profiles.title"),
+              viewport_name
+            )
+            assert_avatar_image_geometry(40, 64)
+          end
         end
 
         def translate(key, **options)
@@ -8485,9 +8931,7 @@ def configure_evidence_capture
             github_url: "https://github.com/example/example"
           )
 
-          return unless devise?
-
-          @user = User.find_or_create_by!(email: "evidence@example.com") do |user|
+          @user = User.find_or_create_by!(login_id: "evidence_user") do |user|
             user.password = PASSWORD
             user.password_confirmation = PASSWORD
           end
@@ -8499,22 +8943,8 @@ def configure_evidence_capture
           capture_page("about", "アプリについて", about_path, Page::TITLES.fetch("about"), viewport)
           assert_selector ".lexxy-content", text: "管理画面から更新したAction Text本文"
           capture_faq_page(viewport)
-          login_path = devise? ? new_user_session_path : new_session_path
-          login_heading = devise? ? translate("devise_views.sessions.title") : translate("wallet_siwe.title")
-          capture_page("login", login_heading, login_path, login_heading, viewport)
-
-          if devise?
-            capture_page("registration", "アカウント作成", new_user_registration_path, translate("devise_views.registrations.new_title"), viewport)
-            capture_page("password-reset-request", "パスワード再設定", new_user_password_path, translate("devise_views.passwords.new_title"), viewport)
-            reset_token = @user.send_reset_password_instructions
-            capture_page(
-              "password-reset-edit",
-              translate("devise_views.passwords.edit_title"),
-              edit_user_password_path(reset_password_token: reset_token),
-              translate("devise_views.passwords.edit_title"),
-              viewport
-            )
-          end
+          capture_page("login", translate("devise_views.sessions.title"), new_user_session_path, translate("devise_views.sessions.title"), viewport)
+          capture_page("registration", "アカウント作成", new_user_registration_path, translate("devise_views.registrations.new_title"), viewport)
 
           return unless viewport == "mobile"
 
@@ -8524,47 +8954,11 @@ def configure_evidence_capture
         end
 
         def authenticate
-          if devise?
-            visit new_user_session_path
-            fill_in User.human_attribute_name(:email), with: @user.email
-            fill_in User.human_attribute_name(:password), with: PASSWORD
-            click_button translate("devise_views.sessions.submit")
-            assert_current_path root_path
-          else
-            authenticate_wallet_siwe
-          end
-        end
-
-        def authenticate_wallet_siwe(private_key = PRIVATE_KEY)
-          visit root_path
-          browser_uri = URI(page.current_url)
-          integration = ActionDispatch::Integration::Session.new(Rails.application)
-          integration.host! browser_uri.host + (browser_uri.port == 80 ? "" : ":#{browser_uri.port}")
-          key = Eth::Key.new(priv: private_key)
-          integration.get "/session/nonce", headers: siwe_test_headers(key)
-          assert_equal 200, integration.response.status
-
-          nonce = integration.response.parsed_body.fetch("nonce")
-          origin = "#{browser_uri.scheme}://#{browser_uri.host}:#{browser_uri.port}"
-          message = Siwe::Message.new(
-            domain: browser_uri.host + (browser_uri.port == 80 ? "" : ":#{browser_uri.port}"),
-            address: key.address.to_s,
-            uri: origin,
-            chain_id: 1,
-            nonce: nonce,
-            issued_at: Time.zone.parse("2026-01-01 00:00:00 UTC").iso8601,
-            statement: Rails.configuration.x.application_identity.siwe_statement
-          ).prepare_message
-          integration.post "/session", params: { message: message, signature: key.personal_sign(message) },
-            headers: siwe_test_headers(key), as: :json
-          assert_equal 200, integration.response.status
-
-          cookie = integration.cookies.to_hash.fetch("session_id")
-          page.driver.with_playwright_page do |playwright_page|
-            playwright_page.context.add_cookies([{ name: "session_id", value: cookie, url: origin }])
-          end
-          visit root_path
-          @user = User.find_by!(wallet_address: key.address.to_s.downcase)
+          visit new_user_session_path
+          fill_in User.human_attribute_name(:login_id), with: @user.login_id
+          fill_in User.human_attribute_name(:password), with: PASSWORD
+          click_button translate("devise_views.sessions.submit")
+          assert_current_path root_path
         end
 
         def prepare_authenticated_data
@@ -8576,10 +8970,9 @@ def configure_evidence_capture
             clear_enqueued_jobs
             clear_performed_jobs
           end
-          identifier = devise? ? { email: "member@example.com", password: PASSWORD, password_confirmation: PASSWORD } :
-            { wallet_address: Eth::Key.new(priv: REGULAR_PRIVATE_KEY).address.to_s.downcase }
-          @regular_user = User.find_or_create_by!(identifier.slice(devise? ? :email : :wallet_address)) do |user|
-            identifier.each { |name, value| user.public_send("#{name}=", value) }
+          @regular_user = User.find_or_create_by!(login_id: "member_user") do |user|
+            user.password = PASSWORD
+            user.password_confirmation = PASSWORD
           end
         end
 
@@ -8588,9 +8981,7 @@ def configure_evidence_capture
           capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
           capture_avatar_states(viewport)
-          account_settings_path = devise? ? edit_user_registration_path : edit_account_path
-          account_settings_heading = devise? ? translate("devise_views.registrations.edit_title") : translate("accounts.edit.title")
-          capture_page("account-settings", "アカウント設定", account_settings_path, account_settings_heading, viewport)
+          capture_page("account-settings", "アカウント設定", edit_user_registration_path, translate("devise_views.registrations.edit_title"), viewport)
           capture_page("notifications", "通知", notification_path, translate("web_push.page.title"), viewport)
           capture_enabled_web_push(viewport) if WEB_PUSH
 
@@ -8694,17 +9085,12 @@ def configure_evidence_capture
           Capybara.reset_sessions!
           viewport_size = VIEWPORTS.fetch(viewport)
           page.current_window.resize_to(viewport_size.fetch("width"), viewport_size.fetch("height"))
-          if devise?
-            visit new_user_session_path
-            fill_in User.human_attribute_name(:email), with: @regular_user.email
-            fill_in User.human_attribute_name(:password), with: PASSWORD
-            click_button translate("devise_views.sessions.submit")
-            assert_current_path root_path
-            @user = @regular_user
-          else
-            authenticate_wallet_siwe(REGULAR_PRIVATE_KEY)
-            assert_equal @regular_user, @user
-          end
+          visit new_user_session_path
+          fill_in User.human_attribute_name(:login_id), with: @regular_user.login_id
+          fill_in User.human_attribute_name(:password), with: PASSWORD
+          click_button translate("devise_views.sessions.submit")
+          assert_current_path root_path
+          @user = @regular_user
 
           visit root_path
           find("header details.dropdown > summary", visible: :visible).click if viewport == "mobile"
@@ -9243,7 +9629,7 @@ def configure_evidence_capture
         end
     end
   RUBY
-  runner = runner.sub("__AUTHENTICATION__", authentication.inspect)
+  runner = runner.sub("__ADDITIONAL_LOGIN_METHODS__", additional_login_methods.inspect)
   runner = runner.sub("__IMAGE_DELIVERY__", image_delivery.inspect)
   runner = runner.sub("__WEB_PUSH__", web_push.inspect)
   runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)
@@ -9464,7 +9850,8 @@ after_bundle do
   configure_annotaterb
   configure_application_identity
   configure_image_delivery
-  VALUES.fetch("account_authentication") == "devise" ? install_devise : install_wallet_siwe
+  install_devise
+  install_siwe if VALUES.fetch("additional_login_methods").include?("siwe")
   configure_roles
   configure_content_management
   configure_profile if VALUES.fetch("profile_features").any?

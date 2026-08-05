@@ -196,6 +196,25 @@ class QuestionnaireTest < Minitest::Test
     ], prompt.choose_calls.fetch(0)
   end
 
+  def test_uses_unlimited_gum_multiple_selection_for_additional_login_methods
+    initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject do |key, _|
+      key == "additional_login_methods"
+    end
+    prompt = RecordingPrompt.new(answers: [%w[siwe]])
+
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all(initial_answers)
+
+    assert_equal %w[siwe], answers["additional_login_methods"]
+    assert_equal [
+      %w[siwe],
+      {
+        header: "追加するログイン方法を選択してください。",
+        selected: [],
+        no_limit: true
+      }
+    ], prompt.choose_calls.fetch(0)
+  end
+
   def test_accepts_no_selected_profile_features
     initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |key, _| key == "profile_features" }
     prompt = RecordingPrompt.new(answers: [[]])

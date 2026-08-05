@@ -23,7 +23,7 @@ class EvidenceTest < Minitest::Test
 
   def test_rejects_changed_or_extra_screenshots
     with_evidence_repository do |root|
-      screenshot = File.join(root, "docs/evidence/devise-ja/home--desktop.png")
+      screenshot = File.join(root, "docs/evidence/full-ja/home--desktop.png")
       File.binwrite(screenshot, fake_png(1400, 901))
 
       error = assert_raises(RuntimeError) { RapidRailsTemplate::Evidence.verify(root: root) }
@@ -31,7 +31,7 @@ class EvidenceTest < Minitest::Test
     end
 
     with_evidence_repository do |root|
-      File.binwrite(File.join(root, "docs/evidence/devise-ja/extra.png"), fake_png(1400, 900))
+      File.binwrite(File.join(root, "docs/evidence/full-ja/extra.png"), fake_png(1400, 900))
 
       error = assert_raises(RuntimeError) { RapidRailsTemplate::Evidence.verify(root: root) }
       assert_includes error.message, "スクリーンショット一覧がmanifestと一致しません"
@@ -40,11 +40,38 @@ class EvidenceTest < Minitest::Test
 
   def test_rejects_readme_that_does_not_match_manifest
     with_evidence_repository do |root|
-      File.write(File.join(root, "docs/evidence/siwe-en/README.md"), "stale\n")
+      File.write(File.join(root, "docs/evidence/full-ja/README.md"), "stale\n")
 
       error = assert_raises(RuntimeError) { RapidRailsTemplate::Evidence.verify(root: root) }
 
       assert_includes error.message, "READMEがmanifestと一致しません"
+    end
+  end
+
+  def test_rejects_duplicate_capture_id_and_viewport
+    Dir.mktmpdir do |directory|
+      File.binwrite(File.join(directory, "first.png"), fake_png(1400, 900))
+      File.binwrite(File.join(directory, "second.png"), fake_png(1400, 900))
+      captures = [
+        { "id" => "home", "viewport" => "desktop", "path" => "first.png" },
+        { "id" => "home", "viewport" => "desktop", "path" => "second.png" }
+      ]
+
+      error = assert_raises(RuntimeError) do
+        RapidRailsTemplate::Evidence.validate_capture_set!(directory, captures)
+      end
+
+      assert_includes error.message, "capture IDとviewportの組み合わせが重複しています"
+    end
+  end
+
+  def test_rejects_unexpected_evidence_variant
+    with_evidence_repository do |root|
+      FileUtils.mkdir_p(File.join(root, "docs/evidence/legacy"))
+
+      error = assert_raises(RuntimeError) { RapidRailsTemplate::Evidence.verify(root: root) }
+
+      assert_includes error.message, "エビデンス構成が一致しません"
     end
   end
 
@@ -63,18 +90,25 @@ class EvidenceTest < Minitest::Test
           File.write(
             File.join(directory, "captures.json"),
             JSON.pretty_generate(
-              "authentication" => metadata.fetch("authentication"),
+              "scenario_set" => metadata.fetch("scenario_set"),
+              "additional_login_methods" => metadata.fetch("additional_login_methods"),
               "locale" => metadata.fetch("locale"),
               "image_delivery" => metadata.fetch("image_delivery"),
               "viewports" => { "desktop" => { "width" => 1400, "height" => 900 } },
               "captures" => [
-                { "id" => "home", "title" => "ホーム", "viewport" => "desktop", "path" => "home--desktop.png" }
+                {
+                  "id" => "#{metadata.fetch("scenario_set")}-home",
+                  "title" => "ホーム",
+                  "viewport" => "desktop",
+                  "path" => "home--desktop.png"
+                }
               ]
             )
           )
           manifest = RapidRailsTemplate::Evidence.finalize_variant(
             directory: directory,
-            authentication: metadata.fetch("authentication"),
+            scenario_set: metadata.fetch("scenario_set"),
+            additional_login_methods: metadata.fetch("additional_login_methods"),
             locale: metadata.fetch("locale"),
             image_delivery: metadata.fetch("image_delivery"),
             source_fingerprint: fingerprint,

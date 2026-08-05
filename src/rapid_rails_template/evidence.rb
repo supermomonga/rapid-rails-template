@@ -7,11 +7,7 @@ require "json"
 module RapidRailsTemplate
   module Evidence
     VARIANTS = {
-      "devise-ja" => { "authentication" => "devise", "locale" => "ja", "image_delivery" => "rails" },
-      "devise-en" => { "authentication" => "devise", "locale" => "en", "image_delivery" => "rails" },
-      "siwe-ja" => { "authentication" => "siwe", "locale" => "ja", "image_delivery" => "rails" },
-      "siwe-en" => { "authentication" => "siwe", "locale" => "en", "image_delivery" => "rails" },
-      "imgproxy-devise-ja" => { "authentication" => "devise", "locale" => "ja", "image_delivery" => "imgproxy" }
+      "full-ja" => { "scenario_set" => "full", "additional_login_methods" => %w[siwe], "locale" => "ja", "image_delivery" => "imgproxy" }
     }.freeze
     PNG_SIGNATURE = "\x89PNG\r\n\x1A\n".b.freeze
 
@@ -31,12 +27,16 @@ module RapidRailsTemplate
       (source_paths + [File.join(root, "bin/update-evidence")]).sort
     end
 
-    def finalize_variant(directory:, authentication:, locale:, image_delivery:, source_fingerprint:, base_commit:)
+    def finalize_variant(directory:, scenario_set:, additional_login_methods:, locale:, image_delivery:, source_fingerprint:,
+      base_commit:)
       report_path = File.join(directory, "captures.json")
       raise "撮影レポートがありません: #{report_path}" unless File.file?(report_path)
 
       report = JSON.parse(File.read(report_path))
-      raise "認証方式が一致しません: #{report.fetch("authentication")}" unless report.fetch("authentication") == authentication
+      raise "scenario setが一致しません: #{report.fetch("scenario_set")}" unless report.fetch("scenario_set") == scenario_set
+      unless report.fetch("additional_login_methods") == additional_login_methods
+        raise "追加ログイン方法が一致しません: #{report.fetch("additional_login_methods").inspect}"
+      end
       raise "localeが一致しません: #{report.fetch("locale")}" unless report.fetch("locale") == locale
       raise "画像配信方式が一致しません: #{report.fetch("image_delivery")}" unless report.fetch("image_delivery") == image_delivery
 
@@ -59,8 +59,9 @@ module RapidRailsTemplate
 
       validate_capture_set!(directory, captures)
       manifest = {
-        "schema_version" => 3,
-        "authentication" => authentication,
+        "schema_version" => 5,
+        "scenario_set" => scenario_set,
+        "additional_login_methods" => additional_login_methods,
         "locale" => locale,
         "image_delivery" => image_delivery,
         "source_fingerprint" => source_fingerprint,
@@ -76,13 +77,24 @@ module RapidRailsTemplate
 
     def verify(root:, evidence_root: File.join(root, "docs/evidence"))
       expected_fingerprint = fingerprint(root)
+      actual_variants = Dir.children(evidence_root).select do |entry|
+        File.directory?(File.join(evidence_root, entry))
+      end.sort
+      unless actual_variants == VARIANTS.keys.sort
+        raise "エビデンス構成が一致しません: #{actual_variants.inspect}"
+      end
+
       manifests = VARIANTS.to_h do |variant, metadata|
         directory = File.join(evidence_root, variant)
         manifest_path = File.join(directory, "manifest.json")
         raise "manifestがありません: #{manifest_path}" unless File.file?(manifest_path)
 
         manifest = JSON.parse(File.read(manifest_path))
-        raise "manifestの認証方式が一致しません: #{variant}" unless manifest.fetch("authentication") == metadata.fetch("authentication")
+        raise "manifestのschema versionが一致しません: #{variant}" unless manifest.fetch("schema_version") == 5
+        raise "manifestのscenario setが一致しません: #{variant}" unless manifest.fetch("scenario_set") == metadata.fetch("scenario_set")
+        unless manifest.fetch("additional_login_methods") == metadata.fetch("additional_login_methods")
+          raise "manifestの追加ログイン方法が一致しません: #{variant}"
+        end
         raise "manifestのlocaleが一致しません: #{variant}" unless manifest.fetch("locale") == metadata.fetch("locale")
         raise "manifestの画像配信方式が一致しません: #{variant}" unless manifest.fetch("image_delivery") == metadata.fetch("image_delivery")
         unless manifest.fetch("source_fingerprint") == expected_fingerprint
@@ -124,10 +136,11 @@ module RapidRailsTemplate
     end
 
     def render_variant_readme(manifest)
-      authentication = manifest.fetch("authentication")
+      scenario_set = manifest.fetch("scenario_set")
+      additional_login_methods = manifest.fetch("additional_login_methods")
       locale = manifest.fetch("locale")
       image_delivery = manifest.fetch("image_delivery")
-      title = "#{authentication == "devise" ? "Devise" : "Wallet SIWE"} / #{locale} / #{image_delivery}"
+      title = "#{scenario_set} / #{locale} / #{image_delivery}"
       lines = [
         "# #{title} エビデンス",
         "",
@@ -135,6 +148,7 @@ module RapidRailsTemplate
         "- Base commit: `#{manifest.fetch("base_commit")}`",
         "- Locale: `#{locale}`",
         "- Image delivery: `#{image_delivery}`",
+        "- Additional login methods: `#{additional_login_methods.empty? ? '(none)' : additional_login_methods.join(', ')}`",
         "- 更新: `rake evidence:update`",
         ""
       ]
@@ -157,13 +171,9 @@ module RapidRailsTemplate
       <<~MARKDOWN
         # UIエビデンス
 
-        Devise版とWallet SIWE版のRails配信、およびDevise版の実imgproxy配信をCapybaraとPlaywrightにより撮影したエビデンスです。
+        選択可能な機能をすべて有効化した日本語sampleを、CapybaraとPlaywrightで一括検証したエビデンスです。
 
-        - [Devise / ja](devise-ja/README.md)
-        - [Devise / en](devise-en/README.md)
-        - [Wallet SIWE / ja](siwe-ja/README.md)
-        - [Wallet SIWE / en](siwe-en/README.md)
-        - [Devise / ja / imgproxy](imgproxy-devise-ja/README.md)
+        - [Full / ja](full-ja/README.md)
         - Source fingerprint: `#{fingerprint}`
         - 更新: `rake evidence:update`
         - 検証: `rake evidence:verify`
@@ -175,6 +185,10 @@ module RapidRailsTemplate
 
       paths = captures.map { |capture| capture.fetch("path") }
       raise "スクリーンショット名が重複しています: #{directory}" unless paths.uniq == paths
+      capture_keys = captures.map { |capture| capture.values_at("id", "viewport") }
+      unless capture_keys.uniq == capture_keys
+        raise "capture IDとviewportの組み合わせが重複しています: #{directory}"
+      end
       expected_paths = paths.sort
       actual_paths = Dir[File.join(directory, "*.png")].map { |path| File.basename(path) }.sort
       raise "スクリーンショット一覧がmanifestと一致しません: #{directory}" unless actual_paths == expected_paths

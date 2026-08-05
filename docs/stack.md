@@ -12,7 +12,7 @@ Rails内部識別子は`--app-id`から`rails new --name`へ渡し、ユーザ�
 
 生成アプリはRails 8.1の`config_for`で`config/application_identity.yml`を読み、検証済みの`ApplicationIdentity`を`Rails.configuration.x.application_identity`へ設定します。developmentは`http://localhost:3000`、testは`http://www.example.com`をcanonical originとし、productionは`APPLICATION_ORIGIN`を必須とします。originの不足時にrequest hostへ切り替える処理は持ちません。同じoriginからroutesとAction Mailerの`default_url_options`、canonical URL、OGP URLを構築します。
 
-I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`config.i18n.default_locale`へ設定します。request境界では`I18n.with_locale`を使用し、locale fallbackを無効化します。Rails validationには`rails-i18n`、Devise選択時は`devise-i18n`を使用し、アプリ固有のView、controller、JavaScript表示文面は生成するlocale fileのja/enペアを正本とします。
+I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`config.i18n.default_locale`へ設定します。request境界では`I18n.with_locale`を使用し、locale fallbackを無効化します。Rails validationには`rails-i18n`、認証には常設の`devise-i18n`を使用し、アプリ固有のView、controller、JavaScript表示文面は生成するlocale fileのja/enペアを正本とします。
 
 ## 固定構成
 
@@ -77,15 +77,15 @@ account navigationはdaisyUIの`menu with icons`として構築し、各linkの�
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
 
-- `/`は認証方式にかかわらず公開する。
+- `/`は追加ログイン方法にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
 - `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。Active StorageはAction Textとともに常設し、`avatar`選択時だけBoring AvatarsとProfileの添付画像機能を追加する。
 - 画像未設定時はUser IDの文字列表現から`marble` variantのBoring Avatarを生成し、themeのprimary、secondary、success、warning、errorに対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
-- login、account登録、password再設定はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。
-- Deviseではsessions、registrations、passwordsのapplication Viewをgeneratorで展開してtheme化する。
-- Wallet SIWEではsessionの`new`、`create`、`destroy`だけを公開し、login Viewをtheme化する。署名UIはStimulus controllerとして生成し、Turbo遷移ごとのconnect/disconnect lifecycleへ従う。accountは`show`をプロフィール、`edit`をwallet addressとアカウント削除UIを持つアカウント設定とし、`destroy`でUserと従属Sessionを削除する。
+- loginとaccount登録はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。password recoveryは生成しない。
+- Deviseのsessionsとregistrationsのapplication Viewをgeneratorで展開し、ユーザーID＋パスワード用にtheme化する。
+- SIWE選択時だけlogin画面へ明示的な署名buttonを追加し、account navigationへ名前付きwalletの一覧・追加・名称変更・current-password付き解除画面を追加する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
 - account sub-layoutの左ペインにはユーザー向けmenuだけを表示し、管理項目を混在させない。admin sub-layoutの左ペインには見出し「管理画面」と、ユーザー管理、固定ページ管理、FAQ管理、外部リンク設定の管理menuだけを表示し、account項目を混在させない。現在のControllerに対応するlinkは`menu-active`と`aria-current="page"`で示す。
@@ -176,15 +176,15 @@ PushNotifier.deliver_later(
 | `DELETE /push_subscription` | 現在のUser範囲でbrowser IDを冪等削除して`204` |
 | `POST /push_subscription/test` | 現在のUserとbrowser IDに一致する購読へ固定通知をenqueueして`202`。未登録は`404`、設定不足は`503`、5回/分超過は`429` |
 
-DeviseとWallet SIWEで共通の認証必須`/notification`ページを生成し、account navigationの独立項目「通知」から開きます。アカウント設定画面へWeb Push UIは埋め込みません。通知ページはdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
+追加ログイン方法にかかわらず共通のDevise認証必須`/notification`ページを生成し、account navigationの独立項目「通知」から開きます。アカウント設定画面へWeb Push UIは埋め込みません。通知ページはdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
 
 ### Roleと認可
 
-認証方式にかかわらず、生成アプリケーションには固定roleを複数付与できる`UserRole`とAction Policyのpolicy基盤を常に生成します。初期roleは`admin`だけとし、一般Userはroleを持ちません。`UserRole`は`user_id`と文字列`role`を持ち、組み合わせの一意制約、外部キー、`NOT NULL`、許可roleのdatabase check constraintで不変条件を保証します。role定義はコードとmigrationで管理し、管理画面からrole種別そのものを追加・編集しません。
+生成アプリケーションには固定roleを複数付与できる`UserRole`とAction Policyのpolicy基盤を常に生成します。初期roleは`admin`だけとし、一般Userはroleを持ちません。`UserRole`は内部識別子である`user_id`と文字列`role`を持ち、組み合わせの一意制約、外部キー、`NOT NULL`、許可roleのdatabase check constraintで不変条件を保証します。role定義はコードとmigrationで管理し、管理画面からrole種別そのものを追加・編集しません。
 
 `User`は`has_role?`、`grant_role!`、`revoke_role!`を公開し、role付与を冪等にします。一般の登録・アカウント更新parameterへroleを含めず、role変更はAction Policyで保護された管理画面に限定します。複数roleの権限は許可を加算し、role階層と明示denyは持ちません。
 
-管理画面は`/admin/users`にユーザー一覧をページング表示し、`admin`の付与と解除を提供します。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。最初のadminは、認証方式に応じたemailまたはwallet addressを引数に取る`roles:grant_admin` taskで既存Userへ付与します。`db/seeds.rb`は存在する場合だけgit管理外の`db/seeds.local.rb`を読み込み、管理対象の`.example`には秘密値や実識別子を含めません。
+管理画面は`/admin/users`に数値IDと、Profile有効時だけProfileの表示名をページング表示し、`admin`の付与と解除を提供します。`login_id`やwallet addressは表示しません。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。最初のadminは`users.id`を引数に取る`roles:grant_admin[user_id]` taskで既存Userへ付与し、local seedは`ADMIN_USER_ID`を使用します。
 
 ## テスト用Gem
 
@@ -197,7 +197,7 @@ factory_bot_rails
 
 Playwright driverはChromium・headlessへ固定し、`playwright-ruby-client`が公開する互換CLI versionを`package.json`へ導入します。実行時は生成アプリケーションの`node_modules/.bin/playwright`を明示し、`playwright install chromium`でbrowser binaryを準備します。必要な実行ファイルがない場合にSeleniumへ戻すフォールバックは設けません。
 
-UIエビデンスはCapybaraのroute遷移・入力・表示確認と、Playwright native pageのfull-page screenshotを組み合わせます。基本画面を1400×900と390×844で撮影し、認証方式別のMarkdownとmanifestへ列挙します。Deviseは実際のログインform、Wallet SIWEは実際のnonce・署名検証でsessionを作成し、テスト専用認証routeは生成しません。
+UIエビデンスはCapybaraのroute遷移・入力・表示確認と、Playwright native pageのfull-page screenshotを組み合わせます。password基底の共通画面、SIWE固有差分、画像配信差分を重複しないscenario setとして1400×900と390×844で撮影します。共通画面は実際のDevise login form、SIWE差分はdatabase challengeと署名検証で同じUserへsessionを作成し、テスト専用認証routeは生成しません。
 
 ## Schema annotation・Linter・Formatter・開発支援
 
@@ -250,7 +250,7 @@ productionではPuma pluginを有効化せず、`bin/jobs`をworkerプロセス�
 
 `job_operations=enable`かつ`active_job=solid_queue`の場合だけ、Mission Control Jobs 1.1.0を導入します。engineは`/admin/jobs`だけへmountし、root直下の`/jobs`や別pathへ公開しません。queue一覧、状態別job、worker、定期task、失敗内容、単体・一括retry/discardなど、Solid Queue adapterが提供する操作を使用します。
 
-`MissionControl::Jobs.base_controller_class`には`Admin::JobOperationsController`を設定します。このcontrollerは既存`Admin::BaseController`を継承し、全engine actionを`JobOperationPolicy#manage?`で認可します。Deviseの`current_user`とWallet SIWEの`Current.user`は既存Action Policy contextを再利用し、controller内でroleを直接判定しません。Mission Control標準のHTTP Basic認証は明示的に無効化し、環境変数やcredentialsによる別系統の認証は追加しません。
+`MissionControl::Jobs.base_controller_class`には`Admin::JobOperationsController`を設定します。このcontrollerは既存`Admin::BaseController`を継承し、全engine actionを`JobOperationPolicy#manage?`で認可します。追加ログイン方法にかかわらずDeviseの`current_user`を既存Action Policy contextへ渡し、controller内でroleを直接判定しません。Mission Control標準のHTTP Basic認証は明示的に無効化し、別系統の認証は追加しません。
 
 Mission Controlの公式ViewはBulma classを出力するため、Rails 8.1 Enginesの公式View lookup順序を利用し、Mission Control Jobs 1.1.0向けのhost Viewでlayout、application/server選択、section tab、flash、queue、状態別job、filter、worker、定期task、詳細、paginationをshadowします。Bulma stylesheetや専用CSSは生成せず、既存Tailwind CSS 4／daisyUI 5の`tabs`、`tab-content`、`card`、`table`、`badge`、`btn`、`fieldset`、`alert`、`collapse`、`mockup-code`、`join`へ統一します。engineのroute、controller、adapter、英語label、retry/discard/pause/resume/run操作は変更しません。専用layoutはQueues、Failed jobs、Workersなどのsection tabをpartial layoutとして1回だけrenderし、active tabの直後へengine本文blockをtabpanelとして渡します。各engine Viewは実際の画面名を`page_title`へ設定します。application/server選択はsection階層ではないためtab content本文内に残します。通常画面ではhost Importmap、engine画面ではMission Control Importmapだけを出力し、専用layoutから既存admin layoutへnested renderします。admin navigationは生成アプリの既定localeに従い、document titleはengineのpage titleとapplication nameを組み合わせます。
 
@@ -260,7 +260,7 @@ Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Contr
 
 `maintenance_tasks=enable`かつ`active_job=solid_queue`の場合だけ、Shopify `maintenance_tasks` 2.17.0を導入します。公式`maintenance_tasks:install` generatorが提供するmigrationをそのまま使用し、`maintenance_tasks_runs`で実行履歴、status、cursor、arguments、metadata、job ID、error class/message/backtraceを管理します。同じ情報を保持する独自modelやaudit tableは追加しません。
 
-engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksController`を`MaintenanceTasks.parent_controller`へ設定します。parent controllerは既存`Admin::BaseController`を継承し、全engine actionを`MaintenanceTaskPolicy#manage?`で認可します。Deviseでは`current_user`、Wallet SIWEでは`Current.user`を既存Action Policy contextから利用し、controller内でroleを直接判定しません。
+engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksController`を`MaintenanceTasks.parent_controller`へ設定します。parent controllerは既存`Admin::BaseController`を継承し、全engine actionを`MaintenanceTaskPolicy#manage?`で認可します。metadataには`triggered_by_user_id`として`users.id`を保存し、追加ログイン方法にかかわらずDeviseの`current_user`を利用します。
 
 engineのroute、controller、helper API、Run操作は2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。Bulma stylesheetは読み込まず、Bulma classを出力するtask、run、errorのViewと表示helperをhost側でshadowして、既存Tailwind CSS 4／daisyUI 5のcard、badge、collapse、form、alert componentへ統一します。3秒ごとの`data-refresh`更新はhostのStimulus controllerで行い、外部stylesheet用CSP例外やinline scriptは追加しません。
 
@@ -396,6 +396,10 @@ Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queu
 
 `rails new`開始前にSolid系のgenerator optionを確定し、標準の一括導入を`--skip-solid`で抑止したうえで、選択したcomponentだけを公式install generatorで導入します。Solid Cacheは既定で使用し、質問で無効化できます。
 
-## SIWE wallet認証
+## Deviseと追加SIWEログイン
 
-`wallet_siwe`では`siwe-rb` 0.2.xとvendor化したWeb3.js 4.16.0を使用します。`siwe-rb`のnative dependencyをbuildするため、macOS開発環境にはAutoconfとAutomake、production Docker build stageには`autoconf`、`automake`、`libtool`を導入します。Ruby 4.0ではBundlerが`eth`の制約に合うBigDecimal 3.xとOpenSSL 3.xを解決します。
+Devise 5.0.4と`devise-i18n`は常設し、Userは標準の整数`id`、`login_id`、`encrypted_password`、`remember_created_at`を持ちます。関連・認可・監査は`users.id`だけを参照し、認証用`login_id`はログインと認証情報変更以外へ露出しません。email、password recovery列、`:recoverable`、`:validatable`は生成しません。
+
+`additional_login_methods`へ`siwe`を選択した場合だけ`siwe-rb` 0.2.xと`:siweable`を追加します。`:siweable`はDeviseの公開module登録契約に従ってmodel、controller、routeを登録し、Warden strategyは追加しません。mapper拡張をroutes評価前に読み込み、成功時は紐付いた既存Userの`active_for_authentication?`を確認してDeviseの`sign_in`を呼びます。
+
+`SiweIdentity`はUserごとに複数の名前付きEOA addressを保持します。`SiweChallenge`はraw tokenのdigest、login/link purpose、link対象User、browser session binding、address、chain ID、server生成message、nonce、5分の期限、消費時刻をdatabaseで管理します。署名済みmessageからaddressを導出し、canonical originからdomainとURIを構成します。challengeの発行・検証はPOST＋CSRF、no-store、IP＋session rate limitで保護し、同一challengeの並行consumeは1件だけ成功します。RPC、ERC-1271、WalletConnect、外部SaaSは導入しません。

@@ -27,7 +27,7 @@ class BootstrapTest < Minitest::Test
         command = ARGV.shift
         if command == "choose"
           selected = ARGV.find { |argument| argument.start_with?("--selected=") }
-          puts selected.split("=", 2).fetch(1)
+          puts selected.split("=", 2).fetch(1) if selected
         elsif command == "confirm"
           exit 1
         else

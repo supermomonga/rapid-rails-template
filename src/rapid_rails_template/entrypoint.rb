@@ -74,8 +74,8 @@ module RapidRailsTemplate
 
     def self.usage
       options = ["  #{APP_ID_OPTION}=ID", "  #{APP_NAME_OPTION}=NAME"]
-      options.concat(CLI_OPTIONS.map do |option, (_, allowed)|
-        separator = option == "--profile-features" ? "," : "|"
+      options.concat(CLI_OPTIONS.map do |option, (id, allowed)|
+        separator = Configuration.multiple_value_option?(id) ? "," : "|"
         "  #{option}=#{allowed.join(separator)}"
       end)
       (["使用方法: ruby bootstrap.rb [OPTIONS] APP_PATH", "オプション:"] + options).join("\n")
@@ -84,7 +84,7 @@ module RapidRailsTemplate
     def self.parse_option_value(option, id, allowed, value)
       raise Error, "#{option}には値が必要です\n#{usage}" if value.nil?
 
-      unless id == "profile_features"
+      unless Configuration.multiple_value_option?(id)
         raise Error, "#{option}には値が必要です\n#{usage}" if value.empty?
         raise Error, "#{option}の値が不正です: #{value}（#{allowed.join('/')}から選択してください）" unless allowed.include?(value)
 

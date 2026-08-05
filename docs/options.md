@@ -175,18 +175,22 @@ Maintenance TasksはActive Jobを介して実行するため、実効値が`acti
 
 `enable`では`maintenance_tasks` 2.17.0の公式install generatorを実行し、Gem標準のRun modelとmigrationでstatus、cursor、error、job ID、arguments、metadataを管理します。engineは`/admin/maintenance_tasks`だけへmountし、既存のadmin認証、Action Policy、admin layoutを再利用します。管理画面はBulmaを読み込まず、host側のdaisyUI View overrideを使用します。実taskやplaceholderは生成しません。
 
-## `account_authentication`
+## `additional_login_methods`
 
-- CLI引数: `--account-authentication=devise|wallet_siwe`
-- 質問文: アカウント管理方法を選択してください。
-- 選択肢: `devise`、`wallet_siwe`
-- 既定値: `devise`
+- CLI引数: `--additional-login-methods=siwe`または`--additional-login-methods=`
+- 質問文: 追加するログイン方法を選択してください。
+- 選択肢: `siwe`の複数選択
+- 既定値: 選択なし
 - 表示条件: 常に表示する
-- 影響する処理: Deviseのinstall・model生成、またはRails組み込み認証基盤、`siwe-rb`、Web3.jsを使うEVM wallet認証処理
+- 影響する処理: Deviseの`:siweable` module、`siwe-rb`、SIWE credential・challenge・route・管理画面
 
-`devise`はメールアドレスとパスワードによる登録・ログインを提供します。`wallet_siwe`はWalletConnectや外部SaaSを使用せず、注入済みEIP-1193 provider、Web3.js 4.16.0、`siwe-rb` 0.2.xでSIWEを提供します。Railsが17文字のnonceを生成してsessionへ保存し、5分以内の一回限りのchallengeとして検証します。domain、URI、nonce、署名、正のchain IDを検証し、成功時は小文字化したEVM addressだけを一意なUser識別子にします。chain IDはUser識別子に含めないため、同じaddressはどのEVM互換chainでも同一アカウントです。Deviseアカウントとの紐付けは行いません。
+Devise 5.0.4、`devise-i18n`、ユーザーID＋パスワードによる登録・ログインはすべての構成で生成します。`User`の内部識別子は標準の整数`id`、認証用IDは`login_id`です。`login_id`はtrim・小文字化し、3〜32文字の小文字英数字とアンダースコアに制限します。email、password recovery列、`:recoverable`、`:validatable`は生成しません。passwordは`Devise.password_length`で検証し、`login_id`またはpasswordの更新にはcurrent passwordを要求します。
 
-どちらの認証方式でもhomeは公開し、account画面を認証必須とします。guest向け認証画面にはauthentication layout、account画面にはaccount layoutを適用します。Wallet SIWEのsession resourceは`new`、`create`、`destroy`だけに制限し、controllerに存在しない`show`、`edit`、`update` routeは生成しません。Wallet SIWEのaccount resourceは`show`、`edit`、`destroy`を公開し、wallet addressはプロフィールではなくアカウント設定に表示します。削除確認後にUserと従属する全Sessionを削除し、homeへ戻します。
+`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。会員登録は常にユーザーID＋パスワードで行い、ログイン後に名前付きEOA walletを複数追加できます。wallet addressは全Userで一意かつ変更不可、wallet名はUser内で大文字小文字を無視して一意です。SIWEログインは紐付いた既存UserだけをDeviseへsign inし、未登録walletからUserを作成しません。
+
+challengeはdatabaseへtoken digest、purpose、User、browser session、address、chain ID、server生成message、nonce、5分の期限、消費時刻を保存します。canonical originからdomainとURIを構成し、clientのHost、message、User ID、purpose、redirect先を信用しません。発行・検証はPOST＋CSRF、`Cache-Control: no-store`、IP＋sessionごとのrate limitで保護します。初期実装は正のEIP-155 chain IDを持つEOA署名だけを対象とし、RPC、ERC-1271、WalletConnect、外部SaaSは追加しません。
+
+CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正規化します。空値を選択なしとして受け入れ、未知値、重複値、空要素を生成開始前に拒否します。旧optionのaliasや互換処理は提供しません。
 
 ## `profile_features`
 
@@ -268,7 +272,7 @@ avatar uploadは静止画JPEG、PNG、WebPだけを許可し、5 MiB以下、幅
 - 表示条件: 常に表示する
 - 影響する処理: Action MailerとAction Mailboxのgenerator option
 
-`auto`は`account_authentication == devise`の場合に`use`、それ以外の場合に`skip`へ正規化します。`skip`の場合は`rails new`へ`--skip-action-mailer --skip-action-mailbox`を渡します。確認画面には`auto`ではなく、正規化後の実効値と理由を表示します。
+`auto`は自動的にメールを必要とする機能がないため`skip`へ正規化します。Deviseだけを理由にメールを有効化しません。`skip`の場合は`rails new`へ`--skip-action-mailer --skip-action-mailbox`を渡します。確認画面には`auto`ではなく、正規化後の実効値と理由を表示します。
 
 ## `deployment`
 
@@ -291,8 +295,9 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 
 - 各選択肢と既定値が正規化後の設定へ正しく反映されること。
 - CLI引数で指定した項目を再質問せず、未指定の適用可能な項目だけを質問すること。
-- `profile_features`をGumの複数選択で収集し、選択なしを有効な回答として扱うこと。
-- `--profile-features`のカンマ区切り値を正規化し、空値でProfile関連生成物をすべて省略すること。
+- `additional_login_methods`と`profile_features`をGumの複数選択で収集し、選択なしを有効な回答として扱うこと。
+- schema上の全配列optionのカンマ区切り値を宣言順へ正規化し、未知値、重複値、空要素を拒否すること。
+- `--profile-features`の空値でProfile関連生成物をすべて省略し、`--additional-login-methods`の空値でSIWE固有生成物をすべて省略すること。
 - Active Storageと`active_storage_db`はAction Textとともに常設し、全環境でファイル本体を専用storage SQLite databaseへ保存すること。
 - `avatar`選択時だけBoring Avatars、Profile添付、User ID由来の既定アバター、header trigger、画像削除routeを生成すること。
 - 設定済み画像がBoring Avatarより優先され、削除後は同じUser ID由来のBoring Avatarへ戻ること。
@@ -306,7 +311,7 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - 最終確認で中止した場合、どの選択結果でもテンプレート固有の変更を開始しないこと。
 - 最終確認に質問時の回答、正規化後の実効値、解決理由、全実行予定が表示されること。
 - 承認後に質問が行われず、確定済み設定と実行計画が変化しないこと。
-- `mail == auto`がDeviseでは`use`、SIWE wallet認証では`skip`へ正規化されること。
+- `mail == auto`が追加ログイン方法にかかわらず`skip`へ正規化されること。
 - PWAを使わない場合、Web Pushを質問せず`web-push` gemを追加しないこと。
 - `pwa=skip + web_push=use`と`web_push=use + active_job=skip`の明示矛盾を変更開始前に拒否すること。
 - Web Push使用時はActive Jobを質問せず、未指定値を理由付きでSolid Queueへ正規化すること。
@@ -317,7 +322,7 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - Solid Queueを使わない場合はMaintenance Tasksを`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
 - PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
 - Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。
-- DeviseとWallet SIWEの両方で購読APIと共通設定UIを認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。
+- password基底構成とSIWE追加構成で購読APIと共通設定UIをDevise認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。
 - Solid Queueを使わない場合、queue database、Puma plugin、production workerを生成しないこと。
 - Maintenance Tasksを使わない場合、Gem、migration、initializer、controller、route、navigationを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。

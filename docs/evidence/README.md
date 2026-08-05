@@ -1,12 +1,8 @@
 # UIエビデンス
 
-Devise版とWallet SIWE版のRails配信、およびDevise版の実imgproxy配信をCapybaraとPlaywrightにより撮影したエビデンスです。
+選択可能な機能をすべて有効化した日本語sampleを、CapybaraとPlaywrightで一括検証したエビデンスです。
 
-- [Devise / ja](devise-ja/README.md)
-- [Devise / en](devise-en/README.md)
-- [Wallet SIWE / ja](siwe-ja/README.md)
-- [Wallet SIWE / en](siwe-en/README.md)
-- [Devise / ja / imgproxy](imgproxy-devise-ja/README.md)
-- Source fingerprint: `5dadd5a9b470af23b57686bde488826ccad018cf065a3634e08b5d56ea2e59ad`
+- [Full / ja](full-ja/README.md)
+- Source fingerprint: `d524e06b2c975f1c4c8c563639463a9bd03806bc804a521eb003be31d7978ec1`
 - 更新: `rake evidence:update`
 - 検証: `rake evidence:verify`

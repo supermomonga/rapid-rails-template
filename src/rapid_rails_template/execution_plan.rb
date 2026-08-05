@@ -53,9 +53,8 @@ module RapidRailsTemplate
 
     def build_gems
       result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
-      result << "devise" if configuration["account_authentication"] == "devise"
-      result << "devise-i18n" if configuration["account_authentication"] == "devise"
-      result << "siwe-rb" if configuration["account_authentication"] == "wallet_siwe"
+      result.concat(%w[devise devise-i18n])
+      result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
       result << "boring_avatars" if configuration["profile_features"].include?("avatar")
       result << "imgproxy-rails" if configuration["image_delivery"] == "imgproxy"
@@ -71,7 +70,8 @@ module RapidRailsTemplate
 
     def build_steps
       result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
-      result << (configuration["account_authentication"] == "devise" ? "install_devise" : "install_wallet_siwe")
+      result << "install_devise"
+      result << "install_siwe" if configuration["additional_login_methods"].include?("siwe")
       result << "configure_roles"
       result << "configure_content_management"
       result << "configure_profile" if configuration["profile_features"].any?
@@ -246,27 +246,35 @@ module RapidRailsTemplate
           test/helpers/avatar_helper_test.rb
         ])
       end
-      if configuration["account_authentication"] == "devise"
+      result.concat(%w[
+        app/controllers/users/registrations_controller.rb
+        app/views/devise/sessions/new.html.erb
+        app/views/devise/registrations/new.html.erb
+        app/views/devise/registrations/edit.html.erb
+        config/locales/devise_views.ja.yml
+        config/locales/devise_views.en.yml
+      ])
+      if configuration["additional_login_methods"].include?("siwe")
         result.concat(%w[
-          app/controllers/users/registrations_controller.rb
-          app/views/devise/sessions/new.html.erb
-          app/views/devise/registrations/new.html.erb
-          app/views/devise/registrations/edit.html.erb
-          app/views/devise/passwords/new.html.erb
-          app/views/devise/passwords/edit.html.erb
-          app/views/devise/mailer/confirmation_instructions.html.erb
-          app/views/devise/mailer/reset_password_instructions.html.erb
-          app/views/devise/mailer/unlock_instructions.html.erb
-          app/views/devise/mailer/email_changed.html.erb
-          app/views/devise/mailer/password_change.html.erb
-          config/locales/devise_views.ja.yml
-          config/locales/devise_views.en.yml
+          app/models/siwe_identity.rb
+          app/models/siwe_challenge.rb
+          lib/devise/models/siweable.rb
+          lib/devise/siweable.rb
+          lib/devise/siweable/routes.rb
+          app/controllers/users/siwe_sessions_controller.rb
+          app/controllers/account/siwe_identities_controller.rb
+          app/javascript/controllers/siwe_sign_in_controller.js
+          app/views/account/siwe_identities/index.html.erb
+          config/initializers/devise_siweable.rb
+          config/locales/siwe.ja.yml
+          config/locales/siwe.en.yml
+          db/migrate/*_create_siwe_identities.rb
+          db/migrate/*_create_siwe_challenges.rb
+          test/models/siwe_identity_test.rb
+          test/models/siwe_challenge_test.rb
+          test/controllers/users/siwe_sessions_controller_test.rb
+          test/controllers/account/siwe_identities_controller_test.rb
         ])
-      else
-        result << "app/views/sessions/new.html.erb"
-        result << "app/javascript/controllers/siwe_sign_in_controller.js"
-        result << "app/views/accounts/edit.html.erb"
-        result << "test/support/siwe_test_request.rb"
       end
       if configuration["pwa"] == "use"
         result.concat(%w[

@@ -101,7 +101,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/shared/_footer.html.erb" => %w[footer footer-vertical footer-title link link-hover],
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
       "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
-      "app/views/accounts/edit.html.erb" => %w[card card-body card-title list list-row badge btn],
+      "app/views/account/siwe_identities/index.html.erb" => %w[card card-body card-title list list-row fieldset input btn alert],
       "app/views/notifications/show.html.erb" => %w[card card-body card-title card-actions toggle btn alert],
       "app/views/admin/users/index.html.erb" => %w[card card-body table badge btn join join-item],
       "app/views/pages/_page.html.erb" => %w[card card-body],
@@ -120,10 +120,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/devise/shared/_links.html.erb" => %w[divider menu],
       "app/views/devise/sessions/new.html.erb" => %w[fieldset fieldset-legend input checkbox btn],
       "app/views/devise/registrations/new.html.erb" => %w[fieldset fieldset-legend input btn],
-      "app/views/devise/registrations/edit.html.erb" => %w[card fieldset fieldset-legend input btn],
-      "app/views/devise/passwords/new.html.erb" => %w[fieldset fieldset-legend input btn],
-      "app/views/devise/passwords/edit.html.erb" => %w[fieldset fieldset-legend input btn],
-      "app/views/sessions/new.html.erb" => %w[btn alert divider]
+      "app/views/devise/registrations/edit.html.erb" => %w[card fieldset fieldset-legend input btn]
     }
 
     view_sources = component_expectations.to_h { |path, _components| [path, generated_file_source(path)] }
@@ -207,10 +204,11 @@ class RailsTemplateContractTest < Minitest::Test
     refute_match(/\bmin-h-\d+/, combined)
   end
 
-  def test_devise_fixtures_satisfy_the_generated_unique_email_constraint
-    assert_includes @source, 'email: one@example.com'
-    assert_includes @source, 'email: two@example.com'
+  def test_devise_fixtures_satisfy_the_generated_unique_login_id_constraint
+    assert_includes @source, 'login_id: user_one'
+    assert_includes @source, 'login_id: user_two'
     assert_includes @source, 'Devise::Encryptor.digest(User, "password123")'
+    refute_includes generated_file_source("test/fixtures/users.yml"), "email:"
   end
 
   def test_generates_the_pwa_manifest_routes_registration_and_push_handlers
@@ -218,6 +216,7 @@ class RailsTemplateContractTest < Minitest::Test
     worker = generated_file_source("app/views/pwa/service-worker.js")
     controller = generated_file_source("app/javascript/controllers/pwa_controller.js")
     layout = generated_file_source("app/views/layouts/application.html.erb")
+    defaults = source_between("def configure_default_views", "def configure_web_push")
 
     assert_includes pwa, 'route \'get "manifest" => "rails/pwa#manifest", as: :pwa_manifest\''
     assert_includes pwa, 'route \'get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker\''
@@ -225,7 +224,6 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes pwa, 'theme_color: "#3ea8ff"'
     assert_includes pwa, 'src: "/icon.png"'
     assert_includes pwa, 'theme_color: "#3ea8ff"'
-    defaults = source_between("def configure_default_views", "def configure_web_push")
     assert_includes defaults, '<meta name="theme-color" content="#3ea8ff">'
     assert_includes defaults, 'tag.link rel: "manifest", href: application_routes.pwa_manifest_path(format: :json)'
     assert_includes defaults, '#{pwa_head.lines.map'
@@ -405,8 +403,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes route, 'actual == \'mount MaintenanceTasks::Engine, at: "/maintenance_tasks"\''
     assert_includes route, 'mount MaintenanceTasks::Engine, at: "/admin/maintenance_tasks", as: :admin_maintenance_tasks'
     assert_includes initializer, 'MaintenanceTasks.parent_controller = "Admin::MaintenanceTasksController"'
-    assert_includes initializer, '"triggered_by_type"'
-    assert_includes initializer, '"triggered_by_identifier"'
+    assert_includes initializer, '"triggered_by_user_id" => authorization_user.id'
     assert_includes initializer, "Rails.application.config.to_prepare"
     assert_includes initializer, "MaintenanceTasks::TasksHelper"
     assert_includes initializer, "target.prepend(helper) unless target < helper"
@@ -539,7 +536,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes policy, 'def manage_roles?'
     assert_includes policy, 'relation_scope do |relation|'
     assert_includes users_controller, 'authorize! User, to: :index?'
-    assert_includes users_controller, 'authorized_scope(User.all)'
+    assert_includes users_controller, 'authorized_scope(#{user_scope})'
     assert_includes users_controller, 'pagy(:offset, users, limit: 25)'
     assert_includes roles_controller, 'authorize! @user, to: :manage_roles?'
     assert_includes roles_controller, '@user == authorization_user'
@@ -568,13 +565,13 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes view, "dark:"
     refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, view)
 
-    assert_includes task, 'task :grant_admin, [:identifier] => :environment'
-    assert_includes task, 'find_by!('
+    assert_includes task, 'task :grant_admin, [:user_id] => :environment'
+    assert_includes task, 'User.find(user_id)'
     assert_includes task, 'user.grant_role!(:admin)'
     assert_includes roles, 'Rails.root.join("db/seeds.local.rb")'
     assert_includes roles, 'load local_seeds if local_seeds.file?'
     assert_includes roles, 'append_to_file ".gitignore", "\\n/db/seeds.local.rb\\n"'
-    assert_includes local_seed, 'ENV.fetch("#{identifier_environment}")'
+    assert_includes local_seed, 'ENV.fetch("ADMIN_USER_ID")'
     assert_includes local_seed, 'admin.grant_role!(:admin)'
     assert_includes roles, 'create_locale_pair("roles"'
     assert_includes roles, '"last_admin" => "The final administrator cannot delete their account"'
@@ -582,20 +579,19 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes roles, 'I18n.t("admin.user_roles.destroy.self_forbidden")'
   end
 
-  def test_role_generation_covers_both_authentication_contexts_and_last_admin_deletion
+  def test_role_generation_uses_the_single_devise_authentication_context_and_protects_the_last_admin
     roles = source_between("def configure_roles", "def configure_profile")
     devise_registration = generated_file_source("app/controllers/users/registrations_controller.rb")
-    defaults = source_between("def configure_default_views", "def configure_web_push")
-
-    assert_includes roles, 'authorization_user = devise ? "current_user" : "Current.user"'
-    assert_includes roles, 'authentication_callback = devise ? "    before_action :authenticate_user!\\n" : ""'
-    assert_includes roles, 'configure_devise_registration_route'
-    assert_includes @source, 'devise_for :users, controllers: { registrations: "users/registrations" }'
+    assert_includes roles, "def authorization_user"
+    assert_includes roles, "current_user"
+    refute_includes roles, "Current.user"
+    assert_includes roles, "before_action :authenticate_user!"
+    assert_includes @source, "configure_devise_routes"
+    assert_includes @source, 'controllers = [\'registrations: "users/registrations"\']'
+    assert_includes @source, 'controllers << \'siwe_sessions: "users/siwe_sessions"\''
     assert_includes devise_registration, 'if resource.last_admin?'
     assert_includes devise_registration, 'I18n.t("accounts.destroy.last_admin")'
-    assert_includes defaults, 'if user.last_admin?'
-    assert_includes defaults, 'I18n.t("accounts.destroy.last_admin")'
-    assert_match(/install_wallet_siwe\n  configure_roles/, @source)
+    assert_match(/install_devise\n  install_siwe if .*additional_login_methods.*siwe.*\n  configure_roles/m, @source)
   end
 
   def test_role_tests_cover_storage_policy_controllers_and_task
@@ -660,39 +656,44 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator @source.scan("btn btn-primary btn-outline btn-rapid").length, :>=, 2
   end
 
-  def test_wallet_sign_in_uses_the_stimulus_lifecycle_for_turbo_navigation
+  def test_siwe_sign_in_uses_an_explicit_stimulus_action
     assert_includes @source, 'app/javascript/controllers/siwe_sign_in_controller.js'
     assert_includes @source, 'import { Controller } from "@hotwired/stimulus"'
     assert_includes @source, 'data-controller="siwe-sign-in"'
-    assert_includes @source, 'data-action="click->siwe-sign-in#signIn"'
+    assert_includes @source, 'data-action="siwe-sign-in#authenticate"'
+    assert_includes @source, "async authenticate()"
+    refute_includes @source, "async connect()"
     assert_includes @source, 'data-siwe-sign-in-target="error"'
     refute_includes @source, 'app/javascript/siwe_sign_in.js'
     refute_includes @source, 'import \\"siwe_sign_in\\"'
   end
 
-  def test_wallet_integration_requests_use_distinct_rate_limit_addresses
-    helper = generated_file_source("test/support/siwe_test_request.rb")
+  def test_siwe_requests_are_post_only_csrf_protected_and_rate_limited_by_ip_and_session
+    sessions = generated_file_source("app/controllers/users/siwe_sessions_controller.rb")
+    identities = generated_file_source("app/controllers/account/siwe_identities_controller.rb")
 
-    assert_includes helper, "module SiweTestRequest"
-    assert_includes helper, 'key.address.to_s.delete_prefix("0x").scan(/.{4}/).first(4)'
-    assert_includes helper, '"REMOTE_ADDR" => "2001:db8::\#{address_groups.join(":")}"'
-    assert_includes helper, "class ActiveSupport::TestCase"
-    assert_includes helper, "include SiweTestRequest"
-    assert_equal 16, @source.scan("headers: siwe_test_headers(key)").size
-    refute_match(/^\s*(?:integration\.)?get (?:session_nonce_url|"\/session\/nonce")$/m, @source)
+    assert_includes @source, 'post "#{mapping.path_names[:sign_in]}/siwe/challenge"'
+    assert_includes @source, 'post "#{mapping.path_names[:sign_in]}/siwe"'
+    assert_includes @source, "post :challenge, on: :collection"
+    [sessions, identities].each do |controller|
+      assert_includes controller, "rate_limit to: 10, within: 1.minute"
+      assert_includes controller, 'by: -> { "#{request.remote_ip}:#{session_binding}" }'
+      refute_includes controller, "skip_forgery_protection"
+    end
   end
 
-  def test_wallet_account_settings_own_identity_and_account_deletion
+  def test_account_settings_and_siwe_identity_management_use_current_user_scope
     profile = generated_file_source("app/views/accounts/show.html.erb")
-    settings = generated_file_source("app/views/accounts/edit.html.erb")
+    settings = generated_file_source("app/views/devise/registrations/edit.html.erb")
+    identities = generated_file_source("app/controllers/account/siwe_identities_controller.rb")
 
-    refute_includes profile, "Current.user.wallet_address"
+    refute_includes profile, "login_id"
     refute_includes profile, ">ID<"
-    assert_includes settings, "Current.user.wallet_address"
-    assert_includes settings, 'button_to t("accounts.edit.delete"), account_path, method: :delete'
-    assert_includes settings, "btn btn-outline btn-error btn-rapid"
-    assert_includes @source, 'notice: I18n.t("accounts.destroy.notice")'
-    assert_includes @source, '"notice" => "Your account was deleted."'
+    assert_includes settings, "current_password"
+    assert_includes settings, 'method: :delete, class: "btn btn-error btn-rapid"'
+    assert_includes identities, "current_user.siwe_identities.find(params.expect(:id))"
+    assert_includes identities, "current_user.valid_password?"
+    assert_includes @source, 'I18n.t("accounts.destroy.last_admin")'
   end
 
   def test_profile_generation_is_conditional_and_uses_selected_features
@@ -975,9 +976,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"desktop" => { "width" => 1400, "height" => 900 }'
     assert_includes evidence, '"mobile" => { "width" => 390, "height" => 844 }'
     assert_includes evidence, 'playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")'
-    assert_includes evidence, 'integration.post "/session"'
-    assert_includes evidence, 'playwright_page.context.add_cookies'
-    assert_includes evidence, 'fill_in User.human_attribute_name(:email), with: @user.email'
+    assert_includes evidence, 'browser_post_json('
+    assert_includes evidence, '"/users/sign_in/siwe/challenge"'
+    assert_includes evidence, "credentials: 'same-origin'"
+    assert_includes evidence, 'page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))'
+    assert_includes evidence, 'fill_in User.human_attribute_name(:login_id), with: @user.login_id'
     assert_includes evidence, '"api-credential-secret"'
     assert_includes evidence, "def with_deterministic_secure_random"
     assert_includes evidence, "singleton_class.define_method(:urlsafe_base64, original_method)"
@@ -1011,7 +1014,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, "def assert_account_navigation_scope"
     assert_includes evidence, 'translate("navigation.account_menu")'
     assert_includes evidence, 'translate("navigation.admin_menu")'
-    assert_includes evidence, 'runner = runner.sub("__AUTHENTICATION__", authentication.inspect)'
+    assert_includes evidence, 'SCENARIO_SET = "full"'
+    assert_includes evidence, "capture_common_scenarios"
+    assert_includes evidence, 'capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")'
+    assert_includes evidence, 'capture_image_delivery_scenarios if IMAGE_DELIVERY == "imgproxy"'
+    refute_includes evidence, "capture_siwe_delta"
+    refute_includes evidence, "capture_image_delivery_delta"
+    assert_includes evidence, 'runner = runner.sub("__ADDITIONAL_LOGIN_METHODS__", additional_login_methods.inspect)'
     assert_includes evidence, 'runner = runner.sub("__WEB_PUSH__", web_push.inspect)'
     assert_includes evidence, 'runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)'
     assert_includes evidence, 'runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)'
@@ -1060,7 +1069,7 @@ class RailsTemplateContractTest < Minitest::Test
     admin_layout = generated_file_source("app/views/layouts/admin.html.erb")
     admin_navigation = source_between(
       "  admin_navigation_items = <<~ERB",
-      "  signed_in_condition = devise"
+      '  signed_in_condition = "user_signed_in?"'
     )
     authentication_layout = generated_file_source("app/views/layouts/authentication.html.erb")
     home = generated_file_source("app/views/home/index.html.erb")
@@ -1121,14 +1130,15 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
     refute_includes account_navigation, "root_path"
-    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 6, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 6, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, "profile_path"
     assert_includes account_navigation, 't("navigation.dashboard")'
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
     assert_includes account_navigation, 'link_to application_routes.notification_path'
     assert_includes account_navigation, 't("navigation.notifications")'
+    assert_includes account_navigation, "account_siwe_identities_path"
     refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
     refute_includes account_navigation, 'allowed_to?(:index?, User)'
     refute_includes account_navigation, 'admin_users_path'
@@ -1174,13 +1184,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens login, "btn", "btn-block", "btn-rapid"
   end
 
-  def test_wallet_guest_navigation_uses_real_line_breaks
+  def test_devise_guest_navigation_uses_real_line_breaks
     guest_navigation = source_between(
-      "  guest_desktop_navigation = if devise",
+      "  guest_desktop_navigation = <<~ERB",
       "  profile_identity = if display_name_enabled"
     )
 
-    assert_equal 4, guest_navigation.scan("<<~ERB").size
+    assert_equal 2, guest_navigation.scan("<<~ERB").size
     refute_includes guest_navigation, "\\\\n'"
   end
 
@@ -1215,13 +1225,10 @@ class RailsTemplateContractTest < Minitest::Test
       app/views/faqs/index.html.erb
       app/views/devise/sessions/new.html.erb
       app/views/devise/registrations/new.html.erb
-      app/views/devise/passwords/new.html.erb
-      app/views/devise/passwords/edit.html.erb
-      app/views/sessions/new.html.erb
     ]
     with_menu_views = %w[
       app/views/accounts/show.html.erb
-      app/views/accounts/edit.html.erb
+      app/views/account/siwe_identities/index.html.erb
       app/views/admin/users/index.html.erb
       app/views/admin/pages/index.html.erb
       app/views/admin/pages/edit.html.erb
@@ -1268,5 +1275,83 @@ class RailsTemplateContractTest < Minitest::Test
       assert_includes view, "content_for :page_title", path
       refute_includes view, "<h1", path
     end
+  end
+
+  def test_devise_is_the_required_login_id_and_password_baseline
+    devise = source_between("def install_devise", "def install_siwe")
+    user = generated_file_source("app/models/user.rb")
+
+    assert_includes @source, 'gem "devise", "~> 5.0.4"'
+    assert_includes @source, 'gem "devise-i18n"'
+    assert_includes devise, "t.string :login_id, null: false"
+    assert_includes devise, "t.string :encrypted_password, null: false"
+    assert_includes devise, "t.datetime :remember_created_at"
+    assert_includes devise, "add_index :users, :login_id, unique: true"
+    refute_match(/t\.(?:string|datetime) :(?:email|reset_password_token|reset_password_sent_at)/, devise)
+    assert_includes user, 'devise #{devise_declaration}'
+    assert_includes devise, "%w[database_authenticatable registerable rememberable]"
+    refute_includes devise, "recoverable"
+    refute_includes devise, "validatable"
+    assert_includes user, 'normalizes :login_id, with: ->(login_id) { login_id.to_s.strip.downcase }'
+    assert_includes user, 'with: /\\\\A[a-z0-9][a-z0-9_]{2,31}\\\\z/'
+    assert_includes user, "within: Devise.password_length"
+    assert_includes user, "new_record? || password.present? || password_confirmation.present?"
+    assert_includes devise, "config.authentication_keys = [:login_id]"
+    assert_includes devise, "config.case_insensitive_keys = [:login_id]"
+    assert_includes devise, "config.strip_whitespace_keys = [:login_id]"
+  end
+
+  def test_siweable_follows_the_devise_extension_and_existing_user_sign_in_contract
+    siwe = source_between("def install_siwe", "def configure_roles")
+    module_source = generated_file_source("lib/devise/siweable.rb")
+    routes = generated_file_source("lib/devise/siweable/routes.rb")
+    sessions = generated_file_source("app/controllers/users/siwe_sessions_controller.rb")
+
+    assert_includes @source,
+      'gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_methods").include?("siwe")'
+    assert_includes module_source, "Devise.add_module("
+    assert_includes module_source, "model: \"devise/models/siweable\""
+    assert_includes module_source, "controller: :siwe_sessions"
+    assert_includes module_source, "route: :siwe_session"
+    refute_includes module_source, "strategy:"
+    assert_includes module_source, "ActionDispatch::Routing::Mapper.include(Devise::Siweable::Routes)"
+    assert_includes routes, "def devise_siwe_session(mapping, controllers)"
+    assert_includes siwe, 'require Rails.root.join("lib/devise/siweable")'
+    assert_includes sessions, "identity&.user&.active_for_authentication?"
+    assert_includes sessions, "sign_in(:user, identity.user, event: :authentication)"
+    refute_includes sessions, "find_or_create_by!"
+    refute_includes sessions, "bypass_sign_in"
+  end
+
+  def test_siwe_credentials_and_challenges_are_scoped_replay_safe_and_server_authored
+    identity = generated_file_source("app/models/siwe_identity.rb")
+    challenge = generated_file_source("app/models/siwe_challenge.rb")
+    controller = generated_file_source("app/controllers/account/siwe_identities_controller.rb")
+    initializer = generated_file_source("config/initializers/devise_siweable.rb")
+
+    assert_includes identity, "before_validation :set_name_key"
+    assert_includes identity, "length: { maximum: 50 }"
+    assert_includes identity, "uniqueness: { scope: :user_id"
+    assert_includes identity, "errors.add(:address, :readonly)"
+    assert_includes challenge, "TTL = 5.minutes"
+    assert_includes challenge, "SecureRandom.urlsafe_base64(32)"
+    assert_includes challenge, "session_digest: digest(session_binding)"
+    assert_includes challenge, "identity.canonical_url(path_for(purpose))"
+    assert_includes challenge, "strict: true"
+    assert_includes challenge, "update_all(consumed_at: Time.current)"
+    assert_includes controller, "current_user.siwe_identities.find(params.expect(:id))"
+    assert_includes controller, "current_user.valid_password?"
+    assert_includes initializer, "%i[challenge_token signature current_password]"
+    refute_includes challenge, "request.host"
+    refute_includes challenge, "params"
+  end
+
+  def test_common_features_do_not_depend_on_legacy_authentication_identifiers
+    refute_includes @source, "account_authentication"
+    refute_includes @source, "Current.user"
+    refute_includes @source, "wallet_address"
+    refute_includes @source, "users.email"
+    assert_includes @source, '"triggered_by_user_id" => authorization_user.id'
+    assert_includes @source, 'User.find(Integer(ENV.fetch("ADMIN_USER_ID")))'
   end
 end

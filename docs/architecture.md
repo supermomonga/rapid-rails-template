@@ -32,7 +32,7 @@ src/rapid_rails_template/
 bin/
 ├── build-bootstrap                 # bootstrap.rbの決定的生成
 ├── verify-bootstrap                # 生成物と分割ソースの同期確認
-├── update-evidence                 # 両認証方式の生成・撮影・成果物置換
+├── update-evidence                 # 共通・SIWE差分・画像配信差分の生成・撮影・成果物置換
 └── verify-evidence                 # エビデンスの鮮度と整合性確認
 test/
 ├── unit/
@@ -145,9 +145,9 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 
 ### UIエビデンス
 
-生成アプリケーションにはtest環境専用の`evidence:capture` Rake taskを配置します。taskは撮影前にtest databaseを再構築し、Capybaraで実ページを操作してPlaywright Chromiumでfull-page PNGと撮影レポートを出力します。撮影の成否にかかわらずtest databaseを再度初期化するため、証跡用データは通常のfixture testへ残りません。Deviseでは実際のlogin form、Wallet SIWEでは実際のnonce・署名検証を通して認証し、テスト専用login routeや認証fallbackは追加しません。
+生成アプリケーションにはtest環境専用の`evidence:capture` Rake taskを配置します。taskは撮影前にtest databaseを再構築し、Capybaraで実ページを操作してPlaywright Chromiumでfull-page PNGと撮影レポートを出力します。撮影の成否にかかわらずtest databaseを再度初期化するため、証跡用データは通常のfixture testへ残りません。共通画面は実際のDevise login form、SIWE画面はdatabase challengeと署名検証を通して同じUserへ認証し、テスト専用login routeや認証fallbackは追加しません。
 
-リポジトリ側の`rake evidence:update`はDevise版とWallet SIWE版を個別に生成し、両方の撮影が成功してからmanifest、Markdown索引、画像hashを確定して`docs/evidence/`を置換します。鮮度はcommit hashではなく、テンプレート分割ソースと撮影オーケストレーターの内容fingerprintで判定します。base commitは追跡情報としてだけ記録します。
+リポジトリ側の`rake evidence:update`は選択可能な機能をすべて有効にした日本語sampleを1回だけ生成し、全Rails test、RuboCop、共通・SIWE・imgproxy画面の撮影が成功してからmanifest、Markdown索引、画像hashを確定して`docs/evidence/`を置換します。同じcapture IDとviewportの重複を拒否し、鮮度はcommit hashではなく、テンプレート分割ソースと撮影オーケストレーターの内容fingerprintで判定します。
 
 ### `editors`
 

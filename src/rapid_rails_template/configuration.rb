@@ -2,7 +2,9 @@
 
 module RapidRailsTemplate
   class Configuration
+    ADDITIONAL_LOGIN_METHODS = %w[siwe].freeze
     PROFILE_FEATURES = %w[screen_name display_name avatar].freeze
+    MULTIPLE_VALUE_OPTIONS = %w[additional_login_methods profile_features].freeze
 
     VALID_VALUES = {
       "pwa" => %w[use skip],
@@ -11,7 +13,7 @@ module RapidRailsTemplate
       "job_operations" => %w[enable disable],
       "maintenance_tasks" => %w[enable disable],
       "solid_cache" => %w[use skip],
-      "account_authentication" => %w[devise wallet_siwe],
+      "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
       "profile_features" => PROFILE_FEATURES,
       "image_delivery" => %w[rails imgproxy],
       "api" => %w[enable disable],
@@ -28,7 +30,7 @@ module RapidRailsTemplate
       "job_operations" => "disable",
       "maintenance_tasks" => "disable",
       "solid_cache" => "use",
-      "account_authentication" => "devise",
+      "additional_login_methods" => [].freeze,
       "profile_features" => PROFILE_FEATURES,
       "image_delivery" => "rails",
       "api" => "enable",
@@ -42,6 +44,10 @@ module RapidRailsTemplate
 
     def self.build(answers)
       new(answers).tap(&:validate!)
+    end
+
+    def self.multiple_value_option?(key)
+      MULTIPLE_VALUE_OPTIONS.include?(key.to_s)
     end
 
     def initialize(answers)
@@ -79,7 +85,7 @@ module RapidRailsTemplate
       VALID_VALUES.each do |key, allowed|
         value = answers[key]
         raise InvalidConfiguration, "#{key}が未回答です" if value.nil?
-        if key == "profile_features"
+        if self.class.multiple_value_option?(key)
           valid = value.is_a?(Array) && value.uniq == value && (value - allowed).empty?
           raise InvalidConfiguration, "#{key}の値が不正です: #{value.inspect}" unless valid
         else
@@ -113,8 +119,8 @@ module RapidRailsTemplate
 
       return unless @values["mail"] == "auto"
 
-      @values["mail"] = @values["account_authentication"] == "devise" ? "use" : "skip"
-      @reasons["mail"] = "認証方式が#{@values['account_authentication']}のため"
+      @values["mail"] = "skip"
+      @reasons["mail"] = "自動的にメールを必要とする機能がないため"
     end
 
     def validate_explicit_dependencies!(provided_answers)

@@ -41,7 +41,7 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --job-operations=disable \
   --maintenance-tasks=disable \
   --solid-cache=use \
-  --account-authentication=devise \
+  --additional-login-methods=siwe \
   --profile-features=screen_name,display_name,avatar \
   --image-delivery=rails \
   --api=enable \
@@ -51,12 +51,13 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --default-locale=ja \
   APP_PATH
 mise run generate-sampleapp
-mise run generate-sampleapp-wallet-siwe
 mise run evidence-update
 mise run evidence-verify
 ```
 
 `--profile-features`は`screen_name`、`display_name`、`avatar`をカンマ区切りで指定します。既定では3機能すべてを選択し、`--profile-features=`と空値を指定するとProfile modelとプロフィール管理画面を生成しません。対話時はGumの複数選択を使用します。`screen_name`と`display_name`は選択時に必須かつ一意となり、User作成時にHaikunatorで自動生成されます。両方を選択した場合、`display_name`には自動生成した`screen_name`のCamelCaseを設定します。`avatar`を選択した場合、画像未設定時はUser IDから決定的に生成したBoring Avatarを表示し、設定済み画像はプロフィール編集画面から削除してBoring Avatarへ戻せます。生成seedを保存する追加columnは作りません。
+
+DeviseによるユーザーID＋パスワード認証は全構成で必須です。`--additional-login-methods`は既存Userへ後付けできる追加ログイン方法をカンマ区切りで指定し、現在は`siwe`だけを選択できます。既定値および`--additional-login-methods=`は追加方式なしです。SIWEを選択しても会員登録はユーザーID＋パスワードで行い、ログイン後の「ログイン方法」画面で1つ以上の名前付きEOA walletを追加します。アプリ内の関連・認可・監査には`users.id`を使用し、`login_id`やwallet addressを内部識別子にしません。
 
 `--image-delivery`は`rails`または`imgproxy`を指定し、既定値は`rails`です。Rails配信はActive Storageのnamed variant／representation route、imgproxy配信は署名済みURLを使用します。どちらもActive Storage DBを画像storageのsource of truthとし、実行時に相互fallbackしません。imgproxyではRailsとは別のserviceと環境変数が必要です。生成アプリの`docs/image_delivery.md`にnamed variant、upload制約、起動方法、production要件を記載します。
 
@@ -64,9 +65,9 @@ mise run evidence-verify
 
 `--job-operations=enable`はSolid Queue使用時だけ選択でき、Mission Control Jobs 1.1.0を`/admin/jobs`へmountします。画面は既存の管理者認証、Action Policy、admin navigationへ統合し、Mission Control独自のHTTP Basic認証は使用しません。完了ジョブはSolid Queue 1.6.0の標準設定により1日保持した後、毎時12分に公式APIでbatch削除されます。失敗ジョブはcleanup対象外で、管理者がretryまたはdiscardするまで保持されます。
 
-リポジトリの`mise run generate-sampleapp`はDevise認証、`mise run generate-sampleapp-wallet-siwe`はWallet SIWE認証を指定します。どちらも既存の`sample/`を削除してから、同じ場所へアプリを再生成します。
+リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、imgproxy、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 
-`rake evidence:update`（`mise run evidence-update`）は両認証方式を順番に生成し、CapybaraとPlaywright Chromiumで全画面のDesktop／Mobileスクリーンショットを撮影します。成果物は`docs/evidence/devise/`と`docs/evidence/siwe/`へ保存され、各`README.md`から一覧表示できます。両方式の生成と撮影が完了するまで既存エビデンスは置換しません。
+`rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、password基底の共通画面、SIWE、imgproxyを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
 
 `rake evidence:verify`（`mise run evidence-verify`）はブラウザを起動せず、生成元fingerprint、manifest、README、PNGの欠落・余剰・SHA-256・寸法を検証します。通常のリポジトリMinitestにも同じ検証を含むため、テンプレート変更後にエビデンスを更新し忘れるとテストが失敗します。MD内のbase commitは追跡情報であり、鮮度判定には未コミット変更も反映できる内容fingerprintを使用します。
 

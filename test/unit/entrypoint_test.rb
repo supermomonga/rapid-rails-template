@@ -290,7 +290,8 @@ class EntrypointTest < Minitest::Test
 
   def test_profile_features_accept_comma_separated_values
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
-      serialized = value.is_a?(Array) ? "avatar,screen_name" : value
+      selected = id == "profile_features" ? %w[avatar screen_name] : value
+      serialized = selected.is_a?(Array) ? selected.join(",") : selected
       "--#{id.tr('_', '-')}=#{serialized}"
     end
     arguments.unshift("--app-id=sample", "--app-name=Sample App")
@@ -309,7 +310,8 @@ class EntrypointTest < Minitest::Test
 
   def test_empty_profile_features_value_disables_profiles_without_prompting
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
-      serialized = id == "profile_features" ? "" : value
+      serialized = id == "profile_features" ? "" : Array(value).join(",")
+      serialized = value unless value.is_a?(Array)
       "--#{id.tr('_', '-')}=#{serialized}"
     end
     arguments.unshift("--app-id=sample", "--app-name=Sample App")
@@ -324,6 +326,43 @@ class EntrypointTest < Minitest::Test
 
     assert_equal 0, status
     assert_empty RecordingRunner.arguments.fetch(:plan).configuration["profile_features"]
+  end
+
+  def test_additional_login_methods_accept_empty_and_siwe_values
+    [[], %w[siwe]].each do |methods|
+      arguments = RapidRailsTemplate::Configuration::DEFAULTS.map do |id, value|
+        selected = id == "additional_login_methods" ? methods : value
+        serialized = selected.is_a?(Array) ? selected.join(",") : selected
+        "--#{id.tr('_', '-')}=#{serialized}"
+      end
+      arguments.unshift("--app-id=sample", "--app-name=Sample App")
+
+      status = RapidRailsTemplate::Entrypoint.run(
+        [*arguments, "sample"],
+        output: StringIO.new,
+        error: StringIO.new,
+        runner_class: RecordingRunner,
+        prompt: UnexpectedPrompt
+      )
+
+      assert_equal 0, status
+      assert_equal methods, RecordingRunner.arguments.fetch(:plan).configuration["additional_login_methods"]
+    end
+  end
+
+  def test_rejects_unknown_duplicate_and_blank_additional_login_methods
+    ["passkey", "siwe,siwe", "siwe,"].each do |value|
+      error = StringIO.new
+      status = RapidRailsTemplate::Entrypoint.run(
+        ["--additional-login-methods=#{value}", "sample"],
+        error:,
+        runner_class: RecordingRunner,
+        prompt: UnexpectedPrompt
+      )
+
+      assert_equal 1, status
+      assert_includes error.string, "--additional-login-methodsの値が不正です"
+    end
   end
 
   def test_rejects_unknown_duplicate_and_blank_profile_features
@@ -354,6 +393,6 @@ class EntrypointTest < Minitest::Test
 
     assert_equal 1, status
     assert_includes error.string, "[OPTIONS]"
-    assert_includes error.string, "--account-authentication=devise|wallet_siwe"
+    assert_includes error.string, "--additional-login-methods=siwe"
   end
 end

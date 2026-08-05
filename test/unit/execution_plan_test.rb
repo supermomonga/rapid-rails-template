@@ -293,20 +293,25 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
   end
 
-  def test_wallet_plan_uses_siwe_and_not_devise
+  def test_siwe_plan_adds_siwe_to_devise
     plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("account_authentication" => "wallet_siwe", "deployment" => "none"),
+      RapidRailsTemplate::Configuration.build("additional_login_methods" => %w[siwe], "deployment" => "none"),
       app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.gems, "siwe-rb"
-    refute_includes plan.gems, "devise"
+    assert_includes plan.gems, "devise"
+    assert_includes plan.steps, "install_devise"
+    assert_includes plan.steps, "install_siwe"
     assert_includes plan.artifacts, "package.json"
     assert_includes plan.artifacts, "package-lock.json"
-    assert_includes plan.artifacts, "app/views/sessions/new.html.erb"
+    assert_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     assert_includes plan.artifacts, "app/javascript/controllers/siwe_sign_in_controller.js"
-    assert_includes plan.artifacts, "app/views/accounts/edit.html.erb"
-    assert_includes plan.artifacts, "test/support/siwe_test_request.rb"
+    assert_includes plan.artifacts, "app/views/account/siwe_identities/index.html.erb"
+    assert_includes plan.artifacts, "app/models/siwe_identity.rb"
+    assert_includes plan.artifacts, "app/models/siwe_challenge.rb"
+    assert_includes plan.artifacts, "lib/devise/siweable.rb"
+    assert_includes plan.artifacts, "test/controllers/users/siwe_sessions_controller_test.rb"
     assert_includes plan.artifacts, "config/locales/application.ja.yml"
     assert_includes plan.artifacts, "config/locales/application.en.yml"
     assert_equal plan.artifacts.uniq, plan.artifacts
@@ -315,7 +320,6 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/models/user_role.rb"
     assert_includes plan.artifacts, "app/policies/user_policy.rb"
     assert_includes plan.artifacts, "app/views/admin/users/index.html.erb"
-    refute_includes plan.artifacts, "app/views/devise/sessions/new.html.erb"
     refute_includes plan.artifacts, "Dockerfile.prod"
   end
 

@@ -14,12 +14,13 @@ class ConfigurationTest < Minitest::Test
     assert_equal "disable", configuration["maintenance_tasks"]
     assert_equal "Solid Queueを使用しないため", configuration.reasons["maintenance_tasks"]
     assert_equal "use", configuration["solid_cache"]
-    assert_equal "devise", configuration["account_authentication"]
+    assert_empty configuration["additional_login_methods"]
     assert_equal %w[screen_name display_name avatar], configuration["profile_features"]
     assert_equal "rails", configuration["image_delivery"]
     assert_equal "enable", configuration["api"]
     assert_equal "skip", configuration["action_cable"]
-    assert_equal "use", configuration["mail"]
+    assert_equal "skip", configuration["mail"]
+    assert_equal "自動的にメールを必要とする機能がないため", configuration.reasons["mail"]
     assert_equal "ja", configuration["default_locale"]
     refute_includes configuration.answers, "action_text"
   end
@@ -82,10 +83,22 @@ class ConfigurationTest < Minitest::Test
     assert_equal "Maintenance Tasks使用時はSolid Queueが必要です", error.message
   end
 
-  def test_mail_auto_is_disabled_for_wallet_siwe
-    configuration = RapidRailsTemplate::Configuration.build("account_authentication" => "wallet_siwe")
+  def test_mail_auto_is_disabled_without_a_selected_mail_feature
+    configuration = RapidRailsTemplate::Configuration.build("additional_login_methods" => %w[siwe])
 
     assert_equal "skip", configuration["mail"]
+  end
+
+  def test_accepts_supported_additional_login_methods
+    assert_equal %w[siwe], RapidRailsTemplate::Configuration.build(
+      "additional_login_methods" => %w[siwe]
+    )["additional_login_methods"]
+    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("additional_login_methods" => %w[passkey])
+    end
+    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("additional_login_methods" => %w[siwe siwe])
+    end
   end
 
   def test_rejects_invalid_choice

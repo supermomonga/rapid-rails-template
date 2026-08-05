@@ -4323,7 +4323,7 @@ def configure_profile
   if avatar_enabled
     create_file "app/helpers/avatar_helper.rb", <<~RUBY, force: true
       module AvatarHelper
-        BORING_AVATAR_COLORS = %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e].freeze
+        BORING_AVATAR_COLORS = %w[#ffffff #3ea8ff #f1f5f9 #0f83fd #d6e3ed].freeze
         AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze
 
         def profile_avatar(profile, size:, alt:)
@@ -4334,7 +4334,7 @@ def configure_profile
             accessibility = alt.present? ? { label: alt } : { hidden: true }
             boring_avatar(
               profile.user_id.to_s,
-              variant: :marble,
+              variant: :beam,
               colors: BORING_AVATAR_COLORS,
               size: size,
               class: "object-cover",
@@ -4487,7 +4487,7 @@ def configure_profile
           view = ApplicationController.helpers
           expected = view.boring_avatar(
             profile.user_id.to_s,
-            variant: :marble,
+            variant: :beam,
             colors: AvatarHelper::BORING_AVATAR_COLORS,
             size: 64,
             class: "object-cover",

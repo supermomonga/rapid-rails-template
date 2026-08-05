@@ -80,7 +80,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - `/`は追加ログイン方法にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
 - `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。Active StorageはAction Textとともに常設し、`avatar`選択時だけBoring AvatarsとProfileの添付画像機能を追加する。
-- 画像未設定時はUser IDの文字列表現から`marble` variantのBoring Avatarを生成し、themeのprimary、secondary、success、warning、errorに対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
+- 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、themeのbase-100、primary、base-200、secondary、base-300に対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
 - loginとaccount登録はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。password recoveryは生成しない。

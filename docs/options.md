@@ -207,7 +207,7 @@ CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正�
 
 `screen_name`を選択した場合はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`を選択した場合もUser作成時にHaikunator由来の値を自動生成し、必須かつ一意な公開表示名として扱います。両方を選択した場合は、先に一意な`screen_name`を生成し、その値をCamelCaseへ変換した同一由来の値を`display_name`に設定します。databaseには各選択済みcolumnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
 
-`avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`とProfileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。画像未設定時はUser IDの文字列表現をseedとして、`marble` variantとRapid Rails theme palette（`#3ea8ff`、`#0f83fd`、`#10b981`、`#f59e0b`、`#f43f5e`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
+`avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`とProfileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
 添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
 

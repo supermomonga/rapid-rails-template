@@ -783,9 +783,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes profile_configuration, ".profile.avatar.purge if"
     assert_includes profile_configuration, 'I18n.t("profiles.avatar.destroy.notice")'
     assert_includes profile_configuration, '"notice" => "Your avatar image was deleted."'
-    assert_includes avatar_helper, "BORING_AVATAR_COLORS = %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e].freeze"
+    assert_includes avatar_helper, "BORING_AVATAR_COLORS = %w[#ffffff #3ea8ff #f1f5f9 #0f83fd #d6e3ed].freeze"
     assert_includes avatar_helper, "profile.user_id.to_s"
-    assert_includes avatar_helper, "variant: :marble"
+    assert_includes avatar_helper, "variant: :beam"
     assert_includes avatar_helper, "AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze"
     assert_includes avatar_helper, "image_tag profile.avatar.variant(variant)"
     assert_includes avatar_helper, "width: size, height: size"
@@ -925,7 +925,7 @@ class RailsTemplateContractTest < Minitest::Test
     helper = generated_file_source("app/helpers/avatar_helper.rb")
     palette = helper[/BORING_AVATAR_COLORS = %w\[(.*?)\]/, 1].split
 
-    assert_equal %w[#3ea8ff #0f83fd #10b981 #f59e0b #f43f5e], palette
+    assert_equal %w[#ffffff #3ea8ff #f1f5f9 #0f83fd #d6e3ed], palette
     palette.each { |color| assert_match(/--color-[^:]+: #{Regexp.escape(color)};/, @source) }
   end
 

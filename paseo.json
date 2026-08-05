@@ -2,7 +2,12 @@
   "worktree": {
     "setup": [
       "mise trust",
-      "bundle install"
+      "bundle install",
+      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" -w docs/"
+    ],
+    "teardown": [
+      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" -w docs/",
+      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --close docs/**/*.md"
     ]
   },
   "metadataGeneration": {

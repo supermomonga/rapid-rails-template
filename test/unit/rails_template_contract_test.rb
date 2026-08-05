@@ -310,6 +310,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes web_push, 'resource :notification, only: :show'
     assert_includes controller, 'data: { path: notification_path }'
     assert_includes web_push, 'params.expect(push_subscription: %i[browser_id endpoint p256dh auth])'
+    assert_includes web_push, "PushSubscriptionsController.cache_store.clear"
+    refute_includes web_push, "Rails.cache.clear"
   end
 
   def test_solid_queue_uses_the_test_adapter_only_in_test_environment
@@ -457,7 +459,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes route, 'actual == \'mount MaintenanceTasks::Engine, at: "/maintenance_tasks"\''
     assert_includes route, 'mount MaintenanceTasks::Engine, at: "/admin/maintenance_tasks", as: :admin_maintenance_tasks'
     assert_includes initializer, 'MaintenanceTasks.parent_controller = "Admin::MaintenanceTasksController"'
-    assert_includes initializer, '"triggered_by_user_id" => authorization_user.id'
+    assert_includes initializer, "T.bind(self, Admin::MaintenanceTasksController)"
+    assert_includes initializer, '"triggered_by_user_id" => T.must(authorization_user).id'
     assert_includes initializer, "Rails.application.config.to_prepare"
     assert_includes initializer, "MaintenanceTasks::TasksHelper"
     assert_includes initializer, "target.prepend(helper) unless target < helper"
@@ -1049,7 +1052,8 @@ class RailsTemplateContractTest < Minitest::Test
   def test_installs_sorbet_and_checks_types_and_rbi_files_in_the_regular_test_suite
     sorbet_test = generated_file_source("test/sorbet_test.rb")
     shim = generated_file_source("sorbet/rbi/shims/framework_bindings.rbi")
-    application_typechecking = source_between("def configure_application_typechecking", "def configure_sorbet_shims")
+    application_typechecking = source_between("def configure_application_typechecking", "def configure_config_typechecking")
+    config_typechecking = source_between("def configure_config_typechecking", "def configure_sorbet_shims")
     shim_configuration = source_between("def configure_sorbet_shims", "def configure_database")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
     development_gems = source_between("gem_group :development do", "gem_group :development, :test do")
@@ -1060,6 +1064,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes development_and_test_gems, 'gem "tapioca", require: false'
     assert_includes after_bundle, "configure_sorbet"
     assert_operator after_bundle.index('run_checked "bin/annotaterb models"'),
+      :<, after_bundle.index("configure_config_typechecking")
+    assert_operator after_bundle.index("configure_config_typechecking"),
       :<, after_bundle.index('run_checked "bundle exec tapioca init"')
     assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"')
@@ -1108,10 +1114,17 @@ class RailsTemplateContractTest < Minitest::Test
       assert_includes sorbet_test, %Q{"#{dsl_rbi}" =>}
     end
     assert_includes sorbet_test, 'assert_path_exists Rails.root.join("sorbet/rbi/dsl/#{name}.rbi")'
-    %w[app/controllers app/helpers app/models app/policies app/services app/jobs app/mailers app/validators lib test].each do |directory|
+    %w[app/controllers app/helpers app/models app/policies app/services app/jobs app/mailers app/validators config lib test].each do |directory|
       assert_includes application_typechecking, "#{directory}/**/*.rb"
     end
     assert_includes application_typechecking, 'prepend_to_file path, "# typed: true\\n"'
+    assert_includes config_typechecking, 'prepend_to_file "config/puma.rb", "T.bind(self, Puma::DSL)'
+    assert_includes config_typechecking, 'prepend_to_file "config/importmap.rb", "T.bind(self, Importmap::Map)'
+    assert_includes config_typechecking, 'node.receiver.name == :CI'
+    assert_includes config_typechecking, '"ActiveSupport::ContinuousIntegration"'
+    assert_includes config_typechecking, 'T.bind(self, ActiveSupport::ContinuousIntegration)'
+    assert_includes shim, "class Rails::Application"
+    assert_includes shim, "def self.config_for(name, env: T.unsafe(nil)); end"
     assert_includes shim, "class ActiveRecord::Base"
     assert_includes shim, "extend Devise::Models"
     assert_includes shim, "class ActiveSupport::TestCase"
@@ -1125,6 +1138,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes shim, "module ApplicationHelper"
     assert_includes shim_configuration, "module AvatarHelper"
     assert_includes shim_configuration, "module Admin::MaintenanceTasksHelper"
+    assert_includes @source, "T.bind(self, Admin::MaintenanceTasksController)"
+    assert_includes @source, '"triggered_by_user_id" => T.must(authorization_user).id'
     assert_includes shim, "class User"
     assert_includes shim, "include Devise::Models::DatabaseAuthenticatable"
     assert_includes shim, "def password; end"
@@ -1558,7 +1573,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes @source, "Current.user"
     refute_includes @source, "wallet_address"
     refute_includes @source, "users.email"
-    assert_includes @source, '"triggered_by_user_id" => authorization_user.id'
+    assert_includes @source, '"triggered_by_user_id" => T.must(authorization_user).id'
     assert_includes @source, 'User.find(Integer(ENV.fetch("ADMIN_USER_ID")))'
   end
 end

@@ -1,7 +1,7 @@
 # full / ja / imgproxy エビデンス
 
-- Source fingerprint: `8ccb346aea3b4369cc918a1aec074ff4df2052ec804b3402eacc98cf4d852bf8`
-- Base commit: `6073e4a8d7e43e9784381cd4657220e48f5e3365`
+- Source fingerprint: `d1c14fac05156d194f1392f742bac34b2fc5b4b5fb2e432d5826df4b75768f21`
+- Base commit: `69818bb76d018be52c1c5715e2e2977630b0e9dc`
 - Locale: `ja`
 - Image delivery: `imgproxy`
 - Additional login methods: `siwe`

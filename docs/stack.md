@@ -225,7 +225,7 @@ model、policy、service、job、mailer、validator、application-owned `lib`は
 
 `sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`はTapioca専有の生成物として手動編集しません。アプリがRubyで定義するmethodは元の`.rb`へinline signatureを書きます。手書きRBIは`sorbet/rbi/shims/framework_bindings.rbi`だけとし、Devise、Action Policy、Action View、route helper、fixture DSLなど、RailsとGemが実行時に組み込むframework wiringとGem RBIが取得しない公開APIだけを表現します。同じ定義が生成RBIへ追加された場合は`bin/tapioca check-shims`が重複として検出します。反復的な独自macroが複数classへmethodを生成するようになった場合だけcustom DSL compilerへ昇格します。
 
-生成時に`# typed: true`を付ける対象はcontroller、concern、helper、model、policy、service、job、mailer、validator、application-owned `lib`、testです。config、migration、schemaはRails DSLと実行順依存が強いため`typed: false`に留めます。controller、helper、testでRailsが実行時に組み込むDevise、Action Policy、Action View、route helper、fixture DSLの関係も`framework_bindings.rbi`へ集約します。
+生成時に`# typed: true`を付ける対象はcontroller、concern、helper、model、policy、service、job、mailer、validator、application-owned `lib`、config、testです。configではPuma、Importmap、Rails CI、Maintenance Tasksが`instance_eval`するreceiverをRuby本体の`T.bind`で明示し、RailsがApplication subclassへ動的に委譲する`config_for`だけを`framework_bindings.rbi`で表現します。migration、schemaはRails DSLと実行順依存が強いため`typed: false`に留めます。controller、helper、testでRailsが実行時に組み込むDevise、Action Policy、Action View、route helper、fixture DSLの関係も同じshimへ集約します。
 
 生成時と通常のRails testで、`bin/tapioca gems --verify`、`RAILS_ENV=test bin/tapioca dsl --verify --environment=test`、`bin/tapioca check-shims`、`bundle exec srb tc`を実行します。`dsl --verify`はRails DSL生成物の鮮度、`check-shims`は手書き定義の重複、`srb tc`はRuby本体・inline signature・全RBIを合わせた整合性をそれぞれ保証します。Gem更新時は`bin/tapioca gems`、model、migration、routeなどRails DSL変更時はtest database準備後に`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、更新されたRBIをcommitします。検証失敗時に古いRBIや型エラーを許容するfallbackは設けません。
 

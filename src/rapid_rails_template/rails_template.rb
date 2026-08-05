@@ -7715,7 +7715,7 @@ def configure_web_push
       setup do
         @user = users(:one)
         sign_in @user
-        Rails.cache.clear
+        PushSubscriptionsController.cache_store.clear
         configure_vapid
       end
   RUBY
@@ -8621,8 +8621,10 @@ def install_maintenance_tasks
     end
 
     MaintenanceTasks.metadata = lambda do
+      T.bind(self, Admin::MaintenanceTasksController)
+
       {
-        "triggered_by_user_id" => authorization_user.id
+        "triggered_by_user_id" => T.must(authorization_user).id
       }
     end
   RUBY
@@ -10608,6 +10610,7 @@ def configure_sorbet
         app/jobs/**/*.rb
         app/mailers/**/*.rb
         app/validators/**/*.rb
+        config/**/*.rb
         lib/**/*.rb
         test/**/*.rb
       ].freeze
@@ -10700,6 +10703,7 @@ def configure_application_typechecking
     app/jobs/**/*.rb
     app/mailers/**/*.rb
     app/validators/**/*.rb
+    config/**/*.rb
     lib/**/*.rb
     test/**/*.rb
   ]
@@ -10709,6 +10713,43 @@ def configure_application_typechecking
   paths.each do |path|
     prepend_to_file path, "# typed: true\n"
   end
+end
+
+def configure_config_typechecking
+  prepend_to_file "config/puma.rb", "T.bind(self, Puma::DSL)\n\n"
+  prepend_to_file "config/importmap.rb", "T.bind(self, Importmap::Map)\n\n"
+
+  require "prism"
+  path = "config/ci.rb"
+  source = File.binread(path)
+  result = Prism.parse(source)
+  raise "#{path}をRubyとして解析できません: #{result.errors.map(&:message).join(', ')}" unless result.success?
+
+  calls = []
+  queue = [result.value]
+  until queue.empty?
+    node = queue.shift
+    if node.is_a?(Prism::CallNode) && node.name == :run &&
+        node.receiver.is_a?(Prism::ConstantReadNode) && node.receiver.name == :CI &&
+        node.block.is_a?(Prism::BlockNode)
+      calls << node
+    end
+    queue.concat(node.compact_child_nodes)
+  end
+  raise "#{path}のCI.run blockが一意ではありません" unless calls.one?
+
+  call = calls.first
+  block = call.block
+  raise "#{path}のCI.run blockがdo...end形式ではありません" unless source.byteslice(block.opening_loc.start_offset, block.opening_loc.length) == "do"
+
+  edits = [
+    [call.receiver.location.start_offset, call.receiver.location.end_offset, "ActiveSupport::ContinuousIntegration"],
+    [block.opening_loc.end_offset, block.opening_loc.end_offset, "\n  T.bind(self, ActiveSupport::ContinuousIntegration)\n"]
+  ]
+  edits.sort_by { |start_offset, _end_offset, _replacement| -start_offset }.each do |start_offset, end_offset, replacement|
+    source = source.byteslice(0, start_offset) + replacement + source.byteslice(end_offset..)
+  end
+  File.binwrite(path, source)
 end
 
 def configure_sorbet_shims
@@ -10753,6 +10794,11 @@ def configure_sorbet_shims
 
   create_file "sorbet/rbi/shims/framework_bindings.rbi", <<~RBI, force: true
     # typed: true
+
+    class Rails::Application
+      sig { params(name: T.any(String, Symbol), env: T.untyped).returns(T.untyped) }
+      def self.config_for(name, env: T.unsafe(nil)); end
+    end
 
     class ActiveRecord::Base
       extend Devise::Models
@@ -10998,6 +11044,7 @@ after_bundle do
   run_checked "bin/rails db:prepare"
   run_checked "bundle binstubs annotaterb"
   run_checked "bin/annotaterb models"
+  configure_config_typechecking
   run_checked "bundle exec tapioca init"
   append_to_file "sorbet/config", <<~CONFIG
     --suppress-payload-superclass-redefinition-for=Net::IMAP::Literal

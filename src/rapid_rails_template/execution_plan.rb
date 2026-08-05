@@ -203,6 +203,7 @@ module RapidRailsTemplate
           lib/image_delivery_configuration.rb
           lib/imgproxy/active_storage_url_adapter.rb
           config/initializers/imgproxy.rb
+          Procfile.dev
           bin/imgproxy-dev
           test/lib/image_delivery_configuration_test.rb
           test/lib/imgproxy/active_storage_url_adapter_test.rb

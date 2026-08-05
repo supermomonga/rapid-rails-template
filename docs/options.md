@@ -146,7 +146,7 @@ Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push�
 - 表示条件: `web_push != use`
 - 影響する処理: `solid_queue` gemとinstall generator、SQLite queue database、Active Job adapter、development用Puma plugin、production worker
 
-`solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentではPuma pluginを有効化し、productionではPumaから起動しません。`deployment == dokploy`の場合は`Procfile.prod`のworkerプロセスで`bin/jobs --mode async`を実行し、`deployment == none`の場合はproductionでの起動方法を設定しません。
+`solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentには`storage/development_queue.sqlite3`を専用queue databaseとして定義し、`db/queue_schema.rb`を`db:prepare`で読み込んだうえでPuma pluginからSolid Queueを起動します。productionではPumaから起動しません。`deployment == dokploy`の場合は`Procfile.prod`のworkerプロセスで`bin/jobs --mode async`を実行し、`deployment == none`の場合はproductionでの起動方法を設定しません。
 
 ## `job_operations`
 
@@ -224,11 +224,11 @@ avatar uploadは静止画JPEG、PNG、WebPだけを許可し、5 MiB以下、幅
 - 選択肢: `rails`、`imgproxy`
 - 既定値: `rails`
 - 表示条件: 常に表示する
-- 影響する処理: Active Storage variant processor、画像配信initializer、生成アプリ文書、production要件
+- 影響する処理: Active Storage variant processor、画像配信initializer、`Procfile.dev`、生成アプリ文書、production要件
 
 `rails`はActive Storage公式のvariant／representation routeを使用します。`imgproxy`は`imgproxy-rails ~> 0.3.0`を追加し、同じnamed variant APIを署名済みimgproxy URLへ解決します。どちらもblob metadataとattachmentをprimary database、元画像をActive Storage DBに保存します。Railsの処理済みvariantはActive Storage DBへ保存し、imgproxyの派生画像は外部serviceが生成・cacheしますが永続的なsourceにはしません。任意の外部URLを画像sourceとして受け付けません。
 
-両方式ともvariant processorを`:vips`へ固定します。`rails`選択時はimgproxy Gem、initializer、環境変数、外部service要件を生成しません。`imgproxy`選択時はRailsとは別のimgproxy service、`IMGPROXY_ENDPOINT`、hex形式の`IMGPROXY_KEY`と`IMGPROXY_SALT`を必須とし、production source originにはApplication Identityのcanonical originを再利用します。development/testでは`IMGPROXY_SOURCE_ORIGIN`を明示した場合だけHTTPとprivate addressを許可します。productionのHTTP、localhost、private/link-local address、署名なしURLを拒否し、Rails配信へ切り替えません。
+両方式ともvariant processorを`:vips`へ固定します。`rails`選択時はimgproxy Gem、initializer、環境変数、外部service要件を生成しません。`imgproxy`選択時はRailsとは別のimgproxy service、`IMGPROXY_ENDPOINT`、hex形式の`IMGPROXY_KEY`と`IMGPROXY_SALT`を必須とし、production source originにはApplication Identityのcanonical originを再利用します。developmentの`Procfile.dev`はRailsをport 3000、imgproxyをport 8080で起動し、web、Tailwind CSS watch、imgproxyへ同一の公開済み開発専用key、salt、`IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:3000`を直接設定します。RailsのHost Authorizationはdevelopmentだけ`host.docker.internal`を許可し、productionのHTTP、localhost、private/link-local address、署名なしURLは拒否してRails配信へ切り替えません。
 
 ## `api`
 

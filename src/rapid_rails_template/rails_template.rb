@@ -413,6 +413,8 @@ def configure_image_delivery
   RUBY
 
   if delivery == "imgproxy"
+    environment 'config.hosts << "host.docker.internal"', env: "development"
+
     create_file "lib/image_delivery_configuration.rb", <<~'RUBY', force: true
       require "ipaddr"
       require "resolv"
@@ -542,6 +544,26 @@ def configure_image_delivery
       end
     RUBY
 
+    imgproxy_development_environment = {
+      "IMGPROXY_ENDPOINT" => "http://localhost:8080",
+      "IMGPROXY_KEY" => "2bd2493c76c097f627d86b985dce14f949532dc60e2426f1874a4e2320954751",
+      "IMGPROXY_SALT" => "989eaba55a19dfed802f186e320f927dd2379f5ea3db42fb4d85c59c923a3ca8",
+      "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"
+    }.freeze
+    imgproxy_development_prefix = imgproxy_development_environment.map { |name, value| "#{name}=#{value}" }.join(" ")
+    procfile_path = "Procfile.dev"
+    procfile_lines = File.readlines(procfile_path, chomp: true)
+    web_line_indexes = procfile_lines.each_index.select { |index| procfile_lines.fetch(index).start_with?("web:") }
+    css_line_indexes = procfile_lines.each_index.select { |index| procfile_lines.fetch(index).start_with?("css:") }
+    raise "#{procfile_path}のweb processが一意ではありません" unless web_line_indexes.one?
+    raise "#{procfile_path}のcss processが一意ではありません" unless css_line_indexes.one?
+    raise "#{procfile_path}には既にimgproxy processがあります" if procfile_lines.any? { |line| line.start_with?("imgproxy:") }
+
+    procfile_lines[web_line_indexes.fetch(0)] = "web: #{imgproxy_development_prefix} bin/rails server -p 3000"
+    procfile_lines[css_line_indexes.fetch(0)] = "css: #{imgproxy_development_prefix} bin/rails tailwindcss:watch"
+    procfile_lines << "imgproxy: #{imgproxy_development_prefix} bin/imgproxy-dev"
+    create_file procfile_path, procfile_lines.join("\n") + "\n", force: true
+
     create_file "bin/imgproxy-dev", <<~'SH', force: true
       #!/bin/sh
       set -eu
@@ -551,6 +573,7 @@ def configure_image_delivery
       IMGPROXY_PORT="${IMGPROXY_PORT:-8080}"
       ALLOWED_SOURCE="${IMGPROXY_SOURCE_ORIGIN%/}/"
       exec docker run --rm -p "${IMGPROXY_PORT}:8080" \
+        --add-host host.docker.internal:host-gateway \
         -e IMGPROXY_KEY \
         -e IMGPROXY_SALT \
         -e IMGPROXY_ALLOWED_SOURCES="${ALLOWED_SOURCE}" \
@@ -694,16 +717,12 @@ def configure_image_delivery
     <<~MARKDOWN
       `imgproxy`配信では`imgproxy-rails`がActive Storage named variantを署名済みimgproxy URLへ解決します。元画像sourceは`rails_storage_proxy`の署名済みpathだけで、Active Storage DBが元画像のsource of truthです。任意の外部URLは受け付けません。
 
-      必須環境変数は`IMGPROXY_ENDPOINT`、`IMGPROXY_KEY`、`IMGPROXY_SALT`です。keyとsaltは偶数長hexで指定します。productionのsource originは`APPLICATION_ORIGIN`から取得し、HTTPSかつpublic addressだけを許可します。development/testでは`IMGPROXY_SOURCE_ORIGIN`も明示してください。
+      必須環境変数は`IMGPROXY_ENDPOINT`、`IMGPROXY_KEY`、`IMGPROXY_SALT`です。keyとsaltは偶数長hexで指定します。productionのsource originは`APPLICATION_ORIGIN`から取得し、HTTPSかつpublic addressだけを許可します。
 
-      imgproxyはRailsとは別の必須serviceです。`bin/imgproxy-dev`は`darthsim/imgproxy:v4.0.12`を直接起動します。Rails用Dokploy imageや`Procfile.prod`にはimgproxyを追加しません。
+      developmentの`Procfile.dev`はRailsをport 3000、imgproxyをport 8080で起動し、web、Tailwind CSS watch、imgproxyへ同じ公開済みの開発専用key、salt、source originを直接設定します。Railsはimgproxyから元画像を取得できるようdevelopmentだけ`host.docker.internal`を許可します。これらの値をproduction credentialとして使用しないでください。`bin/imgproxy-dev`は`darthsim/imgproxy:v4.0.12`を直接起動します。Rails用Dokploy imageや`Procfile.prod`にはimgproxyを追加しません。
 
       ```console
-      export IMGPROXY_ENDPOINT=http://localhost:8080
-      export IMGPROXY_KEY="$(openssl rand -hex 32)"
-      export IMGPROXY_SALT="$(openssl rand -hex 32)"
-      export IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:3000
-      bin/imgproxy-dev
+      foreman start -f Procfile.dev
       ```
     MARKDOWN
   else
@@ -7512,6 +7531,7 @@ def install_solid_components
   if VALUES.fetch("active_job") == "solid_queue"
     generate "solid_queue:install"
     environment "config.active_job.queue_adapter = :solid_queue"
+    environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"
     environment "config.active_job.queue_adapter = :test", env: "test"
     append_to_file "config/puma.rb", "\nplugin :solid_queue if ENV.fetch(\"RAILS_ENV\", \"development\") == \"development\"\n"
   end
@@ -10199,12 +10219,19 @@ def configure_database
   if VALUES.fetch("job_operations") == "enable"
     test_databases["queue"] = { "database" => "storage/test_queue.sqlite3", "migrations_paths" => "db/queue_migrate" }
   end
+  development_databases = {
+    "primary" => { "database" => "storage/development.sqlite3" },
+    "storage" => { "database" => "storage/development_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
+  }
+  if VALUES.fetch("active_job") == "solid_queue"
+    development_databases["queue"] = {
+      "database" => "storage/development_queue.sqlite3",
+      "migrations_paths" => "db/queue_migrate"
+    }
+  end
   config = {
     "default" => { "adapter" => "sqlite3", "pool" => "<%= ENV.fetch(\"RAILS_MAX_THREADS\", 5) %>", "timeout" => 5000 },
-    "development" => {
-      "primary" => { "database" => "storage/development.sqlite3" },
-      "storage" => { "database" => "storage/development_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
-    },
+    "development" => development_databases,
     "test" => test_databases,
     "production" => production
   }

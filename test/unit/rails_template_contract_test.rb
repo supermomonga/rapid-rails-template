@@ -317,8 +317,19 @@ class RailsTemplateContractTest < Minitest::Test
 
     assert_includes @source, 'gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :solid_queue"'
+    assert_includes solid, 'environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :test", env: "test"'
     assert_includes solid, 'plugin :solid_queue if ENV.fetch(\\"RAILS_ENV\\", \\"development\\") == \\"development\\"'
+  end
+
+  def test_solid_queue_configures_a_dedicated_development_database
+    database = source_between("def configure_database", "def configure_dokploy")
+
+    assert_includes database, 'if VALUES.fetch("active_job") == "solid_queue"'
+    assert_includes database, 'development_databases["queue"] = {'
+    assert_includes database, '"database" => "storage/development_queue.sqlite3"'
+    assert_includes database, '"migrations_paths" => "db/queue_migrate"'
+    assert_includes database, '"development" => development_databases'
   end
 
   def test_installs_mission_control_jobs_at_the_admin_authorization_boundary
@@ -808,6 +819,7 @@ class RailsTemplateContractTest < Minitest::Test
     configuration = generated_file_source("lib/image_delivery_configuration.rb")
     adapter = generated_file_source("lib/imgproxy/active_storage_url_adapter.rb")
     initializer = generated_file_source("config/initializers/imgproxy.rb")
+    imgproxy_script = generated_file_source("bin/imgproxy-dev")
     action_text_test = generated_file_source("test/controllers/pages_controller_test.rb")
 
     assert_includes @source, 'gem "imgproxy-rails", "~> 0.3.0" if VALUES.fetch("image_delivery") == "imgproxy"'
@@ -815,6 +827,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes delivery, "config.active_storage.track_variants = true"
     assert_includes delivery, "rails_storage_redirect"
     assert_includes delivery, "imgproxy_active_storage"
+    assert_includes delivery, 'environment \'config.hosts << "host.docker.internal"\', env: "development"'
     assert_includes configuration, 'environment.fetch("IMGPROXY_ENDPOINT")'
     assert_includes configuration, 'environment.fetch("IMGPROXY_KEY")'
     assert_includes configuration, 'environment.fetch("IMGPROXY_SALT")'
@@ -825,6 +838,20 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes adapter, "rails_storage_proxy_path(image)"
     assert_includes initializer, "config.url_adapters.clear!"
     assert_includes initializer, "Imgproxy::ActiveStorageUrlAdapter"
+    assert_includes delivery, '"IMGPROXY_ENDPOINT" => "http://localhost:8080"'
+    assert_includes delivery, '"IMGPROXY_KEY" => "2bd2493c76c097f627d86b985dce14f949532dc60e2426f1874a4e2320954751"'
+    assert_includes delivery, '"IMGPROXY_SALT" => "989eaba55a19dfed802f186e320f927dd2379f5ea3db42fb4d85c59c923a3ca8"'
+    assert_includes delivery, '"IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"'
+    assert_includes delivery, 'procfile_lines = File.readlines(procfile_path, chomp: true)'
+    assert_includes delivery, "unless web_line_indexes.one?"
+    assert_includes delivery, "unless css_line_indexes.one?"
+    assert_includes delivery, 'procfile_lines[web_line_indexes.fetch(0)] = "web: #{imgproxy_development_prefix} bin/rails server -p 3000"'
+    assert_includes delivery, 'procfile_lines[css_line_indexes.fetch(0)] = "css: #{imgproxy_development_prefix} bin/rails tailwindcss:watch"'
+    assert_includes delivery, 'procfile_lines << "imgproxy: #{imgproxy_development_prefix} bin/imgproxy-dev"'
+    assert_includes imgproxy_script, "--add-host host.docker.internal:host-gateway"
+    assert_includes imgproxy_script, "darthsim/imgproxy:v4.0.12"
+    refute_includes imgproxy_script, "-it"
+    refute_includes imgproxy_script, ":latest"
     assert_includes action_text_test, "keeps Action Text image attachments separate from the avatar policy"
     assert_includes delivery, 'assert_not_includes url, "/unsafe/"'
     refute_includes delivery, 'ENV.fetch("IMGPROXY_ENDPOINT",'

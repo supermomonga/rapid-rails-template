@@ -59,7 +59,7 @@ mise run evidence-verify
 
 DeviseによるユーザーID＋パスワード認証は全構成で必須です。`--additional-login-methods`は既存Userへ後付けできる追加ログイン方法をカンマ区切りで指定し、現在は`siwe`だけを選択できます。既定値および`--additional-login-methods=`は追加方式なしです。SIWEを選択しても会員登録はユーザーID＋パスワードで行い、ログイン後の「アカウント設定」内にある「EVMウォレットログイン」タブからEOA walletを追加します。登録名は`Wallet #<現在の登録数+1>`として自動設定され、編集画面で変更できます。解除は編集とは別画面で、現在のパスワードを確認して実行します。アプリ内の関連・認可・監査には`users.id`を使用し、`login_id`やwallet addressを内部識別子にしません。
 
-`--image-delivery`は`rails`または`imgproxy`を指定し、既定値は`rails`です。Rails配信はActive Storageのnamed variant／representation route、imgproxy配信は署名済みURLを使用します。どちらもActive Storage DBを画像storageのsource of truthとし、実行時に相互fallbackしません。imgproxyではRailsとは別のserviceと環境変数が必要です。生成アプリの`docs/image_delivery.md`にnamed variant、upload制約、起動方法、production要件を記載します。
+`--image-delivery`は`rails`または`imgproxy`を指定し、既定値は`rails`です。Rails配信はActive Storageのnamed variant／representation route、imgproxy配信は署名済みURLを使用します。どちらもActive Storage DBを画像storageのsource of truthとし、実行時に相互fallbackしません。imgproxyではRailsとは別のserviceが必要で、developmentでは生成済み`Procfile.dev`からRailsと一緒に起動します。生成アプリの`docs/image_delivery.md`にnamed variant、upload制約、起動方法、production要件を記載します。
 
 `--default-locale`は`ja`または`en`を指定し、既定値は`ja`です。生成アプリには両言語のlocaleを用意しますが、requestごとの切替UIやUserへのlocale保存は生成しません。productionのcanonical originは`APPLICATION_ORIGIN`環境変数で明示し、development/testだけが固定のローカル既定値を持ちます。
 

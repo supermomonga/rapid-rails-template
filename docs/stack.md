@@ -105,7 +105,7 @@ Active Storageのvariant processorは全環境で`:vips`へ固定します。Rai
 
 imgproxy設定は`ImageDeliveryConfiguration`が一元的に検証します。productionではHTTPS endpoint、空でない偶数長hex key/salt、Application Identity由来のHTTPS public source originを必須とし、DNS解決したloopback、private、link-local addressも拒否します。development/testだけ、`IMGPROXY_SOURCE_ORIGIN`で明示したlocalhostまたはprivate HTTP originを許可します。設定不足、署名なしURL、画像処理失敗をRails配信や元画像表示へfallbackしません。
 
-imgproxyはRails processと別の必須serviceです。Dokploy用Rails imageや`Procfile.prod`へimgproxyを同居させず、platform固有sidecar設定も生成しません。開発・integration検証は固定した`darthsim/imgproxy:v4.0.12`を直接起動し、key、salt、末尾`/`付きの`IMGPROXY_ALLOWED_SOURCES`、source byte数・resolution・animation上限を環境変数で明示します。秘密値はGit管理対象へ保存しません。
+imgproxyはRails processと別の必須serviceです。Dokploy用Rails imageや`Procfile.prod`へimgproxyを同居させず、platform固有sidecar設定も生成しません。developmentの`Procfile.dev`は、Rails environmentをbootするwebとTailwind CSS watch、およびimgproxyへ同じ公開済み開発専用key、salt、endpoint、source originを直接設定し、Railsをport 3000、imgproxyをport 8080で起動します。RailsのHost Authorizationへ`host.docker.internal`を追加するのはdevelopmentだけとします。`bin/imgproxy-dev`は固定した`darthsim/imgproxy:v4.0.12`をattached processとして直接起動し、Linuxでは`host.docker.internal`をhost gatewayへ解決します。末尾`/`付きの`IMGPROXY_ALLOWED_SOURCES`、source byte数・resolution・animation上限も明示し、Foreman終了時は`--rm`によってcontainerを残しません。productionの秘密値はGit管理対象へ保存しません。
 
 Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
 
@@ -235,7 +235,7 @@ https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2
 
 ## Solid Queue
 
-ジョブ管理を使用する場合だけ、現在解決される`solid_queue` 1.6.0を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、`solid_queue:install`が生成するschemaとmigration pathを使用します。test環境だけはActive Storageを含むenqueue処理とjob assertionを外部worker・queue DBから分離するため、Rails標準の`test` adapterへ明示的に上書きします。
+ジョブ管理を使用する場合だけ、現在解決される`solid_queue` 1.6.0を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、developmentでは`storage/development_queue.sqlite3`へ接続して`solid_queue:install`が生成する`db/queue_schema.rb`と`db/queue_migrate`を使用します。生成中の`db:prepare`がこのqueue databaseも準備するため、Puma pluginの初回起動時からSolid Queueのtableが存在します。test環境だけはActive Storageを含むenqueue処理とjob assertionを外部worker・queue DBから分離するため、Rails標準の`test` adapterへ明示的に上書きします。
 
 developmentではPumaからSolid Queueを起動します。
 
@@ -385,7 +385,7 @@ Litestreamの設定または認証情報が不足した場合、replicationな�
 - 必須replica URL: primary、storageと、選択に応じたqueue／cableのLitestream URL
 - 任意の調整値: `WEB_CONCURRENCY`、`RAILS_MAX_THREADS`、`DATABASE_POOL_SIZE`、`JOB_CONCURRENCY`
 
-環境変数の実値や秘密情報を生成先リポジトリへ保存しません。
+production環境変数の実値や秘密情報を生成先リポジトリへ保存しません。`image_delivery=imgproxy`の`Procfile.dev`に記録する公開済み開発専用key/saltはproduction credentialとして使用しません。
 
 ### `none`
 

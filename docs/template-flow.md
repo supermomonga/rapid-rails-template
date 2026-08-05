@@ -28,7 +28,7 @@ flowchart TD
     M --> N["bundle install"]
     N --> O["post_bundle: generatorを実行"]
     O --> P["認証・選択機能を生成し、設定API・構造化データ・Prismで編集"]
-    P --> Q["db:prepareで生成済みmigrationを適用"]
+    P --> Q["db:prepareでprimary・storage・queue等の生成済みschemaとmigrationを適用"]
     Q --> U["verify: 生成結果を検証"]
     U --> R["一時ファイルを削除"]
     R --> S["実行結果を表示して終了"]
@@ -64,7 +64,7 @@ RailsアプリID、表示用アプリ名、固定構成、回答からgenerator 
 
 Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。Action Textのeditorとして`lexxy ~> 0.9.21`を固定で宣言します。
 
-`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。`avatar`が選択されている場合だけ`boring_avatars ~> 0.1.0`をRails binding付きで宣言し、画像未設定時のSVG生成に使用します。`image_delivery=imgproxy`の場合だけ`imgproxy-rails ~> 0.3.0`を宣言し、Rails配信では追加しません。Rails標準Gemfileの`image_processing`を両方式で利用します。
+`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。`avatar`が選択されている場合だけ`boring_avatars ~> 0.1.0`をRails binding付きで宣言し、画像未設定時のSVG生成に使用します。`image_delivery=imgproxy`の場合だけ`imgproxy-rails ~> 0.3.0`を宣言し、Rails配信では追加しません。Rails標準Gemfileの`image_processing`を両方式で利用します。post-bundleではimgproxy選択時だけ、Railsが生成した`Procfile.dev`の一意なwebとCSS watch processへ開発専用署名設定を付与し、webをport 3000へ固定します。同じ設定で`bin/imgproxy-dev`を起動するimgproxy processも追加します。
 
 ### `post_bundle`
 

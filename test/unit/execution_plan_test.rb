@@ -177,7 +177,8 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.steps, "configure_api"
     refute_includes plan.artifacts, "app/models/api_credential.rb"
     refute_includes plan.artifacts, "app/controllers/api/api_controller.rb"
-    refute_includes plan.artifacts, "app/javascript/controllers/clipboard_controller.js"
+    assert_includes plan.artifacts, "app/javascript/controllers/clipboard_controller.js"
+    assert_includes plan.artifacts, "app/views/devise/registrations/complete.html.erb"
     refute_includes plan.artifacts, "app/views/api_credentials/index.html.erb"
   end
 

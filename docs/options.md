@@ -184,9 +184,11 @@ Maintenance TasksはActive Jobを介して実行するため、実効値が`acti
 - 表示条件: 常に表示する
 - 影響する処理: Deviseの`:siweable` module、`siwe-rb`、SIWE credential・challenge・route・管理画面
 
-Devise 5.0.4、`devise-i18n`、ユーザーID＋パスワードによる登録・ログインはすべての構成で生成します。`User`の内部識別子は標準の整数`id`、認証用IDは`login_id`です。`login_id`はtrim・小文字化し、3〜32文字の小文字英数字とアンダースコアに制限します。email、password recovery列、`:recoverable`、`:validatable`は生成しません。passwordは`Devise.password_length`で検証し、`login_id`またはpasswordの更新にはcurrent passwordを要求します。
+Devise 5.0.4、`devise-i18n`、ユーザーID＋パスワードによる登録・ログインはすべての構成で生成します。`User`の内部識別子は標準の整数`id`、認証用IDは`login_id`です。会員登録ではpasswordとpassword confirmationだけを入力させ、`login_id`はUser作成時に`SecureRandom.hex(10)`で未使用の20文字小文字hexとして自動生成します。clientが送信した`login_id`は採用せず、作成後の変更もmodelで拒否します。
 
-`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。会員登録は常にユーザーID＋パスワードで行い、ログイン後に名前付きEOA walletを複数追加できます。wallet addressは全Userで一意かつ変更不可、wallet名はUser内で大文字小文字を無視して一意です。SIWEログインは紐付いた既存UserだけをDeviseへsign inし、未登録walletからUserを作成しません。
+登録成功後は自動ログイン状態を維持して認証必須の`/users/sign_up/complete`へ遷移し、生成したユーザーID、次回ログインに必要なため保存すべき旨、コピー操作を表示します。ユーザーIDは本人の登録完了画面とアカウント設定だけへ読み取り専用で表示し、公開Profileや管理画面には表示しません。ログイン入力では従来どおりtrim・小文字化します。email、password recovery列、`:recoverable`、`:validatable`は生成せず、passwordは`Devise.password_length`で検証し、password更新にはcurrent passwordを要求します。
+
+`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。会員登録は常にpasswordを入力し、自動生成されたユーザーIDを受け取るpassword認証の基底フローで行い、ログイン後に名前付きEOA walletを複数追加できます。wallet addressは全Userで一意かつ変更不可、wallet名はUser内で大文字小文字を無視して一意です。SIWEログインは紐付いた既存UserだけをDeviseへsign inし、未登録walletからUserを作成しません。
 
 challengeはdatabaseへtoken digest、purpose、User、browser session、address、chain ID、server生成message、nonce、5分の期限、消費時刻を保存します。canonical originからdomainとURIを構成し、clientのHost、message、User ID、purpose、redirect先を信用しません。発行・検証はPOST＋CSRF、`Cache-Control: no-store`、IP＋sessionごとのrate limitで保護します。初期実装は正のEIP-155 chain IDを持つEOA署名だけを対象とし、RPC、ERC-1271、WalletConnect、外部SaaSは追加しません。
 

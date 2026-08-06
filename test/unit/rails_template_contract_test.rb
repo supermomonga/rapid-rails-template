@@ -161,7 +161,8 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/devise/shared/_links.html.erb" => %w[divider menu],
       "app/views/devise/sessions/new.html.erb" => %w[fieldset fieldset-legend input checkbox btn],
       "app/views/devise/registrations/new.html.erb" => %w[fieldset fieldset-legend input btn],
-      "app/views/devise/registrations/edit.html.erb" => %w[card fieldset fieldset-legend input btn]
+      "app/views/devise/registrations/complete.html.erb" => %w[alert fieldset fieldset-legend join join-item input btn],
+      "app/views/devise/registrations/edit.html.erb" => %w[card fieldset fieldset-legend join join-item input btn]
     }
 
     view_sources = component_expectations.to_h { |path, _components| [path, generated_file_source(path)] }
@@ -251,8 +252,8 @@ class RailsTemplateContractTest < Minitest::Test
   end
 
   def test_devise_fixtures_satisfy_the_generated_unique_login_id_constraint
-    assert_includes @source, 'login_id: user_one'
-    assert_includes @source, 'login_id: user_two'
+    assert_includes @source, 'login_id: "00000000000000000001"'
+    assert_includes @source, 'login_id: "00000000000000000002"'
     assert_includes @source, 'Devise::Encryptor.digest(User, "password123")'
     refute_includes generated_file_source("test/fixtures/users.yml"), "email:"
   end
@@ -774,6 +775,9 @@ class RailsTemplateContractTest < Minitest::Test
 
     refute_includes profile, "login_id"
     refute_includes profile, ">ID<"
+    assert_includes settings, 'value="<%= resource.login_id %>" readonly'
+    assert_includes settings, 'data-action="clipboard#copy"'
+    refute_includes settings, "f.text_field :login_id"
     assert_includes settings, "current_password"
     assert_includes settings, 'method: :delete, class: "btn btn-error btn-rapid"'
     assert_includes identities, "account_user.siwe_identities.find(params.expect(:id))"
@@ -1179,7 +1183,6 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes shim_configuration, 'create_file "sorbet/rbi/shims/boring_avatars.rbi"'
     assert_includes shim_configuration, "BoringAvatars::RailsAttributeValue"
     assert_includes shim_configuration, 'create_file "sorbet/rbi/shims/bundler_connection_pool.rbi"'
-    assert_includes shim_configuration, 'VALUES.fetch("additional_login_methods").include?("siwe")'
     assert_includes bundler_connection_pool_shim, "class ConnectionPool"
     assert_includes bundler_connection_pool_shim, "module ForkTracker; end"
     assert_includes shim_configuration, "module Admin::MaintenanceTasksHelper"
@@ -1236,6 +1239,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, "credentials: 'same-origin'"
     assert_includes evidence, 'page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))'
     assert_includes evidence, 'fill_in User.human_attribute_name(:login_id), with: @user.login_id'
+    assert_includes evidence, '"registration-complete"'
+    assert_includes evidence, 'value="#{generated_login_id}"'
+    refute_includes evidence, 'value="\#{generated_login_id}"'
+    assert_includes evidence, "def with_deterministic_login_id(login_id)"
+    assert_includes evidence, 'with_deterministic_login_id("00000000000000000005")'
+    assert_includes evidence, 'with_deterministic_login_id("00000000000000000006")'
+    assert_includes evidence, "length == User::LOGIN_ID_BYTES ? login_id : original_method.call(length)"
     assert_includes evidence, '"api-credential-secret"'
     assert_includes evidence, "def with_deterministic_secure_random"
     assert_includes evidence, "T.must(singleton_class).define_method(:urlsafe_base64, T.must(original_method))"
@@ -1246,6 +1256,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"admin-faq-edit"'
     assert_includes evidence, '"admin-footer-setting"'
     assert_includes evidence, '"web-push-enabled"'
+    assert_includes evidence, 'set_evidence_web_push_mode("granted")'
+    assert_includes evidence, "def reconnect_web_push_controller"
+    assert_includes evidence, "playwright_page.evaluate(script)"
+    assert_includes evidence, '[data-push-subscription-target="toggle"]:not([disabled])'
     assert_includes evidence, "def install_web_push_stub"
     assert_includes evidence, 'Object.defineProperty(window, "Notification"'
     assert_includes evidence, 'Object.defineProperty(navigator, "serviceWorker"'
@@ -1486,6 +1500,7 @@ class RailsTemplateContractTest < Minitest::Test
       app/views/faqs/index.html.erb
       app/views/devise/sessions/new.html.erb
       app/views/devise/registrations/new.html.erb
+      app/views/devise/registrations/complete.html.erb
     ]
     with_menu_views = %w[
       app/views/accounts/show.html.erb
@@ -1557,12 +1572,41 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes devise, "recoverable"
     refute_includes devise, "validatable"
     assert_includes user, 'normalizes :login_id, with: ->(login_id) { login_id.to_s.strip.downcase }'
-    assert_includes user, 'with: /\\\\A[a-z0-9][a-z0-9_]{2,31}\\\\z/'
+    assert_includes user, 'LOGIN_ID_BYTES = T.let(10, Integer)'
+    assert_includes user, 'with: /\\\\A[0-9a-f]{20}\\\\z/'
+    assert_includes user, "before_validation :assign_generated_login_id, on: :create"
+    assert_includes user, "candidate = generate_login_id_candidate"
+    assert_includes user, "SecureRandom.hex(LOGIN_ID_BYTES)"
+    assert_includes user, "next if self.class.exists?(login_id: candidate)"
+    assert_includes user, "self.login_id = candidate"
+    assert_includes user, "validate :login_id_cannot_change, on: :update"
+    assert_includes user, "errors.add(:login_id, :login_id_readonly) if will_save_change_to_login_id?"
     assert_includes user, "within: Devise.password_length"
     assert_includes user, "new_record? || password.present? || password_confirmation.present?"
     assert_includes devise, "config.authentication_keys = [:login_id]"
     assert_includes devise, "config.case_insensitive_keys = [:login_id]"
     assert_includes devise, "config.strip_whitespace_keys = [:login_id]"
+  end
+
+  def test_devise_registration_generates_and_presents_an_immutable_login_id
+    routes = source_between("def configure_devise_routes", "def configure_maintenance_tasks_route")
+    controller = generated_file_source("app/controllers/users/registrations_controller.rb")
+    registration = generated_file_source("app/views/devise/registrations/new.html.erb")
+    completion = generated_file_source("app/views/devise/registrations/complete.html.erb")
+
+    assert_includes routes, 'get "users/sign_up/complete", to: "users/registrations#complete", as: :user_registration_complete'
+    assert_includes controller, "before_action :authenticate_user_for_completion!, only: :complete"
+    assert_includes controller, "authenticate_user!(force: true)"
+    assert_includes controller, 'render template: "devise/registrations/complete"'
+    assert_includes controller, "def after_sign_up_path_for(_resource)"
+    assert_includes controller, "user_registration_complete_path"
+    refute_includes registration, "f.text_field :login_id"
+    assert_includes registration, "f.password_field :password"
+    assert_includes registration, "f.password_field :password_confirmation"
+    assert_includes completion, 'value="<%= resource.login_id %>" readonly'
+    assert_includes completion, 'data-action="clipboard#copy"'
+    assert_includes completion, 't("devise_views.registrations.login_id_hint")'
+    assert_includes completion, 'account_path, class: "btn btn-primary btn-block btn-rapid"'
   end
 
   def test_siweable_follows_the_devise_extension_and_existing_user_sign_in_contract

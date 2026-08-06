@@ -51,11 +51,14 @@ class SampleAppTemplateTest < Minitest::Test
   def test_seeds_ten_users_and_fifty_articles_each
     assert_includes @source, "sample_users = 10.times.map"
     assert_includes @source, "50.times do |article_index|"
-    assert_includes @source, "profile = T.must(user.profile)"
+    assert_includes @source, 'screen_name = format("sample_user_%02d", number)'
+    assert_includes @source, "profile = Profile.find_by(screen_name: screen_name)"
+    assert_includes @source, 'user = User.create!(password: "password123", password_confirmation: "password123")'
     assert_includes @source, "article = profile.articles.find_or_initialize_by("
     assert_includes @source, 'article.draft = article_number > 40'
     assert_includes @source, "assert_equal 500, Article.where"
-    assert_includes @source, "profiles = sample_users.map { |user| T.must(user.profile) }"
+    assert_includes @source, "sample_profiles = Profile.where(screen_name: screen_names).includes(:user).order(:screen_name).to_a"
+    assert_includes @source, 'puts "Sample user credentials:"'
     assert_includes @source, '2.times { load Rails.root.join("db/seeds.rb").to_s }'
     assert_includes @source, "created = T.must(Article.order(:id).last)"
   end

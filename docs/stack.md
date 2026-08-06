@@ -84,8 +84,8 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、themeのbase-100、primary、base-200、secondary、base-300に対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
-- loginとaccount登録はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。password recoveryは生成しない。
-- Deviseのsessionsとregistrationsのapplication Viewをgeneratorで展開し、ユーザーID＋パスワード用にtheme化する。
+- login、passwordだけを入力するaccount登録、登録直後のユーザーID提示はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。password recoveryは生成しない。
+- Deviseのsessionsとregistrationsのapplication Viewをgeneratorで展開し、loginではユーザーID＋password、account登録ではpassword＋password confirmation、登録完了とaccount設定では読み取り専用ユーザーIDを表示する。コピー操作はAPI optionに依存しない共通Stimulus controllerを使用する。
 - SIWE選択時だけlogin画面へ明示的な署名buttonを追加する。account navigationへ独立項目は追加せず、「アカウント設定」内の`tabs-lift`で「基本設定」と「EVMウォレットログイン」を切り替える。wallet管理はresourcefulな一覧・新規登録・編集・解除画面へ分離し、解除画面だけでcurrent passwordを要求する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
@@ -223,7 +223,7 @@ Ruby 4.0で読み込まれる`net-imap` 0.6系の実装とSorbet payloadの間�
 
 model、policy、service、job、mailer、validator、application-owned `lib`は生成時に`# typed: true`以上を先頭へ付与します。`ApplicationIdentity`、`ImageDeliveryConfiguration`、`AdminRoleGrant`、avatar upload／image policy、Web Push payload／notifier／VAPID設定は`# typed: strict`とし、private method、定数、instance variableも明示します。Web Push jobの引数はActive Jobが直列化できるprimitiveに限定し、job内で`PushNotificationPayload`へ構造化します。avatar uploadはRails／Rackの動的upload objectを`AvatarUpload`へ一度だけ検証変換します。Action View helperではtab入力を`T::Struct`、application route helper moduleをアプリ固有の`ApplicationRoutes`型、capture blockを`String`、Maintenance Tasksのbuilderを`ActionView::Helpers::FormBuilder`として表現し、application code内へ`T.untyped`を持ち込みません。route method本体はTapiocaが生成する`GeneratedUrlHelpersModule`と`GeneratedPathHelpersModule`を使い、runtime moduleへ付けた`ApplicationRoutes` markerとの接続だけを`framework_bindings.rbi`で表現します。Action Policyはgem側の`method_added` hookがSorbet runtime hookへ委譲しないため、policy predicateだけSorbet公式の`T::Sig::WithoutRuntime.sig`を使用します。`typed: ignore`による除外は行いません。
 
-`sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`はTapioca専有の生成物として手動編集しません。アプリがRubyで定義するmethodは元の`.rb`へinline signatureを書きます。手書きRBIは、Devise、Action Policy、Action View、route helper、fixture DSLなどのruntime wiringを表す`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIがRails binding内で参照する型aliasを補う`sorbet/rbi/shims/boring_avatars.rbi`、SIWE依存のHTTPX Gem RBIが参照するRuby同梱Bundlerのfork hookを表す`sorbet/rbi/shims/bundler_connection_pool.rbi`に分離します。最後のshimはSIWE選択時だけ生成します。同じ定義が生成RBIへ追加された場合は`bin/tapioca check-shims`が重複として検出します。反復的な独自macroが複数classへmethodを生成するようになった場合だけcustom DSL compilerへ昇格します。
+`sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`はTapioca専有の生成物として手動編集しません。アプリがRubyで定義するmethodは元の`.rb`へinline signatureを書きます。手書きRBIは、Devise、Action Policy、Action View、route helper、fixture DSLなどのruntime wiringを表す`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIがRails binding内で参照する型aliasを補う`sorbet/rbi/shims/boring_avatars.rbi`、FFIまたはHTTPXのGem RBIが参照するRuby同梱Bundlerのfork hookを表す`sorbet/rbi/shims/bundler_connection_pool.rbi`に分離します。Bundler shimは認証optionに依存せず常に生成します。同じ定義が生成RBIへ追加された場合は`bin/tapioca check-shims`が重複として検出します。反復的な独自macroが複数classへmethodを生成するようになった場合だけcustom DSL compilerへ昇格します。
 
 生成時に`# typed: true`以上を付ける対象はcontroller、concern、helper、model、policy、service、job、mailer、validator、application-owned `lib`、config、test、`db/seeds.rb`です。configではPuma、Importmap、Rails CI、Maintenance Tasksが`instance_eval`するreceiverをRuby本体の`T.bind`で明示し、RailsがApplication subclassへ動的に委譲する`config_for`だけを`framework_bindings.rbi`で表現します。migration、schemaはRails DSLと実行順依存が強いため`typed: false`に留めます。`.rake`内にapplication logicを置かず、`roles:grant_admin`は`typed: strict`な`AdminRoleGrant`を呼び出します。
 
@@ -415,7 +415,9 @@ Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queu
 
 ## Deviseと追加SIWEログイン
 
-Devise 5.0.4と`devise-i18n`は常設し、Userは標準の整数`id`、`login_id`、`encrypted_password`、`remember_created_at`を持ちます。関連・認可・監査は`users.id`だけを参照し、認証用`login_id`はログインと認証情報変更以外へ露出しません。email、password recovery列、`:recoverable`、`:validatable`は生成しません。
+Devise 5.0.4と`devise-i18n`は常設し、Userは標準の整数`id`、`login_id`、`encrypted_password`、`remember_created_at`を持ちます。`login_id`はUser作成時に`SecureRandom.hex(10)`から未使用の20文字小文字hexを生成し、client入力を採用せず、永続化後の変更をmodel validationで拒否します。databaseの`NOT NULL`制約とunique indexを最終的な一意性境界として維持します。
+
+会員登録はpasswordとpassword confirmationだけを受け付け、成功時はDeviseの自動ログイン状態を維持して`/users/sign_up/complete`へ遷移します。この認証必須画面とaccount設定だけが本人へ`login_id`を読み取り専用で表示し、保存を促す文面とコピー操作を提供します。関連・認可・監査は`users.id`だけを参照し、公開Profileと管理画面へ`login_id`を露出しません。email、password recovery列、`:recoverable`、`:validatable`は生成しません。
 
 `additional_login_methods`へ`siwe`を選択した場合だけ`siwe-rb` 0.2.xと`:siweable`を追加します。`:siweable`はDeviseの公開module登録契約に従ってmodel、controller、routeを登録し、Warden strategyは追加しません。mapper拡張をroutes評価前に読み込み、成功時は紐付いた既存Userの`active_for_authentication?`を確認してDeviseの`sign_in`を呼びます。
 

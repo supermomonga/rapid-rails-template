@@ -1,7 +1,7 @@
 # full / ja / imgproxy エビデンス
 
-- Source fingerprint: `324be203e6c7e4ddfd0428a2bea55ae4ef8e0aa69701b9e640f3f709f632604e`
-- Base commit: `77cf9acb0a494409eb008a906860bb1f9ae1b08c`
+- Source fingerprint: `9376ed9283bab3de86bae09fa5150bf8bc1e7bbae0b55207b57984363fdd6e0b`
+- Base commit: `ffac46dc2fb703da019c0794493797a21bebb6c6`
 - Locale: `ja`
 - Image delivery: `imgproxy`
 - Additional login methods: `siwe`
@@ -36,6 +36,12 @@
 |Desktop|Mobile|
 |---|---|
 |![アカウント作成 (desktop)](registration--desktop.png)|![アカウント作成 (mobile)](registration--mobile.png)|
+
+## アカウント作成完了
+
+|Desktop|Mobile|
+|---|---|
+|![アカウント作成完了 (desktop)](registration-complete--desktop.png)|![アカウント作成完了 (mobile)](registration-complete--mobile.png)|
 
 ## ホーム（ログイン済み）
 

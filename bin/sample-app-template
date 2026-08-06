@@ -489,15 +489,15 @@ append_to_file "db/seeds.rb", <<~'RUBY'
 
   sample_users = 10.times.map do |user_index|
     number = user_index + 1
-    login_id = format("sample_user_%02d", number)
-    user = User.find_or_initialize_by(login_id: login_id)
-    if user.new_record?
-      user.password = "password123"
-      user.password_confirmation = "password123"
+    screen_name = format("sample_user_%02d", number)
+    profile = Profile.find_by(screen_name: screen_name)
+    if profile
+      user = profile.user
+    else
+      user = User.create!(password: "password123", password_confirmation: "password123")
+      profile = T.must(user.profile)
     end
-    user.save!
-    profile = T.must(user.profile)
-    profile.update!(screen_name: login_id, display_name: format("Sample User %02d", number))
+    profile.update!(screen_name: screen_name, display_name: format("Sample User %02d", number))
 
     50.times do |article_index|
       article_number = article_index + 1
@@ -511,6 +511,11 @@ append_to_file "db/seeds.rb", <<~'RUBY'
 
     user
   end
+
+  puts "Sample user credentials:"
+  sample_users.each do |user|
+    puts "  #{T.must(user.profile).screen_name}: #{user.login_id} / password123"
+  end
 RUBY
 
 create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
@@ -522,8 +527,10 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
     test "creates ten users with fifty articles each without duplication" do
       2.times { load Rails.root.join("db/seeds.rb").to_s }
 
-      sample_users = User.where(login_id: (1..10).map { |number| format("sample_user_%02d", number) }).order(:login_id)
-      assert_equal 10, sample_users.count
+      screen_names = (1..10).map { |number| format("sample_user_%02d", number) }
+      sample_profiles = Profile.where(screen_name: screen_names).includes(:user).order(:screen_name).to_a
+      assert_equal 10, sample_profiles.count
+      sample_users = sample_profiles.map(&:user)
 
       sample_users.each do |user|
         articles = T.must(user.profile).articles
@@ -531,8 +538,7 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
         assert_equal 10, articles.where(draft: true).count
         assert_equal 40, articles.where(draft: false).count
       end
-      profiles = sample_users.map { |user| T.must(user.profile) }
-      assert_equal 500, Article.where(profile: profiles).count
+      assert_equal 500, Article.where(profile: sample_profiles).count
     end
   end
 RUBY

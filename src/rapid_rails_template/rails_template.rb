@@ -116,6 +116,12 @@ def configure_devise_routes
     path,
     source.byteslice(0, call.location.start_offset) + replacement + source.byteslice(call.location.end_offset..)
   )
+
+  route <<~RUBY
+    devise_scope :user do
+      get "users/sign_up/complete", to: "users/registrations#complete", as: :user_registration_complete
+    end
+  RUBY
 end
 
 def configure_maintenance_tasks_route
@@ -1307,20 +1313,49 @@ def install_devise
   devise_modules << "siweable" if VALUES.fetch("additional_login_methods").include?("siwe")
   devise_declaration = devise_modules.map { |name| ":#{name}" }.join(", ")
   create_file "app/models/user.rb", <<~RUBY, force: true
+    require "securerandom"
+
     class User < ApplicationRecord
+      LOGIN_ID_BYTES = T.let(10, Integer)
+
       devise #{devise_declaration}, authentication_keys: [:login_id]
 
       normalizes :login_id, with: ->(login_id) { login_id.to_s.strip.downcase }
 
       validates :login_id,
         presence: true,
-        format: { with: /\\A[a-z0-9][a-z0-9_]{2,31}\\z/ },
+        format: { with: /\\A[0-9a-f]{20}\\z/ },
         uniqueness: { case_sensitive: true }
       validates_presence_of :password, if: :password_required?
       validates_confirmation_of :password, if: :password_required?
       validates_length_of :password, within: Devise.password_length, allow_blank: true
 
+      before_validation :assign_generated_login_id, on: :create
+      validate :login_id_cannot_change, on: :update
+
       private
+        sig { void }
+        def assign_generated_login_id
+          loop do
+            candidate = generate_login_id_candidate
+            next if self.class.exists?(login_id: candidate)
+
+            self.login_id = candidate
+            break
+          end
+        end
+
+        sig { returns(String) }
+        def generate_login_id_candidate
+          SecureRandom.hex(LOGIN_ID_BYTES)
+        end
+
+        sig { void }
+        def login_id_cannot_change
+          errors.add(:login_id, :login_id_readonly) if will_save_change_to_login_id?
+        end
+
+        sig { returns(T::Boolean) }
         def password_required?
           new_record? || password.present? || password_confirmation.present?
         end
@@ -1341,25 +1376,56 @@ def install_devise
 
   generate "devise:views", "-v", "sessions", "registrations"
   configure_devise_routes
+  create_file "app/javascript/controllers/clipboard_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["source", "button"]
+      static values = { copied: String }
+
+      async copy() {
+        await navigator.clipboard.writeText(this.sourceTarget.value)
+        this.buttonTarget.textContent = this.copiedValue
+      }
+    }
+  JAVASCRIPT
   create_file "test/fixtures/users.yml", <<~'YAML', force: true
     one:
-      login_id: user_one
+      login_id: "00000000000000000001"
       encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
 
     two:
-      login_id: user_two
+      login_id: "00000000000000000002"
       encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
   YAML
   create_file "test/models/user_test.rb", <<~'RUBY', force: true
     require "test_helper"
 
     class UserTest < ActiveSupport::TestCase
-      test "normalizes and validates the login id" do
-        user = User.new(login_id: "  Sample_User  ", password: "password123", password_confirmation: "password123")
+      test "generates an unused login id and ignores a supplied value" do
+        candidates = [users(:one).login_id, "0123456789abcdefabcd"]
+        user = User.new(
+          login_id: "client_supplied",
+          password: "password123",
+          password_confirmation: "password123"
+        )
+        T.unsafe(user).define_singleton_method(:generate_login_id_candidate) { T.must(candidates.shift) }
 
-        assert user.valid?
-        assert_equal "sample_user", user.login_id
-        assert_not User.new(login_id: "_invalid", password: "password123").valid?
+        user.save!
+
+        assert_empty candidates
+        assert_equal "0123456789abcdefabcd", user.login_id
+        assert_match(/\A[0-9a-f]{20}\z/, user.login_id)
+        login_id_index = T.must(User.connection.indexes(:users).find { |index| index.columns == ["login_id"] })
+        assert_predicate login_id_index, :unique
+      end
+
+      test "does not allow the generated login id to change" do
+        user = users(:one)
+
+        assert_not user.update(login_id: "0123456789abcdefabcd")
+        assert user.errors.added?(:login_id, :login_id_readonly)
+        assert_equal "00000000000000000001", user.reload.login_id
       end
     end
   RUBY
@@ -2922,8 +2988,8 @@ def configure_roles
       include Devise::Test::IntegrationHelpers
 
       setup do
-        @admin = User.create!(login_id: "role_admin", password: "password123", password_confirmation: "password123")
-        @regular = User.create!(login_id: "role_regular", password: "password123", password_confirmation: "password123")
+        @admin = User.create!(password: "password123", password_confirmation: "password123")
+        @regular = User.create!(password: "password123", password_confirmation: "password123")
         @admin.grant_role!(:admin)
       end
 
@@ -2933,9 +2999,8 @@ def configure_roles
         end
 
         def create_additional_users(count)
-          count.times do |index|
+          count.times do
             User.create!(
-              login_id: "role_page_\#{index}",
               password: "password123",
               password_confirmation: "password123"
             )
@@ -3108,6 +3173,14 @@ def configure_roles
       class RegistrationsController < Devise::RegistrationsController
         extend T::Sig
 
+        before_action :authenticate_user_for_completion!, only: :complete
+
+        sig { void }
+        def complete
+          self.resource = T.must(current_user)
+          render template: "devise/registrations/complete"
+        end
+
         sig { void }
         def destroy
           if resource.last_admin?
@@ -3117,6 +3190,18 @@ def configure_roles
 
           super
         end
+
+        private
+          sig { void }
+          def authenticate_user_for_completion!
+            authenticate_user!(force: true)
+          end
+
+        protected
+          sig { params(_resource: User).returns(String) }
+          def after_sign_up_path_for(_resource)
+            user_registration_complete_path
+          end
       end
     end
   RUBY
@@ -3823,12 +3908,10 @@ def configure_content_management
       private
         def setup_content_management_users
           @admin = User.create!(
-            login_id: "content_admin",
             password: "password123",
             password_confirmation: "password123"
           )
           @regular = User.create!(
-            login_id: "content_regular",
             password: "password123",
             password_confirmation: "password123"
           )
@@ -5430,20 +5513,6 @@ def configure_api
     end
   RUBY
 
-  create_file "app/javascript/controllers/clipboard_controller.js", <<~JAVASCRIPT, force: true
-    import { Controller } from "@hotwired/stimulus"
-
-    export default class extends Controller {
-      static targets = ["source", "button"]
-      static values = { copied: String }
-
-      async copy() {
-        await navigator.clipboard.writeText(this.sourceTarget.value)
-        this.buttonTarget.textContent = this.copiedValue
-      }
-    }
-  JAVASCRIPT
-
   create_locale_pair("api_credentials",
     ja: {
       "api_credentials" => {
@@ -5730,17 +5799,19 @@ def configure_devise_views
       "devise_views" => {
         "links" => { "sign_in" => "ログイン画面へ", "sign_up" => "アカウントを作成" },
         "sessions" => { "title" => "ログイン", "description" => "登録済みのユーザーIDとパスワードを入力してください。", "remember_me" => "ログイン状態を保持する", "submit" => "ログイン", "siwe_divider" => "または" },
-        "registrations" => { "new_title" => "アカウント作成", "new_description" => "ユーザーIDとパスワードでアカウントを作成します。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" }
+        "registrations" => { "new_title" => "アカウント作成", "new_description" => "パスワードを設定してアカウントを作成します。ユーザーIDは登録完了後に発行されます。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "complete_title" => "アカウントを作成しました", "complete_description" => "次回のログインには以下のユーザーIDとパスワードが必要です。ユーザーIDを安全な場所に保存してください。", "login_id_hint" => "このユーザーIDは変更できません。", "continue" => "マイページへ", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" }
       },
-      "activerecord" => { "attributes" => { "user" => { "login_id" => "ユーザーID" } } }
+      "activerecord" => { "attributes" => { "user" => { "login_id" => "ユーザーID" } } },
+      "errors" => { "messages" => { "login_id_readonly" => "は変更できません" } }
     },
     en: {
       "devise_views" => {
         "links" => { "sign_in" => "Back to sign in", "sign_up" => "Create an account" },
         "sessions" => { "title" => "Sign in", "description" => "Enter your registered user ID and password.", "remember_me" => "Keep me signed in", "submit" => "Sign in", "siwe_divider" => "or" },
-        "registrations" => { "new_title" => "Create account", "new_description" => "Create an account with a user ID and password.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" }
+        "registrations" => { "new_title" => "Create account", "new_description" => "Set a password to create your account. Your user ID will be issued after registration.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "complete_title" => "Your account has been created", "complete_description" => "You will need the user ID below and your password the next time you sign in. Save the user ID in a secure place.", "login_id_hint" => "This user ID cannot be changed.", "continue" => "Go to your account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" }
       },
-      "activerecord" => { "attributes" => { "user" => { "login_id" => "User ID" } } }
+      "activerecord" => { "attributes" => { "user" => { "login_id" => "User ID" } } },
+      "errors" => { "messages" => { "login_id_readonly" => "cannot be changed" } }
     }
   )
 
@@ -5827,12 +5898,8 @@ def configure_devise_views
     <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "space-y-5" }) do |f| %>
       <%= render "devise/shared/error_messages", resource: resource %>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= f.label :login_id %></legend>
-        <%= f.text_field :login_id, autofocus: true, autocomplete: "username", required: true, minlength: 3, maxlength: 32, pattern: "[a-zA-Z0-9][a-zA-Z0-9_]{2,31}", class: "input input-rapid w-full" %>
-      </fieldset>
-      <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= f.label :password %></legend>
-        <%= f.password_field :password, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
+        <%= f.password_field :password, autofocus: true, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
         <% if @minimum_password_length %>
           <p class="label"><%= t("devise_views.registrations.minimum_password", count: @minimum_password_length) %></p>
         <% end %>
@@ -5847,20 +5914,47 @@ def configure_devise_views
     <%= render "devise/shared/links" %>
   ERB
 
+  create_file "app/views/devise/registrations/complete.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("devise_views.registrations.complete_title") %>
+    <header class="mb-8">
+      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
+    </header>
+
+    <div class="alert alert-warning alert-soft alert-vertical grid-cols-1 justify-items-stretch" role="status">
+      <p class="font-bold"><%= t("devise_views.registrations.complete_description") %></p>
+      <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
+        <legend class="fieldset-legend"><%= User.human_attribute_name(:login_id) %></legend>
+        <div class="join w-full">
+          <input type="text" value="<%= resource.login_id %>" readonly autocomplete="off" aria-label="<%= User.human_attribute_name(:login_id) %>" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
+          <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
+        </div>
+        <p class="label"><%= t("devise_views.registrations.login_id_hint") %></p>
+      </fieldset>
+    </div>
+
+    <div class="mt-6">
+      <%= link_to t("devise_views.registrations.continue"), account_path, class: "btn btn-primary btn-block btn-rapid" %>
+    </div>
+  ERB
+
   create_file "app/views/devise/registrations/edit.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("devise_views.registrations.edit_title") %>
     <div class="space-y-6">
       <section class="card bg-base-100 shadow-none">
         <div class="card-body">
+          <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
+            <legend class="fieldset-legend"><%= User.human_attribute_name(:login_id) %></legend>
+            <div class="join w-full">
+              <input type="text" value="<%= resource.login_id %>" readonly autocomplete="off" aria-label="<%= User.human_attribute_name(:login_id) %>" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
+              <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
+            </div>
+            <p class="label"><%= t("devise_views.registrations.login_id_hint") %></p>
+          </fieldset>
           <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
             <%= render "devise/shared/error_messages", resource: resource %>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= f.label :login_id %></legend>
-              <%= f.text_field :login_id, autofocus: true, autocomplete: "username", required: true, minlength: 3, maxlength: 32, pattern: "[a-zA-Z0-9][a-zA-Z0-9_]{2,31}", class: "input input-rapid w-full" %>
-            </fieldset>
-            <fieldset class="fieldset">
               <legend class="fieldset-legend"><%= f.label :password %></legend>
-              <%= f.password_field :password, autocomplete: "new-password", class: "input input-rapid w-full" %>
+              <%= f.password_field :password, autofocus: true, autocomplete: "new-password", class: "input input-rapid w-full" %>
               <p class="label"><%= t("devise_views.registrations.password_hint") %></p>
             </fieldset>
             <fieldset class="fieldset">
@@ -5897,6 +5991,7 @@ def configure_default_views
   solid_queue_enabled = VALUES.fetch("active_job") == "solid_queue"
   maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
+  dokploy_enabled = VALUES.fetch("deployment") == "dokploy"
   profile_features = VALUES.fetch("profile_features")
   profile_enabled = profile_features.any?
   avatar_enabled = profile_features.include?("avatar")
@@ -6768,18 +6863,24 @@ def configure_default_views
         end
     RUBY
   else
+    production_worker_assertion = if dokploy_enabled
+      expected_workers = solid_queue_enabled ? 1 : 0
+      %(assert_equal #{expected_workers}, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") })
+    else
+      %(assert_not Rails.root.join("Procfile.prod").exist?)
+    end
     solid_queue_cleanup_assertion = if solid_queue_enabled
       <<~RUBY
         recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
           .fetch("production").fetch("clear_solid_queue_finished_jobs")
         assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
         assert_equal "every hour at minute 12", recurring.fetch("schedule")
-        assert_equal 1, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") }
+        #{production_worker_assertion}
       RUBY
     else
       <<~RUBY
         assert_not Rails.root.join("config/recurring.yml").exist?
-        assert_equal 0, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") }
+        #{production_worker_assertion}
       RUBY
     end
     <<~RUBY
@@ -6892,11 +6993,49 @@ def configure_default_views
           end
         end
 
+        test "signs up with a generated login id and presents it to the authenticated user" do
+          get user_registration_complete_url
+          assert_redirected_to new_user_session_url
+
+          get new_user_registration_url
+          assert_response :success
+          assert_select 'input[name="user[login_id]"]', count: 0
+          assert_select 'input[name="user[password]"][autocomplete="new-password"]', count: 1
+          assert_select 'input[name="user[password_confirmation]"][autocomplete="new-password"]', count: 1
+
+          assert_difference("User.count", 1) do
+            post user_registration_url, params: {
+              user: {
+                login_id: "client_supplied",
+                password: "password123",
+                password_confirmation: "password123"
+              }
+            }
+          end
+
+          user = T.must(User.order(:id).last)
+          assert_match(/\\A[0-9a-f]{20}\\z/, user.login_id)
+          refute_equal "client_supplied", user.login_id
+          assert_redirected_to user_registration_complete_url
+
+          follow_redirect!
+          assert_response :success
+          assert_select "h1", text: I18n.t("devise_views.registrations.complete_title"), count: 1
+          assert_select 'input[readonly][data-clipboard-target="source"][value=?]', user.login_id, count: 1
+          assert_select 'button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 1
+          assert_select 'a[href=?].btn.btn-primary', account_path, count: 1
+          refute_includes response.body, "client_supplied"
+
+          delete destroy_user_session_url
+          post user_session_url, params: { user: { login_id: user.login_id, password: "password123" } }
+          assert_redirected_to root_url
+        end
+
         test "protects account and renders its sub-layout after login" do
           get account_url
           assert_redirected_to new_user_session_url
 
-          user = User.create!(login_id: "sample_user", password: "password123", password_confirmation: "password123")
+          user = User.create!(password: "password123", password_confirmation: "password123")
     #{profile_binding}#{generated_profile_assertion}#{profile_setup}      user.grant_role!(:admin)
           sign_in user
           get account_url
@@ -8550,8 +8689,8 @@ def install_job_operations
       include Devise::Test::IntegrationHelpers
 
       setup do
-        @admin = User.create!(login_id: "jobs_admin", password: "password123", password_confirmation: "password123")
-        @regular = User.create!(login_id: "jobs_regular", password: "password123", password_confirmation: "password123")
+        @admin = User.create!(password: "password123", password_confirmation: "password123")
+        @regular = User.create!(password: "password123", password_confirmation: "password123")
         @admin.grant_role!(:admin)
       end
 
@@ -9260,8 +9399,8 @@ def install_maintenance_tasks
       include Devise::Test::IntegrationHelpers
 
       setup do
-        @admin = User.create!(login_id: "maintenance_admin", password: "password123", password_confirmation: "password123")
-        @regular = User.create!(login_id: "maintenance_regular", password: "password123", password_confirmation: "password123")
+        @admin = User.create!(password: "password123", password_confirmation: "password123")
+        @regular = User.create!(password: "password123", password_confirmation: "password123")
         @admin.grant_role!(:admin)
       end
 
@@ -9463,6 +9602,7 @@ end
 def configure_evidence_capture
   additional_login_methods = VALUES.fetch("additional_login_methods")
   image_delivery = VALUES.fetch("image_delivery")
+  api = VALUES.fetch("api") == "enable"
   web_push = VALUES.fetch("web_push") == "use"
   job_operations = VALUES.fetch("job_operations") == "enable"
   maintenance_tasks = VALUES.fetch("maintenance_tasks") == "enable"
@@ -9484,6 +9624,7 @@ def configure_evidence_capture
       ADDITIONAL_LOGIN_METHODS = __ADDITIONAL_LOGIN_METHODS__
       IMAGE_DELIVERY = __IMAGE_DELIVERY__
       LOCALE = I18n.default_locale.to_s
+      API = __API__
       WEB_PUSH = __WEB_PUSH__
       JOB_OPERATIONS = __JOB_OPERATIONS__
       MAINTENANCE_TASKS = __MAINTENANCE_TASKS__
@@ -9527,7 +9668,6 @@ def configure_evidence_capture
         def capture_common_scenarios
           VIEWPORTS.each do |viewport_name, viewport|
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
-            install_web_push_stub if WEB_PUSH
             prepare_guest_data
             verify_footer_geometry if viewport_name == "desktop"
             capture_guest_pages(viewport_name)
@@ -9543,9 +9683,11 @@ def configure_evidence_capture
         end
 
         def capture_siwe_scenarios
-          @user = User.find_or_create_by!(login_id: "evidence_user") do |user|
-            user.password = PASSWORD
-            user.password_confirmation = PASSWORD
+          @user ||= with_deterministic_login_id("00000000000000000005") do
+            User.create! do |user|
+              user.password = PASSWORD
+              user.password_confirmation = PASSWORD
+            end
           end
           T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
 
@@ -9802,9 +9944,11 @@ def configure_evidence_capture
             github_url: "https://github.com/example/example"
           )
 
-          @user = User.find_or_create_by!(login_id: "evidence_user") do |user|
-            user.password = PASSWORD
-            user.password_confirmation = PASSWORD
+          @user ||= with_deterministic_login_id("00000000000000000005") do
+            User.create! do |user|
+              user.password = PASSWORD
+              user.password_confirmation = PASSWORD
+            end
           end
           T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
         end
@@ -9817,8 +9961,22 @@ def configure_evidence_capture
           capture_page("login", translate("devise_views.sessions.title"), new_user_session_path, translate("devise_views.sessions.title"), viewport)
           capture_page("registration", "アカウント作成", new_user_registration_path, translate("devise_views.registrations.new_title"), viewport)
 
+          generated_login_id = viewport == "desktop" ? "00000000000000000003" : "00000000000000000004"
+          fill_in User.human_attribute_name(:password), with: PASSWORD
+          fill_in User.human_attribute_name(:password_confirmation), with: PASSWORD
+          with_deterministic_login_id(generated_login_id) do
+            click_button translate("devise_views.registrations.create")
+            assert_current_path user_registration_complete_path
+            assert_selector %(input[readonly][data-clipboard-target="source"][value="#{generated_login_id}"])
+          end
+          assert_text translate("devise_views.registrations.complete_description")
+          capture_current_page("registration-complete", "アカウント作成完了", viewport)
+          Capybara.reset_sessions!
+
           return unless viewport == "mobile"
 
+          viewport_size = VIEWPORTS.fetch(viewport)
+          page.current_window.resize_to(viewport_size.fetch("width"), viewport_size.fetch("height"))
           visit root_path
           find("header details.dropdown > summary", visible: :visible).click
           capture_current_page("navigation-guest-open", "モバイルメニュー（未ログイン）", viewport)
@@ -9842,9 +10000,13 @@ def configure_evidence_capture
             clear_enqueued_jobs
             clear_performed_jobs
           end
-          @regular_user = User.find_or_create_by!(login_id: "member_user") do |user|
-            user.password = PASSWORD
-            user.password_confirmation = PASSWORD
+          unless @regular_user
+            @regular_user = with_deterministic_login_id("00000000000000000006") do
+              User.create! do |user|
+                user.password = PASSWORD
+                user.password_confirmation = PASSWORD
+              end
+            end
           end
         end
 
@@ -9855,23 +10017,26 @@ def configure_evidence_capture
           capture_avatar_states(viewport)
           capture_page("account-settings", "アカウント設定", edit_user_registration_path, translate("devise_views.registrations.edit_title"), viewport)
           if WEB_PUSH
+            set_evidence_web_push_mode("granted")
             capture_page("notifications", "通知", notification_path, translate("web_push.page.title"), viewport)
             capture_enabled_web_push(viewport)
           end
 
-          @user.api_credentials.destroy_all
-          capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, translate("api_credentials.title"), viewport)
-          capture_page("api-credential-new", "APIキー作成", new_api_credential_path, translate("api_credentials.new"), viewport)
-          fill_in ApiCredential.human_attribute_name(:name), with: "Evidence CLI"
-          with_deterministic_secure_random do
-            find('input[type="submit"]').click
+          if API
+            @user.api_credentials.destroy_all
+            capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, translate("api_credentials.title"), viewport)
+            capture_page("api-credential-new", "APIキー作成", new_api_credential_path, translate("api_credentials.new"), viewport)
+            fill_in ApiCredential.human_attribute_name(:name), with: "Evidence CLI"
+            with_deterministic_secure_random do
+              find('input[type="submit"]').click
+            end
+            assert_text translate("api_credentials.secret_once")
+            capture_current_page("api-credential-secret", "APIキー詳細（初回secret）", viewport)
+            credential = @user.api_credentials.find_by!(name: "Evidence CLI")
+            capture_page("api-credential-show", "APIキー詳細", api_credential_path(credential), "Evidence CLI", viewport)
+            capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), translate("api_credentials.edit"), viewport)
+            capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, translate("api_credentials.title"), viewport)
           end
-          assert_text translate("api_credentials.secret_once")
-          capture_current_page("api-credential-secret", "APIキー詳細（初回secret）", viewport)
-          credential = @user.api_credentials.find_by!(name: "Evidence CLI")
-          capture_page("api-credential-show", "APIキー詳細", api_credential_path(credential), "Evidence CLI", viewport)
-          capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), translate("api_credentials.edit"), viewport)
-          capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, translate("api_credentials.title"), viewport)
           capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
           assert_admin_navigation_active(translate("navigation.users"))
           if JOB_OPERATIONS
@@ -9966,7 +10131,6 @@ def configure_evidence_capture
           fill_in User.human_attribute_name(:password), with: PASSWORD
           click_button translate("devise_views.sessions.submit")
           assert_current_path root_path
-          @user = @regular_user
 
           visit root_path
           find("header details.dropdown > summary", visible: :visible).click if viewport == "mobile"
@@ -10042,7 +10206,8 @@ def configure_evidence_capture
 
         def capture_enabled_web_push(viewport)
           install_evidence_csrf_token
-          toggle = find('[data-push-subscription-target="toggle"]')
+          reconnect_web_push_controller
+          toggle = find('[data-push-subscription-target="toggle"]:not([disabled])')
           assert_not toggle.checked?
           toggle.click
           assert_selector '[data-push-subscription-target="status"].alert-success', text: translate("web_push.client.enabled")
@@ -10054,33 +10219,37 @@ def configure_evidence_capture
 
           set_evidence_web_push_mode("rotated")
           visit notification_path
+          reconnect_web_push_controller
           install_evidence_csrf_token
           assert_selector '[data-push-subscription-target="status"].alert-success',
             text: translate("web_push.client.reconciled")
           assert_equal({ "subscribeCount" => 1, "unsubscribeCount" => 1, "subscribed" => true,
                          "permissionRequests" => 0 }, evidence_web_push_stats)
 
-          find('[data-push-subscription-target="toggle"]').click
+          find('[data-push-subscription-target="toggle"]:not([disabled])').click
           assert_selector '[data-push-subscription-target="status"].alert-info',
             text: translate("web_push.client.disabled")
           assert_equal false, evidence_web_push_stats.fetch("subscribed")
 
           set_evidence_web_push_mode("default")
           visit notification_path
+          reconnect_web_push_controller
           install_evidence_csrf_token
-          find('[data-push-subscription-target="toggle"]').click
+          find('[data-push-subscription-target="toggle"]:not([disabled])').click
           assert_selector '[data-push-subscription-target="status"].alert-success',
             text: translate("web_push.client.enabled")
           assert_equal 1, evidence_web_push_stats.fetch("permissionRequests")
 
           set_evidence_web_push_mode("denied")
           visit notification_path
+          reconnect_web_push_controller
           assert_selector '[data-push-subscription-target="status"].alert-warning',
             text: translate("web_push.client.blocked")
           assert find('[data-push-subscription-target="toggle"]').disabled?
 
           set_evidence_web_push_mode("unsupported")
           visit notification_path
+          reconnect_web_push_controller
           assert_selector '[data-push-subscription-target="status"].alert-warning',
             text: translate("web_push.client.unsupported")
           assert find('[data-push-subscription-target="toggle"]').disabled?
@@ -10107,9 +10276,18 @@ def configure_evidence_capture
           page.evaluate_script("window.__evidencePush.stats()")
         end
 
+        def reconnect_web_push_controller
+          install_web_push_stub
+          page.execute_script(<<~JAVASCRIPT)
+            window.Stimulus
+              .getControllerForElementAndIdentifier(document.body, "push-subscription")
+              .connect()
+          JAVASCRIPT
+        end
+
         def install_web_push_stub
           page.driver.with_playwright_page do |playwright_page|
-            playwright_page.add_init_script(script: <<~JAVASCRIPT)
+            script = <<~JAVASCRIPT
               (() => {
                 const installCsrfToken = () => {
                   if (!document.head) return false
@@ -10204,6 +10382,7 @@ def configure_evidence_capture
                 })
               })()
             JAVASCRIPT
+            playwright_page.evaluate(script)
           end
         end
 
@@ -10546,6 +10725,17 @@ def configure_evidence_capture
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
+        def with_deterministic_login_id(login_id)
+          singleton_class = SecureRandom.singleton_class
+          original_method = SecureRandom.method(:hex)
+          singleton_class.define_method(:hex) do |length|
+            length == User::LOGIN_ID_BYTES ? login_id : original_method.call(length)
+          end
+          yield
+        ensure
+          T.must(singleton_class).define_method(:hex, T.must(original_method))
+        end
+
         def with_deterministic_secure_random
           singleton_class = SecureRandom.singleton_class
           original_method = SecureRandom.method(:urlsafe_base64)
@@ -10587,6 +10777,7 @@ def configure_evidence_capture
   RUBY
   runner = runner.sub("__ADDITIONAL_LOGIN_METHODS__", additional_login_methods.inspect)
   runner = runner.sub("__IMAGE_DELIVERY__", image_delivery.inspect)
+  runner = runner.sub("__API__", api.inspect)
   runner = runner.sub("__WEB_PUSH__", web_push.inspect)
   runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)
   runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)
@@ -10603,8 +10794,9 @@ def configure_evidence_capture
   end
   unless web_push
     disabled_constants << :WEB_PUSH
-    disabled_methods.concat(%i[capture_enabled_web_push install_web_push_stub])
+    disabled_methods.concat(%i[capture_enabled_web_push reconnect_web_push_controller install_web_push_stub])
   end
+  disabled_constants << :API unless api
   unless job_operations
     disabled_constants << :JOB_OPERATIONS
     disabled_methods.concat(%i[verify_job_operations_geometry assert_job_operations_tabs_single_row])
@@ -11002,8 +11194,8 @@ def configure_sorbet_shims
       sig { returns(T.nilable(User)) }
       def current_user; end
 
-      sig { void }
-      def authenticate_user!; end
+      sig { params(options: T.untyped).void }
+      def authenticate_user!(options = T.unsafe(nil)); end
     end
 
     class DeviseController < ActionController::Base
@@ -11014,6 +11206,9 @@ def configure_sorbet_shims
 
       sig { returns(T.nilable(User)) }
       def current_user; end
+
+      sig { params(options: T.untyped).void }
+      def authenticate_user!(options = T.unsafe(nil)); end
     end
 
     module ApplicationHelper
@@ -11091,19 +11286,17 @@ def configure_sorbet_shims
     RBI
   end
 
-  if VALUES.fetch("additional_login_methods").include?("siwe")
-    create_file "sorbet/rbi/shims/bundler_connection_pool.rbi", <<~'RBI', force: true
-      # typed: true
+  create_file "sorbet/rbi/shims/bundler_connection_pool.rbi", <<~'RBI', force: true
+    # typed: true
 
-      # Ruby ships Bundler with a vendored connection pool. Tapioca can observe
-      # its Process fork hook while compiling HTTPX, but Bundler has no Gem RBI.
-      module Bundler
-        class ConnectionPool
-          module ForkTracker; end
-        end
+    # Ruby ships Bundler with a vendored connection pool. Tapioca can observe
+    # its Process fork hook while compiling FFI or HTTPX, but Bundler has no Gem RBI.
+    module Bundler
+      class ConnectionPool
+        module ForkTracker; end
       end
-    RBI
-  end
+    end
+  RBI
 end
 
 def configure_database

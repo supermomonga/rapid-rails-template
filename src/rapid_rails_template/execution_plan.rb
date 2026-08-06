@@ -112,6 +112,7 @@ module RapidRailsTemplate
         sorbet/tapioca/config.yml
         sorbet/tapioca/require.rb
         sorbet/rbi/shims/framework_bindings.rbi
+        sorbet/rbi/shims/bundler_connection_pool.rbi
         sorbet/rbi/**/*
         test/sorbet_test.rb
         db/seeds.rb
@@ -225,14 +226,12 @@ module RapidRailsTemplate
         ])
       end
       result << "sorbet/rbi/shims/boring_avatars.rbi" if configuration["profile_features"].include?("avatar")
-      result << "sorbet/rbi/shims/bundler_connection_pool.rbi" if configuration["additional_login_methods"].include?("siwe")
       if configuration["api"] == "enable"
         result.concat(%w[
           app/models/api_credential.rb
           app/controllers/api/api_controller.rb
           app/controllers/api/api_credentials_controller.rb
           app/controllers/api_credentials_controller.rb
-          app/javascript/controllers/clipboard_controller.js
           app/views/api_credentials/index.html.erb
           app/views/api_credentials/show.html.erb
           app/views/api_credentials/new.html.erb
@@ -269,8 +268,10 @@ module RapidRailsTemplate
       end
       result.concat(%w[
         app/controllers/users/registrations_controller.rb
+        app/javascript/controllers/clipboard_controller.js
         app/views/devise/sessions/new.html.erb
         app/views/devise/registrations/new.html.erb
+        app/views/devise/registrations/complete.html.erb
         app/views/devise/registrations/edit.html.erb
         config/locales/devise_views.ja.yml
         config/locales/devise_views.en.yml

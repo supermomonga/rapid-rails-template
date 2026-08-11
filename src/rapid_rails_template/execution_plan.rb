@@ -74,7 +74,7 @@ module RapidRailsTemplate
       result << "install_siwe" if configuration["additional_login_methods"].include?("siwe")
       result << "configure_roles"
       result << "configure_content_management"
-      result << "install_avatar_cropper" if configuration["profile_features"].include?("avatar")
+      result << "install_image_cropper" if configuration["profile_features"].include?("avatar")
       result << "configure_profile" if configuration["profile_features"].any?
       result << "configure_api" if configuration["api"] == "enable"
       result << "configure_pwa" if configuration["pwa"] == "use"
@@ -250,7 +250,7 @@ module RapidRailsTemplate
       end
       if configuration["profile_features"].include?("avatar")
         result.concat(%w[
-          app/javascript/controllers/avatar_crop_controller.js
+          app/javascript/controllers/image_crop_controller.js
           app/services/avatar_image_policy.rb
           app/services/avatar_upload.rb
           app/validators/avatar_upload_validator.rb

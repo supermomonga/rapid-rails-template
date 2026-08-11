@@ -100,7 +100,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper_test, "omits optional modal description and actions"
     assert_includes helper_test, "rejects invalid modal identifiers and empty labels"
     assert_includes profile_configuration, "with_modal("
-    assert_includes profile_configuration, 'dialog_data: { avatar_crop_target: "dialog", action: "close->avatar-crop#close" }'
+    assert_includes profile_configuration, 'dialog_data: { image_crop_target: "dialog", action: "close->image-crop#close" }'
     refute_includes profile_configuration, '<dialog'
     refute_includes profile_configuration, 'class="modal-box"'
     refute_includes profile_configuration, 'class="modal-action"'
@@ -819,14 +819,14 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_profile_generation_is_conditional_and_uses_selected_features
     controller = generated_file_source("app/controllers/profiles_controller.rb")
-    crop_controller = generated_file_source("app/javascript/controllers/avatar_crop_controller.js")
+    crop_controller = generated_file_source("app/javascript/controllers/image_crop_controller.js")
     crop_system_test = generated_file_source("test/system/profile_avatar_crop_test.rb")
     avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
     avatar_helper_test = generated_file_source("test/helpers/avatar_helper_test.rb")
     profile_configuration = source_between("def configure_profile", "def configure_api")
 
     assert_includes @source, 'configure_profile if VALUES.fetch("profile_features").any?'
-    assert_includes @source, 'install_avatar_cropper if VALUES.fetch("profile_features").include?("avatar")'
+    assert_includes @source, 'install_image_cropper if VALUES.fetch("profile_features").include?("avatar")'
     assert_includes @source, 'run_checked "bin/importmap pin cropperjs@2.1.1"'
     assert_includes @source, %q(path = "vendor/javascript/#{package.sub('/', '--')}.js")
     refute_includes @source, 'rails_command "active_storage:install"'
@@ -853,8 +853,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes controller, 'I18n.t("profiles.update.notice")'
     assert_includes profile_configuration, '<fieldset class="fieldset min-w-0 grid-cols-1">'
     assert_includes profile_configuration, 'form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp"'
-    assert_includes profile_configuration, 'data: { avatar_crop_target: "input", action: "change->avatar-crop#select" }'
-    assert_includes profile_configuration, 'data-controller="avatar-crop"'
+    assert_includes profile_configuration, 'data: { image_crop_target: "input", action: "change->image-crop#select" }'
+    assert_includes profile_configuration, 'data-controller="image-crop"'
+    assert_includes profile_configuration, 'data-image-crop-aspect-ratio-value="1"'
+    assert_includes profile_configuration, 'data-image-crop-output-width-value="512"'
+    assert_includes profile_configuration, 'data-image-crop-output-height-value="512"'
     assert_includes profile_configuration, 'with_modal('
     assert_includes profile_configuration, '#{avatar_crop_modal}#{form_wrapper_close}'
     assert_includes @source, "assert_select 'form[action=?] dialog', profile_path, count: 0"
@@ -888,14 +891,27 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes avatar_helper_test, "profile.user_id.to_s"
     assert_includes avatar_helper_test, "normalize_boring_avatar_ids"
     assert_includes crop_controller, 'import Cropper from "cropperjs"'
-    assert_includes crop_controller, "const OUTPUT_SIZE = 512"
-    assert_includes crop_controller, "const LOSSY_QUALITY = 0.9"
-    assert_includes crop_controller, 'initial-aspect-ratio="1" aspect-ratio="1"'
-    assert_includes crop_controller, '$toCanvas({ width: OUTPUT_SIZE, height: OUTPUT_SIZE })'
+    refute_includes crop_controller, "OUTPUT_SIZE"
+    refute_includes crop_controller, "avatar"
+    assert_includes crop_controller, "aspectRatio: Number"
+    assert_includes crop_controller, 'movable precise resizable'
+    assert_includes crop_controller, "outputWidth: Number"
+    assert_includes crop_controller, "outputHeight: Number"
+    assert_includes crop_controller, 'if (!this.hasAspectRatioValue) return ""'
+    assert_includes crop_controller, "return this.hasAspectRatioValue ? this.aspectRatioValue : Number.NaN"
+    assert_includes crop_controller, 'this.cropperSelection().$toCanvas(this.canvasOptions())'
+    assert_includes crop_controller, "if (this.hasOutputWidthValue) options.width = this.outputWidthValue"
+    assert_includes crop_controller, "if (this.hasOutputHeightValue) options.height = this.outputHeightValue"
+    assert_includes crop_controller, "this.validateConfiguration()"
+    assert_includes crop_controller, "this.allowedTypesValue.includes(file.type)"
     assert_includes crop_controller, "const transfer = new DataTransfer()"
     assert_includes crop_controller, 'document.addEventListener("turbo:before-cache", this.beforeCache)'
     assert_includes crop_controller, "this.cropper?.destroy()"
     assert_includes crop_system_test, "crops a rectangular image to a 512 pixel square before upload"
+    assert_includes crop_system_test, "supports configured and free aspect ratios"
+    assert_includes crop_system_test, 'element.removeAttribute("data-image-crop-aspect-ratio-value")'
+    assert_includes crop_system_test, 'assert_equal [640, 360], selected_image_dimensions'
+    assert_includes crop_system_test, 'assert_equal [240, 120], selected_image_dimensions'
     assert_includes crop_system_test, "keeps the last confirmed crop when replacements are dismissed"
     assert_includes crop_system_test, "page.send_keys(:escape)"
     assert_includes crop_system_test, "playwright_page.mouse.click(5, 5)"

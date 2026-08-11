@@ -209,11 +209,13 @@ CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正�
 
 `screen_name`を選択した場合はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`を選択した場合もUser作成時にHaikunator由来の値を自動生成し、必須かつ一意な公開表示名として扱います。両方を選択した場合は、先に一意な`screen_name`を生成し、その値をCamelCaseへ変換した同一由来の値を`display_name`に設定します。databaseには各選択済みcolumnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
 
-`avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
+`avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、汎用`image_crop` Stimulus controller、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
 添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
 
-avatarの選択元画像は静止画JPEG、PNG、WebPだけを許可し、5 MiB以下、幅・高さとも4096px以下に制限します。ブラウザ側では1:1を維持する可変crop枠で構図を決め、Crop確定時に元のMIME typeとfilenameを維持した512×512のFileへ変換します。PNGはlossless、JPEGとWebPはquality 0.9とし、確定済みFileを通常のprofile formが送信するまでuploadしません。再選択後のcancelでは直前に確定したFileとpreviewを復元し、変換失敗時に元画像送信へfallbackしません。
+`image_crop` controllerはアスペクト比、初期coverage、出力幅・高さ、許可MIME type、入力上限、lossy品質をStimulus valuesで受け取ります。アスペクト比を省略すると自由cropとなり、出力幅・高さもそれぞれ省略可能です。指定された出力寸法はCropper.jsへ渡し、選択範囲の比率を保ったcanvasを生成します。不正または空の設定値は暗黙に補正せず、controller接続時に明示的に失敗させます。
+
+avatarの選択元画像は静止画JPEG、PNG、WebPだけを許可し、5 MiB以下、幅・高さとも4096px以下に制限します。プロフィールViewは汎用controllerへアスペクト比1、初期coverage 0.8、出力幅・高さ512、lossy品質0.9を指定します。ブラウザ側では1:1を維持する可変crop枠で構図を決め、Crop確定時に元のMIME typeとfilenameを維持した512×512のFileへ変換します。PNGはlossless、JPEGとWebPはquality 0.9とし、確定済みFileを通常のprofile formが送信するまでuploadしません。再選択後のcancelでは直前に確定したFileとpreviewを復元し、変換失敗時に元画像送信へfallbackしません。
 
 サーバー側はcrop済みuploadについても静止画JPEG、PNG、WebP、5 MiB以下、幅・高さ4096px以下、かつ正方形であることを検証します。空ファイル、申告MIMEと実形式の不一致、decode不能画像、GIF、APNG、animated WebP、長方形画像を拒否し、検証成功後だけActive Storageへ添付します。formの`accept`と説明文、I18n errorはこのpolicyと一致させます。Action Text添付にはavatar policyを適用しません。
 

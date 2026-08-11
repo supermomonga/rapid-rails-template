@@ -68,7 +68,7 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 ### `post_bundle`
 
-最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。直後に`active_storage_db`の公式migration taskを実行し、生成されたファイル本体用migrationを`db/storage_migrate`へ移します。続けてLexxyとActive StorageをImportmapへ登録します。`avatar`選択時だけImportmapの公式`pin` commandでCropper.js 2.1.1とtransitive dependencyを`vendor/javascript`へ固定します。Deviseの公式generatorは全構成で実行し、migrationとUser modelを`login_id`＋password契約へ構造的に補正します。SIWE選択時だけ`:siweable`、credential、database challenge、route、管理画面を追加します。
+最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。直後に`active_storage_db`の公式migration taskを実行し、生成されたファイル本体用migrationを`db/storage_migrate`へ移します。続けてLexxyとActive StorageをImportmapへ登録します。`avatar`選択時だけImportmapの公式`pin` commandでCropper.js 2.1.1とtransitive dependencyを`vendor/javascript`へ固定し、任意または自由なアスペクト比とoptionalな出力寸法をvaluesで設定できる`image_crop` Stimulus controllerを生成します。プロフィールViewはこのcontrollerへ1:1と512×512を指定します。Deviseの公式generatorは全構成で実行し、migrationとUser modelを`login_id`＋password契約へ構造的に補正します。SIWE選択時だけ`:siweable`、credential、database challenge、route、管理画面を追加します。
 
 認証生成より前にApplication Identity、ja/en locale、request locale境界、canonical originを設定します。認証Userを生成した直後にAction Policy、`UserRole`、policy、管理画面、`users.id`を受け取るadmin付与taskを生成し、全機能をDeviseの`current_user`へ接続します。固定ページ、FAQ、footer設定、Profile、API、PWA、Web Push、Solid系機能は追加ログイン方法を参照しません。Maintenance Tasks metadataには`triggered_by_user_id`を保存します。
 

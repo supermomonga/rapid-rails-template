@@ -54,8 +54,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_operator plan.steps.index("configure_generator_view_templates"), :<, plan.steps.index("configure_default_views")
     assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "configure_profile"
-    assert_includes plan.steps, "install_avatar_cropper"
-    assert_operator plan.steps.index("install_avatar_cropper"), :<, plan.steps.index("configure_profile")
+    assert_includes plan.steps, "install_image_cropper"
+    assert_operator plan.steps.index("install_image_cropper"), :<, plan.steps.index("configure_profile")
     assert_includes plan.steps, "configure_default_views"
     assert_includes plan.steps, "configure_evidence_capture"
     assert_includes plan.steps, "configure_roles"
@@ -128,7 +128,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/views/profiles/edit.html.erb"
     assert_includes plan.artifacts, "app/helpers/avatar_helper.rb"
     assert_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
-    assert_includes plan.artifacts, "app/javascript/controllers/avatar_crop_controller.js"
+    assert_includes plan.artifacts, "app/javascript/controllers/image_crop_controller.js"
     assert_includes plan.artifacts, "test/system/profile_avatar_crop_test.rb"
     assert_includes plan.artifacts, "vendor/javascript/cropperjs.js"
     assert_includes plan.artifacts, "vendor/javascript/@cropper--element-selection.js"
@@ -277,7 +277,7 @@ class ExecutionPlanTest < Minitest::Test
 
     assert_includes plan.steps, "install_action_text"
     refute_includes plan.steps, "configure_profile"
-    refute_includes plan.steps, "install_avatar_cropper"
+    refute_includes plan.steps, "install_image_cropper"
     refute_includes plan.gems, "haikunator"
     refute_includes plan.gems, "boring_avatars"
     refute_includes plan.artifacts, "app/models/profile.rb"
@@ -288,7 +288,7 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "app/services/avatar_image_policy.rb"
     refute_includes plan.artifacts, "app/services/avatar_upload.rb"
     refute_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
-    refute_includes plan.artifacts, "app/javascript/controllers/avatar_crop_controller.js"
+    refute_includes plan.artifacts, "app/javascript/controllers/image_crop_controller.js"
     refute_includes plan.artifacts, "test/system/profile_avatar_crop_test.rb"
     refute_includes plan.artifacts, "vendor/javascript/cropperjs.js"
   end
@@ -301,10 +301,10 @@ class ExecutionPlanTest < Minitest::Test
 
     assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "install_action_text"
-    refute_includes plan.steps, "install_avatar_cropper"
+    refute_includes plan.steps, "install_image_cropper"
     refute_includes plan.gems, "boring_avatars"
     refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
-    refute_includes plan.artifacts, "app/javascript/controllers/avatar_crop_controller.js"
+    refute_includes plan.artifacts, "app/javascript/controllers/image_crop_controller.js"
     refute_includes plan.artifacts, "test/system/profile_avatar_crop_test.rb"
     refute_includes plan.artifacts, "vendor/javascript/cropperjs.js"
   end
@@ -316,12 +316,12 @@ class ExecutionPlanTest < Minitest::Test
     )
 
     assert_includes plan.steps, "configure_profile"
-    assert_includes plan.steps, "install_avatar_cropper"
+    assert_includes plan.steps, "install_image_cropper"
     assert_includes plan.gems, "boring_avatars"
     refute_includes plan.gems, "haikunator"
     assert_includes plan.artifacts, "app/helpers/avatar_helper.rb"
     assert_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
-    assert_includes plan.artifacts, "app/javascript/controllers/avatar_crop_controller.js"
+    assert_includes plan.artifacts, "app/javascript/controllers/image_crop_controller.js"
     assert_includes plan.artifacts, "test/system/profile_avatar_crop_test.rb"
     assert_includes plan.artifacts, "vendor/javascript/cropperjs.js"
   end

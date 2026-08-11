@@ -43,7 +43,6 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --solid-cache=use \
   --additional-login-methods=siwe \
   --profile-features=screen_name,display_name,avatar \
-  --image-delivery=rails \
   --api=enable \
   --action-cable=skip \
   --mail=auto \
@@ -59,7 +58,7 @@ mise run evidence-verify
 
 DeviseによるユーザーID＋パスワード認証は全構成で必須です。会員登録ではpasswordとpassword confirmationだけを入力し、登録成功後に20文字の小文字hexで自動生成された変更不可のユーザーIDを表示します。ユーザーIDは登録完了画面と本人のアカウント設定からコピーでき、次回以降のログインに使用します。`--additional-login-methods`は既存Userへ後付けできる追加ログイン方法をカンマ区切りで指定し、現在は`siwe`だけを選択できます。既定値および`--additional-login-methods=`は追加方式なしです。SIWEを選択しても会員登録はpassword認証の基底フローで行い、ログイン後の「アカウント設定」内にある「EVMウォレットログイン」タブからEOA walletを追加します。登録名は`Wallet #<現在の登録数+1>`として自動設定され、編集画面で変更できます。解除は編集とは別画面で、現在のパスワードを確認して実行します。アプリ内の関連・認可・監査には`users.id`を使用し、`login_id`やwallet addressを内部識別子にしません。
 
-`--image-delivery`は`rails`または`imgproxy`を指定し、既定値は`rails`です。Rails配信はActive Storageのnamed variant／representation route、imgproxy配信は署名済みURLを使用します。どちらもActive Storage DBを画像storageのsource of truthとし、実行時に相互fallbackしません。imgproxyではRailsとは別のserviceが必要で、developmentでは生成済み`Procfile.dev`からRailsと一緒に起動します。生成アプリの`docs/image_delivery.md`にnamed variant、upload制約、起動方法、production要件を記載します。
+画像は全環境でActive Storage DBの専用SQLite databaseへ保存し、libvipsでvariantを生成します。画像URLはActive Storage公式のproxy routeへ解決し、productionではThrusterのHTTP cacheがwarmなrequestをPuma、Rails、SQLiteへ転送せず返します。生成アプリの`docs/image_delivery.md`にnamed variant、公開signed URL、cache制約を記載します。
 
 `--default-locale`は`ja`または`en`を指定し、既定値は`ja`です。生成アプリには両言語のlocaleを用意しますが、requestごとの切替UIやUserへのlocale保存は生成しません。productionのcanonical originは`APPLICATION_ORIGIN`環境変数で明示し、development/testだけが固定のローカル既定値を持ちます。
 
@@ -69,11 +68,11 @@ DeviseによるユーザーID＋パスワード認証は全構成で必須です
 
 `sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`は生成物であり、手動編集しません。Rails DSL由来の型は`RAILS_ENV=test bin/tapioca dsl --environment=test`、Gem APIは`bin/tapioca gems`で更新し、アプリがRubyで定義するmethodは同じ`.rb`へinline `sig`を記述します。Tapiocaが表現できないframework wiringは`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIで不足する型aliasは`sorbet/rbi/shims/boring_avatars.rbi`、FFIまたはHTTPXのGem RBIから参照されるBundler同梱APIは`sorbet/rbi/shims/bundler_connection_pool.rbi`で補います。`sorbet/rbi/todo.rbi`は残さず、通常の`bin/rails test`がRBIの鮮度、shimの重複、`bundle exec srb tc`を検証するため、`bin/ci`とGitHub Actionsでも同じ契約が適用されます。
 
-リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、imgproxy、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
+リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 
 生成後はsample専用のArticle scaffoldを`/articles`へ追加し、`sample_user_01`から`sample_user_10`までのscreen nameを持つ10ユーザーと、各ユーザー50件（公開40件、draft 10件）、合計500件の記事をseedします。ユーザーIDは通常のUser作成と同じく自動生成し、seed完了時にscreen name、ユーザーID、共通password `password123`の対応をterminalへ表示します。公開済み記事は誰でも閲覧でき、ログインしたユーザーは自分のdraftを含む記事の作成・閲覧・編集・削除ができます。このArticleはscaffold templateの確認用であり、配布用`bootstrap.rb`や`rake evidence:update`の生成アプリには含めません。
 
-`rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、password基底の共通画面、SIWE、imgproxyを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、Sorbet・RBI検証、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
+`rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、password基底の共通画面、SIWE、avatarを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。さらに実際のThrusterを非特権portで起動し、Active Storage variantがcache miss後の再requestでhitすることを検証します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、Sorbet・RBI検証、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
 
 `rake evidence:verify`（`mise run evidence-verify`）はブラウザを起動せず、生成元fingerprint、manifest、README、PNGの欠落・余剰・SHA-256・寸法を検証します。通常のリポジトリMinitestにも同じ検証を含むため、テンプレート変更後にエビデンスを更新し忘れるとテストが失敗します。MD内のbase commitは追跡情報であり、鮮度判定には未コミット変更も反映できる内容fingerprintを使用します。
 

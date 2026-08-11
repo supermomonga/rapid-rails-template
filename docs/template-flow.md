@@ -50,7 +50,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 `--app-id`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でRailsアプリIDを質問します。続いて`--app-name`が未指定の場合は、確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、`profile_features`では全featureを選択済みとして表示し、`no_limit: true`の複数選択を使用します。選択なしと`--profile-features=`はProfile生成を無効にする明示回答です。RailsアプリID、表示用アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
 
-全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。Job OperationsとMaintenance TasksはWeb PushによってSolid Queueが必須になった場合、またはSolid Queueが選択済みの場合だけ質問し、それ以外では`disable`へ正規化します。明示`enable`とSolid Queueなしの矛盾はこの段階で拒否します。画像配信方式は常に質問し、既定のRails representation routeまたは外部imgproxy serviceを実行前に確定します。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production process、production要件を一覧で提示します。
+全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。Job OperationsとMaintenance TasksはWeb PushによってSolid Queueが必須になった場合、またはSolid Queueが選択済みの場合だけ質問し、それ以外では`disable`へ正規化します。明示`enable`とSolid Queueなしの矛盾はこの段階で拒否します。画像配信は質問を持たず、Active Storage DB、libvips、`rails_storage_proxy`へ固定します。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production process、production要件を一覧で提示します。
 
 利用者が`Gum.confirm`で承認した時点で設定と実行計画を不変化します。確認の既定値は拒否とします。承認後に質問を追加したり、回答を再解釈したり、実行計画を暗黙に変更したりしません。
 
@@ -64,7 +64,7 @@ RailsアプリID、表示用アプリ名、固定構成、回答からgenerator 
 
 Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。Action Textのeditorとして`lexxy ~> 0.9.21`を固定で宣言します。Sorbetは全構成で常設し、`sorbet-runtime`をapplication Gem、`sorbet`をdevelopment Gem、`tapioca`をdevelopment/test Gemとして宣言します。
 
-`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。`avatar`が選択されている場合だけ`boring_avatars ~> 0.1.0`をRails binding付きで宣言し、画像未設定時のSVG生成に使用します。`image_delivery=imgproxy`の場合だけ`imgproxy-rails ~> 0.3.0`を宣言し、Rails配信では追加しません。Rails標準Gemfileの`image_processing`を両方式で利用します。post-bundleではimgproxy選択時だけ、Railsが生成した`Procfile.dev`の一意なwebとCSS watch processへ開発専用署名設定を付与し、webをport 3000へ固定します。同じ設定で`bin/imgproxy-dev`を起動するimgproxy processも追加します。
+`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。`avatar`が選択されている場合だけ`boring_avatars ~> 0.1.0`をRails binding付きで宣言し、画像未設定時のSVG生成に使用します。Rails標準Gemfileの`image_processing`とThrusterを全構成で利用し、外部画像処理serviceや開発用sidecarは追加しません。
 
 ### `post_bundle`
 
@@ -80,7 +80,7 @@ databaseとannotationを確定し、config DSLのreceiverをRuby本体の`T.bind
 
 generatorの成果物、必要な設定、コマンドの終了状態を検証します。生成アプリケーションの通常テストには`bin/annotaterb models --frozen`に加え、Gem RBIとtest環境のRails DSL RBIの鮮度、shim重複、`bundle exec srb tc`を検査するtestを含めます。`dsl --verify`はRails DSL生成物だけ、`check-shims`は生成RBIとの重複、`srb tc`はinline signatureとRuby本体を含む全体整合性を担当します。既存の`bin/rails test`、`bin/ci`、GitHub Actionsは同じtestを実行します。検証失敗を成功として扱うフォールバックは設けず、失敗した処理、理由、更新commandを表示します。
 
-通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。`rake evidence:update`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、imgproxy、API、Solid Cable、mail、Dokployを有効にした日本語sampleを1回だけ生成します。同じアプリで全Rails test、Sorbet・RBI検証、RuboCopを実行し、password基底の共通画面、SIWE、画像配信の全シナリオを撮影して整合性検証が成功した場合だけ`docs/evidence/`を置換します。
+通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。`rake evidence:update`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mail、Dokployを有効にした日本語sampleを1回だけ生成します。同じアプリで全Rails test、Sorbet・RBI検証、RuboCop、Thruster cacheの`miss`から`hit`への遷移を検証し、password基底の共通画面、SIWE、avatarの全シナリオを撮影して整合性検証が成功した場合だけ`docs/evidence/`を置換します。
 
 ### 後始末
 

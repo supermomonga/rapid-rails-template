@@ -7,7 +7,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods profile_features image_delivery api action_cable mail deployment default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods profile_features api action_cable mail deployment default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -49,7 +49,6 @@ gem "devise-i18n"
 gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_methods").include?("siwe")
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
-gem "imgproxy-rails", "~> 0.3.0" if VALUES.fetch("image_delivery") == "imgproxy"
 gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
 gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"
 gem "mission_control-jobs", "1.1.0" if VALUES.fetch("job_operations") == "enable"
@@ -438,388 +437,24 @@ def configure_application_identity
 end
 
 def configure_image_delivery
-  delivery = VALUES.fetch("image_delivery")
   environment <<~RUBY
     config.active_storage.variant_processor = :vips
     config.active_storage.track_variants = true
-    config.active_storage.resolve_model_to_route = :#{delivery == "imgproxy" ? "imgproxy_active_storage" : "rails_storage_redirect"}
+    config.active_storage.resolve_model_to_route = :rails_storage_proxy
   RUBY
 
-  if delivery == "imgproxy"
-    environment 'config.hosts << "host.docker.internal"', env: "development"
-
-    create_file "lib/image_delivery_configuration.rb", <<~'RUBY', force: true
-      require "ipaddr"
-      require "resolv"
-      require "uri"
-
-      class ImageDeliveryConfiguration
-        extend T::Sig
-
-        Error = Class.new(StandardError)
-        HEX_PATTERN = /\A(?:[0-9a-fA-F]{2})+\z/
-        NON_PUBLIC_IPV4_NETWORKS = T.let(%w[
-          0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16
-          172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.88.99.0/24
-          192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24
-          224.0.0.0/4 240.0.0.0/4
-        ].map { |network| IPAddr.new(network) }.freeze, T::Array[IPAddr])
-        GLOBAL_IPV6_NETWORK = IPAddr.new("2000::/3")
-        NON_PUBLIC_IPV6_NETWORKS = T.let(
-          %w[2001:2::/48 2001:db8::/32].map { |network| IPAddr.new(network) }.freeze,
-          T::Array[IPAddr]
-        )
-
-        sig { returns(String) }
-        attr_reader :endpoint
-
-        sig { returns(String) }
-        attr_reader :key
-
-        sig { returns(String) }
-        attr_reader :salt
-
-        sig { returns(String) }
-        attr_reader :source_origin
-
-        sig do
-          params(
-            environment: T::Hash[String, String],
-            rails_environment: T.any(String, ActiveSupport::EnvironmentInquirer),
-            application_identity: ApplicationIdentity,
-            resolver: T.proc.params(host: String).returns(T::Array[String])
-          ).returns(ImageDeliveryConfiguration)
-        end
-        def self.fetch!(environment: ENV.to_h, rails_environment: Rails.env,
-          application_identity: Rails.configuration.x.application_identity,
-          resolver: ->(host) { Resolv.getaddresses(host) })
-          new(environment:, rails_environment:, application_identity:, resolver:)
-        end
-
-        sig do
-          params(
-            environment: T::Hash[String, String],
-            rails_environment: T.any(String, ActiveSupport::EnvironmentInquirer),
-            application_identity: ApplicationIdentity,
-            resolver: T.proc.params(host: String).returns(T::Array[String])
-          ).void
-        end
-        def initialize(environment:, rails_environment:, application_identity:, resolver:)
-          production = rails_environment.to_s == "production"
-          @endpoint = T.let(validate_url(environment.fetch("IMGPROXY_ENDPOINT") { raise Error, "IMGPROXY_ENDPOINT is required" }, "IMGPROXY_ENDPOINT", origin: false, https: production), String)
-          @key = T.let(validate_hex(environment.fetch("IMGPROXY_KEY") { raise Error, "IMGPROXY_KEY is required" }, "IMGPROXY_KEY"), String)
-          @salt = T.let(validate_hex(environment.fetch("IMGPROXY_SALT") { raise Error, "IMGPROXY_SALT is required" }, "IMGPROXY_SALT"), String)
-          source = if production
-                     application_identity.canonical_origin
-                   else
-                     environment.fetch("IMGPROXY_SOURCE_ORIGIN") { raise Error, "IMGPROXY_SOURCE_ORIGIN is required outside production" }
-                   end
-          @source_origin = T.let(validate_url(source, "imgproxy source origin", origin: true, https: production), String)
-          if production
-            validate_public_host!(@endpoint, "IMGPROXY_ENDPOINT", resolver)
-            validate_public_host!(@source_origin, "imgproxy source origin", resolver)
-          end
-          freeze
-        rescue URI::InvalidURIError => error
-          raise Error, "image delivery URL is invalid: #{error.message}"
-        end
-
-        private
-          sig { params(value: String, name: String).returns(String) }
-          def validate_hex(value, name)
-            value = value.to_s
-            raise Error, "#{name} must be non-empty even-length hexadecimal" unless value.match?(HEX_PATTERN)
-
-            value.freeze
-          end
-
-          sig { params(value: String, name: String, origin: T::Boolean, https: T::Boolean).returns(String) }
-          def validate_url(value, name, origin:, https:)
-            raise Error, "#{name} is required" if value.to_s.strip.empty?
-
-            uri = URI.parse(value.to_s)
-            valid = uri.is_a?(URI::HTTP) && uri.host && uri.userinfo.nil? && uri.query.nil? && uri.fragment.nil?
-            valid &&= ["", "/"].include?(uri.path) if origin
-            raise Error, "#{name} must be an HTTP(S) URL without userinfo, query, or fragment" unless valid
-            raise Error, "#{name} must use HTTPS in production" if https && uri.scheme != "https"
-
-            uri.path = "" if origin
-            uri.to_s.delete_suffix("/").freeze
-          end
-
-          sig do
-            params(
-              url: String,
-              name: String,
-              resolver: T.proc.params(host: String).returns(T::Array[String])
-            ).void
-          end
-          def validate_public_host!(url, name, resolver)
-            host = URI.parse(url).host
-            raise Error, "#{name} host is required" if host.nil?
-            raise Error, "#{name} must not use localhost in production" if host.casecmp?("localhost")
-
-            addresses = begin
-              [IPAddr.new(host)]
-            rescue IPAddr::InvalidAddressError
-              Array(resolver.call(host)).map { |address| IPAddr.new(address) }
-            end
-            raise Error, "#{name} host could not be resolved" if addresses.empty?
-            return if addresses.all? { |address| public_address?(address) }
-
-            raise Error, "#{name} must resolve only to public addresses in production"
-          rescue Resolv::ResolvError, SocketError, IPAddr::InvalidAddressError => error
-            raise Error, "#{name} host could not be resolved: #{error.message}"
-          end
-
-          sig { params(address: IPAddr).returns(T::Boolean) }
-          def public_address?(address)
-            return NON_PUBLIC_IPV4_NETWORKS.none? { |network| network.include?(address) } if address.ipv4?
-
-            return false unless GLOBAL_IPV6_NETWORK.include?(address)
-
-            NON_PUBLIC_IPV6_NETWORKS.none? { |network| network.include?(address) }
-          end
-      end
-    RUBY
-
-    create_file "lib/imgproxy/active_storage_url_adapter.rb", <<~'RUBY', force: true
-      module Imgproxy
-        class ActiveStorageUrlAdapter < UrlAdapters::ActiveStorage
-          extend T::Sig
-
-          sig { params(source_origin: String).void }
-          def initialize(source_origin:)
-            super()
-            @source_origin = source_origin.delete_suffix("/")
-          end
-
-          Image = T.type_alias do
-            T.any(ActiveStorage::Attached::One, ActiveStorage::Attachment, ActiveStorage::Blob)
-          end
-
-          sig { params(image: Image).returns(String) }
-          def url(image)
-            path = Rails.application.routes.url_helpers.rails_storage_proxy_path(image)
-            "#{@source_origin}#{path}"
-          end
-        end
-      end
-    RUBY
-
-    create_file "config/initializers/imgproxy.rb", <<~'RUBY', force: true
-      require Rails.root.join("lib/image_delivery_configuration")
-      require Rails.root.join("lib/imgproxy/active_storage_url_adapter")
-
-      assets_precompile = ENV["SECRET_KEY_BASE_DUMMY"] == "1" &&
-        defined?(Rake) && Rake.application.top_level_tasks.include?("assets:precompile")
-      unless assets_precompile
-        image_delivery = ImageDeliveryConfiguration.fetch!
-        Rails.configuration.x.image_delivery = image_delivery
-
-        Imgproxy.configure do |config|
-          config.endpoint = image_delivery.endpoint
-          config.key = image_delivery.key
-          config.salt = image_delivery.salt
-          config.use_short_options = true
-          config.base64_encode_urls = true
-          config.url_adapters.clear!
-          config.url_adapters.add(Imgproxy::ActiveStorageUrlAdapter.new(source_origin: image_delivery.source_origin))
-        end
-      end
-    RUBY
-
-    imgproxy_development_environment = {
-      "IMGPROXY_ENDPOINT" => "http://localhost:8080",
-      "IMGPROXY_KEY" => "2bd2493c76c097f627d86b985dce14f949532dc60e2426f1874a4e2320954751",
-      "IMGPROXY_SALT" => "989eaba55a19dfed802f186e320f927dd2379f5ea3db42fb4d85c59c923a3ca8",
-      "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"
-    }.freeze
-    imgproxy_development_prefix = imgproxy_development_environment.map { |name, value| "#{name}=#{value}" }.join(" ")
-    procfile_path = "Procfile.dev"
-    procfile_lines = File.readlines(procfile_path, chomp: true)
-    web_line_indexes = procfile_lines.each_index.select { |index| procfile_lines.fetch(index).start_with?("web:") }
-    css_line_indexes = procfile_lines.each_index.select { |index| procfile_lines.fetch(index).start_with?("css:") }
-    raise "#{procfile_path}のweb processが一意ではありません" unless web_line_indexes.one?
-    raise "#{procfile_path}のcss processが一意ではありません" unless css_line_indexes.one?
-    raise "#{procfile_path}には既にimgproxy processがあります" if procfile_lines.any? { |line| line.start_with?("imgproxy:") }
-
-    procfile_lines[web_line_indexes.fetch(0)] = "web: #{imgproxy_development_prefix} bin/rails server -p 3000"
-    procfile_lines[css_line_indexes.fetch(0)] = "css: #{imgproxy_development_prefix} bin/rails tailwindcss:watch"
-    procfile_lines << "imgproxy: #{imgproxy_development_prefix} bin/imgproxy-dev"
-    create_file procfile_path, procfile_lines.join("\n") + "\n", force: true
-
-    create_file "bin/imgproxy-dev", <<~'SH', force: true
-      #!/bin/sh
-      set -eu
-      : "${IMGPROXY_KEY:?IMGPROXY_KEY is required}"
-      : "${IMGPROXY_SALT:?IMGPROXY_SALT is required}"
-      : "${IMGPROXY_SOURCE_ORIGIN:?IMGPROXY_SOURCE_ORIGIN is required}"
-      IMGPROXY_PORT="${IMGPROXY_PORT:-8080}"
-      ALLOWED_SOURCE="${IMGPROXY_SOURCE_ORIGIN%/}/"
-      exec docker run --rm -p "${IMGPROXY_PORT}:8080" \
-        --add-host host.docker.internal:host-gateway \
-        -e IMGPROXY_KEY \
-        -e IMGPROXY_SALT \
-        -e IMGPROXY_ALLOWED_SOURCES="${ALLOWED_SOURCE}" \
-        -e IMGPROXY_MAX_SRC_FILE_SIZE=5242880 \
-        -e IMGPROXY_MAX_SRC_RESOLUTION=16.8 \
-        -e IMGPROXY_MAX_ANIMATION_FRAMES=1 \
-        darthsim/imgproxy:v4.0.12
-    SH
-    chmod "bin/imgproxy-dev", 0o755
-
-    create_file "test/lib/image_delivery_configuration_test.rb", <<~'RUBY', force: true
-      require "test_helper"
-
-      class ImageDeliveryConfigurationTest < ActiveSupport::TestCase
-        test "accepts signed explicit development settings" do
-          configuration = build_configuration
-
-          assert_equal "http://localhost:8080", configuration.endpoint
-          assert_equal "http://host.docker.internal:3000", configuration.source_origin
-        end
-
-        test "requires endpoint key salt and source origin" do
-          %w[IMGPROXY_ENDPOINT IMGPROXY_KEY IMGPROXY_SALT IMGPROXY_SOURCE_ORIGIN].each do |name|
-            environment = valid_environment.except(name)
-            assert_raises(ImageDeliveryConfiguration::Error) { build_configuration(environment:) }
-          end
-        end
-
-        test "rejects malformed signing values" do
-          ["", "0", "xyz", "00-11"].each do |value|
-            error = assert_raises(ImageDeliveryConfiguration::Error) do
-              build_configuration(environment: valid_environment.merge("IMGPROXY_KEY" => value))
-            end
-            assert_match(/IMGPROXY_KEY/, error.message)
-          end
-        end
-
-        test "production requires HTTPS public endpoint and canonical source origin" do
-          identity = ApplicationIdentity.new(app_name: "Sample", canonical_origin: "https://app.example.com", default_locale: :en)
-          resolver = ->(_host) { ["93.184.216.34"] }
-          configuration = build_configuration(
-            environment: valid_environment.except("IMGPROXY_SOURCE_ORIGIN").merge("IMGPROXY_ENDPOINT" => "https://images.example.com"),
-            rails_environment: "production",
-            application_identity: identity,
-            resolver:
-          )
-
-          assert_equal "https://app.example.com", configuration.source_origin
-          assert_raises(ImageDeliveryConfiguration::Error) do
-            build_configuration(rails_environment: "production", application_identity: identity, resolver:)
-          end
-          assert_raises(ImageDeliveryConfiguration::Error) do
-            build_configuration(
-              environment: valid_environment.except("IMGPROXY_SOURCE_ORIGIN").merge("IMGPROXY_ENDPOINT" => "https://images.example.com"),
-              rails_environment: "production",
-              application_identity: identity,
-              resolver: ->(_host) { ["127.0.0.1"] }
-            )
-          end
-          assert_raises(ImageDeliveryConfiguration::Error) do
-            build_configuration(
-              environment: valid_environment.except("IMGPROXY_SOURCE_ORIGIN").merge("IMGPROXY_ENDPOINT" => "https://images.example.com"),
-              rails_environment: "production",
-              application_identity: identity,
-              resolver: ->(_host) { ["203.0.113.10"] }
-            )
-          end
-        end
-
-        private
-          def build_configuration(environment: valid_environment, rails_environment: "test",
-            application_identity: Rails.configuration.x.application_identity,
-            resolver: ->(_host) { ["93.184.216.34"] })
-            ImageDeliveryConfiguration.new(environment:, rails_environment:, application_identity:, resolver:)
-          end
-
-          def valid_environment
-            {
-              "IMGPROXY_ENDPOINT" => "http://localhost:8080",
-              "IMGPROXY_KEY" => "00112233",
-              "IMGPROXY_SALT" => "aabbccdd",
-              "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"
-            }
-          end
-      end
-    RUBY
-
-    create_file "test/lib/imgproxy/active_storage_url_adapter_test.rb", <<~'RUBY', force: true
-      require "test_helper"
-      require "base64"
-      require "openssl"
-      require "uri"
-
-      class ImgproxyActiveStorageUrlAdapterTest < ActiveSupport::TestCase
-        test "builds a source URL only from an Active Storage blob proxy path" do
-          blob = ActiveStorage::Blob.create_and_upload!(
-            io: StringIO.new("stored image"), filename: "avatar.png", content_type: "image/png"
-          )
-          adapter = Imgproxy::ActiveStorageUrlAdapter.new(source_origin: "https://app.example.com")
-
-          url = adapter.url(blob)
-
-          assert url.start_with?("https://app.example.com/rails/active_storage/blobs/proxy/")
-          assert_includes url, blob.signed_id
-        ensure
-          blob&.purge
-        end
-
-        test "signs an imgproxy URL whose encoded source is the blob proxy path" do
-          blob = ActiveStorage::Blob.create_and_upload!(
-            io: StringIO.new("stored image"), filename: "avatar.png", content_type: "image/png"
-          )
-
-          url = Imgproxy.url_for(blob, resizing_type: "fill", width: 40, height: 40, enlarge: 1)
-          path = T.must(URI(url).path)
-          signature, processing, *encoded_source = path.delete_prefix("/").split("/")
-          unsigned_path = "/#{([processing] + encoded_source).join("/")}"
-          expected_signature = Base64.urlsafe_encode64(
-            OpenSSL::HMAC.digest(
-              "sha256",
-              [Rails.configuration.x.image_delivery.key].pack("H*"),
-              [Rails.configuration.x.image_delivery.salt].pack("H*") + unsigned_path
-            ),
-            padding: false
-          )
-
-          assert_equal expected_signature, signature
-          assert_equal "rs:fill:40:40:1", processing
-          source = Base64.urlsafe_decode64(encoded_source.join)
-          assert source.start_with?("http://host.docker.internal:45678/rails/active_storage/blobs/proxy/")
-          assert_includes source, blob.signed_id
-          assert_not_includes url, "/unsafe/"
-        ensure
-          blob&.purge
-        end
-      end
-    RUBY
-  end
-
-  delivery_description = if delivery == "imgproxy"
-    <<~MARKDOWN
-      `imgproxy`配信では`imgproxy-rails`がActive Storage named variantを署名済みimgproxy URLへ解決します。元画像sourceは`rails_storage_proxy`の署名済みpathだけで、Active Storage DBが元画像のsource of truthです。任意の外部URLは受け付けません。
-
-      必須環境変数は`IMGPROXY_ENDPOINT`、`IMGPROXY_KEY`、`IMGPROXY_SALT`です。keyとsaltは偶数長hexで指定します。productionのsource originは`APPLICATION_ORIGIN`から取得し、HTTPSかつpublic addressだけを許可します。
-
-      developmentの`Procfile.dev`はRailsをport 3000、imgproxyをport 8080で起動し、web、Tailwind CSS watch、imgproxyへ同じ公開済みの開発専用key、salt、source originを直接設定します。Railsはimgproxyから元画像を取得できるようdevelopmentだけ`host.docker.internal`を許可します。これらの値をproduction credentialとして使用しないでください。`bin/imgproxy-dev`は`darthsim/imgproxy:v4.0.12`を直接起動します。Rails用Dokploy imageや`Procfile.prod`にはimgproxyを追加しません。
-
-      ```console
-      foreman start -f Procfile.dev
-      ```
-    MARKDOWN
-  else
-    "`rails`配信ではActive Storage公式のrepresentation routeを使用します。imgproxy Gem、設定、外部serviceは不要です。\n"
-  end
   create_file "docs/image_delivery.md", <<~MARKDOWN, force: true
     # Image delivery
 
-    Active Storageのattachment、blob metadata、元画像は、配信方式にかかわらずActive Storage／Active Storage DBをsource of truthとします。Rails配信の処理済みvariantはActive Storage DBへ保存します。imgproxyの派生画像は外部serviceが生成・cacheしますが、永続的なsourceにはしません。variant processorはlibvipsです。
+    Active Storageのattachmentとblob metadataはprimary SQLite database、元画像と処理済みvariant本体はActive Storage DBの専用storage SQLite databaseをsource of truthとします。variant processorはlibvipsで、生成済みvariantはvariant recordを使って再処理せず再利用します。
     Docker外で開発・testするhostにもlibvips runtimeが必要です（macOSでは例: `brew install vips`）。
 
-    #{delivery_description}
+    attachment、blob、representationのURLはActive Storage公式の`rails_storage_proxy` routeへ解決します。初回requestはThrusterからPuma、Rails、Active Storage DBへ転送され、Railsが`public`かつ`immutable`なresponseを返します。同じURLがThrusterのHTTP cacheに残っている間は、ThrusterがPuma、Rails、SQLiteを通さずresponseを返します。variantが生成済みであることと、ThrusterのHTTP cacheがwarmであることは別の状態です。
+
+    Thrusterのcacheはprocess内memoryに保持され、既定の全体容量は64 MiB、1 responseあたりの上限は1 MiBです。process再起動、eviction、上限を超えるresponse、Range requestではcacheを利用できません。容量は必要な場合だけThrusterの環境変数で調整し、このtemplateはCDNや永続cacheを追加しません。
+
+    Active Storageのproxy controllerが発行するsigned URLは恒久的で、URLを知る利用者には公開されます。認証必須の添付にはglobal proxy routeを使用せず、認証済みcontrollerを別途設計してください。
+
     ## Avatar policy
 
     Profile avatarは`header_avatar`（40×40）と`profile_avatar`（64×64）のnamed variantだけを使用し、中央基準で正方形にcropします。uploadは静止画JPEG、PNG、WebP、5 MiB以下、幅・高さ4096px以下に限定します。GIF、APNG、animated WebP、空・破損・偽装画像は拒否します。
@@ -845,6 +480,37 @@ def configure_image_delivery
     end
   RUBY
   append_to_file "test/test_helper.rb", "\nrequire_relative \"support/image_test_fixture\"\n"
+
+  create_file "test/integration/image_delivery_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+
+    class ImageDeliveryTest < ActionDispatch::IntegrationTest
+      test "serves stored variants through the permanent public proxy route" do
+        blob = ImageTestFixture.png_blob
+        variant = blob.variant(resize_to_limit: [1, 1])
+        path = Rails.application.routes.url_helpers.rails_storage_proxy_path(variant)
+
+        assert_includes path, "/rails/active_storage/representations/proxy/"
+        assert_difference -> { blob.variant_records.count }, 1 do
+          get path
+        end
+
+        assert_response :success
+        assert_equal "image/png", response.media_type
+        assert_includes response.headers.fetch("cache-control"), "public"
+        assert_includes response.headers.fetch("cache-control"), "immutable"
+        first_body = response.body
+
+        assert_no_difference -> { blob.variant_records.count } do
+          get path
+        end
+        assert_response :success
+        assert_equal first_body, response.body
+      ensure
+        blob&.purge
+      end
+    end
+  RUBY
 end
 
 def install_action_text
@@ -4102,12 +3768,7 @@ def configure_content_management
         assert_response :success
         assert_select ".lexxy-content figure.attachment img[src]", count: 1
         source = css_select(".lexxy-content figure.attachment img[src]").first["src"]
-        if Rails.configuration.active_storage.resolve_model_to_route == :imgproxy_active_storage
-          assert source.start_with?("http://localhost:8080/")
-          assert_not_includes source, "/unsafe/"
-        else
-          assert_includes source, "/rails/active_storage/representations/"
-        end
+        assert_includes source, "/rails/active_storage/representations/proxy/"
         assert_equal ImageTestFixture::PNG, blob.download
         rich_text = page.reload.rich_text_content
         assert_equal [blob], rich_text.embeds.blobs
@@ -4921,12 +4582,7 @@ def configure_profile
 
           assert_includes rendered, "<img"
           assert_not_includes rendered, "<svg"
-          if Rails.configuration.active_storage.resolve_model_to_route == :imgproxy_active_storage
-            assert_includes rendered, "http://localhost:8080/"
-            assert_not_includes rendered, "/unsafe/"
-          else
-            assert_includes rendered, "/rails/active_storage/representations/"
-          end
+          assert_includes rendered, "/rails/active_storage/representations/proxy/"
           assert_includes rendered, 'width="64"'
           assert_includes rendered, 'height="64"'
         ensure
@@ -4943,6 +4599,8 @@ def configure_profile
               image = Vips::Image.new_from_file(file.path)
               assert_equal dimensions, [image.width, image.height]
             end
+            stored_variant = ActiveStorageDB::File.find_by!(ref: variant.image.blob.key)
+            assert_equal variant.image.blob.download, stored_variant.data
           end
           assert_equal 2, profile.avatar.blob.variant_records.count
         ensure
@@ -9601,7 +9259,7 @@ end
 
 def configure_evidence_capture
   additional_login_methods = VALUES.fetch("additional_login_methods")
-  image_delivery = VALUES.fetch("image_delivery")
+  avatar = VALUES.fetch("profile_features").include?("avatar")
   api = VALUES.fetch("api") == "enable"
   web_push = VALUES.fetch("web_push") == "use"
   job_operations = VALUES.fetch("job_operations") == "enable"
@@ -9622,17 +9280,12 @@ def configure_evidence_capture
 
       SCENARIO_SET = "full"
       ADDITIONAL_LOGIN_METHODS = __ADDITIONAL_LOGIN_METHODS__
-      IMAGE_DELIVERY = __IMAGE_DELIVERY__
+      AVATAR = __AVATAR__
       LOCALE = I18n.default_locale.to_s
       API = __API__
       WEB_PUSH = __WEB_PUSH__
       JOB_OPERATIONS = __JOB_OPERATIONS__
       MAINTENANCE_TASKS = __MAINTENANCE_TASKS__
-      if IMAGE_DELIVERY == "imgproxy"
-        Capybara.server_host = "0.0.0.0"
-        Capybara.server_port = 45_678
-        Capybara.app_host = "http://127.0.0.1:45678"
-      end
       require "eth" if ADDITIONAL_LOGIN_METHODS.include?("siwe")
       VIEWPORTS = {
         "desktop" => { "width" => 1400, "height" => 900 },
@@ -9649,7 +9302,7 @@ def configure_evidence_capture
         @captures = []
         capture_common_scenarios
         capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")
-        capture_image_delivery_scenarios if IMAGE_DELIVERY == "imgproxy"
+        capture_avatar_scenarios if AVATAR
 
         File.write(
           @output_directory.join("captures.json"),
@@ -9657,7 +9310,6 @@ def configure_evidence_capture
             "scenario_set" => SCENARIO_SET,
             "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
             "locale" => LOCALE,
-            "image_delivery" => IMAGE_DELIVERY,
             "viewports" => VIEWPORTS,
             "captures" => @captures
           ) + "\n"
@@ -9880,7 +9532,7 @@ def configure_evidence_capture
           JAVASCRIPT
         end
 
-        def capture_image_delivery_scenarios
+        def capture_avatar_scenarios
           VIEWPORTS.each do |viewport_name, viewport|
             Capybara.reset_sessions!
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
@@ -9890,16 +9542,16 @@ def configure_evidence_capture
             profile.avatar.purge if profile.avatar.attached?
             profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
             capture_page(
-              "image-delivery-home-avatar",
-              "画像配信（ホーム）",
+              "avatar-home",
+              "アバター（ホーム）",
               root_path,
               translate("home.heading"),
               viewport_name
             )
             assert_avatar_image_geometry(40)
             capture_page(
-              "image-delivery-profile-avatar",
-              "画像配信（プロフィール）",
+              "avatar-profile",
+              "アバター（プロフィール）",
               profile_path,
               translate("profiles.title"),
               viewport_name
@@ -10776,13 +10428,17 @@ def configure_evidence_capture
     end
   RUBY
   runner = runner.sub("__ADDITIONAL_LOGIN_METHODS__", additional_login_methods.inspect)
-  runner = runner.sub("__IMAGE_DELIVERY__", image_delivery.inspect)
+  runner = runner.sub("__AVATAR__", avatar.inspect)
   runner = runner.sub("__API__", api.inspect)
   runner = runner.sub("__WEB_PUSH__", web_push.inspect)
   runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)
   runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)
   disabled_constants = []
   disabled_methods = []
+  unless avatar
+    disabled_constants << :AVATAR
+    disabled_methods << :capture_avatar_scenarios
+  end
   unless additional_login_methods.include?("siwe")
     disabled_constants << :ADDITIONAL_LOGIN_METHODS
     disabled_methods.concat(%i[
@@ -10959,7 +10615,6 @@ def configure_sorbet
         app/services/push_notifier.rb
         app/services/vapid_configuration.rb
         lib/application_identity.rb
-        lib/image_delivery_configuration.rb
       ].freeze
 
       APPLICATION_DSL_RBI_SOURCES = {
@@ -11080,7 +10735,6 @@ def configure_application_typechecking
     app/services/push_notifier.rb
     app/services/vapid_configuration.rb
     lib/application_identity.rb
-    lib/image_delivery_configuration.rb
   ].select { |path| File.exist?(path) }
 
   paths.each do |path|
@@ -11364,7 +11018,7 @@ def configure_database
 end
 
 def configure_dokploy
-  processes = ["web: bundle exec puma -p 3000 -C ./config/puma.rb"]
+  processes = ["web: bin/thrust bin/rails server"]
   processes << "worker: bin/jobs --mode async" if VALUES.fetch("active_job") == "solid_queue"
   create_file "Procfile.prod", processes.join("\n") + "\n"
 
@@ -11415,7 +11069,7 @@ def configure_dokploy
     COPY --from=build /usr/local/bundle /usr/local/bundle
     COPY --from=build /rails /rails
     VOLUME ["/data"]
-    EXPOSE 3000
+    EXPOSE 80
     ENTRYPOINT ["/rails/bin/docker-entrypoint"]
     CMD ["litestream", "replicate", "-config", "/rails/litestream.yml", "-exec", "bundle exec foreman start --procfile=Procfile.prod"]
   DOCKERFILE

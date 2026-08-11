@@ -219,19 +219,6 @@ avatar uploadは静止画JPEG、PNG、WebPだけを許可し、5 MiB以下、幅
 
 何も選択しなかった場合はProfile model、migration、controller、route、View、test fixtureを生成しません。header menuは`bars-3` + `MENU`を使い、account navigationからプロフィール項目を除外します。
 
-## `image_delivery`
-
-- CLI引数: `--image-delivery=rails|imgproxy`
-- 質問文: 画像配信方式を選択してください。
-- 選択肢: `rails`、`imgproxy`
-- 既定値: `rails`
-- 表示条件: 常に表示する
-- 影響する処理: Active Storage variant processor、画像配信initializer、`Procfile.dev`、生成アプリ文書、production要件
-
-`rails`はActive Storage公式のvariant／representation routeを使用します。`imgproxy`は`imgproxy-rails ~> 0.3.0`を追加し、同じnamed variant APIを署名済みimgproxy URLへ解決します。どちらもblob metadataとattachmentをprimary database、元画像をActive Storage DBに保存します。Railsの処理済みvariantはActive Storage DBへ保存し、imgproxyの派生画像は外部serviceが生成・cacheしますが永続的なsourceにはしません。任意の外部URLを画像sourceとして受け付けません。
-
-両方式ともvariant processorを`:vips`へ固定します。`rails`選択時はimgproxy Gem、initializer、環境変数、外部service要件を生成しません。`imgproxy`選択時はRailsとは別のimgproxy service、`IMGPROXY_ENDPOINT`、hex形式の`IMGPROXY_KEY`と`IMGPROXY_SALT`を必須とし、production source originにはApplication Identityのcanonical originを再利用します。developmentの`Procfile.dev`はRailsをport 3000、imgproxyをport 8080で起動し、web、Tailwind CSS watch、imgproxyへ同一の公開済み開発専用key、salt、`IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:3000`を直接設定します。RailsのHost Authorizationはdevelopmentだけ`host.docker.internal`を許可し、productionのHTTP、localhost、private/link-local address、署名なしURLは拒否してRails配信へ切り替えません。
-
 ## `api`
 
 - CLI引数: `--api=enable|disable`
@@ -285,11 +272,11 @@ avatar uploadは静止画JPEG、PNG、WebPだけを許可し、5 MiB以下、幅
 - 表示条件: 常に表示する
 - 影響する処理: Docker関連のgenerator option、production用Docker/Procfile/Litestream、Dokploy設定
 
-`dokploy`ではRails標準のDocker/Kamal/Thrusterを使用しません。`rails new`へ`--skip-docker --skip-kamal --skip-thruster`を渡し、Application Templateから`Dockerfile.prod`、`.dockerignore`、`bin/docker-entrypoint`、`Procfile.prod`、`litestream.yml`を生成します。`foreman`をproductionで利用できるGemとして追加し、LitestreamをDocker imageへinstallします。
+`dokploy`ではRails標準のDocker/Kamalを使用しません。`rails new`へ`--skip-docker --skip-kamal`を渡し、Rails標準のThruster Gemと`bin/thrust`は生成します。Application Templateから`Dockerfile.prod`、`.dockerignore`、`bin/docker-entrypoint`、`Procfile.prod`、`litestream.yml`を生成し、`foreman`をproductionで利用できるGemとして追加してLitestreamをDocker imageへinstallします。
 
-`none`でも`rails new`へ`--skip-docker --skip-kamal --skip-thruster`を渡しますが、production用Dockerfile、Procfile、Litestream設定、`foreman`、Dokploy固有設定を追加しません。
+`none`でも`rails new`へ`--skip-docker --skip-kamal`を渡し、Thruster Gemと`bin/thrust`は生成しますが、production用Dockerfile、Procfile、Litestream設定、`foreman`、Dokploy固有設定を追加しません。
 
-`dokploy`を選択した場合は`Procfile.prod`へPumaのwebプロセスを定義し、`active_job == solid_queue`の場合だけworkerプロセスも追加します。コンテナの既定commandがLitestream経由でForemanを起動し、Foremanが`Procfile.prod`のプロセスを管理します。
+`dokploy`を選択した場合は`Procfile.prod`へ`bin/thrust bin/rails server`を定義し、Thrusterが既定のHTTP port 80で待ち受け、既定target port 3000のPumaを管理します。`active_job == solid_queue`の場合だけworkerプロセスも追加します。コンテナの既定commandがLitestream経由でForemanを起動し、Foremanが`Procfile.prod`のプロセスを管理します。
 
 primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLitestreamのreplication対象とし、queueとcableは対応する機能を選択した場合だけ追加します。`STORAGE_DATABASE_PATH`と`LITESTREAM_STORAGE_REPLICA_URL`を含む必要なdatabase path、replica URL、S3互換storageの認証情報が不足した場合は実行を失敗させます。
 
@@ -301,6 +288,8 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - schema上の全配列optionのカンマ区切り値を宣言順へ正規化し、未知値、重複値、空要素を拒否すること。
 - `--profile-features`の空値でProfile関連生成物をすべて省略し、`--additional-login-methods`の空値でSIWE固有生成物をすべて省略すること。
 - Active Storageと`active_storage_db`はAction Textとともに常設し、全環境でファイル本体を専用storage SQLite databaseへ保存すること。
+- `--image-delivery`を不明なoptionとして拒否し、全Active Storage URLを`rails_storage_proxy`へ解決すること。
+- 実画像variantがlibvipsで一度だけ生成され、proxy responseが`public`かつ`immutable`であること。
 - `avatar`選択時だけBoring Avatars、Profile添付、User ID由来の既定アバター、header trigger、画像削除routeを生成すること。
 - 設定済み画像がBoring Avatarより優先され、削除後は同じUser ID由来のBoring Avatarへ戻ること。
 - すべての適用可能な項目をCLI引数で指定した場合、標準入力を読まずに実行すること。
@@ -328,7 +317,8 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - Solid Queueを使わない場合、queue database、Puma plugin、production workerを生成しないこと。
 - Maintenance Tasksを使わない場合、Gem、migration、initializer、controller、route、navigationを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。
-- `deployment == dokploy`で`Dockerfile.prod`、`Procfile.prod`、entrypoint、Litestream設定を生成し、Rails標準Docker、Kamal、Thrusterを生成しないこと。
-- `deployment == none`でDocker、Kamal、Thruster、Procfile、Litestream、`foreman`を生成・追加しないこと。
+- 全構成でRails標準のThruster Gemと`bin/thrust`を生成し、`--skip-thruster`を使用しないこと。
+- `deployment == dokploy`で`Dockerfile.prod`、`Procfile.prod`、entrypoint、Litestream設定を生成し、Rails標準DockerとKamalは生成しないこと。
+- `deployment == none`でDocker、Kamal、Procfile、Litestream、`foreman`を生成・追加しないこと。
 - `deployment == dokploy`かつ`active_job == solid_queue`の場合だけ`Procfile.prod`へworkerを追加すること。
 - `deployment == dokploy`でprimaryとActive Storageのstorageを常にreplicateし、queueとcableを選択に応じて追加すること。

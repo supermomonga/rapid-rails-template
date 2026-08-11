@@ -10,7 +10,6 @@ module RapidRailsTemplate
       --skip-rubocop
       --skip-docker
       --skip-kamal
-      --skip-thruster
       --skip-system-test
     ].freeze
 

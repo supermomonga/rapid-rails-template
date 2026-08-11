@@ -15,18 +15,11 @@ run = '''
 #!/usr/bin/env ruby
 require "fileutils"
 require "rbconfig"
-require "securerandom"
 
 root = File.realpath(Dir.pwd)
 sample = File.join(root, "sample")
 FileUtils.rm_rf(sample)
-imgproxy_environment = {
-  "IMGPROXY_ENDPOINT" => "http://localhost:8080",
-  "IMGPROXY_KEY" => SecureRandom.hex(32),
-  "IMGPROXY_SALT" => SecureRandom.hex(32),
-  "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"
-}
-generated = system imgproxy_environment, RbConfig.ruby, File.join(root, "bootstrap.rb"),
+generated = system RbConfig.ruby, File.join(root, "bootstrap.rb"),
   "--app-id=sample",
   "--app-name=Sample App",
   "--default-locale=ja",
@@ -38,7 +31,6 @@ generated = system imgproxy_environment, RbConfig.ruby, File.join(root, "bootstr
   "--solid-cache=use",
   "--additional-login-methods=siwe",
   "--profile-features=screen_name,display_name,avatar",
-  "--image-delivery=imgproxy",
   "--api=enable",
   "--action-cable=solid_cable",
   "--mail=use",
@@ -48,6 +40,6 @@ abort "sampleアプリの生成に失敗しました" unless generated
 
 sample_template = File.join(root, "bin/sample-app-template")
 sample_template_runner = File.join(root, "bin/apply-sample-app-template")
-exec imgproxy_environment.merge("BUNDLE_GEMFILE" => File.join(sample, "Gemfile")),
-  "bundle", "exec", RbConfig.ruby, sample_template_runner, sample, sample_template
+exec({ "BUNDLE_GEMFILE" => File.join(sample, "Gemfile") },
+  "bundle", "exec", RbConfig.ruby, sample_template_runner, sample, sample_template)
 '''

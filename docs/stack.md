@@ -32,7 +32,7 @@ I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`
 | active link | `active_link_to` | 現在ページに応じたリンク表示に使用する |
 | 認可 | `action_policy` | authorization policyの標準実装とする |
 | Rich text・画像storage | Action Text、Active Storage、`active_storage_db`、`image_processing ~> 1.2`、`lexxy ~> 0.9.21` | 添付本体とvariantを専用SQLite databaseへ保存し、画像variantはlibvipsで処理する |
-| 画像配信 | Active Storage representation route、または`imgproxy-rails ~> 0.3.0` | `image_delivery`で明示選択し、実行時fallbackを持たない |
+| 画像配信 | Active Storage proxy route、Thruster | 公開signed URLをHTTP cacheし、warm hitではPuma、Rails、SQLiteを迂回する |
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
 | Profile名生成 | `haikunator` | `screen_name`または`display_name`を選択した場合だけUser作成時の既定値生成に使用する |
 | 既定アバター生成 | `boring_avatars ~> 0.1.0` | `avatar`を選択した場合だけUser IDから決定的なSVGを生成する |
@@ -98,15 +98,13 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 
 Action Text、Active Storage、Active Storage DB、Lexxyは選択式にせず、すべての生成アプリケーションへ導入します。Action Textの公式install generatorでActive Storageのmetadata／attachment migrationと添付表示partialを生成し、`active_storage_db`の公式migration taskでファイル本体用migrationを生成して`db/storage_migrate`へ分離します。Active Storage DB engineを`/active_storage_db`へmountし、development、test、productionのActive Storage serviceをすべて`:db`に設定します。Active Storageのblob metadataとattachmentはprimary database、ファイル本体は専用storage SQLite databaseへ保存し、Disk serviceへ暗黙に切り替えません。
 
-Active Storageのvariant processorは全環境で`:vips`へ固定します。Rails標準生成物の`image_processing ~> 1.2`を利用し、Dokploy用runtime imageには`libvips`を含めます。Profile avatarは40×40の`header_avatar`と64×64の`profile_avatar`だけをnamed variantとして定義し、任意の変換hashをViewへ記述しません。attachment、blob metadata、元画像のsource of truthは両方式ともActive Storage／Active Storage DBです。Rails配信の処理済みvariantはActive Storage DBへ保存し、imgproxy配信の派生画像は外部serviceが生成・cacheしますが、永続的な画像sourceとして扱いません。
+Active Storageのvariant processorは全環境で`:vips`、variant trackingは有効、route resolverは`:rails_storage_proxy`へ固定します。Rails標準生成物の`image_processing ~> 1.2`を利用し、Dokploy用runtime imageには`libvips`を含めます。Profile avatarは40×40の`header_avatar`と64×64の`profile_avatar`だけをnamed variantとして定義し、任意の変換hashをViewへ記述しません。attachmentとblob metadataはprimary SQLite、元画像と処理済みvariant本体はActive Storage DBの専用storage SQLiteをsource of truthとします。
 
 生成アプリをDocker外で開発・testするhostにもlibvips runtimeが必要です。macOSでは`brew install vips`など、対象OSのpackage managerでlibvipsを明示的に導入し、`Vips::Image`が実画像をdecodeできることをtestで確認します。
 
-`image_delivery=rails`はActive Storage公式representation routeを使用します。`image_delivery=imgproxy`だけが公式`imgproxy-rails`と署名済みURLを使用し、Active Storage blobの署名済みproxy routeだけをsourceとして構成します。任意の外部URLを受け取るendpointは生成しません。Action Textのoriginal、download、削除とavatar policyは分離し、global route resolverを変更した状態でもAction Textの契約を検証します。
+Active Storageのblobとrepresentationは公式proxy controllerから配信します。初回requestはThruster、Puma、Rails、Active Storage DBを通り、Railsが`public`かつ`immutable`なresponseを返します。同じsigned URLがThrusterのmemory cacheに残っている間はThrusterが直接返却します。生成済みvariantはlibvips処理を省略しますが、Thruster cacheがcoldならRailsとSQLiteの読出しは発生します。Action Textのoriginal、download、削除とavatar policyは分離し、global proxy resolverでも各契約を検証します。
 
-imgproxy設定は`ImageDeliveryConfiguration`が一元的に検証します。productionではHTTPS endpoint、空でない偶数長hex key/salt、Application Identity由来のHTTPS public source originを必須とし、DNS解決したloopback、private、link-local addressも拒否します。development/testだけ、`IMGPROXY_SOURCE_ORIGIN`で明示したlocalhostまたはprivate HTTP originを許可します。設定不足、署名なしURL、画像処理失敗をRails配信や元画像表示へfallbackしません。
-
-imgproxyはRails processと別の必須serviceです。Dokploy用Rails imageや`Procfile.prod`へimgproxyを同居させず、platform固有sidecar設定も生成しません。developmentの`Procfile.dev`は、Rails environmentをbootするwebとTailwind CSS watch、およびimgproxyへ同じ公開済み開発専用key、salt、endpoint、source originを直接設定し、Railsをport 3000、imgproxyをport 8080で起動します。RailsのHost Authorizationへ`host.docker.internal`を追加するのはdevelopmentだけとします。`bin/imgproxy-dev`は固定した`darthsim/imgproxy:v4.0.12`をattached processとして直接起動し、Linuxでは`host.docker.internal`をhost gatewayへ解決します。末尾`/`付きの`IMGPROXY_ALLOWED_SOURCES`、source byte数・resolution・animation上限も明示し、Foreman終了時は`--rm`によってcontainerを残しません。productionの秘密値はGit管理対象へ保存しません。
+Thrusterのcache既定値は全体64 MiB、1 responseあたり1 MiBです。process再起動、eviction、上限超過、Range requestではcacheを利用できません。このtemplateはCDN、永続cache、独自cache middlewareを追加しません。Active Storageのproxy URLは恒久的で、URLを知る利用者へ公開されるため、認証必須の添付は対象外です。
 
 Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
 
@@ -305,7 +303,7 @@ productionの`config/database.yml`には、常設のstorage databaseに加え、
 
 ### `dokploy`
 
-Rails標準のDocker/Kamal/Thruster構成は使用せず、`rails new`へ`--skip-docker --skip-kamal --skip-thruster`を渡します。Application Templateが次のproduction専用ファイルを生成します。
+Rails標準のDocker/Kamal構成は使用せず、`rails new`へ`--skip-docker --skip-kamal`を渡します。Thruster Gemと`bin/thrust`はRails標準generatorから取得し、Application Templateが次のproduction専用ファイルを生成します。
 
 ```text
 Dockerfile.prod
@@ -324,10 +322,10 @@ Dokployではbuild typeをDockerfile、Dockerfile pathを`Dockerfile.prod`に設
 `Dockerfile.prod`は、公式Docker Hubに存在する対象範囲内の固定tag `ruby:4.0.0-slim`を使うmulti-stage buildとします。開発環境は`mise.toml`でRuby 4.0.6へ固定します。
 
 - base stageでproduction用Bundler環境とLitestreamを用意する。
-- build stageでGemをinstallし、build専用の`APPLICATION_ORIGIN=https://build.example.com`と`SECRET_KEY_BASE_DUMMY=1`でassetsをprecompileする。imgproxy initializerが設定検証を省略するのはこのRake taskだけで、serverやworkerのproduction bootでは必要な環境変数を常に検証する。
+- build stageでGemをinstallし、build専用の`APPLICATION_ORIGIN=https://build.example.com`と`SECRET_KEY_BASE_DUMMY=1`でassetsをprecompileする。
 - final stageには実行時Gem、SQLite、libvips、jemalloc、Litestream、アプリケーションだけを含める。
 - `/data`をvolumeとして宣言し、SQLite databaseをimage layerやephemeral filesystemへ保存しない。
-- `PORT=3000`でPumaを公開する。
+- Thrusterの既定HTTP port 80を公開し、内側のPumaは既定target port 3000で待ち受ける。
 - YJITとjemallocを有効化する。
 - entrypointを`bin/docker-entrypoint`へ固定する。
 - 既定commandでLitestreamのreplicationを開始し、その`-exec`から`bundle exec foreman start --procfile=Procfile.prod`を実行する。
@@ -339,7 +337,7 @@ Litestreamは`0.5.14`へ固定し、linux/amd64とlinux/arm64のrelease assetを
 `foreman` gemは`deployment == dokploy`の場合だけ、productionで実行できるgroupへ`require: false`で追加します。`Procfile.prod`には必ずWebプロセスを定義します。
 
 ```procfile
-web: bundle exec puma -p 3000 -C ./config/puma.rb
+web: bin/thrust bin/rails server
 ```
 
 `active_job == solid_queue`の場合だけworkerを追加します。
@@ -392,20 +390,20 @@ Litestreamの設定または認証情報が不足した場合、replicationな�
 
 - build type: Dockerfile
 - Dockerfile path: `Dockerfile.prod`
-- container port: `3000`
+- container port: `80`
 - persistent volume mount: `/data`
 - container command: Dockerfileの既定commandを使用
 - 必須secret: `RAILS_MASTER_KEY`、Litestreamのaccess keyとsecret key
 - Web Push使用時の必須環境変数: `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`
 - 必須database path: `DATABASE_PATH`、`STORAGE_DATABASE_PATH`と、選択に応じた`QUEUE_DATABASE_PATH`／`CACHE_DATABASE_PATH`／`CABLE_DATABASE_PATH`
 - 必須replica URL: primary、storageと、選択に応じたqueue／cableのLitestream URL
-- 任意の調整値: `WEB_CONCURRENCY`、`RAILS_MAX_THREADS`、`DATABASE_POOL_SIZE`、`JOB_CONCURRENCY`
+- 任意の調整値: `WEB_CONCURRENCY`、`RAILS_MAX_THREADS`、`DATABASE_POOL_SIZE`、`JOB_CONCURRENCY`、Thrusterのcache容量
 
-production環境変数の実値や秘密情報を生成先リポジトリへ保存しません。`image_delivery=imgproxy`の`Procfile.dev`に記録する公開済み開発専用key/saltはproduction credentialとして使用しません。
+production環境変数の実値や秘密情報を生成先リポジトリへ保存しません。Thruster/Pumaのport環境変数は生成せず、Dokploy側をcontainer port 80へ合わせます。
 
 ### `none`
 
-`Dockerfile.prod`、`.dockerignore`、production用`bin/docker-entrypoint`、`Procfile.prod`、`litestream.yml`、Kamal、Thruster、Dokploy固有設定を生成しません。`foreman`も追加しません。アプリケーション自体のPuma設定や、選択したSolid Queueの`bin/jobs`は維持します。
+`Dockerfile.prod`、`.dockerignore`、production用`bin/docker-entrypoint`、`Procfile.prod`、`litestream.yml`、Kamal、Dokploy固有設定を生成しません。`foreman`も追加しません。Rails標準のThruster Gemと`bin/thrust`、Puma設定、選択したSolid Queueの`bin/jobs`は維持します。
 
 ## Rails 8.1のSolid系既定値
 

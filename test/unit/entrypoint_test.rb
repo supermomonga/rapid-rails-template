@@ -395,4 +395,20 @@ class EntrypointTest < Minitest::Test
     assert_includes error.string, "[OPTIONS]"
     assert_includes error.string, "--additional-login-methods=siwe"
   end
+
+  def test_rejects_removed_image_delivery_option
+    output = StringIO.new
+    error = StringIO.new
+
+    status = RapidRailsTemplate::Entrypoint.run(
+      ["--image-delivery=rails", "sample"],
+      output:,
+      error:,
+      runner_class: RecordingRunner,
+      prompt: UnexpectedPrompt
+    )
+
+    assert_equal 1, status
+    assert_includes error.string, "不明なオプションです: --image-delivery"
+  end
 end

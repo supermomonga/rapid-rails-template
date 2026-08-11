@@ -20,7 +20,6 @@ class MiseTasksTest < Minitest::Test
       --solid-cache=use
       --additional-login-methods=siwe
       --profile-features=screen_name,display_name,avatar
-      --image-delivery=imgproxy
       --api=enable
       --action-cable=solid_cable
       --mail=use
@@ -28,18 +27,15 @@ class MiseTasksTest < Minitest::Test
       --default-locale=ja
     ].each { |option| assert_includes task, %Q("#{option}") }
 
-    %w[IMGPROXY_ENDPOINT IMGPROXY_KEY IMGPROXY_SALT IMGPROXY_SOURCE_ORIGIN].each do |name|
-      assert_includes task, %Q("#{name}" =>)
-    end
-    assert_includes task, "generated = system imgproxy_environment, RbConfig.ruby"
+    assert_includes task, "generated = system RbConfig.ruby"
     assert_includes task, 'abort "sampleアプリの生成に失敗しました" unless generated'
     assert_includes task, 'sample_template = File.join(root, "bin/sample-app-template")'
     assert_includes task, 'sample_template_runner = File.join(root, "bin/apply-sample-app-template")'
-    assert_includes task, 'exec imgproxy_environment.merge("BUNDLE_GEMFILE" => File.join(sample, "Gemfile"))'
+    assert_includes task, 'exec({ "BUNDLE_GEMFILE" => File.join(sample, "Gemfile") },'
     assert_includes task, '"bundle", "exec", RbConfig.ruby, sample_template_runner, sample, sample_template'
 
     bootstrap_index = task.index("generated = system").then { |index| refute_nil(index); index }
-    template_index = task.index('exec imgproxy_environment.merge("BUNDLE_GEMFILE"').then do |index|
+    template_index = task.index('exec({ "BUNDLE_GEMFILE"').then do |index|
       refute_nil index
       index
     end

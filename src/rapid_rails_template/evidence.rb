@@ -7,7 +7,7 @@ require "json"
 module RapidRailsTemplate
   module Evidence
     VARIANTS = {
-      "full-ja" => { "scenario_set" => "full", "additional_login_methods" => %w[siwe], "locale" => "ja", "image_delivery" => "imgproxy" }
+      "full-ja" => { "scenario_set" => "full", "additional_login_methods" => %w[siwe], "locale" => "ja" }
     }.freeze
     PNG_SIGNATURE = "\x89PNG\r\n\x1A\n".b.freeze
 
@@ -27,8 +27,7 @@ module RapidRailsTemplate
       (source_paths + [File.join(root, "bin/update-evidence")]).sort
     end
 
-    def finalize_variant(directory:, scenario_set:, additional_login_methods:, locale:, image_delivery:, source_fingerprint:,
-      base_commit:)
+    def finalize_variant(directory:, scenario_set:, additional_login_methods:, locale:, source_fingerprint:, base_commit:)
       report_path = File.join(directory, "captures.json")
       raise "撮影レポートがありません: #{report_path}" unless File.file?(report_path)
 
@@ -38,7 +37,6 @@ module RapidRailsTemplate
         raise "追加ログイン方法が一致しません: #{report.fetch("additional_login_methods").inspect}"
       end
       raise "localeが一致しません: #{report.fetch("locale")}" unless report.fetch("locale") == locale
-      raise "画像配信方式が一致しません: #{report.fetch("image_delivery")}" unless report.fetch("image_delivery") == image_delivery
 
       captures = report.fetch("captures").map do |capture|
         path = capture.fetch("path")
@@ -59,11 +57,10 @@ module RapidRailsTemplate
 
       validate_capture_set!(directory, captures)
       manifest = {
-        "schema_version" => 5,
+        "schema_version" => 6,
         "scenario_set" => scenario_set,
         "additional_login_methods" => additional_login_methods,
         "locale" => locale,
-        "image_delivery" => image_delivery,
         "source_fingerprint" => source_fingerprint,
         "base_commit" => base_commit,
         "viewports" => report.fetch("viewports"),
@@ -90,13 +87,12 @@ module RapidRailsTemplate
         raise "manifestがありません: #{manifest_path}" unless File.file?(manifest_path)
 
         manifest = JSON.parse(File.read(manifest_path))
-        raise "manifestのschema versionが一致しません: #{variant}" unless manifest.fetch("schema_version") == 5
+        raise "manifestのschema versionが一致しません: #{variant}" unless manifest.fetch("schema_version") == 6
         raise "manifestのscenario setが一致しません: #{variant}" unless manifest.fetch("scenario_set") == metadata.fetch("scenario_set")
         unless manifest.fetch("additional_login_methods") == metadata.fetch("additional_login_methods")
           raise "manifestの追加ログイン方法が一致しません: #{variant}"
         end
         raise "manifestのlocaleが一致しません: #{variant}" unless manifest.fetch("locale") == metadata.fetch("locale")
-        raise "manifestの画像配信方式が一致しません: #{variant}" unless manifest.fetch("image_delivery") == metadata.fetch("image_delivery")
         unless manifest.fetch("source_fingerprint") == expected_fingerprint
           raise "#{variant}のエビデンスが古くなっています。rake evidence:updateを実行してください"
         end
@@ -139,15 +135,13 @@ module RapidRailsTemplate
       scenario_set = manifest.fetch("scenario_set")
       additional_login_methods = manifest.fetch("additional_login_methods")
       locale = manifest.fetch("locale")
-      image_delivery = manifest.fetch("image_delivery")
-      title = "#{scenario_set} / #{locale} / #{image_delivery}"
+      title = "#{scenario_set} / #{locale}"
       lines = [
         "# #{title} エビデンス",
         "",
         "- Source fingerprint: `#{manifest.fetch("source_fingerprint")}`",
         "- Base commit: `#{manifest.fetch("base_commit")}`",
         "- Locale: `#{locale}`",
-        "- Image delivery: `#{image_delivery}`",
         "- Additional login methods: `#{additional_login_methods.empty? ? '(none)' : additional_login_methods.join(', ')}`",
         "- 更新: `rake evidence:update`",
         ""

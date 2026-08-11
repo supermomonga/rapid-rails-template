@@ -57,7 +57,7 @@ module RapidRailsTemplate
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
       result << "boring_avatars" if configuration["profile_features"].include?("avatar")
-      result << "imgproxy-rails" if configuration["image_delivery"] == "imgproxy"
+      result << "thruster"
       result << "web-push" if configuration["web_push"] == "use"
       result << "solid_queue" if configuration["active_job"] == "solid_queue"
       result << "mission_control-jobs" if configuration["job_operations"] == "enable"
@@ -211,20 +211,11 @@ module RapidRailsTemplate
         config/initializers/active_storage_db.rb
         db/storage_migrate/*_create_active_storage_db_files.active_storage_db.rb
         test/models/active_storage_db_test.rb
+        test/integration/image_delivery_test.rb
         docs/image_delivery.md
         test/support/image_test_fixture.rb
       ]
-      if configuration["image_delivery"] == "imgproxy"
-        result.concat(%w[
-          lib/image_delivery_configuration.rb
-          lib/imgproxy/active_storage_url_adapter.rb
-          config/initializers/imgproxy.rb
-          Procfile.dev
-          bin/imgproxy-dev
-          test/lib/image_delivery_configuration_test.rb
-          test/lib/imgproxy/active_storage_url_adapter_test.rb
-        ])
-      end
+      result << "bin/thrust"
       result << "sorbet/rbi/shims/boring_avatars.rbi" if configuration["profile_features"].include?("avatar")
       if configuration["api"] == "enable"
         result.concat(%w[
@@ -384,15 +375,6 @@ module RapidRailsTemplate
       if configuration["active_job"] == "solid_queue"
         result << "Solid Queue worker/dispatcher/scheduler"
         result << "finished jobs retained for 1 day; failed jobs retained until retry/discard"
-      end
-      if configuration["image_delivery"] == "imgproxy"
-        result.concat([
-          "separate imgproxy v4 service",
-          "IMGPROXY_ENDPOINT (HTTPS)",
-          "IMGPROXY_KEY (hex)",
-          "IMGPROXY_SALT (hex)",
-          "public HTTPS APPLICATION_ORIGIN"
-        ])
       end
       result
     end

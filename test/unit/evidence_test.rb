@@ -16,7 +16,6 @@ class EvidenceTest < Minitest::Test
       "scenario_set" => "full",
       "additional_login_methods" => [],
       "locale" => "ja",
-      "image_delivery" => "skip",
       "source_fingerprint" => "fingerprint",
       "base_commit" => "abc123",
       "captures" => [
@@ -130,7 +129,6 @@ class EvidenceTest < Minitest::Test
               "scenario_set" => metadata.fetch("scenario_set"),
               "additional_login_methods" => metadata.fetch("additional_login_methods"),
               "locale" => metadata.fetch("locale"),
-              "image_delivery" => metadata.fetch("image_delivery"),
               "viewports" => { "desktop" => { "width" => 1400, "height" => 900 } },
               "captures" => [
                 {
@@ -147,7 +145,6 @@ class EvidenceTest < Minitest::Test
             scenario_set: metadata.fetch("scenario_set"),
             additional_login_methods: metadata.fetch("additional_login_methods"),
             locale: metadata.fetch("locale"),
-            image_delivery: metadata.fetch("image_delivery"),
             source_fingerprint: fingerprint,
             base_commit: "abc123"
           )

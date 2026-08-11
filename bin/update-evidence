@@ -4,8 +4,9 @@
 require "fileutils"
 require "net/http"
 require "open3"
-require "securerandom"
+require "socket"
 require "tmpdir"
+require "timeout"
 require_relative "../src/rapid_rails_template/evidence"
 
 ROOT = File.expand_path("..", __dir__)
@@ -22,7 +23,6 @@ COMMON_OPTIONS = [
   "--solid-cache=use",
   "--additional-login-methods=siwe",
   "--profile-features=screen_name,display_name,avatar",
-  "--image-delivery=imgproxy",
   "--api=enable",
   "--action-cable=solid_cable",
   "--mail=use",
@@ -30,13 +30,7 @@ COMMON_OPTIONS = [
   "--deployment=dokploy"
 ].freeze
 VARIANTS = {
-  "full-ja" => { scenario_set: "full", additional_login_methods: %w[siwe], locale: "ja", image_delivery: "imgproxy" }
-}.freeze
-IMGPROXY_ENVIRONMENT = {
-  "IMGPROXY_ENDPOINT" => "http://localhost:8080",
-  "IMGPROXY_KEY" => SecureRandom.hex(32),
-  "IMGPROXY_SALT" => SecureRandom.hex(32),
-  "IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:45678"
+  "full-ja" => { scenario_set: "full", additional_login_methods: %w[siwe], locale: "ja" }
 }.freeze
 
 def run!(*command, env: {}, chdir: ROOT)
@@ -45,40 +39,87 @@ def run!(*command, env: {}, chdir: ROOT)
   raise "コマンドが失敗しました: #{command.join(" ")}" unless success
 end
 
-def with_imgproxy
-  container = "rapid-rails-imgproxy-evidence-#{Process.pid}"
-  run!(
-    "docker", "run", "--detach", "--rm", "--name", container,
-    "--publish", "8080:8080",
-    "--add-host", "host.docker.internal:host-gateway",
-    "--env", "IMGPROXY_KEY=#{IMGPROXY_ENVIRONMENT.fetch("IMGPROXY_KEY")}",
-    "--env", "IMGPROXY_SALT=#{IMGPROXY_ENVIRONMENT.fetch("IMGPROXY_SALT")}",
-    "--env", "IMGPROXY_ALLOWED_SOURCES=#{IMGPROXY_ENVIRONMENT.fetch("IMGPROXY_SOURCE_ORIGIN")}/",
-    "--env", "IMGPROXY_MAX_SRC_FILE_SIZE=5242880",
-    "--env", "IMGPROXY_MAX_SRC_RESOLUTION=16.8",
-    "--env", "IMGPROXY_MAX_ANIMATION_FRAMES=1",
-    "darthsim/imgproxy:v4.0.12"
+def verify_thruster_cache!
+  listeners = 2.times.map { TCPServer.new("127.0.0.1", 0) }
+  http_port, target_port = listeners.map { |listener| listener.addr.fetch(1) }
+  listeners.each(&:close)
+
+  runner = <<~'RUBY'
+    require "stringio"
+    require "vips"
+
+    png = Vips::Image.black(8, 8).write_to_buffer(".png")
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new(png), filename: "thruster-cache-probe.png", content_type: "image/png"
+    )
+    variant = blob.variant(resize_to_limit: [4, 4])
+    path = Rails.application.routes.url_helpers.rails_storage_proxy_path(variant)
+    puts "THRUSTER_CACHE_PROBE=#{blob.id}\t#{path}"
+  RUBY
+  stdout, stderr, status = Open3.capture3(
+    { "RAILS_ENV" => "test" }, File.join(SAMPLE, "bin/rails"), "runner", runner, chdir: SAMPLE
   )
-  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 30
-  loop do
-    response = Net::HTTP.get_response(URI("http://localhost:8080/health"))
-    break if response.is_a?(Net::HTTPSuccess)
-    raise "imgproxy health checkが時間内に成功しませんでした" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+  raise "Thruster cache probeの作成に失敗しました: #{stderr}" unless status.success?
 
-    sleep 0.5
-  rescue EOFError, Errno::ECONNREFUSED, Errno::ECONNRESET, Net::OpenTimeout, Net::ReadTimeout
-    raise "imgproxy health checkが時間内に成功しませんでした" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+  marker = stdout.lines.find { |line| line.start_with?("THRUSTER_CACHE_PROBE=") }
+  raise "Thruster cache probeのURLを取得できませんでした: #{stdout}" unless marker
 
-    sleep 0.5
+  blob_id, path = marker.delete_prefix("THRUSTER_CACHE_PROBE=").strip.split("\t", 2)
+  environment = {
+    "RAILS_ENV" => "test",
+    "THRUSTER_HTTP_PORT" => http_port.to_s,
+    "THRUSTER_TARGET_PORT" => target_port.to_s,
+    "THRUSTER_LOG_REQUESTS" => "0"
+  }
+  output = +""
+  server_pid = nil
+  reader_thread = nil
+  Open3.popen2e(
+    environment,
+    File.join(SAMPLE, "bin/thrust"), File.join(SAMPLE, "bin/rails"), "server",
+    chdir: SAMPLE
+  ) do |stdin, server_output, wait_thread|
+    stdin.close
+    server_pid = wait_thread.pid
+    reader_thread = Thread.new { output << server_output.read }
+    uri = URI("http://127.0.0.1:#{http_port}#{path}")
+    first = nil
+    Timeout.timeout(30) do
+      loop do
+        first = Net::HTTP.get_response(uri)
+        break if first.is_a?(Net::HTTPSuccess)
+
+        sleep 0.1
+      rescue EOFError, Errno::ECONNREFUSED, Errno::ECONNRESET
+        sleep 0.1
+      end
+    end
+    second = Net::HTTP.get_response(uri)
+    raise "Thruster cache初回requestがmissではありません: #{first["X-Cache"].inspect}" unless first["X-Cache"] == "miss"
+    raise "Thruster cache再requestがhitではありません: #{second["X-Cache"].inspect}" unless second["X-Cache"] == "hit"
+    raise "Thruster cacheのresponse bodyが一致しません" unless first.body == second.body
+  ensure
+    begin
+      Process.kill("TERM", server_pid) if server_pid
+    rescue Errno::ESRCH
+      nil
+    end
+    wait_thread.join
+    reader_thread.join
   end
-  yield
 ensure
-  system("docker", "stop", container) if container
+  reader_thread&.join
+  if blob_id
+    _stdout, cleanup_stderr, cleanup_status = Open3.capture3(
+      { "RAILS_ENV" => "test" }, File.join(SAMPLE, "bin/rails"), "runner",
+      "ActiveStorage::Blob.find(#{Integer(blob_id)}).purge", chdir: SAMPLE
+    )
+    raise "Thruster cache probeの削除に失敗しました: #{cleanup_stderr}" unless cleanup_status.success?
+  end
 end
 
 run!(File.join(ROOT, "bin/build-bootstrap"))
 run!(File.join(ROOT, "bin/verify-bootstrap"))
-run!("docker", "info", "--format", "{{.ServerVersion}}") if VARIANTS.values.any? { |metadata| metadata.fetch(:image_delivery) == "imgproxy" }
 source_fingerprint = RapidRailsTemplate::Evidence.fingerprint(ROOT)
 base_commit, status = Open3.capture2("git", "rev-parse", "HEAD", chdir: ROOT)
 raise "base commitを取得できません" unless status.success?
@@ -88,9 +129,10 @@ begin
   manifests = {}
   VARIANTS.each do |variant, metadata|
     FileUtils.rm_rf(SAMPLE)
-    run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *COMMON_OPTIONS, SAMPLE, env: IMGPROXY_ENVIRONMENT)
-    run!(File.join(SAMPLE, "bin/rails"), "test", env: IMGPROXY_ENVIRONMENT, chdir: SAMPLE)
-    run!(File.join(SAMPLE, "bin/rubocop"), env: IMGPROXY_ENVIRONMENT, chdir: SAMPLE)
+    run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *COMMON_OPTIONS, SAMPLE)
+    run!(File.join(SAMPLE, "bin/rails"), "test", chdir: SAMPLE)
+    verify_thruster_cache!
+    run!(File.join(SAMPLE, "bin/rubocop"), chdir: SAMPLE)
 
     playwright = File.join(SAMPLE, "node_modules/.bin/playwright")
     raise "Playwright CLIが生成されていません: #{playwright}" unless File.executable?(playwright)
@@ -98,21 +140,17 @@ begin
 
     output_directory = File.join(staging_root, variant)
     FileUtils.mkdir_p(output_directory)
-    capture_environment = IMGPROXY_ENVIRONMENT.merge(
-        "RAILS_ENV" => "test",
-        "EVIDENCE_OUTPUT_DIR" => output_directory,
-        "PLAYWRIGHT_CLI_EXECUTABLE_PATH" => playwright
-    )
-    capture = lambda do
-      run!(File.join(SAMPLE, "bin/rails"), "evidence:capture", env: capture_environment, chdir: SAMPLE)
-    end
-    with_imgproxy(&capture)
+    capture_environment = {
+      "RAILS_ENV" => "test",
+      "EVIDENCE_OUTPUT_DIR" => output_directory,
+      "PLAYWRIGHT_CLI_EXECUTABLE_PATH" => playwright
+    }
+    run!(File.join(SAMPLE, "bin/rails"), "evidence:capture", env: capture_environment, chdir: SAMPLE)
     manifests[variant] = RapidRailsTemplate::Evidence.finalize_variant(
       directory: output_directory,
       scenario_set: metadata.fetch(:scenario_set),
       additional_login_methods: metadata.fetch(:additional_login_methods),
       locale: metadata.fetch(:locale),
-      image_delivery: metadata.fetch(:image_delivery),
       source_fingerprint: source_fingerprint,
       base_commit: base_commit.strip
     )

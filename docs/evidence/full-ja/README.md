@@ -1,9 +1,8 @@
-# full / ja / imgproxy エビデンス
+# full / ja エビデンス
 
-- Source fingerprint: `9376ed9283bab3de86bae09fa5150bf8bc1e7bbae0b55207b57984363fdd6e0b`
-- Base commit: `ffac46dc2fb703da019c0794493797a21bebb6c6`
+- Source fingerprint: `8d6c1df2c86f78b22ff4ff1c6960c46b60c236dc43051fca37ee24b43048045f`
+- Base commit: `07f9e3dbaddb7f6178f14d5d90537702b191a693`
 - Locale: `ja`
-- Image delivery: `imgproxy`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
 
@@ -273,14 +272,14 @@
 |---|---|
 |![ウォレット名を更新しました。 (desktop)](siwe-identity-renamed--desktop.png)|![ウォレット名を更新しました。 (mobile)](siwe-identity-renamed--mobile.png)|
 
-## 画像配信（ホーム）
+## アバター（ホーム）
 
 |Desktop|Mobile|
 |---|---|
-|![画像配信（ホーム） (desktop)](image-delivery-home-avatar--desktop.png)|![画像配信（ホーム） (mobile)](image-delivery-home-avatar--mobile.png)|
+|![アバター（ホーム） (desktop)](avatar-home--desktop.png)|![アバター（ホーム） (mobile)](avatar-home--mobile.png)|
 
-## 画像配信（プロフィール）
+## アバター（プロフィール）
 
 |Desktop|Mobile|
 |---|---|
-|![画像配信（プロフィール） (desktop)](image-delivery-profile-avatar--desktop.png)|![画像配信（プロフィール） (mobile)](image-delivery-profile-avatar--mobile.png)|
+|![アバター（プロフィール） (desktop)](avatar-profile--desktop.png)|![アバター（プロフィール） (mobile)](avatar-profile--mobile.png)|

@@ -75,7 +75,7 @@ class SampleAppTemplateTest < Minitest::Test
       'sample_run_checked "bundle exec srb tc"',
       'sample_run_checked "bin/rubocop -a"',
       'sample_run_checked "bin/rails db:seed"',
-      'sample_run_checked "IMGPROXY_SOURCE_ORIGIN=http://host.docker.internal:45678 bin/rails test"'
+      'sample_run_checked "bin/rails test"'
     ]
 
     indexes = commands.map do |command|

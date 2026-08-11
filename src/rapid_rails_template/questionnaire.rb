@@ -13,7 +13,6 @@ module RapidRailsTemplate
       Question.new(:solid_cache, "Solid Cacheを使用しますか？", %w[use skip], "use", nil, false),
       Question.new(:additional_login_methods, "追加するログイン方法を選択してください。", Configuration::ADDITIONAL_LOGIN_METHODS, [], nil, true),
       Question.new(:profile_features, "プロフィール機能を選択してください。", Configuration::PROFILE_FEATURES, Configuration::PROFILE_FEATURES, nil, true),
-      Question.new(:image_delivery, "画像配信方式を選択してください。", %w[rails imgproxy], "rails", nil, false),
       Question.new(:api, "API機能を有効にしますか？", %w[enable disable], "enable", nil, false),
       Question.new(:action_cable, "Action Cableを使用しますか？", %w[solid_cable skip], "skip", nil, false),
       Question.new(:mail, "メール機能を使用しますか？", %w[auto use skip], "auto", nil, false),

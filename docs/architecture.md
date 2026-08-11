@@ -61,7 +61,7 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 - `--css=tailwind`
 - `--skip-rubocop`
 - `--skip-action-mailer`と`--skip-action-mailbox`
-- `--skip-docker`、`--skip-kamal`、`--skip-thruster`
+- `--skip-docker`、`--skip-kamal`
 - Rails標準のSolid Queue/Cableを条件付きにするためのSolid系オプション
 
 これらを生成後のファイル削除で代替しません。`bootstrap.rb`が対話と実行確認を`rails new`より前に行い、確定したgenerator optionでRailsを起動してからApplication Template処理へ引き継ぎます。
@@ -147,7 +147,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 
 生成アプリケーションにはtest環境専用の`evidence:capture` Rake taskを配置します。taskは撮影前にtest databaseを再構築し、Capybaraで実ページを操作してPlaywright Chromiumでfull-page PNGと撮影レポートを出力します。撮影の成否にかかわらずtest databaseを再度初期化するため、証跡用データは通常のfixture testへ残りません。共通画面は実際のDevise login form、SIWE画面はdatabase challengeと署名検証を通して同じUserへ認証し、テスト専用login routeや認証fallbackは追加しません。
 
-リポジトリ側の`rake evidence:update`は選択可能な機能をすべて有効にした日本語sampleを1回だけ生成し、全Rails test、RuboCop、共通・SIWE・imgproxy画面の撮影が成功してからmanifest、Markdown索引、画像hashを確定して`docs/evidence/`を置換します。同じcapture IDとviewportの重複を拒否し、鮮度はcommit hashではなく、テンプレート分割ソースと撮影オーケストレーターの内容fingerprintで判定します。
+リポジトリ側の`rake evidence:update`は選択可能な機能をすべて有効にした日本語sampleを1回だけ生成し、全Rails test、RuboCop、Thruster cache smoke、共通・SIWE・avatar画面の撮影が成功してからmanifest、Markdown索引、画像hashを確定して`docs/evidence/`を置換します。同じcapture IDとviewportの重複を拒否し、鮮度はcommit hashではなく、テンプレート分割ソースと撮影オーケストレーターの内容fingerprintで判定します。
 
 ### `editors`
 

@@ -852,47 +852,25 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'assert_equal profile.screen_name.camelize, profile.display_name'
   end
 
-  def test_configures_explicit_rails_and_imgproxy_image_delivery_boundaries
+  def test_configures_active_storage_proxy_delivery_without_imgproxy
     delivery = source_between("def configure_image_delivery", "def install_action_text")
-    configuration = generated_file_source("lib/image_delivery_configuration.rb")
-    adapter = generated_file_source("lib/imgproxy/active_storage_url_adapter.rb")
-    initializer = generated_file_source("config/initializers/imgproxy.rb")
-    imgproxy_script = generated_file_source("bin/imgproxy-dev")
     action_text_test = generated_file_source("test/controllers/pages_controller_test.rb")
+    delivery_test = generated_file_source("test/integration/image_delivery_test.rb")
 
-    assert_includes @source, 'gem "imgproxy-rails", "~> 0.3.0" if VALUES.fetch("image_delivery") == "imgproxy"'
     assert_includes delivery, "config.active_storage.variant_processor = :vips"
     assert_includes delivery, "config.active_storage.track_variants = true"
-    assert_includes delivery, "rails_storage_redirect"
-    assert_includes delivery, "imgproxy_active_storage"
-    assert_includes delivery, 'environment \'config.hosts << "host.docker.internal"\', env: "development"'
-    assert_includes configuration, 'environment.fetch("IMGPROXY_ENDPOINT")'
-    assert_includes configuration, 'environment.fetch("IMGPROXY_KEY")'
-    assert_includes configuration, 'environment.fetch("IMGPROXY_SALT")'
-    assert_includes configuration, 'application_identity.canonical_origin'
-    assert_includes configuration, "NON_PUBLIC_IPV4_NETWORKS"
-    assert_includes configuration, "GLOBAL_IPV6_NETWORK"
-    assert_includes configuration, "addresses.all? { |address| public_address?(address) }"
-    assert_includes adapter, "rails_storage_proxy_path(image)"
-    assert_includes initializer, "config.url_adapters.clear!"
-    assert_includes initializer, "Imgproxy::ActiveStorageUrlAdapter"
-    assert_includes delivery, '"IMGPROXY_ENDPOINT" => "http://localhost:8080"'
-    assert_includes delivery, '"IMGPROXY_KEY" => "2bd2493c76c097f627d86b985dce14f949532dc60e2426f1874a4e2320954751"'
-    assert_includes delivery, '"IMGPROXY_SALT" => "989eaba55a19dfed802f186e320f927dd2379f5ea3db42fb4d85c59c923a3ca8"'
-    assert_includes delivery, '"IMGPROXY_SOURCE_ORIGIN" => "http://host.docker.internal:3000"'
-    assert_includes delivery, 'procfile_lines = File.readlines(procfile_path, chomp: true)'
-    assert_includes delivery, "unless web_line_indexes.one?"
-    assert_includes delivery, "unless css_line_indexes.one?"
-    assert_includes delivery, 'procfile_lines[web_line_indexes.fetch(0)] = "web: #{imgproxy_development_prefix} bin/rails server -p 3000"'
-    assert_includes delivery, 'procfile_lines[css_line_indexes.fetch(0)] = "css: #{imgproxy_development_prefix} bin/rails tailwindcss:watch"'
-    assert_includes delivery, 'procfile_lines << "imgproxy: #{imgproxy_development_prefix} bin/imgproxy-dev"'
-    assert_includes imgproxy_script, "--add-host host.docker.internal:host-gateway"
-    assert_includes imgproxy_script, "darthsim/imgproxy:v4.0.12"
-    refute_includes imgproxy_script, "-it"
-    refute_includes imgproxy_script, ":latest"
+    assert_includes delivery, "config.active_storage.resolve_model_to_route = :rails_storage_proxy"
     assert_includes action_text_test, "keeps Action Text image attachments separate from the avatar policy"
-    assert_includes delivery, 'assert_not_includes url, "/unsafe/"'
-    refute_includes delivery, 'ENV.fetch("IMGPROXY_ENDPOINT",'
+    assert_includes action_text_test, "/rails/active_storage/representations/proxy/"
+    assert_includes delivery_test, "rails_storage_proxy_path(variant)"
+    assert_includes delivery_test, 'response.headers.fetch("cache-control")'
+    assert_includes delivery_test, 'assert_includes response.headers.fetch("cache-control"), "public"'
+    assert_includes delivery_test, 'assert_includes response.headers.fetch("cache-control"), "immutable"'
+    assert_includes delivery_test, "assert_no_difference"
+    assert_includes @source, "ActiveStorageDB::File.find_by!(ref: variant.image.blob.key)"
+    assert_includes @source, "assert_equal variant.image.blob.download, stored_variant.data"
+    refute_includes @source, "imgproxy"
+    refute_includes @source, "IMGPROXY"
   end
 
   def test_installs_action_text_and_configures_lexxy_before_daisyui
@@ -949,6 +927,10 @@ class RailsTemplateContractTest < Minitest::Test
 
     assert_includes dokploy, '${STORAGE_DATABASE_PATH}'
     assert_includes dokploy, '${LITESTREAM_STORAGE_REPLICA_URL}'
+    assert_includes dokploy, 'web: bin/thrust bin/rails server'
+    assert_includes dokploy, "EXPOSE 80"
+    refute_includes dokploy, "THRUSTER_HTTP_PORT"
+    refute_includes dokploy, "THRUSTER_TARGET_PORT"
   end
 
   def test_generates_fixed_pages_faqs_footer_settings_and_admin_management
@@ -1286,10 +1268,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'SCENARIO_SET = "full"'
     assert_includes evidence, "capture_common_scenarios"
     assert_includes evidence, 'capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")'
-    assert_includes evidence, 'capture_image_delivery_scenarios if IMAGE_DELIVERY == "imgproxy"'
+    assert_includes evidence, "capture_avatar_scenarios if AVATAR"
     refute_includes evidence, "capture_siwe_delta"
-    refute_includes evidence, "capture_image_delivery_delta"
+    refute_includes evidence, "capture_avatar_delta"
     assert_includes evidence, 'runner = runner.sub("__ADDITIONAL_LOGIN_METHODS__", additional_login_methods.inspect)'
+    assert_includes evidence, 'runner = runner.sub("__AVATAR__", avatar.inspect)'
     assert_includes evidence, 'runner = runner.sub("__WEB_PUSH__", web_push.inspect)'
     assert_includes evidence, 'runner = runner.sub("__JOB_OPERATIONS__", job_operations.inspect)'
     assert_includes evidence, 'runner = runner.sub("__MAINTENANCE_TASKS__", maintenance_tasks.inspect)'

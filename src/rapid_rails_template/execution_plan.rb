@@ -74,6 +74,7 @@ module RapidRailsTemplate
       result << "install_siwe" if configuration["additional_login_methods"].include?("siwe")
       result << "configure_roles"
       result << "configure_content_management"
+      result << "install_avatar_cropper" if configuration["profile_features"].include?("avatar")
       result << "configure_profile" if configuration["profile_features"].any?
       result << "configure_api" if configuration["api"] == "enable"
       result << "configure_pwa" if configuration["pwa"] == "use"
@@ -249,12 +250,26 @@ module RapidRailsTemplate
       end
       if configuration["profile_features"].include?("avatar")
         result.concat(%w[
+          app/javascript/controllers/avatar_crop_controller.js
           app/services/avatar_image_policy.rb
           app/services/avatar_upload.rb
           app/validators/avatar_upload_validator.rb
           app/helpers/avatar_helper.rb
           test/services/avatar_image_policy_test.rb
           test/helpers/avatar_helper_test.rb
+          test/system/profile_avatar_crop_test.rb
+          vendor/javascript/cropperjs.js
+          vendor/javascript/@cropper--element.js
+          vendor/javascript/@cropper--element-canvas.js
+          vendor/javascript/@cropper--element-crosshair.js
+          vendor/javascript/@cropper--element-grid.js
+          vendor/javascript/@cropper--element-handle.js
+          vendor/javascript/@cropper--element-image.js
+          vendor/javascript/@cropper--element-selection.js
+          vendor/javascript/@cropper--element-shade.js
+          vendor/javascript/@cropper--element-viewer.js
+          vendor/javascript/@cropper--elements.js
+          vendor/javascript/@cropper--utils.js
         ])
       end
       result.concat(%w[

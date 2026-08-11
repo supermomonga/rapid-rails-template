@@ -3975,6 +3975,280 @@ def configure_content_management
   RUBY
 end
 
+def install_avatar_cropper
+  run_checked "bin/importmap pin cropperjs@2.1.1"
+
+  expected_packages = %w[
+    cropperjs
+    @cropper/element
+    @cropper/element-canvas
+    @cropper/element-crosshair
+    @cropper/element-grid
+    @cropper/element-handle
+    @cropper/element-image
+    @cropper/element-selection
+    @cropper/element-shade
+    @cropper/element-viewer
+    @cropper/elements
+    @cropper/utils
+  ]
+  importmap = File.binread("config/importmap.rb")
+  expected_packages.each do |package|
+    raise "Cropper.js dependencyがImportmapへ登録されていません: #{package}" unless importmap.match?(/^pin "#{Regexp.escape(package)}"/)
+
+    path = "vendor/javascript/#{package.sub('/', '--')}.js"
+    raise "Cropper.js dependencyが保存されていません: #{path}" unless File.file?(path)
+  end
+
+  create_file "app/javascript/controllers/avatar_crop_controller.js", <<~'JAVASCRIPT', force: true
+    import { Controller } from "@hotwired/stimulus"
+    import Cropper from "cropperjs"
+
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
+    const MAX_BYTES = 5 * 1024 * 1024
+    const MAX_DIMENSION = 4096
+    const OUTPUT_SIZE = 512
+    const LOSSY_QUALITY = 0.9
+
+    export default class extends Controller {
+      static targets = [
+        "input",
+        "dialog",
+        "cropper",
+        "currentPreview",
+        "pendingPreviewContainer",
+        "pendingPreview",
+        "error",
+        "apply"
+      ]
+
+      static values = {
+        invalidTypeMessage: String,
+        tooLargeMessage: String,
+        tooWideOrTallMessage: String,
+        undecodableMessage: String,
+        cropFailedMessage: String
+      }
+
+      connect() {
+        this.committedFile = this.inputTarget.files.item(0)
+        this.cropper = null
+        this.sourceFile = null
+        this.sourceObjectUrl = null
+        this.previewObjectUrl = null
+        this.beforeCache = this.prepareForCache.bind(this)
+        document.addEventListener("turbo:before-cache", this.beforeCache)
+      }
+
+      disconnect() {
+        document.removeEventListener("turbo:before-cache", this.beforeCache)
+        this.destroyCropper()
+        this.revokeSourceObjectUrl()
+        this.revokePreviewObjectUrl()
+      }
+
+      async select() {
+        const selectedFile = this.inputTarget.files.item(0)
+        if (!selectedFile) return
+
+        this.writeInput(this.committedFile)
+        this.clearError()
+
+        try {
+          const image = await this.loadSourceImage(selectedFile)
+          this.sourceFile = selectedFile
+          this.cropperTarget.replaceChildren(image)
+          this.dialogTarget.showModal()
+          this.cropper = new Cropper(image, {
+            container: this.cropperTarget,
+            template: `
+              <cropper-canvas class="block h-full w-full" background>
+                <cropper-image initial-center-size="cover" scalable translatable></cropper-image>
+                <cropper-shade hidden></cropper-shade>
+                <cropper-handle action="move" plain></cropper-handle>
+                <cropper-selection initial-aspect-ratio="1" aspect-ratio="1" initial-coverage="0.8" movable resizable>
+                  <cropper-grid role="grid" bordered covered></cropper-grid>
+                  <cropper-crosshair centered></cropper-crosshair>
+                  <cropper-handle action="move" theme-color="rgba(255, 255, 255, 0.35)"></cropper-handle>
+                  <cropper-handle action="n-resize"></cropper-handle>
+                  <cropper-handle action="e-resize"></cropper-handle>
+                  <cropper-handle action="s-resize"></cropper-handle>
+                  <cropper-handle action="w-resize"></cropper-handle>
+                  <cropper-handle action="ne-resize"></cropper-handle>
+                  <cropper-handle action="nw-resize"></cropper-handle>
+                  <cropper-handle action="se-resize"></cropper-handle>
+                  <cropper-handle action="sw-resize"></cropper-handle>
+                </cropper-selection>
+              </cropper-canvas>
+            `
+          })
+
+          const selection = this.cropper.getCropperSelection()
+          const cropperImage = this.cropper.getCropperImage()
+          if (!selection || !cropperImage) throw new Error("Cropper elements were not created")
+
+          selection.aspectRatio = 1
+          this.applyTarget.focus()
+        } catch (error) {
+          this.destroyCropper()
+          this.revokeSourceObjectUrl()
+          const message = error instanceof Error && error.message ? error.message : this.undecodableMessageValue
+          this.showError(message)
+        }
+      }
+
+      zoomIn() {
+        this.cropperImage().$zoom(0.1)
+      }
+
+      zoomOut() {
+        this.cropperImage().$zoom(-0.1)
+      }
+
+      reset() {
+        const selection = this.cropperSelection()
+        this.cropperImage().$resetTransform()
+        selection.$reset()
+        selection.aspectRatio = 1
+      }
+
+      cancel() {
+        this.dialogTarget.close()
+      }
+
+      close() {
+        this.destroyCropper()
+        this.revokeSourceObjectUrl()
+        this.sourceFile = null
+      }
+
+      async apply() {
+        if (!this.sourceFile) return
+
+        this.applyTarget.disabled = true
+        this.clearError()
+        try {
+          const canvas = await this.cropperSelection().$toCanvas({ width: OUTPUT_SIZE, height: OUTPUT_SIZE })
+          const blob = await this.canvasToBlob(canvas, this.sourceFile.type)
+          if (!blob || blob.type !== this.sourceFile.type || blob.size === 0 || blob.size > MAX_BYTES) {
+            throw new Error("Cropped image does not satisfy the upload contract")
+          }
+
+          const croppedFile = new File([blob], this.sourceFile.name, {
+            type: this.sourceFile.type,
+            lastModified: this.sourceFile.lastModified
+          })
+          this.committedFile = croppedFile
+          this.writeInput(croppedFile)
+          this.updatePreview(croppedFile)
+          this.dialogTarget.close()
+        } catch (_error) {
+          this.showError(this.cropFailedMessageValue)
+        } finally {
+          this.applyTarget.disabled = false
+        }
+      }
+
+      prepareForCache() {
+        this.committedFile = null
+        this.writeInput(null)
+        if (this.dialogTarget.open) this.dialogTarget.close()
+        this.destroyCropper()
+        this.revokeSourceObjectUrl()
+        this.revokePreviewObjectUrl()
+        this.pendingPreviewTarget.removeAttribute("src")
+        this.pendingPreviewContainerTarget.hidden = true
+        this.currentPreviewTarget.hidden = false
+      }
+
+      async loadSourceImage(file) {
+        try {
+          if (!ALLOWED_TYPES.includes(file.type)) throw new Error(this.invalidTypeMessageValue)
+          if (file.size === 0 || file.size > MAX_BYTES) throw new Error(this.tooLargeMessageValue)
+
+          this.revokeSourceObjectUrl()
+          this.sourceObjectUrl = URL.createObjectURL(file)
+          const image = new Image()
+          image.alt = ""
+          image.decoding = "async"
+          image.src = this.sourceObjectUrl
+          await image.decode()
+          if (image.naturalWidth <= 0 || image.naturalHeight <= 0) throw new Error(this.undecodableMessageValue)
+          if (image.naturalWidth > MAX_DIMENSION || image.naturalHeight > MAX_DIMENSION) {
+            throw new Error(this.tooWideOrTallMessageValue)
+          }
+          return image
+        } catch (error) {
+          this.revokeSourceObjectUrl()
+          const message = error instanceof Error && error.message ? error.message : this.undecodableMessageValue
+          throw new Error(message)
+        }
+      }
+
+      canvasToBlob(canvas, type) {
+        const quality = type === "image/png" ? undefined : LOSSY_QUALITY
+        return new Promise((resolve) => canvas.toBlob(resolve, type, quality))
+      }
+
+      cropperImage() {
+        const image = this.cropper?.getCropperImage()
+        if (!image) throw new Error("Cropper image is unavailable")
+        return image
+      }
+
+      cropperSelection() {
+        const selection = this.cropper?.getCropperSelection()
+        if (!selection) throw new Error("Cropper selection is unavailable")
+        return selection
+      }
+
+      writeInput(file) {
+        const transfer = new DataTransfer()
+        if (file) transfer.items.add(file)
+        this.inputTarget.files = transfer.files
+      }
+
+      updatePreview(file) {
+        this.revokePreviewObjectUrl()
+        this.previewObjectUrl = URL.createObjectURL(file)
+        this.pendingPreviewTarget.src = this.previewObjectUrl
+        this.pendingPreviewContainerTarget.hidden = false
+        this.currentPreviewTarget.hidden = true
+      }
+
+      showError(message) {
+        this.errorTargets.forEach((target) => {
+          target.textContent = message
+          target.hidden = false
+        })
+      }
+
+      clearError() {
+        this.errorTargets.forEach((target) => {
+          target.textContent = ""
+          target.hidden = true
+        })
+      }
+
+      destroyCropper() {
+        this.cropper?.destroy()
+        this.cropper = null
+        this.cropperTarget.replaceChildren()
+      }
+
+      revokeSourceObjectUrl() {
+        if (this.sourceObjectUrl) URL.revokeObjectURL(this.sourceObjectUrl)
+        this.sourceObjectUrl = null
+      }
+
+      revokePreviewObjectUrl() {
+        if (this.previewObjectUrl) URL.revokeObjectURL(this.previewObjectUrl)
+        this.previewObjectUrl = null
+      }
+    }
+  JAVASCRIPT
+end
+
 def configure_profile
   features = VALUES.fetch("profile_features")
   avatar_enabled = features.include?("avatar")
@@ -4187,6 +4461,7 @@ def configure_profile
 
           image = Vips::Image.new_from_file(path, access: :sequential, fail_on: :truncated)
           raise_error(:too_wide_or_tall) if image.width > MAX_DIMENSION || image.height > MAX_DIMENSION
+          raise_error(:not_square) unless image.width == image.height
           if image.get_typeof("n-pages") != 0 && image.get("n-pages").to_i > 1
             raise_error(:animated)
           end
@@ -4358,7 +4633,13 @@ def configure_profile
   profile_locale_ja = {
     "profiles" => {
       "title" => "プロフィール", "edit_title" => "プロフィール編集", "edit" => "プロフィールを編集",
-      "screen_name_hint" => "小文字の英数字とアンダースコアが使えます。", "current_avatar" => "現在のアバター", "avatar_label" => "アバター", "avatar_hint" => "静止画JPEG、PNG、WebP（5 MiB以下、幅・高さ4096px以下）を選択してください。",
+      "screen_name_hint" => "小文字の英数字とアンダースコアが使えます。", "current_avatar" => "現在のアバター", "avatar_label" => "アバター", "avatar_hint" => "静止画JPEG、PNG、WebP（5 MiB以下、幅・高さ4096px以下）を選択し、正方形に切り抜いてください。",
+      "avatar_crop" => {
+        "title" => "アバター画像の切り抜き", "description" => "正方形の範囲を移動・拡大縮小して構図を調整してください。", "preview" => "切り抜き後のアバターpreview",
+        "zoom_out" => "縮小", "zoom_in" => "拡大", "reset" => "リセット", "apply" => "切り抜きを適用", "cancel" => "キャンセル", "close" => "閉じる",
+        "invalid_type" => "静止画JPEG、PNG、WebPを選択してください。", "too_large" => "画像は5 MiB以下にしてください。", "too_wide_or_tall" => "画像の幅と高さは4096px以下にしてください。",
+        "undecodable" => "画像を読み込めませんでした。", "crop_failed" => "正方形画像を生成できませんでした。別の画像を選択してください。"
+      },
       "avatar_delete_title" => "アバター画像の削除", "avatar_delete_description" => "設定済みの画像を削除し、IDから生成したアバターへ戻します。", "avatar_delete" => "設定済み画像を削除", "avatar_delete_confirm" => "設定済みのアバター画像を削除しますか？",
       "update" => { "notice" => "プロフィールを更新しました" }, "avatar" => { "destroy" => { "notice" => "アバター画像を削除しました" } }
     },
@@ -4366,7 +4647,7 @@ def configure_profile
       "attributes" => { "profile" => { "screen_name" => "スクリーンネーム", "display_name" => "表示名", "avatar" => "アバター画像", "avatar_upload" => "アバター画像" } },
       "errors" => { "models" => { "profile" => { "attributes" => { "avatar_upload" => {
         "empty" => "が空です", "too_large" => "は%{max_size}以下にしてください", "unsupported_type" => "は静止画JPEG、PNG、WebPを選択してください",
-        "content_type_mismatch" => "のファイル形式と申告形式が一致しません", "too_wide_or_tall" => "の幅と高さは%{max_dimension}px以下にしてください",
+        "content_type_mismatch" => "のファイル形式と申告形式が一致しません", "too_wide_or_tall" => "の幅と高さは%{max_dimension}px以下にしてください", "not_square" => "は正方形にしてください",
         "animated" => "にanimationを含めることはできません", "undecodable" => "を画像として解析できません"
       } } } } }
     }
@@ -4374,7 +4655,13 @@ def configure_profile
   profile_locale_en = {
     "profiles" => {
       "title" => "Profile", "edit_title" => "Edit profile", "edit" => "Edit profile",
-      "screen_name_hint" => "Use lowercase letters, numbers, and underscores.", "current_avatar" => "Current avatar", "avatar_label" => "Avatar", "avatar_hint" => "Choose a static JPEG, PNG, or WebP up to 5 MiB and 4096px on either side.",
+      "screen_name_hint" => "Use lowercase letters, numbers, and underscores.", "current_avatar" => "Current avatar", "avatar_label" => "Avatar", "avatar_hint" => "Choose a static JPEG, PNG, or WebP up to 5 MiB and 4096px on either side, then crop it to a square.",
+      "avatar_crop" => {
+        "title" => "Crop avatar image", "description" => "Move and resize the square selection to compose your avatar.", "preview" => "Cropped avatar preview",
+        "zoom_out" => "Zoom out", "zoom_in" => "Zoom in", "reset" => "Reset", "apply" => "Apply crop", "cancel" => "Cancel", "close" => "Close",
+        "invalid_type" => "Choose a static JPEG, PNG, or WebP image.", "too_large" => "The image must be no larger than 5 MiB.", "too_wide_or_tall" => "The image must be no wider or taller than 4096px.",
+        "undecodable" => "The image could not be loaded.", "crop_failed" => "A square image could not be generated. Choose another image."
+      },
       "avatar_delete_title" => "Delete avatar image", "avatar_delete_description" => "Delete the uploaded image and return to the avatar generated from your ID.", "avatar_delete" => "Delete uploaded image", "avatar_delete_confirm" => "Delete the uploaded avatar image?",
       "update" => { "notice" => "Your profile was updated." }, "avatar" => { "destroy" => { "notice" => "Your avatar image was deleted." } }
     },
@@ -4382,7 +4669,7 @@ def configure_profile
       "attributes" => { "profile" => { "screen_name" => "Screen name", "display_name" => "Display name", "avatar" => "Avatar image", "avatar_upload" => "Avatar image" } },
       "errors" => { "models" => { "profile" => { "attributes" => { "avatar_upload" => {
         "empty" => "is empty", "too_large" => "must be no larger than %{max_size}", "unsupported_type" => "must be a static JPEG, PNG, or WebP",
-        "content_type_mismatch" => "does not match its declared file type", "too_wide_or_tall" => "must be no wider or taller than %{max_dimension}px",
+        "content_type_mismatch" => "does not match its declared file type", "too_wide_or_tall" => "must be no wider or taller than %{max_dimension}px", "not_square" => "must be square",
         "animated" => "must not contain animation", "undecodable" => "could not be decoded as an image"
       } } } } }
     }
@@ -4429,13 +4716,18 @@ def configure_profile
 
         module_function
 
-        def upload(format: :png, width: 96, height: 72, content_type: nil)
+        def upload(format: :png, width: 96, height: 96, content_type: nil)
+          tempfile = image_file(format:, width:, height:)
+          uploaded_file(tempfile, "avatar.#{format}", content_type || "image/#{format == :jpg ? 'jpeg' : format}")
+        end
+
+        def image_file(format: :png, width: 96, height: 96)
           tempfile = Tempfile.new(["avatar-", ".#{format}"])
           tempfile.binmode
           image = Vips::Image.black(width, height, bands: 3).new_from_image([32, 128, 224])
           image.write_to_file(tempfile.path)
           tempfile.rewind
-          uploaded_file(tempfile, "avatar.#{format}", content_type || "image/#{format == :jpg ? 'jpeg' : format}")
+          tempfile
         end
 
         def empty_upload
@@ -4533,6 +4825,10 @@ def configure_profile
         test "rejects excessive dimensions and undecodable images" do
           assert_policy_error :too_wide_or_tall, AvatarTestImage.upload(width: AvatarImagePolicy::MAX_DIMENSION + 1, height: 1)
           assert_policy_error :undecodable, AvatarTestImage.corrupt_png_upload
+        end
+
+        test "rejects non-square images" do
+          assert_policy_error :not_square, AvatarTestImage.upload(width: 96, height: 72)
         end
 
         test "rejects APNG and animated WebP" do
@@ -4777,6 +5073,155 @@ def configure_profile
     #{profile_tests.join("\n")}end
   RUBY
 
+  if avatar_enabled
+    create_file "test/system/profile_avatar_crop_test.rb", <<~'RUBY', force: true
+      require "application_system_test_case"
+
+      class ProfileAvatarCropTest < ApplicationSystemTestCase
+        test "crops a rectangular image to a 512 pixel square before upload" do
+          user = users(:one)
+          profile = T.must(user.profile)
+          source = AvatarTestImage.image_file(width: 320, height: 180)
+          sign_in(user)
+
+          visit edit_profile_path
+          attach_file Profile.human_attribute_name(:avatar_upload), source.path
+
+          assert_selector "dialog#avatar-crop-modal[open]"
+          assert_equal 0, page.evaluate_script('document.querySelector("input[name=\\"profile[avatar_upload]\\"]").files.length')
+          assert_not profile.reload.avatar.attached?
+          selection_geometry = page.evaluate_script(<<~JAVASCRIPT)
+            (() => {
+              const selection = document.querySelector("cropper-selection")
+              return { width: selection.width, height: selection.height, aspectRatio: selection.aspectRatio }
+            })()
+          JAVASCRIPT
+          assert_in_delta selection_geometry.fetch("width"), selection_geometry.fetch("height"), 0.5
+          assert_equal 1, selection_geometry.fetch("aspectRatio")
+
+          initial_transform = page.evaluate_script('document.querySelector("cropper-image").$getTransform()')
+          click_button I18n.t("profiles.avatar_crop.zoom_in")
+          zoomed_transform = page.evaluate_script('document.querySelector("cropper-image").$getTransform()')
+          refute_equal initial_transform, zoomed_transform
+
+          click_button I18n.t("profiles.avatar_crop.apply")
+          assert_no_selector "dialog#avatar-crop-modal[open]"
+          metadata = page.evaluate_async_script(<<~JAVASCRIPT)
+            const done = arguments[0]
+            const file = document.querySelector('input[name="profile[avatar_upload]"]').files[0]
+            createImageBitmap(file).then((image) => {
+              done({ name: file.name, type: file.type, width: image.width, height: image.height })
+            }).catch((error) => done({ error: error.message }))
+          JAVASCRIPT
+          assert_equal File.basename(source.path), metadata.fetch("name")
+          assert_equal "image/png", metadata.fetch("type")
+          assert_equal [512, 512], metadata.values_at("width", "height")
+          assert_selector '[data-avatar-crop-target="pendingPreviewContainer"]:not([hidden]) img[src^="blob:"]'
+          assert_not profile.reload.avatar.attached?
+
+          click_button I18n.t("common.save")
+          assert_current_path profile_path
+          assert_predicate profile.reload.avatar, :attached?
+          stored = Vips::Image.new_from_buffer(profile.avatar.blob.download, "")
+          assert_equal [512, 512], [stored.width, stored.height]
+          assert_equal "image/png", profile.avatar.blob.content_type
+        ensure
+          source&.close!
+        end
+
+        test "keeps the last confirmed crop when replacements are dismissed" do
+          user = users(:one)
+          first = AvatarTestImage.image_file(width: 320, height: 180)
+          second = AvatarTestImage.image_file(width: 180, height: 320)
+          sign_in(user)
+          visit edit_profile_path
+
+          attach_file Profile.human_attribute_name(:avatar_upload), first.path
+          click_button I18n.t("profiles.avatar_crop.apply")
+          assert_no_selector "dialog#avatar-crop-modal[open]"
+          committed = selected_file_metadata
+          preview = find('[data-avatar-crop-target="pendingPreview"]')["src"]
+
+          attach_file Profile.human_attribute_name(:avatar_upload), second.path
+          assert_selector "dialog#avatar-crop-modal[open]"
+          click_button I18n.t("profiles.avatar_crop.cancel")
+
+          assert_no_selector "dialog#avatar-crop-modal[open]"
+          assert_equal committed, selected_file_metadata
+          assert_equal preview, find('[data-avatar-crop-target="pendingPreview"]')["src"]
+
+          attach_file Profile.human_attribute_name(:avatar_upload), second.path
+          assert_selector "dialog#avatar-crop-modal[open]"
+          page.send_keys(:escape)
+
+          assert_no_selector "dialog#avatar-crop-modal[open]"
+          assert_equal committed, selected_file_metadata
+          assert_equal preview, find('[data-avatar-crop-target="pendingPreview"]')["src"]
+
+          attach_file Profile.human_attribute_name(:avatar_upload), second.path
+          assert_selector "dialog#avatar-crop-modal[open]"
+          page.driver.with_playwright_page { |playwright_page| playwright_page.mouse.click(5, 5) }
+
+          assert_no_selector "dialog#avatar-crop-modal[open]"
+          assert_equal committed, selected_file_metadata
+          assert_equal preview, find('[data-avatar-crop-target="pendingPreview"]')["src"]
+        ensure
+          first&.close!
+          second&.close!
+        end
+
+        test "keeps the last confirmed crop when image conversion fails" do
+          user = users(:one)
+          first = AvatarTestImage.image_file(width: 320, height: 180)
+          second = AvatarTestImage.image_file(width: 180, height: 320)
+          sign_in(user)
+          visit edit_profile_path
+
+          attach_file Profile.human_attribute_name(:avatar_upload), first.path
+          click_button I18n.t("profiles.avatar_crop.apply")
+          assert_no_selector "dialog#avatar-crop-modal[open]"
+          committed = selected_file_metadata
+          preview = find('[data-avatar-crop-target="pendingPreview"]')["src"]
+
+          attach_file Profile.human_attribute_name(:avatar_upload), second.path
+          assert_selector "dialog#avatar-crop-modal[open]"
+          page.execute_script(<<~JAVASCRIPT)
+            window.originalCanvasToBlob = HTMLCanvasElement.prototype.toBlob
+            HTMLCanvasElement.prototype.toBlob = function(callback) { callback(null) }
+          JAVASCRIPT
+          click_button I18n.t("profiles.avatar_crop.apply")
+
+          assert_selector "dialog#avatar-crop-modal[open]"
+          assert_selector 'dialog#avatar-crop-modal [role="alert"]:not([hidden])', text: I18n.t("profiles.avatar_crop.crop_failed")
+          assert_equal committed, selected_file_metadata
+          assert_equal preview, find('[data-avatar-crop-target="pendingPreview"]')["src"]
+        ensure
+          page.execute_script("HTMLCanvasElement.prototype.toBlob = window.originalCanvasToBlob") if page
+          first&.close!
+          second&.close!
+        end
+
+        private
+          def sign_in(user)
+            visit new_user_session_path
+            fill_in User.human_attribute_name(:login_id), with: user.login_id
+            fill_in User.human_attribute_name(:password), with: "password123"
+            click_button I18n.t("devise_views.sessions.submit")
+            assert_current_path root_path
+          end
+
+          def selected_file_metadata
+            page.evaluate_script(<<~JAVASCRIPT)
+              (() => {
+                const file = document.querySelector('input[name="profile[avatar_upload]"]').files[0]
+                return { name: file.name, type: file.type, size: file.size }
+              })()
+            JAVASCRIPT
+          end
+      end
+    RUBY
+  end
+
   form_fields = []
   if features.include?("screen_name")
     form_fields << <<~ERB
@@ -4800,33 +5245,78 @@ def configure_profile
       <fieldset class="fieldset min-w-0 grid-cols-1">
         <legend class="fieldset-legend"><%= form.label :avatar_upload %></legend>
         <div class="avatar">
-          <div class="w-16 rounded-full">
+          <div class="w-16 rounded-full" data-avatar-crop-target="currentPreview">
             <%= profile_avatar(profile, size: 64, alt: t("profiles.current_avatar")) %>
           </div>
+          <div class="w-16 rounded-full" data-avatar-crop-target="pendingPreviewContainer" hidden>
+            <img class="object-cover" width="64" height="64" alt="<%= t("profiles.avatar_crop.preview") %>" data-avatar-crop-target="pendingPreview">
+          </div>
         </div>
-        <%= form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp" %>
+        <%= form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp", data: { avatar_crop_target: "input", action: "change->avatar-crop#select" } %>
         <p class="label"><span class="min-w-0 whitespace-normal"><%= t("profiles.avatar_hint") %></span></p>
+        <p class="alert alert-error" role="alert" data-avatar-crop-target="error" hidden></p>
       </fieldset>
     ERB
   end
   form_fields = form_fields.join("\n").lines.map { |line| "  #{line}" }.join
+  form_wrapper_open = if avatar_enabled
+    <<~ERB
+      <div data-controller="avatar-crop"
+           data-avatar-crop-invalid-type-message-value="<%= t("profiles.avatar_crop.invalid_type") %>"
+           data-avatar-crop-too-large-message-value="<%= t("profiles.avatar_crop.too_large") %>"
+           data-avatar-crop-too-wide-or-tall-message-value="<%= t("profiles.avatar_crop.too_wide_or_tall") %>"
+           data-avatar-crop-undecodable-message-value="<%= t("profiles.avatar_crop.undecodable") %>"
+           data-avatar-crop-crop-failed-message-value="<%= t("profiles.avatar_crop.crop_failed") %>">
+    ERB
+  else
+    ""
+  end
+  form_wrapper_close = avatar_enabled ? "</div>\n" : ""
+  avatar_crop_modal = if avatar_enabled
+    <<~ERB
+
+        <% avatar_crop_actions = capture do %>
+          <button type="button" class="btn btn-ghost btn-rapid" data-action="avatar-crop#cancel"><%= t("profiles.avatar_crop.cancel") %></button>
+          <button type="button" class="btn btn-primary btn-rapid" data-avatar-crop-target="apply" data-action="avatar-crop#apply"><%= t("profiles.avatar_crop.apply") %></button>
+        <% end %>
+        <%= with_modal(
+          id: "avatar-crop-modal",
+          title: t("profiles.avatar_crop.title"),
+          description: t("profiles.avatar_crop.description"),
+          close_label: t("profiles.avatar_crop.close"),
+          actions: avatar_crop_actions,
+          dialog_data: { avatar_crop_target: "dialog", action: "close->avatar-crop#close" }
+        ) do %>
+          <div class="alert alert-error mt-4" role="alert" data-avatar-crop-target="error" hidden></div>
+          <div class="mt-4 aspect-square w-full overflow-hidden rounded-box bg-base-200" data-avatar-crop-target="cropper"></div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button type="button" class="btn btn-rapid" data-action="avatar-crop#zoomOut"><%= t("profiles.avatar_crop.zoom_out") %></button>
+            <button type="button" class="btn btn-rapid" data-action="avatar-crop#zoomIn"><%= t("profiles.avatar_crop.zoom_in") %></button>
+            <button type="button" class="btn btn-rapid" data-action="avatar-crop#reset"><%= t("profiles.avatar_crop.reset") %></button>
+          </div>
+        <% end %>
+    ERB
+  else
+    ""
+  end
   create_file "app/views/profiles/_form.html.erb", <<~ERB, force: true
-    <%= form_with model: profile, url: profile_path, class: "space-y-5" do |form| %>
-      <% if profile.errors.any? %>
-        <div class="alert alert-error" role="alert">
-          <ul class="list-disc pl-5">
-            <% profile.errors.full_messages.each do |message| %>
-              <li><%= message %></li>
-            <% end %>
-          </ul>
+    #{form_wrapper_open}  <%= form_with model: profile, url: profile_path, class: "space-y-5" do |form| %>
+        <% if profile.errors.any? %>
+          <div class="alert alert-error" role="alert">
+            <ul class="list-disc pl-5">
+              <% profile.errors.full_messages.each do |message| %>
+                <li><%= message %></li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+
+    #{form_fields.lines.map { |line| "  #{line}" }.join}    <div class="card-actions justify-end">
+          <%= link_to t("common.cancel"), profile_path, class: "btn btn-ghost btn-rapid" %>
+          <%= form.submit t("common.save"), class: "btn btn-primary btn-rapid" %>
         </div>
       <% end %>
-
-    #{form_fields}  <div class="card-actions justify-end">
-        <%= link_to t("common.cancel"), profile_path, class: "btn btn-ghost btn-rapid" %>
-        <%= form.submit t("common.save"), class: "btn btn-primary btn-rapid" %>
-      </div>
-    <% end %>
+    #{avatar_crop_modal}#{form_wrapper_close}
   ERB
 
   profile_rows = []
@@ -5961,6 +6451,42 @@ def configure_default_views
 
       sig do
         params(
+          id: String,
+          title: String,
+          close_label: String,
+          description: T.nilable(String),
+          actions: T.nilable(String),
+          dialog_data: T::Hash[Symbol, Object],
+          block: T.proc.returns(String)
+        ).returns(ActiveSupport::SafeBuffer)
+      end
+      def with_modal(id:, title:, close_label:, description: nil, actions: nil, dialog_data: {}, &block)
+        unless id.match?(/\A[a-z][a-z0-9_-]*\z/)
+          Kernel.raise ArgumentError, "modal id must be a lowercase DOM id"
+        end
+        Kernel.raise ArgumentError, "modal title must not be empty" if title.strip.empty?
+        Kernel.raise ArgumentError, "modal close label must not be empty" if close_label.strip.empty?
+
+        title_id = "#{id}-title"
+        description_id = "#{id}-description"
+        modal_content = [tag.h2(title, id: title_id, class: "text-lg font-bold leading-[1.5]")]
+        if description.present?
+          modal_content << tag.p(description, id: description_id, class: "mt-2 text-base-content/70")
+        end
+        modal_content << capture(&block)
+        modal_content << tag.div(actions, class: "modal-action") if actions.present?
+
+        box = tag.div(safe_join(modal_content), class: "modal-box")
+        backdrop = tag.form(method: "dialog", class: "modal-backdrop") do
+          tag.button(close_label, type: "submit")
+        end
+        aria = { labelledby: title_id }
+        aria[:describedby] = description_id if description.present?
+        tag.dialog(safe_join([box, backdrop]), id:, class: "modal", data: dialog_data, aria:)
+      end
+
+      sig do
+        params(
           tabs: T::Array[Tab],
           size: T.nilable(Symbol),
           block: T.proc.returns(String)
@@ -6017,6 +6543,51 @@ def configure_default_views
 
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
+
+      test "renders one accessible native dialog from captured body and actions" do
+        capture_count = 0
+        actions = capture { tag.button("Apply", type: "button") }
+        html = with_modal(
+          id: "example-modal",
+          title: "Example",
+          description: "Description",
+          close_label: "Close",
+          actions:,
+          dialog_data: { controller_target: "dialog", action: "close->controller#close" }
+        ) do
+          capture_count += 1
+          tag.p("Body")
+        end
+        fragment = Nokogiri::HTML5.fragment(html)
+        dialog = T.must(fragment.at_css("dialog#example-modal.modal"))
+
+        assert_equal 1, capture_count
+        assert_equal "example-modal-title", dialog["aria-labelledby"]
+        assert_equal "example-modal-description", dialog["aria-describedby"]
+        assert_equal "dialog", dialog["data-controller-target"]
+        assert_equal "close->controller#close", dialog["data-action"]
+        assert_equal "Example", dialog.at_css(".modal-box > h2#example-modal-title").text
+        assert_equal "Description", dialog.at_css(".modal-box > p#example-modal-description").text
+        assert_equal "Body", dialog.at_css(".modal-box > p:not([id])").text
+        assert_equal "Apply", dialog.at_css(".modal-action > button").text
+        assert_equal "dialog", dialog.at_css("form.modal-backdrop")["method"]
+        assert_equal "Close", dialog.at_css("form.modal-backdrop > button[type=submit]").text
+      end
+
+      test "omits optional modal description and actions" do
+        html = with_modal(id: "simple-modal", title: "Simple", close_label: "Close") { tag.p("Body") }
+        dialog = T.must(Nokogiri::HTML5.fragment(html).at_css("dialog#simple-modal"))
+
+        assert_nil dialog["aria-describedby"]
+        assert_nil dialog.at_css("[id=simple-modal-description]")
+        assert_nil dialog.at_css(".modal-action")
+      end
+
+      test "rejects invalid modal identifiers and empty labels" do
+        assert_raises(ArgumentError) { with_modal(id: "Invalid Modal", title: "Title", close_label: "Close") { "body" } }
+        assert_raises(ArgumentError) { with_modal(id: "valid-modal", title: " ", close_label: "Close") { "body" } }
+        assert_raises(ArgumentError) { with_modal(id: "valid-modal", title: "Title", close_label: " ") { "body" } }
+      end
 
       test "selects the longest matching path and captures content once" do
         request.path = "/account/siwe_identities/1/edit"
@@ -6419,9 +6990,16 @@ def configure_default_views
     end
     if avatar_enabled
       form_assertions << <<~RUBY
-        assert_select 'form[action=?] fieldset.fieldset.min-w-0.grid-cols-1 input.file-input.min-w-0[name="profile[avatar_upload]"][accept="image/jpeg,image/png,image/webp"]', profile_path, count: 1
+        assert_select '[data-controller="avatar-crop"]', count: 1
+        assert_select 'form[action=?] fieldset.fieldset.min-w-0.grid-cols-1 input.file-input.min-w-0[name="profile[avatar_upload]"][accept="image/jpeg,image/png,image/webp"][data-avatar-crop-target="input"]', profile_path, count: 1
         assert_select 'form[action=?] fieldset.fieldset p.label > span.min-w-0.whitespace-normal', profile_path, text: I18n.t("profiles.avatar_hint"), count: 1
         assert_select 'form[action=?] .avatar svg[width="64"][height="64"]', profile_path, count: 1
+        assert_select 'form[action=?] dialog', profile_path, count: 0
+        assert_select 'dialog#avatar-crop-modal.modal[aria-labelledby="avatar-crop-modal-title"][aria-describedby="avatar-crop-modal-description"]', count: 1 do
+          assert_select '.modal-box > h2#avatar-crop-modal-title', text: I18n.t("profiles.avatar_crop.title"), count: 1
+          assert_select '.modal-action button[data-action="avatar-crop#apply"]', text: I18n.t("profiles.avatar_crop.apply"), count: 1
+          assert_select 'form.modal-backdrop[method="dialog"]', count: 1
+        end
         assert_select 'form[action=?]', profile_avatar_path, count: 0
       RUBY
     end
@@ -6456,7 +7034,7 @@ def configure_default_views
             assert_redirected_to profile_url
             assert_predicate profile.reload.avatar, :attached?
             get edit_profile_url
-            assert_select 'form[action=?] .avatar img[width="64"][height="64"]', profile_path, count: 1
+            assert_select 'form[action=?] [data-avatar-crop-target="currentPreview"] img[width="64"][height="64"]', profile_path, count: 1
             assert_select 'form[action=?][method="post"]', profile_avatar_path, count: 1 do
               assert_select 'input[name="_method"][value="delete"]', count: 1
               assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm]', text: I18n.t("profiles.avatar_delete"), count: 1
@@ -6467,6 +7045,12 @@ def configure_default_views
             assert_response :unprocessable_content
             error_text = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.undecodable")
             assert_select '.alert.alert-error[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
+            assert_equal original_blob, profile.reload.avatar.blob
+
+            patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.upload(width: 96, height: 72) } }
+            assert_response :unprocessable_content
+            square_error = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.not_square")
+            assert_select '.alert.alert-error[role="alert"]', text: /\#{Regexp.escape(square_error)}/, count: 1
             assert_equal original_blob, profile.reload.avatar.blob
 
             delete profile_avatar_url
@@ -9540,7 +10124,7 @@ def configure_evidence_capture
             authenticate
             profile = T.must(@user.profile)
             profile.avatar.purge if profile.avatar.attached?
-            profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
+            profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 320))
             capture_page(
               "avatar-home",
               "アバター（ホーム）",
@@ -9803,7 +10387,35 @@ def configure_evidence_capture
           capture_page("profile-boring-avatar", "プロフィール（自動生成アバター）", profile_path, translate("profiles.title"), viewport)
           capture_page("profile-edit-boring-avatar", "プロフィール編集（自動生成アバター）", edit_profile_path, translate("profiles.edit_title"), viewport)
 
-          T.must(@user.profile).update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 180))
+          source = AvatarTestImage.image_file(width: 320, height: 180)
+          visit edit_profile_path
+          attach_file Profile.human_attribute_name(:avatar_upload), source.path
+          assert_selector "dialog#avatar-crop-modal[open]"
+          if viewport == "desktop"
+            [320, 390, 640, 960, 961].each do |width|
+              page.current_window.resize_to(width, VIEWPORTS.fetch("mobile").fetch("height"))
+              assert_avatar_crop_modal_geometry
+            end
+            viewport_size = VIEWPORTS.fetch(viewport)
+            page.current_window.resize_to(viewport_size.fetch("width"), viewport_size.fetch("height"))
+          end
+          assert_avatar_crop_modal_geometry
+          capture_current_page("profile-avatar-crop-modal", "プロフィール画像の切り抜き", viewport)
+          click_button translate("profiles.avatar_crop.apply")
+          assert_no_selector "dialog#avatar-crop-modal[open]"
+          assert_not T.must(@user.profile).reload.avatar.attached?
+          cropped = page.evaluate_async_script(<<~JAVASCRIPT)
+            const done = arguments[0]
+            const file = document.querySelector('input[name="profile[avatar_upload]"]').files[0]
+            createImageBitmap(file).then((image) => done({ width: image.width, height: image.height, type: file.type }))
+              .catch((error) => done({ error: error.message }))
+          JAVASCRIPT
+          assert_equal({ "width" => 512, "height" => 512, "type" => "image/png" }, cropped)
+          click_button translate("common.save")
+          assert_current_path profile_path
+          stored = Vips::Image.new_from_buffer(T.must(@user.profile).reload.avatar.blob.download, "")
+          assert_equal [512, 512], [stored.width, stored.height]
+
           capture_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport)
           assert_avatar_image_geometry(40)
           capture_page("profile-uploaded-avatar", "プロフィール（画像アバター）", profile_path, translate("profiles.title"), viewport)
@@ -9816,10 +10428,52 @@ def configure_evidence_capture
           assert_selector ".alert.alert-success", text: translate("profiles.avatar.destroy.notice")
           capture_current_page("profile-avatar-deleted", "プロフィール（画像削除後）", viewport)
           capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, translate("home.heading"), viewport)
+        ensure
+          source&.close!
+        end
+
+        def assert_avatar_crop_modal_geometry
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const dialog = document.querySelector("dialog#avatar-crop-modal")
+                const box = dialog.querySelector(".modal-box")
+                const cropper = dialog.querySelector('[data-avatar-crop-target="cropper"]')
+                const selection = dialog.querySelector("cropper-selection")
+                const boxRect = box.getBoundingClientRect()
+                const cropperRect = cropper.getBoundingClientRect()
+                return {
+                  dialogOpen: dialog.open,
+                  documentWidth: document.documentElement.scrollWidth,
+                  viewportWidth: window.innerWidth,
+                  boxLeft: boxRect.left,
+                  boxRight: boxRect.right,
+                  cropperWidth: cropperRect.width,
+                  cropperHeight: cropperRect.height,
+                  selectionWidth: selection.width,
+                  selectionHeight: selection.height,
+                  aspectRatio: selection.aspectRatio
+                }
+              }
+            JAVASCRIPT
+          end
+          assert geometry.fetch("dialogOpen")
+          assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")
+          assert_operator geometry.fetch("boxLeft"), :>=, 0
+          assert_operator geometry.fetch("boxRight"), :<=, geometry.fetch("viewportWidth")
+          assert_in_delta geometry.fetch("cropperWidth"), geometry.fetch("cropperHeight"), 1
+          assert_in_delta geometry.fetch("selectionWidth"), geometry.fetch("selectionHeight"), 1
+          assert_equal 1, geometry.fetch("aspectRatio")
         end
 
         def assert_avatar_image_geometry(*sizes)
           geometry = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.wait_for_function(<<~JAVASCRIPT, arg: sizes)
+              (expectedSizes) => expectedSizes.every((size) => {
+                const image = document.querySelector(`img[width="${size}"][height="${size}"]`)
+                return image && image.complete && image.naturalWidth === size && image.naturalHeight === size
+              })
+            JAVASCRIPT
             javascript = <<~JAVASCRIPT
               () => {
                 const expectedSizes = __EXPECTED_SIZES__
@@ -11092,6 +11746,7 @@ after_bundle do
   install_siwe if VALUES.fetch("additional_login_methods").include?("siwe")
   configure_roles
   configure_content_management
+  install_avatar_cropper if VALUES.fetch("profile_features").include?("avatar")
   configure_profile if VALUES.fetch("profile_features").any?
   configure_api if VALUES.fetch("api") == "enable"
   configure_pwa if VALUES.fetch("pwa") == "use"

@@ -137,6 +137,7 @@ begin
     playwright = File.join(SAMPLE, "node_modules/.bin/playwright")
     raise "Playwright CLIが生成されていません: #{playwright}" unless File.executable?(playwright)
     run!(playwright, "install", "chromium", chdir: SAMPLE)
+    run!(File.join(SAMPLE, "bin/rails"), "test:system", chdir: SAMPLE)
 
     output_directory = File.join(staging_root, variant)
     FileUtils.mkdir_p(output_directory)

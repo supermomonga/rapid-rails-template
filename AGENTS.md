@@ -32,6 +32,7 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 - Viewを実装するときは、意図に合うdaisyUI component、part、modifierが存在するかを先に確認し、存在する場合はそれらを使用してください。daisyUI componentで表現できるUIをTailwind CSS utilityだけで再実装しません。
 - daisyUI componentの内部寸法とpaddingは既定値を優先し、`menu` itemなどへ`min-h-*`や`p-*`を追加しません。サイズ変更が必要な場合はTailwind CSS utilityより先にdaisyUIの公式size modifierまたはtheme tokenを使用し、既定値を上書きする理由を`docs/`とテストへ残してください。
 - タブ付きコンテンツは生成アプリの`ApplicationHelper#with_tab`を使用し、Viewやlayoutで`tab`と`tab-content`を直接組み立てません。active判定は各tabの`path`によるprefix判定、またはoptionalな`is_active` lambdaで指定し、block本文はhelperがactive tab直後へ配置します。横スクロール用の`overflow-x-auto`、1段表示用の`min-w-max`、tabpanel用の`sticky`もhelperが一括して生成し、個別Viewでは重複させません。tabpanelを伴わないtab形式selectorは対象外です。
+- native dialogを使うdaisyUI modalは生成アプリの`ApplicationHelper#with_modal`を使用し、Viewやlayoutで`modal`、`modal-box`、`modal-action`、`modal-backdrop`を直接組み立てません。helperは共通DOM、見出し、説明、actions、ARIA参照、backdrop close formだけを担当し、開閉triggerや個別Stimulus controllerの処理を持ちません。`form[method=dialog]`を通常formへ入れ子にしないよう、modal helperの出力は通常formの外へ配置してください。
 - `tabs-lift`と`tab-content`を組み合わせる画面では、DOM上の隣接だけでなく、証跡画像上でもactive tabとtabpanelが視覚的に接続していることを確認します。active tabとtabpanelの間に別行のtabが入る折り返し、孤立したtab、borderの分断・重複、tabpanelの上borderがactive tabの下へ透ける表示は不合格です。全体画像だけで判断せず、共有境界を等倍以上で確認し、computed border幅に加えてstacking order上もactive tabが共有境界を覆うことを検証します。
 - desktop証跡では、同一tablist内の全tabが同じ行に配置され、active tabの下端とtabpanelの上端が接続していることをcomputed geometryで検証します。
 - 参考画像や明示された画面要件と異なる表示を、daisyUIの既定動作やresponsive時の一般的な挙動であることを理由に許容しません。

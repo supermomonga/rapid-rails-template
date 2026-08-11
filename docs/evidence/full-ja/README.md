@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `8d6c1df2c86f78b22ff4ff1c6960c46b60c236dc43051fca37ee24b43048045f`
-- Base commit: `07f9e3dbaddb7f6178f14d5d90537702b191a693`
+- Source fingerprint: `76a7fac6424074449a6bcfa11ffcb30a687747ab9e2c35d2f62a9616b6f4aefb`
+- Base commit: `ef94a56e565822b119c574342ebc9666a450a64c`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -65,6 +65,12 @@
 |Desktop|Mobile|
 |---|---|
 |![プロフィール編集（自動生成アバター） (desktop)](profile-edit-boring-avatar--desktop.png)|![プロフィール編集（自動生成アバター） (mobile)](profile-edit-boring-avatar--mobile.png)|
+
+## プロフィール画像の切り抜き
+
+|Desktop|Mobile|
+|---|---|
+|![プロフィール画像の切り抜き (desktop)](profile-avatar-crop-modal--desktop.png)|![プロフィール画像の切り抜き (mobile)](profile-avatar-crop-modal--mobile.png)|
 
 ## ホーム（画像アバター）
 

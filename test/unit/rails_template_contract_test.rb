@@ -65,6 +65,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "block: T.proc.returns(String)"
     refute_includes helper, "T.untyped"
     assert_equal 1, helper.scan("def application_routes").size
+    assert_includes helper, "def with_modal(id:, title:, close_label:, description: nil, actions: nil, dialog_data: {}, &block)"
+    assert_includes helper, "dialog_data: T::Hash[Symbol, Object]"
+    assert_includes helper, 'tag.dialog(safe_join([box, backdrop]), id:, class: "modal", data: dialog_data, aria:)'
     assert_includes helper, "def with_tab(tabs:, size: nil, &block)"
     assert_includes helper, "request.path.start_with?(path)"
     assert_includes helper, "predicate.call"
@@ -79,6 +82,30 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes manifest, "name: identity.app_name"
     assert_includes manifest, "lang: identity.default_locale.to_s"
     refute_match(/I18n\.t\([^)]*locale:\s*:ja/m, @source)
+  end
+
+  def test_requires_the_shared_modal_helper_for_native_dialog_modals
+    helper = generated_file_source("app/helpers/application_helper.rb")
+    helper_test = generated_file_source("test/helpers/application_helper_test.rb")
+    profile_configuration = source_between("def configure_profile", "def configure_api")
+    agents = File.binread(File.expand_path("../../AGENTS.md", __dir__))
+
+    assert_includes helper, 'id.match?(/\A[a-z][a-z0-9_-]*\z/)'
+    assert_includes helper, 'tag.h2(title, id: title_id'
+    assert_includes helper, 'tag.form(method: "dialog", class: "modal-backdrop")'
+    assert_includes helper, 'aria = { labelledby: title_id }'
+    assert_includes helper, 'aria[:describedby] = description_id if description.present?'
+    assert_includes helper_test, "renders one accessible native dialog from captured body and actions"
+    assert_includes helper_test, "assert_equal 1, capture_count"
+    assert_includes helper_test, "omits optional modal description and actions"
+    assert_includes helper_test, "rejects invalid modal identifiers and empty labels"
+    assert_includes profile_configuration, "with_modal("
+    assert_includes profile_configuration, 'dialog_data: { avatar_crop_target: "dialog", action: "close->avatar-crop#close" }'
+    refute_includes profile_configuration, '<dialog'
+    refute_includes profile_configuration, 'class="modal-box"'
+    refute_includes profile_configuration, 'class="modal-action"'
+    refute_includes profile_configuration, 'class="modal-backdrop"'
+    assert_includes agents, "ApplicationHelper#with_modal"
   end
 
   def test_requires_the_shared_tab_helper_for_tabbed_content
@@ -792,11 +819,16 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_profile_generation_is_conditional_and_uses_selected_features
     controller = generated_file_source("app/controllers/profiles_controller.rb")
+    crop_controller = generated_file_source("app/javascript/controllers/avatar_crop_controller.js")
+    crop_system_test = generated_file_source("test/system/profile_avatar_crop_test.rb")
     avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
     avatar_helper_test = generated_file_source("test/helpers/avatar_helper_test.rb")
     profile_configuration = source_between("def configure_profile", "def configure_api")
 
     assert_includes @source, 'configure_profile if VALUES.fetch("profile_features").any?'
+    assert_includes @source, 'install_avatar_cropper if VALUES.fetch("profile_features").include?("avatar")'
+    assert_includes @source, 'run_checked "bin/importmap pin cropperjs@2.1.1"'
+    assert_includes @source, %q(path = "vendor/javascript/#{package.sub('/', '--')}.js")
     refute_includes @source, 'rails_command "active_storage:install"'
     assert_includes @source, 't.references :user, null: false, foreign_key: true, index: { unique: true }'
     assert_includes @source, 'has_one :profile, dependent: :destroy'
@@ -821,6 +853,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes controller, 'I18n.t("profiles.update.notice")'
     assert_includes profile_configuration, '<fieldset class="fieldset min-w-0 grid-cols-1">'
     assert_includes profile_configuration, 'form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp"'
+    assert_includes profile_configuration, 'data: { avatar_crop_target: "input", action: "change->avatar-crop#select" }'
+    assert_includes profile_configuration, 'data-controller="avatar-crop"'
+    assert_includes profile_configuration, 'with_modal('
+    assert_includes profile_configuration, '#{avatar_crop_modal}#{form_wrapper_close}'
+    assert_includes @source, "assert_select 'form[action=?] dialog', profile_path, count: 0"
+    refute_includes profile_configuration, "modal-box"
     assert_includes profile_configuration, '<p class="label"><span class="min-w-0 whitespace-normal"><%= t("profiles.avatar_hint") %></span></p>'
     assert_includes @source, 'route "resource :profile, only: %i[show edit update]"'
     assert_includes profile_configuration, 'delete "profile/avatar", to: "profiles#destroy_avatar", as: :profile_avatar'
@@ -844,10 +882,26 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes profile_configuration, "self.avatar = avatar_upload"
     assert_includes profile_configuration, "MAX_BYTES = T.let(5 * 1024 * 1024, Integer)"
     assert_includes profile_configuration, 'MAX_DIMENSION = T.let(4096, Integer)'
+    assert_includes profile_configuration, 'raise_error(:not_square) unless image.width == image.height'
     assert_includes profile_configuration, "Marcel::MimeType.for"
     assert_includes profile_configuration, 'Vips::Image.new_from_file(path, access: :sequential, fail_on: :truncated)'
     assert_includes avatar_helper_test, "profile.user_id.to_s"
     assert_includes avatar_helper_test, "normalize_boring_avatar_ids"
+    assert_includes crop_controller, 'import Cropper from "cropperjs"'
+    assert_includes crop_controller, "const OUTPUT_SIZE = 512"
+    assert_includes crop_controller, "const LOSSY_QUALITY = 0.9"
+    assert_includes crop_controller, 'initial-aspect-ratio="1" aspect-ratio="1"'
+    assert_includes crop_controller, '$toCanvas({ width: OUTPUT_SIZE, height: OUTPUT_SIZE })'
+    assert_includes crop_controller, "const transfer = new DataTransfer()"
+    assert_includes crop_controller, 'document.addEventListener("turbo:before-cache", this.beforeCache)'
+    assert_includes crop_controller, "this.cropper?.destroy()"
+    assert_includes crop_system_test, "crops a rectangular image to a 512 pixel square before upload"
+    assert_includes crop_system_test, "keeps the last confirmed crop when replacements are dismissed"
+    assert_includes crop_system_test, "page.send_keys(:escape)"
+    assert_includes crop_system_test, "playwright_page.mouse.click(5, 5)"
+    assert_includes crop_system_test, "keeps the last confirmed crop when image conversion fails"
+    assert_includes crop_system_test, "HTMLCanvasElement.prototype.toBlob = function(callback) { callback(null) }"
+    assert_includes crop_system_test, 'assert_equal [512, 512], metadata.values_at("width", "height")'
     refute_includes profile_configuration, "boring_avatar_seed"
     assert_includes @source, 'assert_equal profile.screen_name.camelize, profile.display_name'
   end
@@ -1204,6 +1258,7 @@ class RailsTemplateContractTest < Minitest::Test
   def test_generates_deterministic_playwright_evidence_capture
     evidence = source_between("def configure_evidence_capture", "def configure_annotaterb").force_encoding(Encoding::UTF_8)
     common_files = source_between("def configure_common_files", "def configure_evidence_capture").force_encoding(Encoding::UTF_8)
+    update_evidence = File.binread(File.expand_path("../../bin/update-evidence", __dir__))
 
     assert_includes @source, 'Playwright::COMPATIBLE_PLAYWRIGHT_VERSION.strip'
     assert_includes @source, 'npm install --save-dev playwright@#{playwright_version}'
@@ -1269,6 +1324,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, "capture_common_scenarios"
     assert_includes evidence, 'capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")'
     assert_includes evidence, "capture_avatar_scenarios if AVATAR"
+    assert_includes evidence, 'AvatarTestImage.image_file(width: 320, height: 180)'
+    assert_includes evidence, 'capture_current_page("profile-avatar-crop-modal", "プロフィール画像の切り抜き", viewport)'
+    assert_includes evidence, "def assert_avatar_crop_modal_geometry"
+    assert_includes evidence, 'assert_equal({ "width" => 512, "height" => 512, "type" => "image/png" }, cropped)'
+    assert_includes evidence, '[320, 390, 640, 960, 961].each'
+    assert_includes update_evidence, 'run!(File.join(SAMPLE, "bin/rails"), "test:system", chdir: SAMPLE)'
     refute_includes evidence, "capture_siwe_delta"
     refute_includes evidence, "capture_avatar_delta"
     assert_includes evidence, 'runner = runner.sub("__ADDITIONAL_LOGIN_METHODS__", additional_login_methods.inspect)'

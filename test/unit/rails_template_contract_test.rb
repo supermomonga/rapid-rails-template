@@ -149,6 +149,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, "--radius-field: 0.5rem;"
     assert_includes @source, "--radius-box: 0.75rem;"
     assert_includes @source, "--depth: 0;"
+    assert_includes @source, "@layer components {"
+    assert_includes @source, ".card-rapid {"
+    assert_includes @source, "@apply card card-border bg-base-100 shadow-none;"
+    assert_includes @source, "@apply border-base-300;"
+    legacy_card_classes = class_attributes(@source).select do |classes|
+      (%w[card card-border border-base-300 bg-base-100 shadow-none] - classes).empty?
+    end
+    assert_empty legacy_card_classes
     assert_includes @source, 'font-family: -apple-system, system-ui, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;'
     assert_includes @source, "font-size: 1rem;"
     assert_includes @source, "line-height: 1.8;"
@@ -160,32 +168,32 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_default_views_use_daisyui_components_and_semantic_colors
     component_expectations = {
-      "app/views/layouts/authentication.html.erb" => %w[hero hero-content card card-body],
+      "app/views/layouts/authentication.html.erb" => %w[hero hero-content card-rapid card-body],
       "app/views/layouts/_account_shell.html.erb" => %w[menu menu-title],
       "app/views/layouts/admin.html.erb" => %w[menu menu-title],
       "app/views/shared/_header.html.erb" => %w[navbar dropdown menu btn],
       "app/views/shared/_flash.html.erb" => %w[alert],
       "app/views/shared/_footer.html.erb" => %w[footer footer-vertical footer-title link link-hover],
-      "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-body card-title],
-      "app/views/accounts/show.html.erb" => %w[card card-body card-title btn],
+      "app/views/home/index.html.erb" => %w[hero hero-content badge btn card-rapid card-body card-title],
+      "app/views/accounts/show.html.erb" => %w[card-rapid card-body card-title btn],
       "app/views/account/siwe_identities/index.html.erb" => %w[list list-row btn alert],
       "app/views/account/siwe_identities/new.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/show.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/edit.html.erb" => %w[fieldset fieldset-legend input btn alert],
-      "app/views/notifications/show.html.erb" => %w[card card-body card-title card-actions toggle btn alert],
-      "app/views/admin/users/index.html.erb" => %w[card card-body table badge btn join join-item],
-      "app/views/pages/_page.html.erb" => %w[card card-body],
+      "app/views/notifications/show.html.erb" => %w[card-rapid card-body card-title card-actions toggle btn alert],
+      "app/views/admin/users/index.html.erb" => %w[card-rapid card-body table badge btn join join-item],
+      "app/views/pages/_page.html.erb" => %w[card-rapid card-body],
       "app/views/faqs/index.html.erb" => %w[collapse collapse-arrow collapse-title collapse-content alert],
-      "app/views/admin/pages/index.html.erb" => %w[card card-body table btn],
-      "app/views/admin/pages/edit.html.erb" => %w[card card-body btn],
-      "app/views/admin/faqs/index.html.erb" => %w[card card-body table badge btn],
+      "app/views/admin/pages/index.html.erb" => %w[card-rapid card-body table btn],
+      "app/views/admin/pages/edit.html.erb" => %w[card-rapid card-body btn],
+      "app/views/admin/faqs/index.html.erb" => %w[card-rapid card-body table badge btn],
       "app/views/admin/faqs/_form.html.erb" => %w[alert fieldset fieldset-legend input checkbox btn],
-      "app/views/admin/footer_settings/edit.html.erb" => %w[card card-body alert fieldset fieldset-legend input btn],
+      "app/views/admin/footer_settings/edit.html.erb" => %w[card-rapid card-body alert fieldset fieldset-legend input btn],
       "app/views/api_credentials/_form.html.erb" => %w[alert fieldset fieldset-legend input btn],
-      "app/views/api_credentials/index.html.erb" => %w[card card-body table join join-item input alert btn],
-      "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card card-body card-title btn],
-      "app/views/api_credentials/new.html.erb" => %w[card card-body],
-      "app/views/api_credentials/edit.html.erb" => %w[card card-body],
+      "app/views/api_credentials/index.html.erb" => %w[card-rapid card-body table join join-item input alert btn],
+      "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card-rapid card-body card-title btn],
+      "app/views/api_credentials/new.html.erb" => %w[card-rapid card-body],
+      "app/views/api_credentials/edit.html.erb" => %w[card-rapid card-body],
       "app/views/users/passkey_sessions/new.html.erb" => %w[checkbox btn alert],
       "app/views/users/passkey_registrations/new.html.erb" => %w[btn alert],
       "app/views/account/passkeys/index.html.erb" => %w[list list-row btn badge],
@@ -265,12 +273,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes index, "model_resource_name(singular_table_name)"
     refute_includes index, "notice"
 
-    assert_class_tokens(show, "card", "card-border")
+    assert_class_tokens(show, "card-rapid")
     assert_includes show, 'method: :delete, class: "btn btn-outline btn-error btn-rapid"'
     assert_class_tokens(partial, "list")
     assert_class_tokens(partial, "list-row")
     assert_includes partial, "<%%= dom_id <%= singular_name %> %>"
-    assert_class_tokens(controller, "card", "card-border")
+    assert_class_tokens(controller, "card-rapid")
     assert_includes controller, "<%= class_name %>#<%= @action %>"
     assert_includes controller, "Find me in <%= @path %>"
 
@@ -662,7 +670,7 @@ class RailsTemplateContractTest < Minitest::Test
     service = generated_file_source("app/services/admin_role_grant.rb")
     local_seed = generated_file_source("db/seeds.local.rb.example")
 
-    assert_class_tokens view, "card", "card-border"
+    assert_class_tokens view, "card-rapid"
     assert_class_tokens view, "overflow-x-auto"
     assert_class_tokens view, "table", "table-sm", "table-pin-rows"
     assert_class_tokens view, "badge"
@@ -1374,6 +1382,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '640 => "column"'
     assert_includes evidence, 'assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")'
     assert_includes evidence, "def verify_with_menu_layout_geometry"
+    assert_includes evidence, "def verify_page_actions_geometry"
+    assert_includes evidence, "prepare_job_operations_data if JOB_OPERATIONS"
+    assert_includes evidence, "class EvidenceFailedJob < ApplicationJob"
+    assert_includes evidence, 'data-page-actions-container="card"'
+    assert_includes evidence, 'data-page-actions-container="tab"'
+    assert_includes evidence, 'actionColumnCount: getComputedStyle(actions).gridTemplateColumns.split(" ").length'
     assert_includes evidence, '{ "account" => account_path, "admin" => admin_pages_path }.each'
     assert_includes evidence, "[320, 390, 640, 960, 961].each"
     assert_includes evidence, "visit path"
@@ -1490,9 +1504,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes with_menu_layout, 'data-layout="with-menu"'
     assert_includes with_menu_layout, 'min-[961px]:grid-cols-[220px_minmax(0,1fr)]'
     assert_includes with_menu_layout, '<%= yield :with_menu_navigation %>'
+    assert_includes with_menu_layout, '<% page_content = yield %>'
     assert_includes with_menu_layout, '<h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>'
-    assert_equal 1, with_menu_layout.scan("<%= yield %>").size
-    assert_operator with_menu_layout.index("content_for(:page_title)"), :<, with_menu_layout.index("<%= yield %>")
+    assert_includes with_menu_layout, '<%= page_actions(card: true) unless content_for?(:page_actions_in_tab) %>'
+    assert_includes with_menu_layout, '<%= page_content %>'
+    assert_operator with_menu_layout.index("page_content = yield"), :<, with_menu_layout.index("content_for(:page_title)")
+    assert_operator with_menu_layout.index("content_for(:page_title)"), :<, with_menu_layout.index("page_actions(card: true)")
+    assert_operator with_menu_layout.index("page_actions(card: true)"), :<, with_menu_layout.index("<%= page_content %>")
     refute_includes with_menu_layout, "with_menu_subnavigation"
     refute_includes with_menu_layout, "tab-content"
     assert_includes with_menu_layout, '<% content_for :content, flush: true do %>'
@@ -1611,6 +1629,40 @@ class RailsTemplateContractTest < Minitest::Test
       assert_includes view, "content_for :page_title", path
       refute_includes view, "<h1", path
     end
+  end
+
+  def test_page_actions_use_shared_slots_without_moving_model_or_form_actions
+    helper = generated_file_source("app/helpers/application_helper.rb")
+    passkeys = generated_file_source("app/views/account/passkeys/index.html.erb")
+    identities = generated_file_source("app/views/account/siwe_identities/index.html.erb")
+    api_credentials = generated_file_source("app/views/api_credentials/index.html.erb")
+    faqs = generated_file_source("app/views/admin/faqs/index.html.erb")
+    application_selection = generated_file_source("app/views/layouts/mission_control/jobs/_application_selection.html.erb")
+    jobs_index = generated_file_source("app/views/mission_control/jobs/jobs/index.html.erb")
+    job_show = generated_file_source("app/views/mission_control/jobs/jobs/show.html.erb")
+    api_form = generated_file_source("app/views/api_credentials/_form.html.erb")
+
+    assert_includes helper, "def page_actions(card:)"
+    assert_includes helper, "private :page_actions"
+    assert_includes helper, 'data: { page_actions_column: "secondary" }'
+    assert_includes helper, 'data: { page_actions_column: "primary" }'
+    assert_includes helper, 'class: "grid min-w-0 gap-4 sm:grid-cols-2"'
+    assert_includes helper, 'class: "card-rapid mb-6"'
+    assert_includes helper, 'content_for(:page_actions_in_tab, "true", flush: true)'
+    assert_operator helper.index("tab_content = capture(&block)"), :<, helper.index("page_actions(card: false)")
+
+    [passkeys, identities, api_credentials, faqs].each do |view|
+      assert_includes view, "content_for :page_actions_primary"
+      refute_includes view, "content_for :page_actions_secondary"
+    end
+    assert_includes application_selection, "content_for :page_actions_secondary"
+    assert_includes jobs_index, "content_for :page_actions_secondary"
+    assert_includes jobs_index, "content_for :page_actions_primary"
+
+    refute_includes job_show, "content_for :page_actions_primary"
+    assert_includes job_show, '<header class="flex flex-wrap items-start justify-between gap-4">'
+    refute_includes api_form, "content_for :page_actions_primary"
+    assert_includes api_form, '<%= form.submit class: "btn btn-primary btn-rapid" %>'
   end
 
   def test_page_titles_use_one_content_for_contract_across_generated_views

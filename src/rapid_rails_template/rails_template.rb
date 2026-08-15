@@ -744,6 +744,13 @@ def install_daisyui
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     }
 
+    @layer components {
+      .card-rapid {
+        @apply card card-border bg-base-100 shadow-none;
+        @apply border-base-300;
+      }
+    }
+
     @utility input-rapid {
       --input-color: var(--color-base-300);
       font-size: 1rem;
@@ -829,7 +836,7 @@ def configure_generator_view_templates
         <%%= link_to "New <%= human_name.downcase %>", <%= new_helper(type: :path) %>, class: "btn btn-primary btn-rapid" %>
       </header>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table table-sm table-pin-rows">
@@ -899,7 +906,7 @@ def configure_generator_view_templates
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <%%= render @<%= singular_table_name %> %>
           <div class="card-actions justify-end">
@@ -921,7 +928,7 @@ def configure_generator_view_templates
         <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
       </header>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
         </div>
@@ -941,7 +948,7 @@ def configure_generator_view_templates
         </div>
       </header>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
         </div>
@@ -953,7 +960,7 @@ def configure_generator_view_templates
     <%% content_for :page_title, "<%= class_name %>#<%= @action %>" %>
 
     <div class="mx-auto w-full max-w-[820px] px-5 py-10 md:py-14">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <h1 class="card-title text-2xl leading-[1.5]"><%%= content_for(:page_title) %></h1>
           <p class="text-neutral">Find me in <%= @path %></p>
@@ -1958,12 +1965,12 @@ def install_passkey_views
 
   create_file "app/views/account/passkeys/index.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("passkeys.title") %>
+    <% content_for :page_actions_primary do %>
+      <%= link_to t("passkeys.add"), new_account_passkey_path, class: "btn btn-primary btn-rapid" %>
+    <% end %>
 
     <section class="space-y-5">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p class="text-base-content/70"><%= t("passkeys.description") %></p>
-        <%= link_to t("passkeys.add"), new_account_passkey_path, class: "btn btn-primary btn-rapid" %>
-      </div>
+      <p class="text-base-content/70"><%= t("passkeys.description") %></p>
 
       <ul class="list gap-3">
         <% @passkeys.each do |passkey| %>
@@ -3098,12 +3105,12 @@ def install_siwe
 
   create_file "app/views/account/siwe_identities/index.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("siwe.identities.title") %>
+    <% content_for :page_actions_primary do %>
+      <%= link_to t("siwe.identities.add"), new_account_siwe_identity_path, class: "btn btn-primary btn-rapid" %>
+    <% end %>
 
     <section class="space-y-5">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-base-content/70"><%= t("siwe.identities.description") %></p>
-          <%= link_to t("siwe.identities.add"), new_account_siwe_identity_path, class: "btn btn-primary btn-rapid" %>
-        </div>
+        <p class="text-base-content/70"><%= t("siwe.identities.description") %></p>
 
         <% if @siwe_identities.any? %>
           <ul class="list gap-3">
@@ -3513,6 +3520,9 @@ def install_siwe
         get account_siwe_identities_url
         assert_response :success
         assert_select "a[href=?]", new_account_siwe_identity_path, count: 1
+        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"] a[href=?]',
+          new_account_siwe_identity_path, count: 1
+        assert_select '[data-page-actions-container="card"]', count: 0
         assert_select "ul.list.gap-3 > li.list-row", count: 0
         assert_select "form", count: 0
         assert_select '.tab-active[aria-current="page"][href=?]', account_siwe_identities_path, count: 1
@@ -4002,7 +4012,7 @@ def configure_roles
         <p class="text-sm text-neutral"><%= t("admin.users.description") %></p>
       </header>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table table-sm table-pin-rows">
@@ -4907,7 +4917,7 @@ def configure_content_management
       <header>
         <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       </header>
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body"><%= @page.content %></div>
       </section>
     </div>
@@ -4943,7 +4953,7 @@ def configure_content_management
   create_file "app/views/admin/pages/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.pages.title") %>
     <div class="space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table">
@@ -4970,7 +4980,7 @@ def configure_content_management
       <header>
         <p class="text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
       </header>
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <%= form_with model: [:admin, @page], class: "space-y-5" do |form| %>
             <fieldset class="fieldset">
@@ -5022,11 +5032,11 @@ def configure_content_management
 
   create_file "app/views/admin/faqs/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.title") %>
+    <% content_for :page_actions_primary do %>
+      <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: "btn btn-rapid" %>
+    <% end %>
     <div class="space-y-6">
-      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: "btn btn-rapid" %>
-      </header>
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <% if @faqs.any? %>
             <div class="overflow-x-auto">
@@ -5060,14 +5070,14 @@ def configure_content_management
   create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.add") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+      <section class="card-rapid"><div class="card-body"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.edit") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+      <section class="card-rapid"><div class="card-body"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
@@ -5077,7 +5087,7 @@ def configure_content_management
       <header>
         <p class="text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
       </header>
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <%= form_with model: [:admin, @footer_setting], url: admin_footer_setting_path, class: "space-y-5" do |form| %>
             <% if @footer_setting.errors.any? %>
@@ -7062,7 +7072,7 @@ def configure_profile
   create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("profiles.title") %>
     <div class="space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <ul class="list">
     #{profile_rows}      </ul>
@@ -7077,7 +7087,7 @@ def configure_profile
   create_file "app/views/profiles/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("profiles.edit_title") %>
     <div class="space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <%= render "form", profile: @profile %>
         </div>
@@ -7404,15 +7414,13 @@ def configure_api
 
   create_file "app/views/api_credentials/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.title") %>
+    <% content_for :page_actions_primary do %>
+      <%= link_to t("api_credentials.new"), new_api_credential_path, class: "btn btn-primary btn-rapid" %>
+    <% end %>
     <div class="space-y-6">
-      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
-        </div>
-        <%= link_to t("api_credentials.new"), new_api_credential_path, class: "btn btn-primary btn-rapid" %>
-      </header>
+      <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body p-5 sm:p-6">
           <% if @api_credentials.any? %>
             <div class="overflow-x-auto">
@@ -7459,7 +7467,7 @@ def configure_api
         </div>
       <% end %>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body p-5 sm:p-6">
           <h2 class="card-title text-base leading-[1.5]"><%= t("api_credentials.information") %></h2>
           <div class="mt-3 grid gap-4">
@@ -7488,14 +7496,14 @@ def configure_api
   create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.new") %>
     <div class="space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card-rapid"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
   create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.edit") %>
     <div class="space-y-6">
-      <section class="card card-border border-base-300 bg-base-100 shadow-none"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card-rapid"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
@@ -7593,6 +7601,9 @@ def configure_api
         get api_credentials_url
         assert_response :success
         assert_select "table.table", count: 0
+        assert_select '[data-page-actions-container="card"].card-rapid [data-page-actions-column="primary"] a[href=?]',
+          new_api_credential_path, count: 1
+        assert_select '[data-page-actions-container="tab"]', count: 0
 
         assert_difference("ApiCredential.count", 1) do
           post api_credentials_url, params: { api_credential: { name: "CLI" } }
@@ -8107,6 +8118,30 @@ def configure_default_views
         tag.dialog(safe_join([box, backdrop]), id:, class: "modal", data: dialog_data, aria:)
       end
 
+      sig { params(card: T::Boolean).returns(T.nilable(ActiveSupport::SafeBuffer)) }
+      def page_actions(card:)
+        secondary = content_for(:page_actions_secondary).presence
+        primary = content_for(:page_actions_primary).presence
+        return if secondary.nil? && primary.nil?
+
+        columns = []
+        if secondary
+          columns << tag.div(secondary, class: "flex min-w-0 flex-col gap-4",
+            data: { page_actions_column: "secondary" })
+        end
+        if primary
+          columns << tag.div(primary,
+            class: class_names("flex min-w-0 flex-col gap-4 sm:items-end", "sm:col-start-2": secondary.nil?),
+            data: { page_actions_column: "primary" })
+        end
+        actions = tag.div(safe_join(columns), class: "grid min-w-0 gap-4 sm:grid-cols-2", data: { page_actions: true })
+        return actions unless card
+
+        tag.div(tag.div(actions, class: "card-body"), class: "card-rapid mb-6",
+          data: { page_actions_container: "card" })
+      end
+      private :page_actions
+
       sig do
         params(
           tabs: T::Array[Tab],
@@ -8142,6 +8177,13 @@ def configure_default_views
 
         active_index = T.must(longest_matches.first).fetch(:index)
         tab_content = capture(&block)
+        if (actions = page_actions(card: false))
+          content_for(:page_actions_in_tab, "true", flush: true)
+          tab_content = safe_join([
+            tag.div(actions, class: "mb-6", data: { page_actions_container: "tab" }),
+            tab_content
+          ])
+        end
         items = tabs.each_with_index.flat_map do |tab, index|
           active = index == active_index
           link = link_to tab.name, tab.path, role: "tab",
@@ -8209,6 +8251,64 @@ def configure_default_views
         assert_raises(ArgumentError) { with_modal(id: "Invalid Modal", title: "Title", close_label: "Close") { "body" } }
         assert_raises(ArgumentError) { with_modal(id: "valid-modal", title: " ", close_label: "Close") { "body" } }
         assert_raises(ArgumentError) { with_modal(id: "valid-modal", title: "Title", close_label: " ") { "body" } }
+      end
+
+      test "renders only the populated page action columns inside a card" do
+        content_for(:page_actions_primary) { tag.a("Create", href: "/new", class: "btn") }
+
+        html = send(:page_actions, card: true)
+        fragment = Nokogiri::HTML5.fragment(T.must(html))
+        card = T.must(fragment.at_css('[data-page-actions-container="card"].card-rapid'))
+        card_body = T.must(card.at_css(".card-body"))
+
+        assert card_body.element_children.first["data-page-actions"]
+        assert_nil card.at_css('[data-page-actions-column="secondary"]')
+        primary = T.must(card.at_css('[data-page-actions-column="primary"]'))
+        assert_includes primary["class"].split, "sm:col-start-2"
+        assert_equal "Create", primary.at_css("a.btn").text
+      end
+
+      test "orders appended secondary fragments before primary actions" do
+        content_for(:page_actions_secondary) { tag.form("Filter", action: "/filter") }
+        content_for(:page_actions_secondary) { tag.div("Server") }
+        content_for(:page_actions_primary) { tag.button("Run", type: "button") }
+
+        html = send(:page_actions, card: false)
+        fragment = Nokogiri::HTML5.fragment(T.must(html))
+        grid = T.must(fragment.at_css('[data-page-actions].sm\\:grid-cols-2'))
+        columns = grid.element_children.select { |node| node["data-page-actions-column"] }
+
+        assert_equal %w[secondary primary], columns.pluck("data-page-actions-column")
+        assert_equal ["Filter", "Server"], columns.first.element_children.map(&:text)
+        refute_includes columns.last["class"].split, "sm:col-start-2"
+        assert_equal "Run", columns.last.at_css("button").text
+      end
+
+      test "omits an empty page actions container" do
+        assert_nil send(:page_actions, card: false)
+        assert_nil send(:page_actions, card: true)
+      end
+
+      test "places page actions at the top of the active tab content" do
+        request.path = "/account"
+        content_for(:page_actions_secondary) { tag.form("Filter", action: "/filter") }
+        content_for(:page_actions_primary) { tag.a("Create", href: "/new") }
+        capture_count = 0
+
+        html = with_tab(tabs: [ApplicationHelper::Tab.new(name: "Account", path: "/account")]) do
+          capture_count += 1
+          tag.p("Tab content")
+        end
+        fragment = Nokogiri::HTML5.fragment(html)
+        tab_content = T.must(fragment.at_css("[role=tabpanel]"))
+        actions_container = T.must(tab_content.element_children.first)
+
+        assert_equal 1, capture_count
+        assert_equal "tab", actions_container["data-page-actions-container"]
+        assert actions_container.at_css("[data-page-actions]")
+        assert_equal "Tab content", tab_content.element_children.find { |node| node.name == "p" }.text
+        assert_nil tab_content.at_css(".card-rapid")
+        assert content_for?(:page_actions_in_tab)
       end
 
       test "selects the longest matching path and captures content once" do
@@ -8330,7 +8430,7 @@ def configure_default_views
     <% content_for :content do %>
       <section class="hero mx-auto w-full max-w-md px-5 py-10 md:py-16" data-layout="authentication">
         <div class="hero-content w-full max-w-none p-0">
-          <div class="card card-border w-full border-base-300 bg-base-100 shadow-none">
+          <div class="card-rapid w-full">
             <div class="card-body p-6 sm:p-8">
               <%= yield %>
             </div>
@@ -8346,8 +8446,10 @@ def configure_default_views
       <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="with-menu">
         <aside class="min-w-0 h-fit"><%= yield :with_menu_navigation %></aside>
         <div class="min-w-0 [container-type:inline-size]">
+          <% page_content = yield %>
           <h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-          <%= yield %>
+          <%= page_actions(card: true) unless content_for?(:page_actions_in_tab) %>
+          <%= page_content %>
         </div>
       </div>
     <% end %>
@@ -8539,7 +8641,7 @@ def configure_default_views
         </div>
         <div class="grid gap-4 min-[961px]:grid-cols-3">
           <% [["01", t("home.features.rails.title"), t("home.features.rails.description")], ["02", t("home.features.ui.title"), t("home.features.ui.description")], ["03", t("home.features.production.title"), t("home.features.production.description")]].each do |number, title, description| %>
-            <article class="card card-border border-base-300 bg-base-100 shadow-none transition-shadow hover:shadow-elevation-1">
+            <article class="card-rapid transition-shadow hover:shadow-elevation-1">
               <div class="card-body gap-3 p-5">
                 <span class="text-xs font-bold text-primary"><%= number %></span>
                 <h3 class="card-title text-base leading-[1.5]"><%= title %></h3>
@@ -8559,7 +8661,7 @@ def configure_default_views
         <p class="text-sm text-neutral">#{account_page_description}</p>
       </header>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body p-5 sm:p-6">
           <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.show.next_step") %></h2>
           <p class="text-sm text-neutral">#{account_page_action}</p>
@@ -8955,6 +9057,9 @@ def configure_default_views
         get account_passkeys_url
         assert_response :success
         assert_select '.tab-active[href=?]', account_passkeys_path, count: 1
+        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"] a[href=?]',
+          new_account_passkey_path, count: 1
+        assert_select '[data-page-actions-container="card"]', count: 0
         assert_select 'ul.list > li.list-row', count: 1
         assert_select 'input[type="password"]', count: 0
 
@@ -9628,7 +9733,7 @@ def configure_web_push
         <p class="text-sm text-neutral"><%= t("web_push.page.description") %></p>
       </header>
 
-      <section class="card card-border border-base-300 bg-base-100 shadow-none">
+      <section class="card-rapid">
         <div class="card-body">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -10109,36 +10214,38 @@ def install_job_operations
 
   create_file "app/views/layouts/mission_control/jobs/_application_selection.html.erb", <<~'ERB', force: true
     <% if @application.servers.many? || selectable_applications.any? %>
-      <section class="card card-border border-base-300 bg-base-100" aria-label="Application selection">
-        <div class="card-body flex-row flex-wrap items-center justify-end gap-4 py-4">
-          <div class="flex flex-wrap items-center justify-end gap-3">
-            <% if @application.servers.many? %>
-              <div role="tablist" class="tabs tabs-lift tabs-sm" aria-label="Servers">
-                <% @application.servers.each do |server| %>
-                  <%= link_to server.name, application_queues_path(@application, server_id: server),
-                    role: "tab", class: class_names("tab", "tab-active": selected_server?(server)),
-                    aria: { current: ("page" if selected_server?(server)) } %>
-                <% end %>
-              </div>
-            <% end %>
-
-            <% if selectable_applications.any? %>
-              <div class="dropdown dropdown-end">
-                <button type="button" tabindex="0" class="btn btn-sm">
-                  <%= MissionControl::Jobs::Current.application.name %>
-                </button>
-                <ul tabindex="0" class="dropdown-content menu z-10 mt-2 w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow">
-                  <% selectable_applications.each do |application| %>
-                    <li><%= link_to application.name, application_queues_path(application, server_id: nil) %></li>
+      <% content_for :page_actions_secondary do %>
+        <section class="card card-border border-base-300 bg-base-100" aria-label="Application selection">
+          <div class="card-body flex-row flex-wrap items-center justify-end gap-4 py-4">
+            <div class="flex flex-wrap items-center justify-end gap-3">
+              <% if @application.servers.many? %>
+                <div role="tablist" class="tabs tabs-lift tabs-sm" aria-label="Servers">
+                  <% @application.servers.each do |server| %>
+                    <%= link_to server.name, application_queues_path(@application, server_id: server),
+                      role: "tab", class: class_names("tab", "tab-active": selected_server?(server)),
+                      aria: { current: ("page" if selected_server?(server)) } %>
                   <% end %>
-                </ul>
-              </div>
-            <% else %>
-              <span class="badge badge-outline"><%= MissionControl::Jobs::Current.application.name %></span>
-            <% end %>
+                </div>
+              <% end %>
+
+              <% if selectable_applications.any? %>
+                <div class="dropdown dropdown-end">
+                  <button type="button" tabindex="0" class="btn btn-sm">
+                    <%= MissionControl::Jobs::Current.application.name %>
+                  </button>
+                  <ul tabindex="0" class="dropdown-content menu z-10 mt-2 w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow">
+                    <% selectable_applications.each do |application| %>
+                      <li><%= link_to application.name, application_queues_path(application, server_id: nil) %></li>
+                    <% end %>
+                  </ul>
+                </div>
+              <% else %>
+                <span class="badge badge-outline"><%= MissionControl::Jobs::Current.application.name %></span>
+              <% end %>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      <% end %>
     <% end %>
   ERB
 
@@ -10266,50 +10373,54 @@ def install_job_operations
     <span class="badge <%= job_operation_status_class(jobs_status) %>"><%= jobs_status %></span>
 
     <% unless @jobs_page.empty? && !active_filters? %>
-      <section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">
-        <div class="card-body">
-          <%= form_for :filter, url: application_jobs_path(MissionControl::Jobs::Current.application, jobs_status), method: :get,
-            html: { class: "grid gap-4 md:grid-cols-2 xl:grid-cols-4" },
-            data: { controller: "form", action: "input->form#debouncedSubmit" } do |form| %>
-            <fieldset class="fieldset">
-              <%= form.label :job_class_name, class: "fieldset-legend" %>
-              <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: "input input-rapid w-full", list: "job-classes", placeholder: "Filter by job class...", autocomplete: "off" %>
-            </fieldset>
-            <fieldset class="fieldset">
-              <%= form.label :queue_name, class: "fieldset-legend" %>
-              <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: "input input-rapid w-full", list: "queue-names", placeholder: "Filter by queue name...", autocomplete: "off" %>
-            </fieldset>
-            <% if jobs_status == "finished" %>
+      <% content_for :page_actions_secondary do %>
+        <section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">
+          <div class="card-body">
+            <%= form_for :filter, url: application_jobs_path(MissionControl::Jobs::Current.application, jobs_status), method: :get,
+              html: { class: "grid gap-4 md:grid-cols-2" },
+              data: { controller: "form", action: "input->form#debouncedSubmit" } do |form| %>
               <fieldset class="fieldset">
-                <%= form.label :finished_at_start, class: "fieldset-legend" %>
-                <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: "input input-rapid w-full" %>
+                <%= form.label :job_class_name, class: "fieldset-legend" %>
+                <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: "input input-rapid w-full", list: "job-classes", placeholder: "Filter by job class...", autocomplete: "off" %>
               </fieldset>
               <fieldset class="fieldset">
-                <%= form.label :finished_at_end, class: "fieldset-legend" %>
-                <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: "input input-rapid w-full" %>
+                <%= form.label :queue_name, class: "fieldset-legend" %>
+                <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: "input input-rapid w-full", list: "queue-names", placeholder: "Filter by queue name...", autocomplete: "off" %>
               </fieldset>
+              <% if jobs_status == "finished" %>
+                <fieldset class="fieldset">
+                  <%= form.label :finished_at_start, class: "fieldset-legend" %>
+                  <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: "input input-rapid w-full" %>
+                </fieldset>
+                <fieldset class="fieldset">
+                  <%= form.label :finished_at_end, class: "fieldset-legend" %>
+                  <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: "input input-rapid w-full" %>
+                </fieldset>
+              <% end %>
+              <%= hidden_field_tag :server_id, MissionControl::Jobs::Current.server.id %>
+              <datalist id="job-classes"><% @job_class_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
+              <datalist id="queue-names"><% @queue_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
+              <div class="card-actions items-end md:col-span-2">
+                <%= link_to "Clear filters", application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: "btn" %>
+              </div>
             <% end %>
-            <%= hidden_field_tag :server_id, MissionControl::Jobs::Current.server.id %>
-            <datalist id="job-classes"><% @job_class_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
-            <datalist id="queue-names"><% @queue_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
-            <div class="card-actions items-end md:col-span-2 xl:col-span-4">
-              <%= link_to "Clear filters", application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: "btn" %>
-            </div>
-          <% end %>
-        </div>
-      </section>
+          </div>
+        </section>
+      <% end %>
     <% end %>
 
     <% if jobs_status.failed? && !@jobs_page.empty? %>
-      <% target = active_filters? ? "selection" : "all" %>
-      <div class="flex flex-wrap items-center justify-end gap-3">
-        <% if active_filters? %><span class="text-sm text-base-content/70"><%= @jobs_count %> jobs found</span><% end %>
-        <%= button_to "Discard #{target}", application_bulk_discards_path(@application, **jobs_filter_param), method: :post,
-          disabled: @jobs_count == 0, class: "btn btn-error",
-          form: { data: { turbo_confirm: "This will delete #{@jobs_count} jobs and can't be undone. Are you sure?" } } %>
-        <%= button_to "Retry #{target}", application_bulk_retries_path(@application, **jobs_filter_param), method: :post,
-          disabled: @jobs_count == 0, class: "btn btn-warning" %>
-      </div>
+      <% content_for :page_actions_primary do %>
+        <% target = active_filters? ? "selection" : "all" %>
+        <div class="flex flex-wrap items-center justify-end gap-3">
+          <% if active_filters? %><span class="text-sm text-base-content/70"><%= @jobs_count %> jobs found</span><% end %>
+          <%= button_to "Discard #{target}", application_bulk_discards_path(@application, **jobs_filter_param), method: :post,
+            disabled: @jobs_count == 0, class: "btn btn-error",
+            form: { data: { turbo_confirm: "This will delete #{@jobs_count} jobs and can't be undone. Are you sure?" } } %>
+          <%= button_to "Retry #{target}", application_bulk_retries_path(@application, **jobs_filter_param), method: :post,
+            disabled: @jobs_count == 0, class: "btn btn-warning" %>
+        </div>
+      <% end %>
     <% end %>
 
     <% if @jobs_page.empty? %>
@@ -10685,6 +10796,19 @@ def install_job_operations
           job_id: active_job.job_id,
           server_id: server.to_param
         )
+
+        get MissionControl::Jobs::Engine.routes.url_helpers.application_jobs_path(
+          application_id: application.to_param,
+          status: "failed",
+          server_id: server.to_param
+        )
+        assert_response :success
+        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"] section[aria-label="Job filters"]', count: 1
+        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"]', count: 1 do
+          assert_select "form button", text: /Discard all/, count: 1
+          assert_select "form button", text: /Retry all/, count: 1
+        end
+        assert_select '[data-page-actions-container="card"]', count: 0
 
         post retry_path
 
@@ -11513,6 +11637,14 @@ def configure_evidence_capture
       PRIVATE_KEY = "1".rjust(64, "0")
       REGULAR_PRIVATE_KEY = "2".rjust(64, "0")
 
+      class EvidenceFailedJob < ApplicationJob
+        self.queue_adapter = :solid_queue if JOB_OPERATIONS
+
+        def perform
+          nil
+        end
+      end
+
       test "captures every generated page and key visual state" do
         @output_directory = Pathname(ENV.fetch("EVIDENCE_OUTPUT_DIR")).expand_path
         raise "EVIDENCE_OUTPUT_DIR must be an existing empty directory" unless @output_directory.directory? && @output_directory.children.empty?
@@ -11544,6 +11676,7 @@ def configure_evidence_capture
             authenticate
             prepare_authenticated_data
             verify_with_menu_layout_geometry if viewport_name == "desktop"
+            verify_page_actions_geometry if viewport_name == "desktop"
             verify_job_operations_geometry if viewport_name == "desktop" && JOB_OPERATIONS
             verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
             capture_authenticated_pages(viewport_name)
@@ -11854,7 +11987,17 @@ def configure_evidence_capture
             clear_enqueued_jobs
             clear_performed_jobs
           end
+          prepare_job_operations_data if JOB_OPERATIONS
           @regular_user = create_evidence_user("evidence-regular") if @regular_user.nil?
+        end
+
+        def prepare_job_operations_data
+          return unless @evidence_failed_job.nil?
+
+          active_job = EvidenceFailedJob.perform_later
+          @evidence_failed_job = SolidQueue::Job.find_by!(active_job_id: active_job.job_id)
+          T.must(@evidence_failed_job.ready_execution).destroy!
+          @evidence_failed_job.failed_with(RuntimeError.new("Evidence failure"))
         end
 
         def capture_authenticated_pages(viewport)
@@ -12600,6 +12743,79 @@ def configure_evidence_capture
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
+        def verify_page_actions_geometry
+          [320, 390, 640, 960, 961].each do |width|
+            page.current_window.resize_to(width, 900)
+            if API
+              visit api_credentials_path
+              no_tab = page.driver.with_playwright_page do |playwright_page|
+                playwright_page.evaluate(<<~JAVASCRIPT)
+                  () => {
+                    const heading = document.querySelector('[data-layout="with-menu"] > div > h1')
+                    const card = document.querySelector('[data-page-actions-container="card"]')
+                    const grid = card.querySelector('[data-page-actions]')
+                    const primary = grid.querySelector('[data-page-actions-column="primary"]')
+                    return {
+                      documentWidth: document.documentElement.scrollWidth,
+                      viewportWidth: window.innerWidth,
+                      cardAfterHeading: heading.nextElementSibling === card,
+                      columnCount: getComputedStyle(grid).gridTemplateColumns.split(" ").length,
+                      gridWidth: grid.getBoundingClientRect().width,
+                      primaryWidth: primary.getBoundingClientRect().width,
+                      primaryLeft: primary.getBoundingClientRect().left,
+                      gridLeft: grid.getBoundingClientRect().left,
+                      secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length,
+                      tabContainerCount: document.querySelectorAll('[data-page-actions-container="tab"]').length
+                    }
+                  }
+                JAVASCRIPT
+              end
+              assert_operator no_tab.fetch("documentWidth"), :<=, no_tab.fetch("viewportWidth"),
+                "no-tab page actions should not overflow at #{width}px"
+              assert no_tab.fetch("cardAfterHeading"),
+                "no-tab page actions should immediately follow the heading at #{width}px"
+              assert_equal 0, no_tab.fetch("secondaryCount")
+              assert_equal 0, no_tab.fetch("tabContainerCount")
+              if width < 640
+                assert_equal 1, no_tab.fetch("columnCount")
+                assert_in_delta no_tab.fetch("gridWidth"), no_tab.fetch("primaryWidth"), 1
+              else
+                assert_equal 2, no_tab.fetch("columnCount")
+                assert_operator no_tab.fetch("primaryLeft"), :>, no_tab.fetch("gridLeft")
+              end
+            end
+
+            visit account_passkeys_path
+            tabbed = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const panel = document.querySelector('[role="tabpanel"].tab-content')
+                  const container = panel.querySelector(':scope > [data-page-actions-container="tab"]')
+                  const grid = container.querySelector('[data-page-actions]')
+                  return {
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    containerIsFirst: panel.firstElementChild === container,
+                    cardCount: container.querySelectorAll('.card-rapid').length,
+                    primaryCount: grid.querySelectorAll('[data-page-actions-column="primary"]').length,
+                    secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length
+                  }
+                }
+              JAVASCRIPT
+            end
+            assert_operator tabbed.fetch("documentWidth"), :<=, tabbed.fetch("viewportWidth"),
+              "tabbed page actions should not overflow at #{width}px"
+            assert tabbed.fetch("containerIsFirst"),
+              "tabbed page actions should be the first tab content at #{width}px"
+            assert_equal 0, tabbed.fetch("cardCount")
+            assert_equal 1, tabbed.fetch("primaryCount")
+            assert_equal 0, tabbed.fetch("secondaryCount")
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
         def verify_job_operations_geometry
           [320, 390, 640, 960, 961].each do |width|
             page.current_window.resize_to(width, 900)
@@ -12714,6 +12930,10 @@ def configure_evidence_capture
                   const tablist = activeTab.parentElement
                   const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
                   const root = tabContent.querySelector("[data-mission-control-jobs-root]")
+                  const actionsContainer = tabContent.querySelector(':scope > [data-page-actions-container="tab"]')
+                  const actions = actionsContainer.querySelector('[data-page-actions]')
+                  const secondary = actions.querySelector('[data-page-actions-column="secondary"]')
+                  const primary = actions.querySelector('[data-page-actions-column="primary"]')
                   return {
                     activeTabBottom: activeTabRect.bottom,
                     activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
@@ -12730,7 +12950,14 @@ def configure_evidence_capture
                     activeTabOwnsTabContent: tabContent.classList.contains("tab-content"),
                     tabContentIsSticky: tabContent.classList.contains("sticky"),
                     tabContentContain: getComputedStyle(tabContent).contain,
-                    tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size
+                    tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
+                    actionContainerIsFirst: tabContent.firstElementChild === actionsContainer,
+                    actionColumnCount: getComputedStyle(actions).gridTemplateColumns.split(" ").length,
+                    secondaryLeft: secondary.getBoundingClientRect().left,
+                    secondaryTop: secondary.getBoundingClientRect().top,
+                    secondaryBottom: secondary.getBoundingClientRect().bottom,
+                    primaryLeft: primary.getBoundingClientRect().left,
+                    primaryTop: primary.getBoundingClientRect().top
                   }
                 }
               JAVASCRIPT
@@ -12757,6 +12984,21 @@ def configure_evidence_capture
               "Mission Control Jobs middle tab content should keep its leading corner at #{width}px"
             assert_operator failed_geometry.fetch("tabContentBottom"), :>=, failed_geometry.fetch("rootBottom"),
               "Mission Control Jobs middle tab content should contain its body at #{width}px"
+            assert failed_geometry.fetch("actionContainerIsFirst"),
+              "Mission Control Jobs page actions should lead the tab content at #{width}px"
+            if width < 640
+              assert_equal 1, failed_geometry.fetch("actionColumnCount"),
+                "Mission Control Jobs page actions should stack at #{width}px"
+              assert_operator failed_geometry.fetch("primaryTop"), :>=, failed_geometry.fetch("secondaryBottom"),
+                "Mission Control Jobs primary actions should follow secondary actions at #{width}px"
+            else
+              assert_equal 2, failed_geometry.fetch("actionColumnCount"),
+                "Mission Control Jobs page actions should use two columns at #{width}px"
+              assert_in_delta failed_geometry.fetch("secondaryTop"), failed_geometry.fetch("primaryTop"), 1,
+                "Mission Control Jobs action columns should align at #{width}px"
+              assert_operator failed_geometry.fetch("primaryLeft"), :>, failed_geometry.fetch("secondaryLeft"),
+                "Mission Control Jobs primary actions should be on the right at #{width}px"
+            end
           end
         ensure
           desktop = VIEWPORTS.fetch("desktop")

@@ -5863,8 +5863,8 @@ def configure_profile
   if avatar_enabled
     model_lines << <<~RUBY.chomp
       has_one_attached :avatar do |attachment|
-        attachment.variant :header_avatar, resize_to_fill: [40, 40]
-        attachment.variant :profile_avatar, resize_to_fill: [64, 64]
+        attachment.variant :header_avatar, resize_to_fill: [40, 40], preprocessed: true
+        attachment.variant :profile_avatar, resize_to_fill: [64, 64], preprocessed: true
       end
       attr_accessor :avatar_upload
       validates :avatar_upload, avatar_upload: true
@@ -6607,6 +6607,29 @@ def configure_profile
           assert_predicate profile.avatar, :attached?
           assert_equal content_type, profile.avatar.blob.content_type
           profile.avatar.purge
+        end
+      ensure
+        profile&.avatar&.purge
+      end
+
+      test "preprocesses named avatar variants asynchronously" do
+        profile = profiles(:one)
+
+        assert_enqueued_jobs 2, only: ActiveStorage::TransformJob do
+          profile.update!(avatar_upload: AvatarTestImage.upload(width: 120, height: 120))
+        end
+        assert_empty profile.avatar.blob.variant_records
+
+        perform_enqueued_jobs(only: ActiveStorage::TransformJob)
+
+        assert_equal 2, profile.avatar.blob.variant_records.count
+        { header_avatar: [40, 40], profile_avatar: [64, 64] }.each do |name, dimensions|
+          variant = profile.avatar.variant(name)
+          variant.image.blob.open do |file|
+            image = Vips::Image.new_from_file(file.path)
+            assert_equal dimensions, [image.width, image.height]
+          end
+          assert ActiveStorageDB::File.exists?(ref: variant.image.blob.key)
         end
       ensure
         profile&.avatar&.purge
@@ -8687,9 +8710,12 @@ def configure_default_views
       #{form_assertions.join}#{update_assertion}
       #{if avatar_enabled
           <<~RUBY
-            patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.upload } }
+            assert_enqueued_jobs 2, only: ActiveStorage::TransformJob do
+              patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.upload } }
+            end
             assert_redirected_to profile_url
             assert_predicate profile.reload.avatar, :attached?
+            assert_empty profile.avatar.blob.variant_records
             get edit_profile_url
             assert_select 'form[action=?] [data-image-crop-target="currentPreview"] img[width="64"][height="64"]', profile_path, count: 1
             assert_select 'form[action=?][method="post"]', profile_avatar_path, count: 1 do
@@ -8851,6 +8877,7 @@ def configure_default_views
 
     class DefaultPagesTest < ActionDispatch::IntegrationTest
       include Devise::Test::IntegrationHelpers
+    #{avatar_enabled ? "  include ActiveJob::TestHelper\n" : ""}
 
       test "renders public and passwordless authentication pages" do
         get root_url
@@ -11701,23 +11728,25 @@ def configure_evidence_capture
             authenticate
             profile = T.must(@user.profile)
             profile.avatar.purge if profile.avatar.attached?
-            profile.update!(avatar_upload: T.unsafe(Object.const_get("AvatarTestImage")).upload(width: 320, height: 320))
-            capture_page(
+            perform_enqueued_jobs(only: ActiveStorage::TransformJob) do
+              profile.update!(avatar_upload: T.unsafe(Object.const_get("AvatarTestImage")).upload(width: 320, height: 320))
+            end
+            capture_avatar_page(
               "avatar-home",
               "アバター（ホーム）",
               root_path,
               translate("home.heading"),
-              viewport_name
+              viewport_name,
+              [40]
             )
-            assert_avatar_image_geometry(40)
-            capture_page(
+            capture_avatar_page(
               "avatar-profile",
               "アバター（プロフィール）",
               host_routes.profile_path,
               translate("profiles.title"),
-              viewport_name
+              viewport_name,
+              [40, 64]
             )
-            assert_avatar_image_geometry(40, 64)
           end
         end
 
@@ -12024,6 +12053,14 @@ def configure_evidence_capture
           capture_current_page(identifier, title, viewport)
         end
 
+        def capture_avatar_page(identifier, title, path, heading, viewport, sizes)
+          visit path
+          assert_equal 200, page.status_code
+          assert_selector "h1", text: heading
+          assert_avatar_image_geometry(sizes)
+          capture_current_page(identifier, title, viewport)
+        end
+
         def capture_avatar_states(viewport)
           capture_page("profile-boring-avatar", "プロフィール（自動生成アバター）", host_routes.profile_path, translate("profiles.title"), viewport)
           capture_page("profile-edit-boring-avatar", "プロフィール編集（自動生成アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport)
@@ -12054,15 +12091,14 @@ def configure_evidence_capture
           assert_equal({ "width" => 512, "height" => 512, "type" => "image/png" }, cropped)
           click_button translate("common.save")
           assert_current_path host_routes.profile_path
+          assert_avatar_image_geometry([40, 64])
+          perform_enqueued_jobs(only: ActiveStorage::TransformJob)
           stored = Vips::Image.new_from_buffer(T.must(@user.profile).reload.avatar.blob.download, "")
           assert_equal [512, 512], [stored.width, stored.height]
 
-          capture_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport)
-          assert_avatar_image_geometry(40)
-          capture_page("profile-uploaded-avatar", "プロフィール（画像アバター）", host_routes.profile_path, translate("profiles.title"), viewport)
-          assert_avatar_image_geometry(40, 64)
-          capture_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport)
-          assert_avatar_image_geometry(40, 64)
+          capture_avatar_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport, [40])
+          capture_avatar_page("profile-uploaded-avatar", "プロフィール（画像アバター）", host_routes.profile_path, translate("profiles.title"), viewport, [40, 64])
+          capture_avatar_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport, [40, 64])
 
           accept_confirm { click_button translate("profiles.avatar_delete") }
           assert_current_path host_routes.profile_path
@@ -12107,12 +12143,23 @@ def configure_evidence_capture
           assert_equal 1, geometry.fetch("aspectRatio")
         end
 
-        def assert_avatar_image_geometry(*sizes)
+        def assert_avatar_image_geometry(sizes)
           geometry = page.driver.with_playwright_page do |playwright_page|
             playwright_page.wait_for_function(<<~JAVASCRIPT, arg: sizes)
               (expectedSizes) => expectedSizes.every((size) => {
-                const image = document.querySelector(`img[width="${size}"][height="${size}"]`)
-                return image && image.complete && image.naturalWidth === size && image.naturalHeight === size
+                const images = Array.from(document.querySelectorAll(`img[width="${size}"][height="${size}"]`))
+                  .filter((image) => image.getClientRects().length > 0)
+                if (images.length === 0) return false
+
+                return images.every((image) => {
+                  if (!image.complete) return false
+                  if (image.naturalWidth !== size || image.naturalHeight !== size) {
+                    throw new Error(
+                      `avatar image failed: expected ${size}x${size}, got ${image.naturalWidth}x${image.naturalHeight}, src=${image.currentSrc}`
+                    )
+                  }
+                  return true
+                })
               })
             JAVASCRIPT
             javascript = <<~JAVASCRIPT
@@ -12121,18 +12168,20 @@ def configure_evidence_capture
                 return {
                 documentWidth: document.documentElement.scrollWidth,
                 viewportWidth: window.innerWidth,
-                images: expectedSizes.map((size) => {
-                  const image = document.querySelector(`img[width="${size}"][height="${size}"]`)
-                  if (!image) return null
-                  const bounds = image.getBoundingClientRect()
-                  return {
-                    expectedSize: size,
-                    naturalWidth: image.naturalWidth,
-                    naturalHeight: image.naturalHeight,
-                    renderedWidth: bounds.width,
-                    renderedHeight: bounds.height
-                  }
-                })
+                images: expectedSizes.flatMap((size) =>
+                  Array.from(document.querySelectorAll(`img[width="${size}"][height="${size}"]`))
+                    .filter((image) => image.getClientRects().length > 0)
+                    .map((image) => {
+                      const bounds = image.getBoundingClientRect()
+                      return {
+                        expectedSize: size,
+                        naturalWidth: image.naturalWidth,
+                        naturalHeight: image.naturalHeight,
+                        renderedWidth: bounds.width,
+                        renderedHeight: bounds.height
+                      }
+                    })
+                )
                 }
               }
             JAVASCRIPT

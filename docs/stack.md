@@ -100,7 +100,9 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 
 Action Text、Active Storage、Active Storage DB、Lexxyは選択式にせず、すべての生成アプリケーションへ導入します。Action Textの公式install generatorでActive Storageのmetadata／attachment migrationと添付表示partialを生成し、`active_storage_db`の公式migration taskでファイル本体用migrationを生成して`db/storage_migrate`へ分離します。Active Storage DB engineを`/active_storage_db`へmountし、development、test、productionのActive Storage serviceをすべて`:db`に設定します。Active Storageのblob metadataとattachmentはprimary database、ファイル本体は専用storage SQLite databaseへ保存し、Disk serviceへ暗黙に切り替えません。
 
-Active Storageのvariant processorは全環境で`:vips`、variant trackingは有効、route resolverは`:rails_storage_proxy`へ固定します。Rails標準生成物の`image_processing ~> 1.2`を利用し、Dokploy用runtime imageには`libvips`を含めます。Profile avatarは40×40の`header_avatar`と64×64の`profile_avatar`だけをnamed variantとして定義し、任意の変換hashをViewへ記述しません。attachmentとblob metadataはprimary SQLite、元画像と処理済みvariant本体はActive Storage DBの専用storage SQLiteをsource of truthとします。
+Active Storageのvariant processorは全環境で`:vips`、variant trackingは有効、route resolverは`:rails_storage_proxy`へ固定します。Rails標準生成物の`image_processing ~> 1.2`を利用し、Dokploy用runtime imageには`libvips`を含めます。Profile avatarは40×40の`header_avatar`と64×64の`profile_avatar`だけを`preprocessed: true`のnamed variantとして定義し、attachment commit後にActive Storage標準の`TransformJob`で非同期生成します。profile更新responseは変換完了を待たず、任意の変換hashをViewへ記述しません。attachmentとblob metadataはprimary SQLite、元画像と処理済みvariant本体はActive Storage DBの専用storage SQLiteをsource of truthとします。
+
+ユーザーupload画像のnamed variantは非同期preprocessを標準とし、複数画像・複数variantの変換をrequest内で同期実行しません。生成中のvariantへrequestが競合する可能性はActive Storage標準のbest effortとして許容します。variant完成前の公開を禁止する機能要件が生じた場合は、そのdomain modelに限定した`processing`から`published`への状態遷移を設計し、Active Storage内部patch、汎用single-flight、元画像fallbackは追加しません。
 
 生成アプリをDocker外で開発・testするhostにもlibvips runtimeが必要です。macOSでは`brew install vips`など、対象OSのpackage managerでlibvipsを明示的に導入し、`Vips::Image`が実画像をdecodeできることをtestで確認します。
 

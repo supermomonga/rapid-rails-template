@@ -887,8 +887,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes avatar_helper, "AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze"
     assert_includes avatar_helper, "image_tag profile.avatar.variant(variant)"
     assert_includes avatar_helper, "width: size, height: size"
-    assert_includes profile_configuration, "attachment.variant :header_avatar, resize_to_fill: [40, 40]"
-    assert_includes profile_configuration, "attachment.variant :profile_avatar, resize_to_fill: [64, 64]"
+    assert_includes profile_configuration, "attachment.variant :header_avatar, resize_to_fill: [40, 40], preprocessed: true"
+    assert_includes profile_configuration, "attachment.variant :profile_avatar, resize_to_fill: [64, 64], preprocessed: true"
+    assert_includes profile_configuration, 'assert_enqueued_jobs 2, only: ActiveStorage::TransformJob'
+    assert_includes profile_configuration, 'perform_enqueued_jobs(only: ActiveStorage::TransformJob)'
     assert_includes profile_configuration, "validates :avatar_upload, avatar_upload: true"
     assert_includes profile_configuration, 'create_file "app/services/avatar_upload.rb"'
     assert_includes profile_configuration, "class AvatarUpload < T::Struct"
@@ -1355,6 +1357,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, "capture_common_scenarios"
     assert_includes evidence, 'capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")'
     assert_includes evidence, "capture_avatar_scenarios if AVATAR"
+    assert_includes evidence, "def capture_avatar_page"
+    assert_includes evidence, "perform_enqueued_jobs(only: ActiveStorage::TransformJob)"
+    assert_includes evidence, "avatar image failed: expected"
     assert_includes evidence, 'Object.const_get("AvatarTestImage")'
     assert_includes evidence, 'capture_current_page("profile-avatar-crop-modal", "プロフィール画像の切り抜き", viewport)'
     assert_includes evidence, "def assert_avatar_crop_modal_geometry"

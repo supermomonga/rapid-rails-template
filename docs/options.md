@@ -211,7 +211,9 @@ CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正�
 
 `avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、汎用`image_crop` Stimulus controller、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
-添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
+添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。両variantは`preprocessed: true`でattachment commit後にActive Storage標準の`TransformJob`へenqueueし、profile更新response内では画像変換を待ちません。Solid Queue選択時は既存workerが処理し、未選択時は既存Active Job adapterを使用します。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
+
+通常のユーザーupload画像はnamed variantの非同期preprocessを標準とし、request内で全variantを同期生成しません。variant完成前の一時的な競合はActive Storage標準のbest effortとして扱います。将来、記事公開などでvariant完成前の公開を禁止する要件が生じた場合だけ、その機能に限定した`processing`から`published`への状態遷移を設計し、汎用single-flightや処理状態基盤は先行追加しません。
 
 `image_crop` controllerはアスペクト比、初期coverage、出力幅・高さ、許可MIME type、入力上限、lossy品質をStimulus valuesで受け取ります。アスペクト比を省略すると自由cropとなり、出力幅・高さもそれぞれ省略可能です。指定された出力寸法はCropper.jsへ渡し、選択範囲の比率を保ったcanvasを生成します。不正または空の設定値は暗黙に補正せず、controller接続時に明示的に失敗させます。
 

@@ -106,6 +106,14 @@ class ConfigurationTest < Minitest::Test
     end
   end
 
+  def test_rejects_removed_or_unknown_configuration_keys
+    error = assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("deployment" => "dokploy")
+    end
+
+    assert_equal "不明な設定です: deployment", error.message
+  end
+
   def test_accepts_supported_default_locales
     assert_equal "ja", RapidRailsTemplate::Configuration.build("default_locale" => "ja")["default_locale"]
     assert_equal "en", RapidRailsTemplate::Configuration.build("default_locale" => "en")["default_locale"]

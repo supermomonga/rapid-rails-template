@@ -15,8 +15,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_equal "Sample App", plan.to_h.fetch("app_name")
     assert_equal "--name=sample", plan.generator_options.first
     refute_includes plan.generator_options, "--skip-thruster"
-    assert_includes plan.generator_options, "--skip-docker"
-    assert_includes plan.generator_options, "--skip-kamal"
+    refute_includes plan.generator_options, "--skip-docker"
+    refute_includes plan.generator_options, "--skip-kamal"
     assert_includes plan.summary, "RailsアプリID: sample"
     assert_includes plan.summary, "表示用アプリ名: Sample App"
     assert_includes plan.gems, "solid_cache"
@@ -33,6 +33,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "lexxy"
     assert_includes plan.gems, "active_storage_db"
     assert_includes plan.gems, "thruster"
+    assert_includes plan.gems, "kamal"
+    refute_includes plan.gems, "foreman"
     refute_includes plan.gems, "imgproxy-rails"
     assert_includes plan.artifacts, "bin/thrust"
     assert_includes plan.gems, "rails-i18n"
@@ -43,6 +45,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.steps, "install_active_storage_db"
     assert_includes plan.steps, "configure_database"
     assert_includes plan.steps, "configure_active_storage_db"
+    assert_includes plan.steps, "configure_kamal"
     assert_includes plan.steps, "configure_lexxy"
     assert_operator plan.steps.index("install_action_text"), :<, plan.steps.index("install_active_storage_db")
     assert_operator plan.steps.index("install_active_storage_db"), :<, plan.steps.index("configure_lexxy")
@@ -158,6 +161,12 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "test/models/active_storage_db_test.rb"
     assert_includes plan.artifacts, "test/integration/image_delivery_test.rb"
     assert_includes plan.artifacts, "docs/image_delivery.md"
+    assert_includes plan.artifacts, "Dockerfile"
+    assert_includes plan.artifacts, "config/deploy.yml"
+    assert_includes plan.artifacts, "config/litestream.yml"
+    assert_includes plan.artifacts, "bin/kamal-restore"
+    assert_includes plan.artifacts, "bin/kamal-restore-volume"
+    assert_includes plan.artifacts, "docs/deployment.md"
     assert_includes plan.artifacts, "app/services/avatar_image_policy.rb"
     assert_includes plan.artifacts, "app/services/avatar_upload.rb"
     assert_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
@@ -183,8 +192,7 @@ class ExecutionPlanTest < Minitest::Test
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build(
         "active_job" => "solid_queue",
-        "maintenance_tasks" => "enable",
-        "deployment" => "dokploy"
+        "maintenance_tasks" => "enable"
       ),
       app_id: "sample", app_name: "Sample App"
     )
@@ -208,8 +216,7 @@ class ExecutionPlanTest < Minitest::Test
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build(
         "active_job" => "solid_queue",
-        "job_operations" => "enable",
-        "deployment" => "dokploy"
+        "job_operations" => "enable"
       ),
       app_id: "sample", app_name: "Sample App"
     )
@@ -331,7 +338,7 @@ class ExecutionPlanTest < Minitest::Test
 
   def test_siwe_plan_adds_siwe_to_devise
     plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("additional_login_methods" => %w[siwe], "deployment" => "none"),
+      RapidRailsTemplate::Configuration.build("additional_login_methods" => %w[siwe]),
       app_id: "sample", app_name: "Sample App"
     )
 
@@ -363,7 +370,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/models/user_role.rb"
     assert_includes plan.artifacts, "app/policies/user_policy.rb"
     assert_includes plan.artifacts, "app/views/admin/users/index.html.erb"
-    refute_includes plan.artifacts, "Dockerfile.prod"
+    assert_includes plan.artifacts, "Dockerfile"
   end
 
   def test_generator_options_disable_solid_bundle_and_selected_frameworks
@@ -380,8 +387,7 @@ class ExecutionPlanTest < Minitest::Test
       "pwa" => "use",
       "web_push" => "use",
       "solid_cache" => "use",
-      "action_cable" => "solid_cable",
-      "deployment" => "dokploy"
+      "action_cable" => "solid_cable"
     )
     plan = RapidRailsTemplate::ExecutionPlan.build(configuration, app_id: "sample", app_name: "Sample App")
 

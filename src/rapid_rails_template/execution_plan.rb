@@ -64,7 +64,7 @@ module RapidRailsTemplate
       result << "maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
       result << "solid_cache" if configuration["solid_cache"] == "use"
       result << "solid_cable" if configuration["action_cable"] == "solid_cable"
-      result << "foreman" if configuration["deployment"] == "dokploy"
+      result << "kamal"
       result
     end
 
@@ -87,7 +87,7 @@ module RapidRailsTemplate
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
       result << "configure_database"
       result << "configure_active_storage_db"
-      result << "configure_dokploy" if configuration["deployment"] == "dokploy"
+      result << "configure_kamal"
       result << "prepare_database"
       result << "annotate_models"
       result << "initialize_sorbet"
@@ -394,14 +394,24 @@ module RapidRailsTemplate
           test/models/solid_queue_cleanup_test.rb
         ])
       end
-      result.concat(%w[Dockerfile.prod .dockerignore bin/docker-entrypoint Procfile.prod litestream.yml]) if configuration["deployment"] == "dokploy"
+      result.concat(%w[
+        Dockerfile
+        .dockerignore
+        .kamal/secrets
+        .kamal/hooks/pre-deploy
+        config/deploy.yml
+        config/litestream.yml
+        bin/docker-entrypoint
+        bin/wait-for-litestream
+        bin/kamal-restore
+        bin/kamal-restore-volume
+        docs/deployment.md
+      ])
       result << "mise.local.toml" if configuration["web_push"] == "use"
       result.uniq
     end
 
     def build_processes
-      return [] unless configuration["deployment"] == "dokploy"
-
       result = ["web"]
       result << "worker" if configuration["active_job"] == "solid_queue"
       result

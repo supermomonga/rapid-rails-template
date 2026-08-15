@@ -46,7 +46,6 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --api=enable \
   --action-cable=skip \
   --mail=auto \
-  --deployment=dokploy \
   --default-locale=ja \
   APP_PATH
 mise run generate-sampleapp
@@ -60,6 +59,8 @@ Passkeyによるパスワードレス認証は全構成で必須です。登録�
 
 画像は全環境でActive Storage DBの専用SQLite databaseへ保存し、libvipsでvariantを生成します。画像URLはActive Storage公式のproxy routeへ解決し、productionではThrusterのHTTP cacheがwarmなrequestをPuma、Rails、SQLiteへ転送せず返します。生成アプリの`docs/image_delivery.md`にnamed variant、公開signed URL、cache制約を記載します。
 
+デプロイは全構成でKamal V2に固定します。Litestream 0.5.15を単一Linux host上のAccessoryとして生成し、Web・条件付きWorkerと同じSQLite volumeを共有します。空volumeの起動時復元は既存DBを上書きせず、既存DBを戻す操作は生成アプリの`bin/kamal-restore`でdry-run、TTY、完全一致確認、全DB整合性検査、deploy lock、復元前ファイル保存を必須にします。詳細は生成アプリの`docs/deployment.md`へ出力します。
+
 `--default-locale`は`ja`または`en`を指定し、既定値は`ja`です。生成アプリには両言語のlocaleを用意しますが、requestごとの切替UIやUserへのlocale保存は生成しません。productionのcanonical originは`APPLICATION_ORIGIN`環境変数で明示し、development/testだけが固定のローカル既定値を持ちます。
 
 `--job-operations=enable`はSolid Queue使用時だけ選択でき、Mission Control Jobs 1.1.0を`/admin/jobs`へmountします。画面は既存の管理者認証、Action Policy、admin navigationへ統合し、Mission Control独自のHTTP Basic認証は使用しません。完了ジョブはSolid Queue 1.6.0の標準設定により1日保持した後、毎時12分に公式APIでbatch削除されます。失敗ジョブはcleanup対象外で、管理者がretryまたはdiscardするまで保持されます。
@@ -68,7 +69,7 @@ Passkeyによるパスワードレス認証は全構成で必須です。登録�
 
 `sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`は生成物であり、手動編集しません。Rails DSL由来の型は`RAILS_ENV=test bin/tapioca dsl --environment=test`、Gem APIは`bin/tapioca gems`で更新し、アプリがRubyで定義するmethodは同じ`.rb`へinline `sig`を記述します。Tapiocaが表現できないframework wiringは`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIで不足する型aliasは`sorbet/rbi/shims/boring_avatars.rbi`、FFIまたはHTTPXのGem RBIから参照されるBundler同梱APIは`sorbet/rbi/shims/bundler_connection_pool.rbi`で補います。`sorbet/rbi/todo.rbi`は残さず、通常の`bin/rails test`がRBIの鮮度、shimの重複、`bundle exec srb tc`を検証するため、`bin/ci`とGitHub Actionsでも同じ契約が適用されます。
 
-リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
+リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mailを有効にしたKamal対応の全部入り日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 
 生成後はsample専用のArticle scaffoldを`/articles`へ追加し、`sample_user_01`から`sample_user_10`までのscreen nameを持つ10ユーザーと、各ユーザー50件（公開40件、draft 10件）、合計500件の記事をseedします。各Userにはsample表示用のPasskey credentialを1件作成しますが、秘密鍵は保存しないため、そのcredentialを使った実ログインはできません。公開済み記事は誰でも閲覧でき、認証済みUserは自分のdraftを含む記事の作成・閲覧・編集・削除ができます。このArticleはscaffold templateの確認用であり、配布用`bootstrap.rb`や`rake evidence:update`の生成アプリには含めません。
 

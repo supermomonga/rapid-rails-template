@@ -34,7 +34,6 @@ generated = system RbConfig.ruby, File.join(root, "bootstrap.rb"),
   "--api=enable",
   "--action-cable=solid_cable",
   "--mail=use",
-  "--deployment=dokploy",
   sample
 abort "sampleアプリの生成に失敗しました" unless generated
 

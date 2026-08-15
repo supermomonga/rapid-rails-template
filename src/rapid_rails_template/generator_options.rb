@@ -8,8 +8,6 @@ module RapidRailsTemplate
       --javascript=importmap
       --css=tailwind
       --skip-rubocop
-      --skip-docker
-      --skip-kamal
       --skip-system-test
     ].freeze
 

@@ -61,7 +61,7 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 - `--css=tailwind`
 - `--skip-rubocop`
 - `--skip-action-mailer`と`--skip-action-mailbox`
-- `--skip-docker`、`--skip-kamal`
+- Rails標準Docker/Kamalを常時生成するため、これらをskipするoptionは渡さない
 - Rails標準のSolid Queue/Cableを条件付きにするためのSolid系オプション
 
 これらを生成後のファイル削除で代替しません。`bootstrap.rb`が対話と実行確認を`rails new`より前に行い、確定したgenerator optionでRailsを起動してからApplication Template処理へ引き継ぎます。

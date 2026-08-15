@@ -492,7 +492,7 @@ append_to_file "db/seeds.rb", <<~'RUBY'
     screen_name = format("sample_user_%02d", number)
     profile = Profile.find_by(screen_name: screen_name)
     if profile
-      user = profile.user
+      user = T.must(profile.user)
     else
       user = User.create!
       profile = T.must(user.profile)
@@ -538,7 +538,7 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
       screen_names = (1..10).map { |number| format("sample_user_%02d", number) }
       sample_profiles = Profile.where(screen_name: screen_names).includes(:user).order(:screen_name).to_a
       assert_equal 10, sample_profiles.count
-      sample_users = sample_profiles.map(&:user)
+      sample_users = sample_profiles.map { |profile| T.must(profile.user) }
 
       sample_users.each do |user|
         assert_equal 1, user.passkey_credentials.count

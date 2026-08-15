@@ -375,7 +375,7 @@ class RailsTemplateContractTest < Minitest::Test
   end
 
   def test_solid_queue_configures_a_dedicated_development_database
-    database = source_between("def configure_database", "def configure_dokploy")
+    database = source_between("def configure_database", "def kamal_restore_cli_body")
 
     assert_includes database, 'if VALUES.fetch("active_job") == "solid_queue"'
     assert_includes database, 'development_databases["queue"] = {'
@@ -979,7 +979,7 @@ class RailsTemplateContractTest < Minitest::Test
     storage_test = generated_file_source("test/models/active_storage_db_test.rb")
     install = source_between("def install_active_storage_db", "def replace_active_storage_service")
     service_configuration = source_between("def configure_active_storage_db", "def configure_lexxy")
-    database_configuration = source_between("def configure_database", "def configure_dokploy")
+    database_configuration = source_between("def configure_database", "def kamal_restore_cli_body")
 
     assert_includes @source, 'gem "active_storage_db"'
     assert_includes install, 'run_checked "bin/rails active_storage_db:install:migrations"'
@@ -991,8 +991,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes service_configuration, 'mount ActiveStorageDB::Engine => "/active_storage_db"'
     assert_includes database_configuration, '"storage/development_storage.sqlite3"'
     assert_includes database_configuration, '"storage/test_storage.sqlite3"'
-    assert_includes database_configuration, '"storage/production_storage.sqlite3"'
-    assert_includes database_configuration, "STORAGE_DATABASE_PATH"
+    assert_includes database_configuration, '"/rails/storage/production_storage.sqlite3"'
+    refute_includes database_configuration, "STORAGE_DATABASE_PATH"
     assert_includes database_configuration, '"db/storage_migrate"'
     assert_includes storage_test, "ActiveStorage::Blob.create_and_upload!"
     assert_includes storage_test, 'assert_equal "storage", ActiveStorageDB::ApplicationRecord.connection_db_config.name'
@@ -1005,15 +1005,45 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator after_bundle.index("configure_active_storage_db"), :<, after_bundle.index('run_checked "bin/rails db:prepare"')
   end
 
-  def test_dokploy_replicates_the_active_storage_database
-    dokploy = source_between("def configure_dokploy", "after_bundle do")
+  def test_kamal_uses_a_litestream_accessory_and_confirmed_restore
+    kamal = source_between("def configure_kamal", "after_bundle do")
+    restore = source_between("def kamal_restore_cli_body", "def configure_kamal_restore")
+    volume_helper = source_between("def configure_kamal_restore", "def configure_kamal")
 
-    assert_includes dokploy, '${STORAGE_DATABASE_PATH}'
-    assert_includes dokploy, '${LITESTREAM_STORAGE_REPLICA_URL}'
-    assert_includes dokploy, 'web: bin/thrust bin/rails server'
-    assert_includes dokploy, "EXPOSE 80"
-    refute_includes dokploy, "THRUSTER_HTTP_PORT"
-    refute_includes dokploy, "THRUSTER_TARGET_PORT"
+    assert_includes @source, 'gem "kamal", "~> 2.11", require: false'
+    assert_includes kamal, "minimum_version: 2.11.0"
+    assert_includes kamal, "litestream/litestream:0.5.15"
+    assert_includes kamal, '"restore-if-db-not-exists" => true'
+    assert_includes kamal, "LITESTREAM_STORAGE_REPLICA_URL"
+    assert_includes kamal, '"#{app_id}_storage:/rails/storage"'
+    assert_includes kamal, 'cmd: bin/jobs --mode async'
+    assert_includes kamal, 'GET /status HTTP/1.0'
+    assert_includes kamal, 'CMD ["./bin/thrust", "./bin/rails", "server"]'
+    assert_includes kamal, 'create_file ".kamal/hooks/pre-deploy"'
+    refute_includes kamal, "Procfile.prod"
+    refute_includes kamal, "foreman"
+    refute_includes kamal, "THRUSTER_HTTP_PORT"
+    refute_includes kamal, "THRUSTER_TARGET_PORT"
+
+    assert_includes restore, 'option_parser.on("--plan")'
+    assert_includes restore, 'option_parser.on("--timestamp=RFC3339")'
+    assert_includes restore, 'option_parser.on("--rollback=OPERATION_ID")'
+    assert_includes restore, 'unless @input.tty? && @output.tty?'
+    assert_includes restore, 'confirm!("RESTORE #{APP_ID} #{target}")'
+    assert_includes restore, '"-integrity-check", "full"'
+    assert_includes restore, '"-dry-run"'
+    assert_includes restore, '"lock", "acquire"'
+    assert_includes restore, '"app", "maintenance"'
+    assert_includes restore, '"litestream", "sync"'
+    assert_includes restore, "Shellwords.join"
+    refute_includes restore, '"-force"'
+    refute_includes restore, "if-replica-exists"
+    refute_includes restore, "--yes"
+
+    assert_includes volume_helper, 'SIDECAR_SUFFIXES = ["", "-wal", "-shm", "-journal"]'
+    assert_includes volume_helper, "installed.reverse_each"
+    assert_includes volume_helper, "moved_previous.reverse_each"
+    assert_includes volume_helper, "replaced-by-rollback"
   end
 
   def test_generates_fixed_pages_faqs_footer_settings_and_admin_management
@@ -1112,7 +1142,7 @@ class RailsTemplateContractTest < Minitest::Test
       :<, after_bundle.index('run_checked "bin/rails db:prepare"')
     assert_operator after_bundle.index("configure_active_storage_db"),
       :<, after_bundle.index('run_checked "bin/rails db:prepare"')
-    assert_operator after_bundle.index('configure_dokploy if VALUES.fetch("deployment") == "dokploy"'),
+    assert_operator after_bundle.index("configure_kamal"),
       :<, after_bundle.index('run_checked "bin/rails db:prepare"')
     assert_operator after_bundle.index('run_checked "bin/rails db:prepare"'),
       :<, after_bundle.index('run_checked "bin/rails tailwindcss:build"')

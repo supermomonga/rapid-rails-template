@@ -18,7 +18,6 @@ module RapidRailsTemplate
       "api" => %w[enable disable],
       "action_cable" => %w[solid_cable skip],
       "mail" => %w[auto use skip],
-      "deployment" => %w[dokploy none],
       "default_locale" => %w[ja en]
     }.freeze
 
@@ -34,7 +33,6 @@ module RapidRailsTemplate
       "api" => "enable",
       "action_cable" => "skip",
       "mail" => "auto",
-      "deployment" => "dokploy",
       "default_locale" => "ja"
     }.freeze
 
@@ -50,6 +48,9 @@ module RapidRailsTemplate
 
     def initialize(answers)
       provided_answers = answers.transform_keys(&:to_s)
+      unknown_keys = provided_answers.keys - VALID_VALUES.keys
+      raise InvalidConfiguration, "不明な設定です: #{unknown_keys.join(', ')}" if unknown_keys.any?
+
       validate_explicit_dependencies!(provided_answers)
       resolved_defaults = DEFAULTS.dup
       if !provided_answers.key?("maintenance_tasks") &&

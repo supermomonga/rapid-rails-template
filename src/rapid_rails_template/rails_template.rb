@@ -1,13 +1,14 @@
 # frozen_string_literal: true
 
 require "json"
+require "shellwords"
 require "yaml"
 require "digest"
 
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods profile_features api action_cable mail deployment default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods profile_features api action_cable mail default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -56,7 +57,6 @@ gem "mission_control-jobs", "1.1.0" if VALUES.fetch("job_operations") == "enable
 gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
 gem "solid_cable" if VALUES.fetch("action_cable") == "solid_cable"
-gem "foreman", require: false if VALUES.fetch("deployment") == "dokploy"
 
 get RUBOCOP_URL, ".rubocop.yml"
 
@@ -70,7 +70,7 @@ def remove_ruby_call_statement(path, call_name, first_argument)
   queue = [result.value]
   until queue.empty?
     node = queue.shift
-    if node.is_a?(Prism::CallNode) && node.name == call_name
+    if node.is_a?(Prism::CallNode) && node.name == call_name.to_sym
       argument = node.arguments&.arguments&.first
       value = argument.respond_to?(:unescaped) ? argument.unescaped : argument.respond_to?(:value) ? argument.value.to_s : nil
       calls << node if value == first_argument
@@ -85,6 +85,9 @@ def remove_ruby_call_statement(path, call_name, first_argument)
   line_end += 1 if line_end < source.bytesize
   File.binwrite(path, source.byteslice(0, line_start) + source.byteslice(line_end..))
 end
+
+remove_ruby_call_statement "Gemfile", "gem", "kamal"
+gem "kamal", "~> 2.11", require: false
 
 def configure_devise_routes
   require "prism"
@@ -7746,7 +7749,6 @@ def configure_default_views
   solid_queue_enabled = VALUES.fetch("active_job") == "solid_queue"
   maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
-  dokploy_enabled = VALUES.fetch("deployment") == "dokploy"
   profile_features = VALUES.fetch("profile_features")
   profile_enabled = profile_features.any?
   avatar_enabled = profile_features.include?("avatar")
@@ -8815,11 +8817,10 @@ def configure_default_views
         end
     RUBY
   else
-    production_worker_assertion = if dokploy_enabled
-      expected_workers = solid_queue_enabled ? 1 : 0
-      %(assert_equal #{expected_workers}, Rails.root.join("Procfile.prod").read.lines.count { |line| line.start_with?("worker:") })
+    production_worker_assertion = if solid_queue_enabled
+      %(assert_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read))
     else
-      %(assert_not Rails.root.join("Procfile.prod").exist?)
+      %(assert_no_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read))
     end
     solid_queue_cleanup_assertion = if solid_queue_enabled
       <<~RUBY
@@ -10033,11 +10034,7 @@ def install_solid_components
 end
 
 def install_job_operations
-  production_worker = if VALUES.fetch("deployment") == "dokploy"
-    "Dokployでは既存の`worker: bin/jobs --mode async`がworker、dispatcher、schedulerを起動します。cleanup専用processは追加しません。"
-  else
-    "このテンプレートはproduction worker processを設定しません。利用環境に合わせてSolid Queue worker、dispatcher、schedulerの起動と監視を別途構成してください。"
-  end
+  production_worker = "Kamalの`worker` roleで`bin/jobs --mode async`を起動し、worker、dispatcher、schedulerを共有します。cleanup専用roleは追加しません。"
   authentication_route_bridge = ""
 
   environment "config.mission_control.jobs.adapters = [:solid_queue]"
@@ -10758,11 +10755,7 @@ def install_job_operations
 end
 
 def install_maintenance_tasks
-  production_worker = if VALUES.fetch("deployment") == "dokploy"
-    "Dokployでは既存の`worker: bin/jobs --mode async`がMaintenance Taskも処理します。専用workerは追加しません。"
-  else
-    "このテンプレートはproduction worker processを設定しません。利用環境に合わせてSolid Queue workerの起動と監視を別途構成してください。"
-  end
+  production_worker = "Kamalの既存`worker` roleがMaintenance Taskも処理します。専用roleは追加しません。"
   authentication_route_bridge = ""
 
   generate "maintenance_tasks:install"
@@ -13426,24 +13419,13 @@ def configure_sorbet_shims
 end
 
 def configure_database
-  dokploy = VALUES.fetch("deployment") == "dokploy"
-  production_paths = if dokploy
-    {
-      "primary" => "<%= ENV.fetch(\"DATABASE_PATH\", \"/data/production.sqlite3\") %>",
-      "storage" => "<%= ENV.fetch(\"STORAGE_DATABASE_PATH\", \"/data/production_storage.sqlite3\") %>",
-      "queue" => "<%= ENV.fetch(\"QUEUE_DATABASE_PATH\", \"/data/production_queue.sqlite3\") %>",
-      "cache" => "<%= ENV.fetch(\"CACHE_DATABASE_PATH\", \"/data/production_cache.sqlite3\") %>",
-      "cable" => "<%= ENV.fetch(\"CABLE_DATABASE_PATH\", \"/data/production_cable.sqlite3\") %>"
-    }
-  else
-    {
-      "primary" => "storage/production.sqlite3",
-      "storage" => "storage/production_storage.sqlite3",
-      "queue" => "storage/production_queue.sqlite3",
-      "cache" => "storage/production_cache.sqlite3",
-      "cable" => "storage/production_cable.sqlite3"
-    }
-  end
+  production_paths = {
+    "primary" => "/rails/storage/production.sqlite3",
+    "storage" => "/rails/storage/production_storage.sqlite3",
+    "queue" => "/rails/storage/production_queue.sqlite3",
+    "cache" => "/rails/storage/production_cache.sqlite3",
+    "cable" => "/rails/storage/production_cable.sqlite3"
+  }
   databases = {
     "primary" => { "database" => production_paths.fetch("primary") },
     "storage" => { "database" => production_paths.fetch("storage"), "migrations_paths" => "db/storage_migrate" }
@@ -13489,62 +13471,757 @@ def configure_database
   create_file "config/database.yml", database_yaml, force: true
 end
 
-def configure_dokploy
-  processes = ["web: bin/thrust bin/rails server"]
-  processes << "worker: bin/jobs --mode async" if VALUES.fetch("active_job") == "solid_queue"
-  create_file "Procfile.prod", processes.join("\n") + "\n"
+def kamal_restore_cli_body
+  <<~'RUBY'
+    require "open3"
+    require "optparse"
+    require "securerandom"
+    require "shellwords"
+    require "time"
 
-  replicas = [
-    "  - path: ${DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_REPLICA_URL}",
-    "  - path: ${STORAGE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_STORAGE_REPLICA_URL}"
+    module KamalRestore
+      KAMAL = File.expand_path("kamal", __dir__)
+
+      class CommandRunner
+        def initialize(output:, error:)
+          @output = output
+          @error = error
+        end
+
+        def run!(*arguments)
+          stdout, stderr, status = Open3.capture3(KAMAL, *arguments)
+          @output.write(stdout)
+          @error.write(stderr)
+          return stdout if status.success?
+
+          raise Error, "command failed (#{status.exitstatus}): bin/kamal #{arguments.join(" ")}"
+        rescue SystemCallError => error
+          raise Error, "could not execute bin/kamal: #{error.message}"
+        end
+
+        def ignore_failure(*arguments)
+          run!(*arguments)
+        rescue Error => error
+          @error.puts "cleanup warning: #{error.message}"
+        end
+      end
+
+      class CLI
+        def initialize(argv, input: $stdin, output: $stdout, error: $stderr, runner: nil)
+          @argv = argv.dup
+          @input = input
+          @output = output
+          @error = error
+          @runner = runner || CommandRunner.new(output:, error:)
+          @marker_created = false
+          @quiesced = false
+          @lock_held = false
+          @database_swapped = false
+        end
+
+        def run
+          options = parse_options
+          if options.fetch(:rollback)
+            run_rollback(options.fetch(:rollback))
+          else
+            run_restore(timestamp: options.fetch(:timestamp), plan_only: options.fetch(:plan))
+          end
+          0
+        rescue OptionParser::ParseError, ArgumentError, Error => error
+          @error.puts "Restore failed: #{error.message}"
+          1
+        rescue Interrupt
+          @error.puts "Restore interrupted"
+          130
+        end
+
+        private
+
+        def parse_options
+          options = { timestamp: nil, plan: false, rollback: nil }
+          parser = OptionParser.new do |option_parser|
+            option_parser.banner = "Usage: bin/kamal-restore [--plan] [--timestamp=RFC3339] | --rollback=OPERATION_ID"
+            option_parser.on("--timestamp=RFC3339") { |value| options[:timestamp] = normalize_timestamp(value) }
+            option_parser.on("--plan") { options[:plan] = true }
+            option_parser.on("--rollback=OPERATION_ID") { |value| options[:rollback] = validate_operation_id(value) }
+          end
+          parser.parse!(@argv)
+          raise OptionParser::InvalidArgument, @argv.join(" ") unless @argv.empty?
+          if options.fetch(:rollback) && (options.fetch(:timestamp) || options.fetch(:plan))
+            raise OptionParser::InvalidArgument, "--rollback cannot be combined with --timestamp or --plan"
+          end
+
+          options
+        end
+
+        def normalize_timestamp(value)
+          Time.iso8601(value).utc.iso8601
+        rescue ArgumentError
+          raise OptionParser::InvalidArgument, "--timestamp must be RFC3339"
+        end
+
+        def validate_operation_id(value)
+          raise OptionParser::InvalidArgument, "invalid operation id" unless OPERATION_ID.match?(value)
+
+          value
+        end
+
+        def run_restore(timestamp:, plan_only:)
+          target = timestamp || "latest"
+          @output.puts "Application: #{APP_ID}"
+          @output.puts "Restore target: #{target}"
+          preview_restore(timestamp)
+          return if plan_only
+
+          confirm!("RESTORE #{APP_ID} #{target}")
+          operation_id = "#{Time.now.utc.strftime(TIMESTAMP_FORMAT)}-#{SecureRandom.hex(6)}"
+          begin
+            begin_restore_operation(operation_id)
+            quiesce_application
+            sync_databases
+            @runner.run!("accessory", "stop", "litestream")
+            acquire_lock!("Restore #{APP_ID} #{operation_id}")
+            app_exec!("bin/kamal-restore-volume", "prepare", operation_id)
+            restore_databases(operation_id, timestamp)
+            @database_swapped = true
+            app_exec!("bin/kamal-restore-volume", "install", operation_id)
+            release_lock!
+            start_application
+            remove_marker
+          rescue StandardError, Interrupt
+            recover_after_failure(operation_id:)
+            raise
+          end
+
+          @output.puts "Restore completed: #{operation_id}"
+          @output.puts "Rollback: bin/kamal-restore --rollback=#{operation_id}"
+        end
+
+        def run_rollback(operation_id)
+          @output.puts "Application: #{APP_ID}"
+          @output.puts "Rollback operation: #{operation_id}"
+          confirm!("ROLLBACK #{APP_ID} #{operation_id}")
+          begin
+            begin_restore_operation(operation_id)
+            quiesce_application
+            sync_databases
+            @runner.run!("accessory", "stop", "litestream")
+            acquire_lock!("Rollback #{APP_ID} #{operation_id}")
+            @database_swapped = true
+            app_exec!("bin/kamal-restore-volume", "rollback", operation_id)
+            release_lock!
+            start_application
+            remove_marker
+          rescue StandardError, Interrupt
+            recover_after_failure(operation_id:)
+            raise
+          end
+
+          @output.puts "Rollback completed: #{operation_id}"
+        end
+
+        def confirm!(phrase)
+          unless @input.tty? && @output.tty?
+            raise Error, "write operations require an interactive terminal"
+          end
+
+          @output.puts "Type the following phrase exactly to continue:"
+          @output.puts phrase
+          @output.print "> "
+          @output.flush
+          actual = @input.gets&.chomp
+          raise Error, "confirmation did not match" unless actual == phrase
+        end
+
+        def preview_restore(timestamp)
+          DATABASES.each do |database|
+            @output.puts "\nDatabase: #{database.fetch("name")}"
+            @runner.run!(*accessory_restore_command(
+              database,
+              output_path: "/tmp/#{APP_ID}-#{database.fetch("name")}-restore-preview.sqlite3",
+              timestamp:,
+              dry_run: true
+            ))
+          end
+        end
+
+        def begin_restore_operation(operation_id)
+          server_exec!("mkdir", "-p", ".kamal")
+          server_exec!("touch", MARKER)
+          @marker_created = true
+          acquire_lock!("Restore barrier #{APP_ID} #{operation_id}")
+          release_lock!
+        rescue StandardError
+          remove_marker
+          raise
+        end
+
+        def quiesce_application
+          @runner.run!("app", "maintenance")
+          @quiesced = true
+          @runner.run!("app", "stop")
+        end
+
+        def sync_databases
+          DATABASES.each do |database|
+            @runner.run!(
+              "accessory", "exec", "litestream", "--reuse",
+              "litestream", "sync", "-socket", SOCKET_PATH, "-wait", "-timeout", "120",
+              database.fetch("path")
+            )
+          end
+        end
+
+        def restore_databases(operation_id, timestamp)
+          DATABASES.each do |database|
+            output_path = "/rails/storage/.restore/#{operation_id}/staged/#{database.fetch("name")}.sqlite3"
+            @runner.run!(*accessory_restore_command(database, output_path:, timestamp:, dry_run: true))
+            @runner.run!(*accessory_restore_command(database, output_path:, timestamp:, dry_run: false))
+          end
+        end
+
+        def accessory_restore_command(database, output_path:, timestamp:, dry_run:)
+          command = [
+            "accessory", "exec", "litestream",
+            "restore", "-config", "/etc/litestream.yml", "-json", "-o", output_path
+          ]
+          command << "-dry-run" if dry_run
+          command.concat(["-integrity-check", "full"]) unless dry_run
+          command.concat(["-timestamp", timestamp]) if timestamp
+          command << database.fetch("path")
+          command
+        end
+
+        def app_exec!(*command)
+          @runner.run!("app", "exec", "-p", "-r", "web", *command)
+        end
+
+        def server_exec!(*command)
+          @runner.run!("server", "exec", Shellwords.join(command))
+        end
+
+        def acquire_lock!(message)
+          @runner.run!("lock", "acquire", "-m", message)
+          @lock_held = true
+        end
+
+        def release_lock!
+          return unless @lock_held
+
+          @runner.run!("lock", "release")
+          @lock_held = false
+        end
+
+        def start_application
+          @runner.run!("accessory", "start", "litestream")
+          app_exec!("bin/wait-for-litestream")
+          @runner.run!("app", "start", "-r", "web")
+          @runner.run!("app", "start", "-r", "worker") if HAS_WORKER
+          @runner.run!("app", "live")
+          @quiesced = false
+        end
+
+        def remove_marker
+          return unless @marker_created
+
+          server_exec!("rm", "-f", MARKER)
+          @marker_created = false
+        end
+
+        def recover_after_failure(operation_id: nil)
+          if @lock_held
+            @runner.ignore_failure("lock", "release")
+            @lock_held = false
+          end
+
+          if @database_swapped
+            @runner.ignore_failure("app", "maintenance")
+            @runner.ignore_failure("app", "stop")
+            @runner.ignore_failure("accessory", "stop", "litestream")
+            @error.puts "Database files changed; services remain stopped for inspection."
+            @error.puts "Rollback: bin/kamal-restore --rollback=#{operation_id}" if operation_id
+            return
+          end
+
+          if @quiesced
+            @runner.ignore_failure("accessory", "start", "litestream")
+            @runner.ignore_failure("app", "exec", "-p", "-r", "web", "bin/wait-for-litestream")
+            @runner.ignore_failure("app", "start", "-r", "web")
+            @runner.ignore_failure("app", "start", "-r", "worker") if HAS_WORKER
+            @runner.ignore_failure("app", "live")
+            @quiesced = false
+          end
+          if @marker_created
+            @runner.ignore_failure("server", "exec", Shellwords.join(["rm", "-f", MARKER]))
+            @marker_created = false
+          end
+        end
+      end
+    end
+
+    exit KamalRestore::CLI.new(ARGV).run if $PROGRAM_NAME == __FILE__
+  RUBY
+end
+
+def configure_kamal_restore(app_id, databases)
+  database_paths = databases.to_h { |database| [database.fetch("name"), database.fetch("path")] }
+  volume_helper = <<~RUBY
+    #!/usr/bin/env ruby
+    APP_ID = #{app_id.inspect}
+    DATABASE_PATHS = #{database_paths.inspect}.freeze
+  RUBY
+  volume_helper << <<~'RUBY'
+    require "fileutils"
+    require "json"
+
+    STORAGE_ROOT = File.dirname(DATABASE_PATHS.values.fetch(0))
+    RESTORE_ROOT = File.join(STORAGE_ROOT, ".restore")
+    SIDECAR_SUFFIXES = ["", "-wal", "-shm", "-journal"].freeze
+    OPERATION_ID = /\A\d{8}T\d{6}Z-[0-9a-f]{12}\z/
+
+    def operation_directory(operation_id)
+      raise "invalid operation id: #{operation_id}" unless OPERATION_ID.match?(operation_id)
+
+      File.join(RESTORE_ROOT, operation_id)
+    end
+
+    def database_files(path)
+      SIDECAR_SUFFIXES.map { |suffix| "#{path}#{suffix}" }
+    end
+
+    def fsync_directory(path)
+      File.open(path) { |directory| directory.fsync }
+    end
+
+    def rename_file(source, destination)
+      File.rename(source, destination)
+      fsync_directory(File.dirname(source))
+      fsync_directory(File.dirname(destination)) unless File.dirname(source) == File.dirname(destination)
+    end
+
+    def prepare(operation_id)
+      directory = operation_directory(operation_id)
+      raise "restore operation already exists: #{operation_id}" if File.exist?(directory)
+
+      FileUtils.mkdir_p(File.join(directory, "staged"))
+      fsync_directory(RESTORE_ROOT)
+      puts directory
+    end
+
+    def install(operation_id)
+      directory = operation_directory(operation_id)
+      staged_directory = File.join(directory, "staged")
+      previous_directory = File.join(directory, "previous")
+      raise "restore operation is not prepared: #{operation_id}" unless File.directory?(staged_directory)
+      raise "restore operation is already installed: #{operation_id}" if File.exist?(previous_directory)
+
+      DATABASE_PATHS.each do |name, path|
+        raise "staged database is missing: #{name}" unless File.file?(File.join(staged_directory, "#{name}.sqlite3"))
+        raise "current database is missing: #{path}" unless File.file?(path)
+      end
+
+      FileUtils.mkdir(previous_directory)
+      moved_previous = []
+      installed = []
+      begin
+        DATABASE_PATHS.each_value do |path|
+          database_files(path).select { |candidate| File.exist?(candidate) }.each do |source|
+            destination = File.join(previous_directory, File.basename(source))
+            rename_file(source, destination)
+            moved_previous << [source, destination]
+          end
+        end
+        DATABASE_PATHS.each do |name, path|
+          source = File.join(staged_directory, "#{name}.sqlite3")
+          rename_file(source, path)
+          installed << [source, path]
+        end
+
+        manifest = {
+          "schema_version" => 1,
+          "app_id" => APP_ID,
+          "operation_id" => operation_id,
+          "database_paths" => DATABASE_PATHS,
+          "installed_at" => Time.now.utc.iso8601
+        }
+        temporary_manifest = File.join(directory, "manifest.json.tmp")
+        File.write(temporary_manifest, JSON.pretty_generate(manifest) + "\n")
+        File.open(temporary_manifest) { |file| file.fsync }
+        rename_file(temporary_manifest, File.join(directory, "manifest.json"))
+      rescue Exception
+        installed.reverse_each do |source, destination|
+          rename_file(destination, source) if File.exist?(destination)
+        end
+        moved_previous.reverse_each do |source, destination|
+          rename_file(destination, source) if File.exist?(destination)
+        end
+        raise
+      end
+
+      puts operation_id
+    end
+
+    def rollback(operation_id)
+      directory = operation_directory(operation_id)
+      previous_directory = File.join(directory, "previous")
+      current_directory = File.join(directory, "replaced-by-rollback")
+      manifest_path = File.join(directory, "manifest.json")
+      raise "restore manifest is missing: #{operation_id}" unless File.file?(manifest_path)
+      raise "rollback was already completed: #{operation_id}" if File.exist?(current_directory)
+
+      manifest = JSON.parse(File.read(manifest_path))
+      raise "restore manifest app id mismatch" unless manifest.fetch("app_id") == APP_ID
+      raise "restore manifest database set mismatch" unless manifest.fetch("database_paths") == DATABASE_PATHS
+      DATABASE_PATHS.each_value do |path|
+        previous = File.join(previous_directory, File.basename(path))
+        raise "previous database is missing: #{previous}" unless File.file?(previous)
+        raise "current database is missing: #{path}" unless File.file?(path)
+      end
+
+      FileUtils.mkdir(current_directory)
+      moved_current = []
+      restored_previous = []
+      begin
+        DATABASE_PATHS.each_value do |path|
+          database_files(path).select { |candidate| File.exist?(candidate) }.each do |source|
+            destination = File.join(current_directory, File.basename(source))
+            rename_file(source, destination)
+            moved_current << [source, destination]
+          end
+        end
+        DATABASE_PATHS.each_value do |path|
+          database_files(path).each do |destination|
+            source = File.join(previous_directory, File.basename(destination))
+            next unless File.exist?(source)
+
+            rename_file(source, destination)
+            restored_previous << [source, destination]
+          end
+        end
+      rescue Exception
+        restored_previous.reverse_each do |source, destination|
+          rename_file(destination, source) if File.exist?(destination)
+        end
+        moved_current.reverse_each do |source, destination|
+          rename_file(destination, source) if File.exist?(destination)
+        end
+        raise
+      end
+
+      puts operation_id
+    end
+
+    require "time"
+
+    command, operation_id, *extra = ARGV
+    raise "usage: bin/kamal-restore-volume prepare|install|rollback OPERATION_ID" if command.nil? || operation_id.nil? || extra.any?
+
+    case command
+    when "prepare" then prepare(operation_id)
+    when "install" then install(operation_id)
+    when "rollback" then rollback(operation_id)
+    else raise "unknown command: #{command}"
+    end
+  RUBY
+  create_file "bin/kamal-restore-volume", volume_helper, force: true
+  chmod "bin/kamal-restore-volume", 0o755
+
+  restore_cli = <<~RUBY
+    #!/usr/bin/env ruby
+    module KamalRestore
+      APP_ID = #{app_id.inspect}
+      DATABASES = #{databases.inspect}.freeze
+      HAS_WORKER = #{databases.any? { |database| database.fetch("name") == "queue" }}
+      MARKER = ".kamal/#{app_id}-restore-in-progress"
+  RUBY
+  restore_cli << <<~'RUBY'
+      SOCKET_PATH = "/rails/storage/.litestream.sock"
+      TIMESTAMP_FORMAT = "%Y%m%dT%H%M%SZ"
+      OPERATION_ID = /\A\d{8}T\d{6}Z-[0-9a-f]{12}\z/
+
+      Error = Class.new(StandardError)
+    end
+  RUBY
+  restore_cli << kamal_restore_cli_body
+  create_file "bin/kamal-restore", restore_cli, force: true
+  chmod "bin/kamal-restore", 0o755
+end
+
+def configure_kamal
+  app_id = PLAN.fetch("app_id")
+  databases = [
+    { "name" => "primary", "path" => "/rails/storage/production.sqlite3", "replica_env" => "LITESTREAM_REPLICA_URL" },
+    { "name" => "storage", "path" => "/rails/storage/production_storage.sqlite3", "replica_env" => "LITESTREAM_STORAGE_REPLICA_URL" }
   ]
-  replicas << "  - path: ${QUEUE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_QUEUE_REPLICA_URL}" if VALUES.fetch("active_job") == "solid_queue"
-  replicas << "  - path: ${CABLE_DATABASE_PATH}\n    replicas:\n      - url: ${LITESTREAM_CABLE_REPLICA_URL}" if VALUES.fetch("action_cable") == "solid_cable"
-  create_file "litestream.yml", "dbs:\n#{replicas.join("\n")}\n"
-  create_file ".dockerignore", ".git\nlog/*\ntmp/*\nstorage/*\nnode_modules\nconfig/master.key\nmise.local.toml\n"
-  create_file "bin/docker-entrypoint", <<~SH
-    #!/bin/sh
-    set -eu
-    mkdir -p /data
-    bundle exec rails db:prepare
-    exec "$@"
-  SH
-  chmod "bin/docker-entrypoint", 0o755
-  create_file "Dockerfile.prod", <<~DOCKERFILE
+  if VALUES.fetch("active_job") == "solid_queue"
+    databases << { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3", "replica_env" => "LITESTREAM_QUEUE_REPLICA_URL" }
+  end
+  if VALUES.fetch("action_cable") == "solid_cable"
+    databases << { "name" => "cable", "path" => "/rails/storage/production_cable.sqlite3", "replica_env" => "LITESTREAM_CABLE_REPLICA_URL" }
+  end
+
+  litestream_config = {
+    "socket" => {
+      "enabled" => true,
+      "path" => "/rails/storage/.litestream.sock",
+      "permissions" => "0660"
+    },
+    "dbs" => databases.map do |database|
+      {
+        "path" => database.fetch("path"),
+        "restore-if-db-not-exists" => true,
+        "replica" => { "url" => "$" + "{#{database.fetch("replica_env")}}" }
+      }
+    end
+  }
+  create_file "config/litestream.yml", YAML.dump(litestream_config, line_width: -1), force: true
+
+  secret_names = %w[RAILS_MASTER_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY]
+  secret_names.concat(databases.map { |database| database.fetch("replica_env") })
+  secret_names.concat(%w[VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT]) if VALUES.fetch("web_push") == "use"
+  kamal_secrets = secret_names.map do |name|
+    if name == "RAILS_MASTER_KEY"
+      "RAILS_MASTER_KEY=$(cat config/master.key)"
+    else
+      "#{name}=$" + "{#{name}:?#{name} is required}"
+    end
+  end
+  create_file ".kamal/secrets", kamal_secrets.join("\n") + "\n", force: true
+
+  worker_role = if VALUES.fetch("active_job") == "solid_queue"
+    "  worker:\n    hosts:\n      - <%= ENV.fetch(\"KAMAL_DEPLOY_HOST\") %>\n    cmd: bin/jobs --mode async\n"
+  else
+    ""
+  end
+  accessory_secret_lines = secret_names.reject { |name| name == "RAILS_MASTER_KEY" || name.start_with?("VAPID_") }
+    .map { |name| "        - #{name}" }.join("\n")
+  vapid_secret_lines = if VALUES.fetch("web_push") == "use"
+    "    - VAPID_PUBLIC_KEY\n    - VAPID_PRIVATE_KEY\n    - VAPID_SUBJECT\n"
+  else
+    ""
+  end
+  create_file "config/deploy.yml", <<~YAML, force: true
+    service: #{app_id}
+    image: #{app_id}
+    minimum_version: 2.11.0
+    primary_role: web
+
+    servers:
+      web:
+        - <%= ENV.fetch("KAMAL_DEPLOY_HOST") %>
+    #{worker_role}
+    proxy:
+      ssl: true
+      host: <%= ENV.fetch("KAMAL_PROXY_HOST") %>
+      app_port: 80
+      healthcheck:
+        path: /up
+
+    registry:
+      server: localhost:5555
+
+    builder:
+      arch: <%= ENV.fetch("KAMAL_BUILD_ARCH", "amd64") %>
+
+    env:
+      clear:
+        APPLICATION_ORIGIN: https://<%= ENV.fetch("KAMAL_PROXY_HOST") %>
+      secret:
+        - RAILS_MASTER_KEY
+    #{vapid_secret_lines}
+    volumes:
+      - "#{app_id}_storage:/rails/storage"
+
+    asset_path: /rails/public/assets
+
+    accessories:
+      litestream:
+        image: litestream/litestream:0.5.15
+        host: <%= ENV.fetch("KAMAL_DEPLOY_HOST") %>
+        cmd: replicate -config /etc/litestream.yml
+        files:
+          - config/litestream.yml:/etc/litestream.yml
+        volumes:
+          - "#{app_id}_storage:/rails/storage"
+        env:
+          clear:
+            AWS_REGION: <%= ENV.fetch("AWS_REGION", "us-east-1") %>
+          secret:
+    #{accessory_secret_lines}
+        options:
+          user: "1000:1000"
+  YAML
+
+  create_file ".dockerignore", <<~IGNORE, force: true
+    .git
+    .kamal
+    log/*
+    tmp/*
+    storage/*
+    node_modules
+    config/master.key
+    mise.local.toml
+  IGNORE
+
+  create_file "Dockerfile", <<~'DOCKERFILE', force: true
     # syntax=docker/dockerfile:1
+    # check=error=true
     ARG RUBY_VERSION=4.0.0
     FROM ruby:${RUBY_VERSION}-slim AS base
     WORKDIR /rails
-    ENV RAILS_ENV=production BUNDLE_DEPLOYMENT=1 BUNDLE_PATH=/usr/local/bundle BUNDLE_WITHOUT=development:test RUBY_YJIT_ENABLE=1
+    RUN apt-get update -qq && \
+        apt-get install --no-install-recommends -y ca-certificates curl libjemalloc2 libsqlite3-0 libvips && \
+        rm -rf /var/lib/apt/lists /var/cache/apt/archives
+    ENV RAILS_ENV=production \
+        BUNDLE_DEPLOYMENT=1 \
+        BUNDLE_PATH=/usr/local/bundle \
+        BUNDLE_WITHOUT=development:test \
+        LD_PRELOAD=libjemalloc.so.2 \
+        RUBY_YJIT_ENABLE=1
 
     FROM base AS build
-    RUN apt-get update -qq && apt-get install --no-install-recommends -y build-essential git nodejs npm pkg-config autoconf automake libtool libssl-dev libsqlite3-dev libyaml-dev && rm -rf /var/lib/apt/lists/*
+    RUN apt-get update -qq && \
+        apt-get install --no-install-recommends -y build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev && \
+        rm -rf /var/lib/apt/lists /var/cache/apt/archives
     COPY Gemfile Gemfile.lock ./
-    RUN bundle install
+    RUN bundle install && rm -rf /root/.bundle
     COPY package.json package-lock.json ./
     RUN npm ci
     COPY . .
-    RUN APPLICATION_ORIGIN=https://build.example.com SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile && rm -rf node_modules
+    RUN APPLICATION_ORIGIN=https://build.example.com SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile && \
+        rm -rf node_modules
 
-    FROM base AS final
-    ARG TARGETARCH
-    ARG LITESTREAM_VERSION=0.5.14
-    RUN case "${TARGETARCH}" in amd64) LITESTREAM_ARCH=x86_64 ;; arm64) LITESTREAM_ARCH=arm64 ;; *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; esac && \
-        LITESTREAM_ASSET="litestream-${LITESTREAM_VERSION}-linux-${LITESTREAM_ARCH}.tar.gz" && \
-        apt-get update -qq && apt-get install --no-install-recommends -y ca-certificates curl libjemalloc2 libsqlite3-0 libvips && \
-        curl -fsSLO "https://github.com/benbjohnson/litestream/releases/download/v${LITESTREAM_VERSION}/${LITESTREAM_ASSET}" && \
-        curl -fsSLO https://github.com/benbjohnson/litestream/releases/download/v${LITESTREAM_VERSION}/checksums.txt && \
-        grep " ${LITESTREAM_ASSET}$" checksums.txt | sha256sum -c - && \
-        tar -xzf "${LITESTREAM_ASSET}" -C /usr/local/bin && \
-        rm -f checksums.txt litestream-*.tar.gz && rm -rf /var/lib/apt/lists/*
-    ENV LD_PRELOAD=libjemalloc.so.2
-    COPY --from=build /usr/local/bundle /usr/local/bundle
-    COPY --from=build /rails /rails
-    VOLUME ["/data"]
+    FROM base
+    RUN groupadd --system --gid 1000 rails && \
+        useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash
+    COPY --chown=rails:rails --from=build /usr/local/bundle /usr/local/bundle
+    COPY --chown=rails:rails --from=build /rails /rails
+    USER 1000:1000
     EXPOSE 80
     ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-    CMD ["litestream", "replicate", "-config", "/rails/litestream.yml", "-exec", "bundle exec foreman start --procfile=Procfile.prod"]
+    CMD ["./bin/thrust", "./bin/rails", "server"]
   DOCKERFILE
+
+  create_file "bin/docker-entrypoint", <<~'SH', force: true
+    #!/bin/bash
+    set -euo pipefail
+
+    if [[ "${1:-}" == "./bin/thrust" && "${2:-}" == "./bin/rails" && "${3:-}" == "server" ]]; then
+      /rails/bin/wait-for-litestream
+      ./bin/rails db:prepare
+    elif [[ "${1:-}" == "bin/jobs" || "${1:-}" == "./bin/jobs" ]]; then
+      /rails/bin/wait-for-litestream
+    fi
+
+    exec "$@"
+  SH
+  chmod "bin/docker-entrypoint", 0o755
+
+  create_file "bin/wait-for-litestream", <<~'RUBY', force: true
+    #!/usr/bin/env ruby
+    require "socket"
+    require "timeout"
+
+    socket_path = "/rails/storage/.litestream.sock"
+    begin
+      Timeout.timeout(Integer(ENV.fetch("LITESTREAM_READY_TIMEOUT", "60"))) do
+        loop do
+          begin
+            UNIXSocket.open(socket_path) do |socket|
+              socket.write("GET /status HTTP/1.0\r\nHost: localhost\r\n\r\n")
+              exit 0 if socket.gets&.match?(/\AHTTP\/1\.[01] 200\b/)
+            end
+          rescue Errno::ENOENT, Errno::ECONNREFUSED
+            nil
+          end
+          sleep 1
+        end
+      end
+    rescue Timeout::Error
+      warn "Litestream did not become ready at #{socket_path}"
+      exit 1
+    end
+  RUBY
+  chmod "bin/wait-for-litestream", 0o755
+
+  configure_kamal_restore(app_id, databases)
+
+  escaped_restore_marker = Shellwords.escape(".kamal/#{app_id}-restore-in-progress")
+  create_file ".kamal/hooks/pre-deploy", <<~SH, force: true
+    #!/bin/sh
+    set -eu
+    if ! bin/kamal server exec "test ! -e #{escaped_restore_marker}"; then
+      echo "#{app_id}: database restore is in progress; deploy aborted" >&2
+      exit 1
+    fi
+  SH
+  chmod ".kamal/hooks/pre-deploy", 0o755
+
+  database_rows = databases.map do |database|
+    "| #{database.fetch("name")} | `#{database.fetch("path")}` | `#{database.fetch("replica_env")}` |"
+  end.join("\n")
+  create_file "docs/deployment.md", <<~MARKDOWN, force: true
+    # Kamal deployment and SQLite recovery
+
+    This application supports Kamal 2.11 on one Linux host. Web, the optional Solid Queue worker,
+    and the Litestream 0.5.15 accessory share the `#{app_id}_storage` Docker volume. Multiple
+    deployment hosts and network filesystems are outside the supported topology.
+
+    ## Required local environment
+
+    Set `KAMAL_DEPLOY_HOST`, `KAMAL_PROXY_HOST`, `AWS_ACCESS_KEY_ID`,
+    `AWS_SECRET_ACCESS_KEY`, and every replica URL listed below before running Kamal.
+    Set `AWS_REGION` when the replica does not use `us-east-1`, and set `KAMAL_BUILD_ARCH`
+    when the host architecture is not `amd64`. Keep all credential values outside the
+    repository; `.kamal/secrets` only reads them from the local environment.
+
+    | Database | Local path | Replica URL variable |
+    | --- | --- | --- |
+    #{database_rows}
+
+    ## Setup and routine operations
+
+    Run `bin/kamal setup` for the first deployment. Litestream restores a database only when
+    its local file does not exist. A replica with no backup is treated as a new database;
+    every other restore or replication error prevents the application from becoming ready.
+
+    Accessories are not replaced by a normal application deploy. After changing the Litestream
+    image, configuration, files, or secrets, run `bin/kamal accessory reboot litestream`.
+    Use `bin/kamal accessory details litestream` and `bin/kamal accessory logs litestream`
+    for status and logs. The application entrypoint waits for the Litestream control socket
+    before `db:prepare` or the Solid Queue worker starts.
+
+    ## Manual restore
+
+    Preview the latest available restore without changing production:
+
+        bin/kamal-restore --plan
+
+    Preview or restore a point in time:
+
+        bin/kamal-restore --plan --timestamp=2026-08-16T00:00:00Z
+        bin/kamal-restore --timestamp=2026-08-16T00:00:00Z
+
+    `bin/kamal-restore` with no arguments restores the latest available state. A write operation
+    requires a TTY and an exact phrase containing the application ID and target. There is no
+    confirmation bypass or force option. All replicated databases are restored and fully checked
+    before any current database is replaced.
+
+    A successful restore prints an operation ID and retains the previous database files, including
+    WAL, SHM, and journal sidecars, under `/rails/storage/.restore/OPERATION_ID/previous`.
+    Roll back with:
+
+        bin/kamal-restore --rollback=OPERATION_ID
+
+    Rollback also requires an exact typed confirmation. Retained restore directories are never
+    deleted automatically. Remove one only after separately confirming that both the restored
+    application and its remote replicas are correct.
+
+    During restore, a remote marker makes the generated `pre-deploy` hook reject new deployments.
+    The destructive file switch runs while the Kamal deploy lock is held. If startup fails after
+    the switch, services remain stopped and the marker remains present for inspection.
+  MARKDOWN
+  append_to_file "README.md", "\n## Deployment and recovery\n\nSee [docs/deployment.md](docs/deployment.md) for Kamal, Litestream, and confirmed restore operations.\n"
 end
 
 after_bundle do
@@ -13575,7 +14252,7 @@ after_bundle do
   install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"
   configure_database
   configure_active_storage_db
-  configure_dokploy if VALUES.fetch("deployment") == "dokploy"
+  configure_kamal
   run_checked "bin/rails db:prepare"
   run_checked "bundle binstubs annotaterb"
   run_checked "bin/annotaterb models"

@@ -224,6 +224,20 @@ class EntrypointTest < Minitest::Test
     assert_includes error.string, "不明なオプションです: --action-text"
   end
 
+  def test_removed_deployment_option_is_rejected
+    error = StringIO.new
+
+    status = RapidRailsTemplate::Entrypoint.run(
+      ["--deployment=dokploy", "sample"],
+      error:,
+      runner_class: RecordingRunner,
+      prompt: UnexpectedPrompt
+    )
+
+    assert_equal 1, status
+    assert_includes error.string, "不明なオプションです: --deployment"
+  end
+
   def test_rejects_maintenance_tasks_without_solid_queue_before_runner_initialization
     error = StringIO.new
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.merge(

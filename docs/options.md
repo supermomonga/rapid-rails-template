@@ -146,7 +146,7 @@ Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push�
 - 表示条件: `web_push != use`
 - 影響する処理: `solid_queue` gemとinstall generator、SQLite queue database、Active Job adapter、development用Puma plugin、production worker
 
-`solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentには`storage/development_queue.sqlite3`を専用queue databaseとして定義し、`db/queue_schema.rb`を`db:prepare`で読み込んだうえでPuma pluginからSolid Queueを起動します。productionではPumaから起動しません。`deployment == dokploy`の場合は`Procfile.prod`のworkerプロセスで`bin/jobs --mode async`を実行し、`deployment == none`の場合はproductionでの起動方法を設定しません。
+`solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentには`storage/development_queue.sqlite3`を専用queue databaseとして定義し、`db/queue_schema.rb`を`db:prepare`で読み込んだうえでPuma pluginからSolid Queueを起動します。productionではPumaから起動せず、Kamalの`worker` roleで`bin/jobs --mode async`を実行します。
 
 ## `job_operations`
 
@@ -269,22 +269,15 @@ avatarの選択元画像は静止画JPEG、PNG、WebPだけを許可し、5 MiB�
 
 `auto`は自動的にメールを必要とする機能がないため`skip`へ正規化します。Deviseだけを理由にメールを有効化しません。`skip`の場合は`rails new`へ`--skip-action-mailer --skip-action-mailbox`を渡します。確認画面には`auto`ではなく、正規化後の実効値と理由を表示します。
 
-## `deployment`
+## Kamal deployment
 
-- CLI引数: `--deployment=dokploy|none`
-- 質問文: デプロイ方法を選択してください。
-- 選択肢: `dokploy`、`none`
-- 既定値: `dokploy`
-- 表示条件: 常に表示する
-- 影響する処理: Docker関連のgenerator option、production用Docker/Procfile/Litestream、Dokploy設定
+デプロイ方法は質問・CLI optionにせず、全構成でKamal V2へ固定します。`--deployment`は廃止済みであり、指定した場合は不明なoptionとして`rails new`開始前に失敗します。
 
-`dokploy`ではRails標準のDocker/Kamalを使用しません。`rails new`へ`--skip-docker --skip-kamal`を渡し、Rails標準のThruster Gemと`bin/thrust`は生成します。Application Templateから`Dockerfile.prod`、`.dockerignore`、`bin/docker-entrypoint`、`Procfile.prod`、`litestream.yml`を生成し、`foreman`をproductionで利用できるGemとして追加してLitestreamをDocker imageへinstallします。
+Rails標準のDocker/Kamal生成を有効にし、Application TemplateがKamal `~> 2.11`、`minimum_version: 2.11.0`、単一Linux host、共有SQLite volume、Web primary role、条件付きSolid Queue worker roleを確定します。Litestream 0.5.15は同じvolumeをmountするAccessoryとし、アプリimageへ含めません。
 
-`none`でも`rails new`へ`--skip-docker --skip-kamal`を渡し、Thruster Gemと`bin/thrust`は生成しますが、production用Dockerfile、Procfile、Litestream設定、`foreman`、Dokploy固有設定を追加しません。
+primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLitestream対象とし、queueとcableは対応機能を選択した場合だけ追加します。cacheは復元時点を揃える必要がない再構築可能データなので対象外です。replica URLとS3互換storageの認証情報が不足した場合は失敗させ、replicationなしで起動しません。
 
-`dokploy`を選択した場合は`Procfile.prod`へ`bin/thrust bin/rails server`を定義し、Thrusterが既定のHTTP port 80で待ち受け、既定target port 3000のPumaを管理します。`active_job == solid_queue`の場合だけworkerプロセスも追加します。コンテナの既定commandがLitestream経由でForemanを起動し、Foremanが`Procfile.prod`のプロセスを管理します。
-
-primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLitestreamのreplication対象とし、queueとcableは対応する機能を選択した場合だけ追加します。`STORAGE_DATABASE_PATH`と`LITESTREAM_STORAGE_REPLICA_URL`を含む必要なdatabase path、replica URL、S3互換storageの認証情報が不足した場合は実行を失敗させます。
+空volumeではLitestreamの`restore-if-db-not-exists`を使用し、backupが存在すれば復元してからcontrol socketを公開します。既存DBを上書きしません。既存DBの手動復元は`bin/kamal-restore`だけを入口とし、plan表示、RFC3339時点指定、TTY、アプリIDと対象を含む完全一致確認、全DBのfull integrity check、deploy lock、復元前DBの保存を必須にします。確認回避、`force`、単一DBだけの復元は提供しません。
 
 ## テスト要件
 
@@ -324,7 +317,7 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - Maintenance Tasksを使わない場合、Gem、migration、initializer、controller、route、navigationを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。
 - 全構成でRails標準のThruster Gemと`bin/thrust`を生成し、`--skip-thruster`を使用しないこと。
-- `deployment == dokploy`で`Dockerfile.prod`、`Procfile.prod`、entrypoint、Litestream設定を生成し、Rails標準DockerとKamalは生成しないこと。
-- `deployment == none`でDocker、Kamal、Procfile、Litestream、`foreman`を生成・追加しないこと。
-- `deployment == dokploy`かつ`active_job == solid_queue`の場合だけ`Procfile.prod`へworkerを追加すること。
-- `deployment == dokploy`でprimaryとActive Storageのstorageを常にreplicateし、queueとcableを選択に応じて追加すること。
+- `--deployment`が不明なoptionとして拒否され、全構成でKamal/Docker/Litestream成果物を生成すること。
+- Solid Queue使用時だけKamalの`worker` roleを追加すること。
+- primaryとActive Storageのstorageを常にreplicateし、queueとcableを選択に応じて追加し、cacheを除外すること。
+- 手動復元が非TTY、確認不一致、backup欠落、integrity failure、lock競合で本番DBを変更しないこと。

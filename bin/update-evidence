@@ -26,8 +26,7 @@ COMMON_OPTIONS = [
   "--api=enable",
   "--action-cable=solid_cable",
   "--mail=use",
-  "--default-locale=ja",
-  "--deployment=dokploy"
+  "--default-locale=ja"
 ].freeze
 VARIANTS = {
   "full-ja" => { scenario_set: "full", additional_login_methods: %w[siwe], locale: "ja" }

@@ -41,7 +41,7 @@ Rails 8.1では、SQLite、Puma、Propshaft、Importmap、Turbo、Stimulus、Min
 
 daisyUIはTailwind CSS 4用pluginとして、Application Templateのpost-bundleフェーズで`npm install --save-dev daisyui@latest`により導入します。生成された`package.json`と`package-lock.json`を管理し、`app/assets/tailwind/application.css`へ組み込みthemeを無効化した`@plugin "daisyui"`と`@plugin "daisyui/theme"`によるcustom themeを登録します。JavaScript配布は引き続きImportmapを使用し、Node.jsはJavaScript bundlerではなくTailwind CSS plugin依存のinstallとasset buildにのみ使用します。`node_modules`はGitおよびDocker build contextへ含めません。
 
-Dokploy用のproduction imageではbuild stageにNode.jsとnpmを導入し、lockfileに対して`npm ci`を実行してから`assets:precompile`を行います。生成済みCSSだけをfinal stageへ引き継ぎ、`node_modules`とNode.js runtimeはfinal imageへ含めません。
+Kamal用のproduction imageではbuild stageにNode.jsとnpmを導入し、lockfileに対して`npm ci`を実行してから`assets:precompile`を行います。生成済みCSSだけをfinal stageへ引き継ぎ、`node_modules`とNode.js runtimeはfinal imageへ含めません。
 
 ### daisyUIカスタムテーマ
 
@@ -100,7 +100,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 
 Action Text、Active Storage、Active Storage DB、Lexxyは選択式にせず、すべての生成アプリケーションへ導入します。Action Textの公式install generatorでActive Storageのmetadata／attachment migrationと添付表示partialを生成し、`active_storage_db`の公式migration taskでファイル本体用migrationを生成して`db/storage_migrate`へ分離します。Active Storage DB engineを`/active_storage_db`へmountし、development、test、productionのActive Storage serviceをすべて`:db`に設定します。Active Storageのblob metadataとattachmentはprimary database、ファイル本体は専用storage SQLite databaseへ保存し、Disk serviceへ暗黙に切り替えません。
 
-Active Storageのvariant processorは全環境で`:vips`、variant trackingは有効、route resolverは`:rails_storage_proxy`へ固定します。Rails標準生成物の`image_processing ~> 1.2`を利用し、Dokploy用runtime imageには`libvips`を含めます。Profile avatarは40×40の`header_avatar`と64×64の`profile_avatar`だけを`preprocessed: true`のnamed variantとして定義し、attachment commit後にActive Storage標準の`TransformJob`で非同期生成します。profile更新responseは変換完了を待たず、任意の変換hashをViewへ記述しません。attachmentとblob metadataはprimary SQLite、元画像と処理済みvariant本体はActive Storage DBの専用storage SQLiteをsource of truthとします。
+Active Storageのvariant processorは全環境で`:vips`、variant trackingは有効、route resolverは`:rails_storage_proxy`へ固定します。Rails標準生成物の`image_processing ~> 1.2`を利用し、Kamal用runtime imageには`libvips`を含めます。Profile avatarは40×40の`header_avatar`と64×64の`profile_avatar`だけを`preprocessed: true`のnamed variantとして定義し、attachment commit後にActive Storage標準の`TransformJob`で非同期生成します。profile更新responseは変換完了を待たず、任意の変換hashをViewへ記述しません。attachmentとblob metadataはprimary SQLite、元画像と処理済みvariant本体はActive Storage DBの専用storage SQLiteをsource of truthとします。
 
 ユーザーupload画像のnamed variantは非同期preprocessを標準とし、複数画像・複数variantの変換をrequest内で同期実行しません。生成中のvariantへrequestが競合する可能性はActive Storage標準のbest effortとして許容します。variant完成前の公開を禁止する機能要件が生じた場合は、そのdomain modelに限定した`processing`から`published`への状態遷移を設計し、Active Storage内部patch、汎用single-flight、元画像fallbackは追加しません。
 
@@ -261,7 +261,7 @@ developmentではPumaからSolid Queueを起動します。
 plugin :solid_queue if ENV.fetch("RAILS_ENV", "development") == "development"
 ```
 
-productionではPuma pluginを有効化せず、`bin/jobs`をworkerプロセスとして起動します。`deployment == dokploy`の場合だけ`Procfile.prod`へworkerを定義し、Webプロセスと同じコンテナ内でForemanから起動します。`deployment == none`でも`bin/jobs`自体は生成しますが、起動方法をこのテンプレートでは設定しません。
+productionではPuma pluginを有効化せず、Solid Queue使用時だけKamalの`worker` roleで`bin/jobs --mode async`を起動します。Web roleとはコンテナを分離し、worker、dispatcher、schedulerを同じSolid Queue supervisorで管理します。
 
 `solid_queue:install`が生成する`config/recurring.yml`の標準cleanupを維持します。`preserve_finished_jobs`は既定の`true`、`clear_finished_jobs_after`は既定の1日とし、毎時12分に`SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)`を実行します。cleanupは`finished_at`が保持期間より古い完了ジョブだけを対象とします。失敗ジョブは`solid_queue_failed_executions`に残り、管理者または運用者がretryかdiscardを行うまで削除しません。既存の`bin/jobs --mode async` supervisorがworker、dispatcher、schedulerを起動するため、cleanup専用processは追加しません。
 
@@ -283,7 +283,7 @@ engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksC
 
 engineのroute、controller、helper API、Run操作は2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。Bulma stylesheetは読み込まず、Bulma classを出力するtask、run、errorのViewと表示helperをhost側でshadowして、既存Tailwind CSS 4／daisyUI 5のcard、badge、collapse、form、alert componentへ統一します。3秒ごとの`data-refresh`更新はhostのStimulus controllerで行い、外部stylesheet用CSP例外やinline scriptは追加しません。
 
-Maintenance Taskは既存Solid Queue workerで実行します。Dokployでは既存`worker: bin/jobs --mode async`を共有し、専用workerを追加しません。`deployment=none`ではproduction worker processを生成せず、利用者がSolid Queue workerの起動と監視を別途構成します。
+Maintenance TaskはKamalの既存Solid Queue `worker` roleで実行し、専用roleを追加しません。
 
 ## Action CableとSolid Cable
 
@@ -301,83 +301,27 @@ production:
 
 productionの`config/database.yml`には、常設のstorage databaseに加え、Action Cableを使用する場合だけprimaryとは別のSQLite cable databaseと`db/cable_migrate`を定義します。Action Cableを使わない構成では、Turbo DriveとTurbo Framesは利用できますが、Action Cableに依存するTurbo Streamsのbroadcast機能は利用できません。
 
-## デプロイ方法
+## Kamal V2 deployment
 
-デプロイは固定構成ではなく、`dokploy`または`none`から選択します。既定値は`dokploy`です。
+デプロイは全構成でKamal V2へ固定し、選択optionは設けません。Rails標準のDocker/Kamal生成を有効にしたうえで、Kamal `~> 2.11`と`minimum_version: 2.11.0`を固定します。対象topologyは単一Linux host・単一Web replicaです。
 
-### `dokploy`
+`Dockerfile`はRails標準構成を基礎に、Ruby 4.0.0のmulti-stage build、Node.js/npmによるasset build、libvips、jemalloc、YJIT、Thrusterを維持します。LitestreamとForemanはアプリimageへ含めません。Webはprimary role、Solid Queue使用時だけ`worker` roleを生成します。
 
-Rails標準のDocker/Kamal構成は使用せず、`rails new`へ`--skip-docker --skip-kamal`を渡します。Thruster Gemと`bin/thrust`はRails標準generatorから取得し、Application Templateが次のproduction専用ファイルを生成します。
+production SQLiteは`<app_id>_storage` named volumeの`/rails/storage`へ配置します。
 
-```text
-Dockerfile.prod
-.dockerignore
-bin/docker-entrypoint
-Procfile.prod
-litestream.yml
-```
-
-これらは本プロジェクトが管理するsource templateからRails/Thorの`template` actionで生成します。Rails標準Dockerfileを生成してから文字列置換する方式は採用しません。
-
-Dokployではbuild typeをDockerfile、Dockerfile pathを`Dockerfile.prod`に設定します。コンテナの既定commandがLitestreamとForemanを起動するため、Dokploy側でweb/worker commandを個別に上書きしません。
-
-#### Docker image
-
-`Dockerfile.prod`は、公式Docker Hubに存在する対象範囲内の固定tag `ruby:4.0.0-slim`を使うmulti-stage buildとします。開発環境は`mise.toml`でRuby 4.0.6へ固定します。
-
-- base stageでproduction用Bundler環境とLitestreamを用意する。
-- build stageでGemをinstallし、build専用の`APPLICATION_ORIGIN=https://build.example.com`と`SECRET_KEY_BASE_DUMMY=1`でassetsをprecompileする。
-- final stageには実行時Gem、SQLite、libvips、jemalloc、Litestream、アプリケーションだけを含める。
-- `/data`をvolumeとして宣言し、SQLite databaseをimage layerやephemeral filesystemへ保存しない。
-- Thrusterの既定HTTP port 80を公開し、内側のPumaは既定target port 3000で待ち受ける。
-- YJITとjemallocを有効化する。
-- entrypointを`bin/docker-entrypoint`へ固定する。
-- 既定commandでLitestreamのreplicationを開始し、その`-exec`から`bundle exec foreman start --procfile=Procfile.prod`を実行する。
-
-Litestreamは`0.5.14`へ固定し、linux/amd64とlinux/arm64のrelease assetをDockerのtarget architectureに応じて選択します。releaseの`checksums.txt`でdownloadしたassetを検証してからinstallし、検証失敗時に別versionや未検証binaryへ切り替えません。
-
-#### production process
-
-`foreman` gemは`deployment == dokploy`の場合だけ、productionで実行できるgroupへ`require: false`で追加します。`Procfile.prod`には必ずWebプロセスを定義します。
-
-```procfile
-web: bin/thrust bin/rails server
-```
-
-`active_job == solid_queue`の場合だけworkerを追加します。
-
-```procfile
-worker: bin/jobs --mode async
-```
-
-Pumaは`RAILS_MAX_THREADS`を既定5、`WEB_CONCURRENCY`を既定2として設定します。productionではSolid Queue Puma pluginを有効化しません。
-
-#### SQLite database
-
-productionのSQLite databaseは、次の環境変数で`/data`配下へ配置します。
-
-| database | 環境変数 | 既定の配置例 | 条件 |
+| database | path | 条件 | Litestream |
 | --- | --- | --- | --- |
-| primary | `DATABASE_PATH` | `/data/production.sqlite3` | 常に必要 |
-| storage | `STORAGE_DATABASE_PATH` | `/data/production_storage.sqlite3` | 常に必要 |
-| queue | `QUEUE_DATABASE_PATH` | `/data/production_queue.sqlite3` | Solid Queue使用時 |
-| cache | `CACHE_DATABASE_PATH` | `/data/production_cache.sqlite3` | Solid Cache使用時 |
-| cable | `CABLE_DATABASE_PATH` | `/data/production_cable.sqlite3` | Action Cable使用時 |
+| primary | `/rails/storage/production.sqlite3` | 常時 | 対象 |
+| storage | `/rails/storage/production_storage.sqlite3` | 常時 | 対象 |
+| queue | `/rails/storage/production_queue.sqlite3` | Solid Queue使用時 | 対象 |
+| cache | `/rails/storage/production_cache.sqlite3` | Solid Cache使用時 | 対象外 |
+| cable | `/rails/storage/production_cable.sqlite3` | Solid Cable使用時 | 対象 |
 
-SQLite共通設定は`transaction_mode: immediate`、`timeout: 20000`とし、connection poolは`DATABASE_POOL_SIZE`、未指定時は`RAILS_MAX_THREADS`を使用します。storageには`db/storage_migrate`、queueには`db/queue_migrate`、cableには`db/cable_migrate`を`migrations_paths`として設定します。`deployment == none`でも複数database構成を維持し、productionのprimaryを`storage/production.sqlite3`、storageを`storage/production_storage.sqlite3`へ配置します。
+SQLite共通設定は`transaction_mode: immediate`、`timeout: 20000`とし、connection poolは`DATABASE_POOL_SIZE`、未指定時は`RAILS_MAX_THREADS`を使用します。storage、queue、cache、cableはそれぞれ専用migration pathを使用します。
 
-`bin/docker-entrypoint`は必要なdirectoryを作成した後、`bundle exec rails db:prepare`を一度実行します。Rails 8.1の`db:prepare`は現在のenvironmentに定義された全databaseを初期化・migrateするため、tableの有無を独自に調べるrunnerやdatabase別の非公開処理は追加しません。失敗時はコンテナを起動せず終了します。
+### Litestream Accessory
 
-#### Litestream
-
-Litestreamはproduction SQLite databaseをS3互換storageへreplicateします。`litestream.yml`には選択済みdatabaseだけを含めます。
-
-- primaryは常にreplication対象とする。
-- Active Storageのstorageは常にreplication対象とする。
-- Solid Queue使用時だけqueueを追加する。
-- Action Cable使用時だけcableを追加する。
-
-各databaseは別のreplica URLを使い、認証情報をファイルへ埋め込みません。
+Litestream 0.5.15をKamal Accessoryとして起動し、Web・Workerと同じnamed volumeをuser `1000:1000`でmountします。各databaseは別のreplica URLを使い、認証情報をファイルへ埋め込みません。
 
 | 用途 | 環境変数 |
 | --- | --- |
@@ -385,29 +329,21 @@ Litestreamはproduction SQLite databaseをS3互換storageへreplicateします�
 | storage replica | `LITESTREAM_STORAGE_REPLICA_URL` |
 | queue replica | `LITESTREAM_QUEUE_REPLICA_URL` |
 | cable replica | `LITESTREAM_CABLE_REPLICA_URL` |
-| access key | `LITESTREAM_ACCESS_KEY_ID` |
-| secret key | `LITESTREAM_SECRET_ACCESS_KEY` |
+| access key | `AWS_ACCESS_KEY_ID` |
+| secret key | `AWS_SECRET_ACCESS_KEY` |
+| region | `AWS_REGION` |
 
-Litestreamの設定または認証情報が不足した場合、replicationなしでRailsだけを起動するフォールバックは行いません。
+各DBへ`restore-if-db-not-exists`を設定します。空volumeかつbackupがある場合だけ起動時に復元し、既存DBは上書きしません。初回でbackupが存在しない場合は新規DB作成へ進み、それ以外の復元・接続エラーではAccessoryを失敗させます。Litestreamは復元とDB openの後にcontrol socketを公開し、Web entrypointはsocketのstatus応答後に`db:prepare`、Workerはstatus応答後に`bin/jobs`を開始します。
 
-#### Dokploy設定
+Accessoryは通常の`kamal deploy`では更新されないため、設定・image・secret変更時は`bin/kamal accessory reboot litestream`を実行します。状態とログは`bin/kamal accessory details litestream`、`bin/kamal accessory logs litestream`で確認します。
 
-- build type: Dockerfile
-- Dockerfile path: `Dockerfile.prod`
-- container port: `80`
-- persistent volume mount: `/data`
-- container command: Dockerfileの既定commandを使用
-- 必須secret: `RAILS_MASTER_KEY`、Litestreamのaccess keyとsecret key
-- Web Push使用時の必須環境変数: `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`
-- 必須database path: `DATABASE_PATH`、`STORAGE_DATABASE_PATH`と、選択に応じた`QUEUE_DATABASE_PATH`／`CACHE_DATABASE_PATH`／`CABLE_DATABASE_PATH`
-- 必須replica URL: primary、storageと、選択に応じたqueue／cableのLitestream URL
-- 任意の調整値: `WEB_CONCURRENCY`、`RAILS_MAX_THREADS`、`DATABASE_POOL_SIZE`、`JOB_CONCURRENCY`、Thrusterのcache容量
+### 確認付き手動復元
 
-production環境変数の実値や秘密情報を生成先リポジトリへ保存しません。Thruster/Pumaのport環境変数は生成せず、Dokploy側をcontainer port 80へ合わせます。
+`bin/kamal-restore`は最新時点、`--timestamp=RFC3339`はpoint-in-time、`--plan`はdry-runだけを実行します。書き込み操作はTTYと`RESTORE <app_id> <target>`の完全一致入力を必須にし、確認回避やforce optionは提供しません。
 
-### `none`
+確認後はmaintenance化、Web/Worker停止、全DBの`sync -wait`、Accessory停止、deploy lock取得、全DBの一時領域へのrestoreとfull integrity check、同一volume内renameの順で処理します。primary、storage、条件付きqueue/cableを常に一組で扱い、部分的な復元は許可しません。切替途中の失敗は補償renameで元へ戻します。
 
-`Dockerfile.prod`、`.dockerignore`、production用`bin/docker-entrypoint`、`Procfile.prod`、`litestream.yml`、Kamal、Dokploy固有設定を生成しません。`foreman`も追加しません。Rails標準のThruster Gemと`bin/thrust`、Puma設定、選択したSolid Queueの`bin/jobs`は維持します。
+復元前DBとWAL/SHM/journalは操作ID別に保持し、`bin/kamal-restore --rollback=OPERATION_ID`で確認付きrollbackを行います。復元中はremote markerと`pre-deploy` hookで新規deployを拒否し、破壊的な切替中はdeploy lockを保持します。切替後の起動失敗では自動rollbackせず、サービスとmarkerを停止状態で残して調査可能にします。
 
 ## Rails 8.1のSolid系既定値
 

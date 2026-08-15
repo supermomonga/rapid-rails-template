@@ -18,6 +18,8 @@ class SampleAppTemplateTest < Minitest::Test
 
   def test_generates_article_scaffold_with_profile_ownership
     assert_includes @source, 'generate "scaffold", "Article", "title:string", "body:text", "draft:boolean"'
+    assert_includes @source, '@pagy, @articles = pagy(:offset, Article.all.order(:id), limit: 25)'
+    assert_includes @source, '<%= pagination(@pagy, aria_label: "Articles pagination") %>'
     assert_includes @source, "t.references :profile, null: false, foreign_key: { on_delete: :cascade }"
     assert_includes @source, "t.string :title, null: false"
     assert_includes @source, "t.text :body, null: false"
@@ -43,7 +45,7 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, "@article = Article.new(article_params)"
     assert_includes @source, "@article.profile = T.must(account_user.profile)"
     assert_includes @source, "pagy(:offset, visible_articles, limit: 25)"
-    assert_includes @source, 'nav aria-label="Article pagination"'
+    assert_includes @source, 'pagination(@pagy, aria_label: "Article pagination")'
     assert_includes @source, 'table table-sm table-pin-rows min-w-[780px]'
     assert_includes @source, 'td class="min-w-64"'
   end

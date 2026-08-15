@@ -769,7 +769,74 @@ def install_daisyui
   append_to_file ".gitignore", "\n/node_modules\n" unless File.read(".gitignore").lines.map(&:strip).include?("/node_modules")
 end
 
-def configure_generator_view_templates
+def configure_generator_templates
+  create_file "lib/templates/rails/scaffold_controller/controller.rb.tt", <<~'RUBY', force: true
+    <% module_namespacing do -%>
+    class <%= controller_class_name %>Controller < ApplicationController
+      before_action :set_<%= singular_table_name %>, only: %i[ show edit update destroy ]
+
+      # GET <%= route_url %>
+      def index
+        @pagy, @<%= plural_table_name %> = pagy(:offset, <%= orm_class.all(class_name) %>.order(:id), limit: 25)
+      end
+
+      # GET <%= route_url %>/1
+      def show
+      end
+
+      # GET <%= route_url %>/new
+      def new
+        @<%= singular_table_name %> = <%= orm_class.build(class_name) %>
+      end
+
+      # GET <%= route_url %>/1/edit
+      def edit
+      end
+
+      # POST <%= route_url %>
+      def create
+        @<%= singular_table_name %> = <%= orm_class.build(class_name, "#{singular_table_name}_params") %>
+
+        if @<%= orm_instance.save %>
+          redirect_to <%= redirect_resource_name %>, notice: <%= %("#{human_name} was successfully created.") %>
+        else
+          render :new, status: <%= ActionDispatch::Constants::UNPROCESSABLE_CONTENT.inspect %>
+        end
+      end
+
+      # PATCH/PUT <%= route_url %>/1
+      def update
+        if @<%= orm_instance.update("#{singular_table_name}_params") %>
+          redirect_to <%= redirect_resource_name %>, notice: <%= %("#{human_name} was successfully updated.") %>, status: :see_other
+        else
+          render :edit, status: <%= ActionDispatch::Constants::UNPROCESSABLE_CONTENT.inspect %>
+        end
+      end
+
+      # DELETE <%= route_url %>/1
+      def destroy
+        @<%= orm_instance.destroy %>
+        redirect_to <%= index_helper %>_path, notice: <%= %("#{human_name} was successfully destroyed.") %>, status: :see_other
+      end
+
+      private
+        # Use callbacks to share common setup or constraints between actions.
+        def set_<%= singular_table_name %>
+          @<%= singular_table_name %> = <%= orm_class.find(class_name, "params.expect(:id)") %>
+        end
+
+        # Only allow a list of trusted parameters through.
+        def <%= "#{singular_table_name}_params" %>
+          <%- if attributes_names.empty? -%>
+          params.fetch(:<%= singular_table_name %>, {})
+          <%- else -%>
+          params.expect(<%= singular_table_name %>: [ <%= permitted_params %> ])
+          <%- end -%>
+        end
+    end
+    <% end -%>
+  RUBY
+
   create_file "lib/templates/erb/scaffold/_form.html.erb.tt", <<~ERB, force: true
     <%%= form_with(model: <%= model_resource_name %>, class: "space-y-5") do |form| %>
       <%% if <%= singular_table_name %>.errors.any? %>
@@ -874,6 +941,8 @@ def configure_generator_view_templates
           </div>
         </div>
       </section>
+
+      <%%= pagination(@pagy, aria_label: "<%= human_name.pluralize %> pagination") %>
     </div>
   ERB
 
@@ -4013,7 +4082,7 @@ def configure_roles
       </header>
 
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <div class="overflow-x-auto">
             <table class="table table-sm table-pin-rows">
               <thead>
@@ -4055,23 +4124,7 @@ def configure_roles
         </div>
       </section>
 
-      <% if @pagy.last > 1 %>
-        <nav aria-label="<%= t("admin.users.pagination") %>">
-          <div class="join">
-            <% if (previous_url = @pagy.page_url(:previous)) %>
-              <%= link_to t("common.previous"), previous_url, class: "btn join-item" %>
-            <% else %>
-              <span class="btn btn-disabled join-item" role="link" aria-disabled="true"><%= t("common.previous") %></span>
-            <% end %>
-            <span class="btn btn-active join-item" aria-current="page"><%= @pagy.page %> / <%= @pagy.last %></span>
-            <% if (next_url = @pagy.page_url(:next)) %>
-              <%= link_to t("common.next"), next_url, class: "btn join-item" %>
-            <% else %>
-              <span class="btn btn-disabled join-item" role="link" aria-disabled="true"><%= t("common.next") %></span>
-            <% end %>
-          </div>
-        </nav>
-      <% end %>
+      <%= pagination(@pagy, aria_label: t("admin.users.pagination")) %>
     </div>
   ERB
 
@@ -4315,7 +4368,11 @@ def configure_roles
 
         assert_response :success
         assert_select 'nav[aria-label=?] .join', I18n.t("admin.users.pagination"), count: 1
-        assert_select '.join .join-item', count: 3
+        assert_select '.join > .join-item.btn', count: 4
+        assert_select '.join > .btn-active[aria-current="page"]', text: "1", count: 1
+        assert_select '.join > .btn-disabled[aria-label=?][aria-disabled="true"]', I18n.t("common.previous"), count: 1
+        assert_select '.join > a[href=?]', admin_users_path(page: 2), text: "2", count: 1
+        assert_select '.join > a[href=?][aria-label=?]', admin_users_path(page: 2), I18n.t("common.next"), count: 1
       end
     end
   RUBY
@@ -4954,7 +5011,7 @@ def configure_content_management
     <% content_for :page_title, t("content_management.admin.pages.title") %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <div class="overflow-x-auto">
             <table class="table">
               <thead><tr><th scope="col"><%= t("content_management.admin.pages.page") %></th><th scope="col"><%= t("content_management.admin.pages.url") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
@@ -4981,7 +5038,7 @@ def configure_content_management
         <p class="text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
       </header>
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <%= form_with model: [:admin, @page], class: "space-y-5" do |form| %>
             <fieldset class="fieldset">
               <legend class="fieldset-legend"><%= form.label :content, t("content_management.admin.pages.body") %></legend>
@@ -5037,7 +5094,7 @@ def configure_content_management
     <% end %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <% if @faqs.any? %>
             <div class="overflow-x-auto">
               <table class="table">
@@ -5070,14 +5127,14 @@ def configure_content_management
   create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.add") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card-rapid"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.edit") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card-rapid"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
@@ -5088,7 +5145,7 @@ def configure_content_management
         <p class="text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
       </header>
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <%= form_with model: [:admin, @footer_setting], url: admin_footer_setting_path, class: "space-y-5" do |form| %>
             <% if @footer_setting.errors.any? %>
               <div class="alert alert-error" role="alert">
@@ -7073,7 +7130,7 @@ def configure_profile
     <% content_for :page_title, t("profiles.title") %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <ul class="list">
     #{profile_rows}      </ul>
           <div class="card-actions justify-end">
@@ -7088,7 +7145,7 @@ def configure_profile
     <% content_for :page_title, t("profiles.edit_title") %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <%= render "form", profile: @profile %>
         </div>
       </section>
@@ -7421,7 +7478,7 @@ def configure_api
       <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
 
       <section class="card-rapid">
-        <div class="card-body p-5 sm:p-6">
+        <div class="card-body p-3">
           <% if @api_credentials.any? %>
             <div class="overflow-x-auto">
               <table class="table">
@@ -7468,7 +7525,7 @@ def configure_api
       <% end %>
 
       <section class="card-rapid">
-        <div class="card-body p-5 sm:p-6">
+        <div class="card-body p-3">
           <h2 class="card-title text-base leading-[1.5]"><%= t("api_credentials.information") %></h2>
           <div class="mt-3 grid gap-4">
             <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
@@ -7496,14 +7553,14 @@ def configure_api
   create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.new") %>
     <div class="space-y-6">
-      <section class="card-rapid"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
   create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.edit") %>
     <div class="space-y-6">
-      <section class="card-rapid"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
@@ -8082,6 +8139,60 @@ def configure_default_views
         Kernel.raise TypeError, "application translation must be a string: #{key}"
       end
 
+      sig { params(pagy: Pagy::Offset, aria_label: String).returns(T.nilable(ActiveSupport::SafeBuffer)) }
+      def pagination(pagy, aria_label:)
+        return if pagy.last <= 1
+
+        series = T.cast(
+          pagy.data_hash(data_keys: [:series]).fetch(:series),
+          T::Array[T.any(Integer, String, Symbol)]
+        )
+        items = [pagination_arrow(pagy, :previous)]
+        items.concat(series.map do |item|
+          case item
+          when Integer
+            link_to item.to_s, pagy.page_url(item), class: "join-item btn"
+          when String
+            tag.span(item, class: "join-item btn btn-active", role: "link",
+              aria: { current: "page", disabled: true })
+          when :gap
+            tag.span("…", class: "join-item btn btn-disabled", role: "separator", aria: { disabled: true })
+          else
+            Kernel.raise TypeError, "unsupported pagination item: #{item.inspect}"
+          end
+        end)
+        items << pagination_arrow(pagy, :next)
+
+        tag.nav(tag.div(safe_join(items), class: "join"), class: "overflow-x-auto", aria: { label: aria_label })
+      end
+
+      sig { params(pagy: Pagy::Offset, direction: Symbol).returns(ActiveSupport::SafeBuffer) }
+      private def pagination_arrow(pagy, direction)
+        path_data, label_key = case direction
+                               when :previous then ["M15.75 19.5 8.25 12l7.5-7.5", "common.previous"]
+                               when :next then ["m8.25 4.5 7.5 7.5-7.5 7.5", "common.next"]
+                               else Kernel.raise ArgumentError, "unsupported pagination direction: #{direction}"
+                               end
+        label = t(label_key)
+        icon = tag.svg(
+          tag.path(stroke_linecap: "round", stroke_linejoin: "round", d: path_data),
+          xmlns: "http://www.w3.org/2000/svg",
+          class: "size-5",
+          fill: "none",
+          viewBox: "0 0 24 24",
+          stroke_width: "1.5",
+          stroke: "currentColor",
+          aria: { hidden: true },
+          data: { slot: "icon" }
+        )
+        classes = "join-item btn btn-square"
+        url = pagy.page_url(direction)
+        return link_to(icon, url, class: classes, aria: { label: label }) if url
+
+        tag.span(icon, class: "#{classes} btn-disabled", tabindex: "-1", role: "link",
+          aria: { label: label, disabled: true })
+      end
+
       sig do
         params(
           id: String,
@@ -8137,7 +8248,7 @@ def configure_default_views
         actions = tag.div(safe_join(columns), class: "grid min-w-0 gap-4 sm:grid-cols-2", data: { page_actions: true })
         return actions unless card
 
-        tag.div(tag.div(actions, class: "card-body"), class: "card-rapid mb-6",
+        tag.div(tag.div(actions, class: "card-body p-3"), class: "card-rapid mb-6",
           data: { page_actions_container: "card" })
       end
       private :page_actions
@@ -8208,6 +8319,42 @@ def configure_default_views
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
 
+      test "renders accessible daisyUI pagination from the Pagy series" do
+        pagy = pagination_pagy(count: 400, page: 8)
+
+        html = pagination(pagy, aria_label: "Records pagination")
+        fragment = Nokogiri::HTML5.fragment(T.must(html))
+        nav = T.must(fragment.at_css('nav.overflow-x-auto[aria-label="Records pagination"]'))
+        items = nav.css(".join > .join-item.btn")
+
+        assert_equal 9, items.size
+        assert_equal %w[1 … 7 8 9 … 16], items.drop(1).take(7).map(&:text)
+        assert_equal "8", nav.at_css(".join-item.btn-active[aria-current=page]").text
+        assert_equal 2, nav.css('.join-item.btn-disabled[role="separator"]').size
+        assert_equal "/records?page=7", nav.at_css(%(.join > a[aria-label="#{I18n.t("common.previous")}"]))["href"]
+        assert_equal "/records?page=9", nav.at_css(%(.join > a[aria-label="#{I18n.t("common.next")}"]))["href"]
+        assert_equal 2, nav.css('svg.size-5[aria-hidden="true"][data-slot="icon"]').size
+      end
+
+      test "disables unavailable pagination arrows and omits a single page" do
+        assert_nil pagination(pagination_pagy(count: 25), aria_label: "Records pagination")
+
+        first_page = Nokogiri::HTML5.fragment(T.must(
+          pagination(pagination_pagy(count: 50), aria_label: "Records pagination")
+        ))
+        previous = T.must(first_page.at_css(%(.join > .btn-disabled[aria-label="#{I18n.t("common.previous")}"])))
+        assert_equal "link", previous["role"]
+        assert_equal "true", previous["aria-disabled"]
+        assert_nil previous["href"]
+
+        last_page = Nokogiri::HTML5.fragment(T.must(
+          pagination(pagination_pagy(count: 50, page: 2), aria_label: "Records pagination")
+        ))
+        following = T.must(last_page.at_css(%(.join > .btn-disabled[aria-label="#{I18n.t("common.next")}"])))
+        assert_equal "true", following["aria-disabled"]
+        assert_nil following["href"]
+      end
+
       test "renders one accessible native dialog from captured body and actions" do
         capture_count = 0
         actions = capture { tag.button("Apply", type: "button") }
@@ -8262,6 +8409,7 @@ def configure_default_views
         card_body = T.must(card.at_css(".card-body"))
 
         assert card_body.element_children.first["data-page-actions"]
+        assert_includes card_body["class"].split, "p-3"
         assert_nil card.at_css('[data-page-actions-column="secondary"]')
         primary = T.must(card.at_css('[data-page-actions-column="primary"]'))
         assert_includes primary["class"].split, "sm:col-start-2"
@@ -8306,6 +8454,7 @@ def configure_default_views
         assert_equal 1, capture_count
         assert_equal "tab", actions_container["data-page-actions-container"]
         assert actions_container.at_css("[data-page-actions]")
+        assert_includes tab_content["class"].split, "p-3"
         assert_equal "Tab content", tab_content.element_children.find { |node| node.name == "p" }.text
         assert_nil tab_content.at_css(".card-rapid")
         assert content_for?(:page_actions_in_tab)
@@ -8385,6 +8534,15 @@ def configure_default_views
           with_tab(tabs: [tab], size: :compact) { "content" }
         end
       end
+
+      private
+
+        def pagination_pagy(count:, page: 1)
+          pagy_request = Pagy::Request.new(
+            request: { base_url: "http://test.host", path: "/records", params: {}, cookie: nil }
+          )
+          Pagy::Offset.new(count:, page:, limit: 25, request: pagy_request)
+        end
     end
   RUBY
 
@@ -8662,7 +8820,7 @@ def configure_default_views
       </header>
 
       <section class="card-rapid">
-        <div class="card-body p-5 sm:p-6">
+        <div class="card-body p-3">
           <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.show.next_step") %></h2>
           <p class="text-sm text-neutral">#{account_page_action}</p>
           <div class="card-actions mt-2 justify-end">
@@ -9734,7 +9892,7 @@ def configure_web_push
       </header>
 
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="card-title text-base leading-[1.5]">
@@ -10494,7 +10652,7 @@ def install_job_operations
     </header>
 
     <section class="card-rapid" aria-labelledby="job-information">
-      <div class="card-body">
+      <div class="card-body p-0">
         <div class="overflow-x-auto">
           <h2 id="job-information" class="sr-only leading-[1.5]">Job information</h2>
           <table class="table min-w-max">
@@ -12050,8 +12208,6 @@ def configure_evidence_capture
             capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), translate("api_credentials.edit"), viewport)
             capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, translate("api_credentials.title"), viewport)
           end
-          capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
-          assert_admin_navigation_active(translate("navigation.users"))
           if JOB_OPERATIONS
             visit host_routes.admin_jobs_path
             assert_equal 200, page.status_code
@@ -12132,6 +12288,11 @@ def configure_evidence_capture
           find("header details.dropdown > summary", visible: :visible).click
           assert_account_menu_visual_state
           capture_current_page("navigation-authenticated-open", "アカウントメニュー（ログイン済み）", viewport)
+
+          @pagination_users = 48.times.map { User.create! } if @pagination_users.nil?
+          verify_pagination_geometry if viewport == "desktop"
+          capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
+          assert_admin_navigation_active(translate("navigation.users"))
         end
 
         def assert_account_menu_visual_state
@@ -12698,6 +12859,8 @@ def configure_evidence_capture
                     const sidebarElement = layout.querySelector(':scope > aside')
                     const sidebar = sidebarElement.getBoundingClientRect()
                     const content = layout.querySelector(':scope > div').getBoundingClientRect()
+                    const surfaceBody = layout.querySelector(':scope > div .card-rapid > .card-body')
+                    const surfaceStyle = getComputedStyle(surfaceBody)
                     const mobileCategory = sidebarElement.querySelector('[data-with-menu-mobile-category]')
                     const scroll = sidebarElement.querySelector('[data-with-menu-scroll]')
                     const menu = sidebarElement.querySelector('[data-with-menu-items]')
@@ -12712,6 +12875,12 @@ def configure_evidence_capture
                       sidebarRight: sidebar.right,
                       contentTop: content.top,
                       contentLeft: content.left,
+                      surfacePadding: [
+                        surfaceStyle.paddingTop,
+                        surfaceStyle.paddingRight,
+                        surfaceStyle.paddingBottom,
+                        surfaceStyle.paddingLeft
+                      ].map(parseFloat),
                       menuDirection: getComputedStyle(menu).flexDirection,
                       mobileCategoryDisplay: getComputedStyle(mobileCategory).display,
                       desktopTitleDisplay: getComputedStyle(desktopTitle).display,
@@ -12728,6 +12897,8 @@ def configure_evidence_capture
 
               assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
                 "#{area} with-menu layout horizontal overflow at #{width}px"
+              assert_equal [12, 12, 12, 12], geometry.fetch("surfacePadding"),
+                "#{area} standard surface should use p-3 at #{width}px"
               if width < 961
                 assert_equal "row", geometry.fetch("menuDirection"),
                   "#{area} with-menu should use a horizontal menu at #{width}px"
@@ -12776,6 +12947,7 @@ def configure_evidence_capture
                   () => {
                     const heading = document.querySelector('[data-layout="with-menu"] > div > h1')
                     const card = document.querySelector('[data-page-actions-container="card"]')
+                    const cardBodyStyle = getComputedStyle(card.querySelector(':scope > .card-body'))
                     const grid = card.querySelector('[data-page-actions]')
                     const primary = grid.querySelector('[data-page-actions-column="primary"]')
                     return {
@@ -12788,7 +12960,13 @@ def configure_evidence_capture
                       primaryLeft: primary.getBoundingClientRect().left,
                       gridLeft: grid.getBoundingClientRect().left,
                       secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length,
-                      tabContainerCount: document.querySelectorAll('[data-page-actions-container="tab"]').length
+                      tabContainerCount: document.querySelectorAll('[data-page-actions-container="tab"]').length,
+                      padding: [
+                        cardBodyStyle.paddingTop,
+                        cardBodyStyle.paddingRight,
+                        cardBodyStyle.paddingBottom,
+                        cardBodyStyle.paddingLeft
+                      ].map(parseFloat)
                     }
                   }
                 JAVASCRIPT
@@ -12799,6 +12977,8 @@ def configure_evidence_capture
                 "no-tab page actions should immediately follow the heading at #{width}px"
               assert_equal 0, no_tab.fetch("secondaryCount")
               assert_equal 0, no_tab.fetch("tabContainerCount")
+              assert_equal [12, 12, 12, 12], no_tab.fetch("padding"),
+                "no-tab page actions should use p-3 at #{width}px"
               if width < 640
                 assert_equal 1, no_tab.fetch("columnCount")
                 assert_in_delta no_tab.fetch("gridWidth"), no_tab.fetch("primaryWidth"), 1
@@ -12813,6 +12993,7 @@ def configure_evidence_capture
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
                   const panel = document.querySelector('[role="tabpanel"].tab-content')
+                  const panelStyle = getComputedStyle(panel)
                   const container = panel.querySelector(':scope > [data-page-actions-container="tab"]')
                   const grid = container.querySelector('[data-page-actions]')
                   return {
@@ -12821,7 +13002,13 @@ def configure_evidence_capture
                     containerIsFirst: panel.firstElementChild === container,
                     cardCount: container.querySelectorAll('.card-rapid').length,
                     primaryCount: grid.querySelectorAll('[data-page-actions-column="primary"]').length,
-                    secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length
+                    secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length,
+                    padding: [
+                      panelStyle.paddingTop,
+                      panelStyle.paddingRight,
+                      panelStyle.paddingBottom,
+                      panelStyle.paddingLeft
+                    ].map(parseFloat)
                   }
                 }
               JAVASCRIPT
@@ -12833,6 +13020,48 @@ def configure_evidence_capture
             assert_equal 0, tabbed.fetch("cardCount")
             assert_equal 1, tabbed.fetch("primaryCount")
             assert_equal 0, tabbed.fetch("secondaryCount")
+            assert_equal [12, 12, 12, 12], tabbed.fetch("padding"),
+              "tab content should use p-3 at #{width}px"
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
+        def verify_pagination_geometry
+          [320, 390].each do |width|
+            page.current_window.resize_to(width, 900)
+            visit host_routes.admin_users_path
+            assert_equal 200, page.status_code
+            geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const nav = document.querySelector('nav[aria-label="#{translate("admin.users.pagination")}"]')
+                  const join = nav.querySelector(':scope > .join')
+                  const items = Array.from(join.querySelectorAll(':scope > .join-item.btn'))
+                  const active = join.querySelector(':scope > .btn-active[aria-current="page"]')
+                  return {
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    directItemCount: items.length,
+                    childCount: join.children.length,
+                    rowCount: new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size,
+                    activeText: active.textContent.trim(),
+                    iconCount: join.querySelectorAll(':scope > .btn-square svg[aria-hidden="true"]').length,
+                    navScrollWidth: nav.scrollWidth,
+                    navClientWidth: nav.clientWidth
+                  }
+                }
+              JAVASCRIPT
+            end
+            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+              "pagination should not overflow the document at #{width}px"
+            assert_equal geometry.fetch("childCount"), geometry.fetch("directItemCount")
+            assert_equal 5, geometry.fetch("directItemCount")
+            assert_equal 1, geometry.fetch("rowCount")
+            assert_equal "1", geometry.fetch("activeText")
+            assert_equal 2, geometry.fetch("iconCount")
+            assert_operator geometry.fetch("navScrollWidth"), :>=, geometry.fetch("navClientWidth")
           end
         ensure
           desktop = VIEWPORTS.fetch("desktop")
@@ -14517,7 +14746,7 @@ after_bundle do
   install_active_storage_db
   configure_lexxy
   install_daisyui
-  configure_generator_view_templates
+  configure_generator_templates
   configure_rubocop
   configure_common_files
   configure_evidence_capture

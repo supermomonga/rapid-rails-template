@@ -52,9 +52,9 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.steps, "install_daisyui"
     assert_operator plan.steps.index("install_action_text"), :<, plan.steps.index("configure_lexxy")
     assert_operator plan.steps.index("configure_lexxy"), :<, plan.steps.index("install_daisyui")
-    assert_includes plan.steps, "configure_generator_view_templates"
-    assert_operator plan.steps.index("install_daisyui"), :<, plan.steps.index("configure_generator_view_templates")
-    assert_operator plan.steps.index("configure_generator_view_templates"), :<, plan.steps.index("configure_default_views")
+    assert_includes plan.steps, "configure_generator_templates"
+    assert_operator plan.steps.index("install_daisyui"), :<, plan.steps.index("configure_generator_templates")
+    assert_operator plan.steps.index("configure_generator_templates"), :<, plan.steps.index("configure_default_views")
     assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "install_image_cropper"
@@ -115,6 +115,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/views/layouts/application.html.erb"
     assert_includes plan.artifacts, "app/helpers/application_helper.rb"
     assert_includes plan.artifacts, "test/helpers/application_helper_test.rb"
+    assert_includes plan.artifacts, "lib/templates/rails/scaffold_controller/controller.rb.tt"
     assert_includes plan.artifacts, "lib/templates/erb/scaffold/index.html.erb.tt"
     assert_includes plan.artifacts, "lib/templates/erb/scaffold/_form.html.erb.tt"
     assert_includes plan.artifacts, "lib/templates/erb/controller/view.html.erb.tt"

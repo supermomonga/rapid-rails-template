@@ -64,6 +64,15 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "options: Object).returns(String)"
     assert_includes helper, "block: T.proc.returns(String)"
     refute_includes helper, "T.untyped"
+    assert_includes helper, "def pagination(pagy, aria_label:)"
+    assert_includes helper, "params(pagy: Pagy::Offset, aria_label: String)"
+    assert_includes helper, "pagy.data_hash(data_keys: [:series])"
+    assert_includes helper, "pagy.page_url(item)"
+    assert_includes helper, 'class: "join-item btn btn-active"'
+    assert_includes helper, 'class: "join-item btn btn-disabled"'
+    assert_includes helper, 'class: "join"'
+    assert_includes helper, 'class: "overflow-x-auto"'
+    assert_includes helper, 'aria: { hidden: true }'
     assert_equal 1, helper.scan("def application_routes").size
     assert_includes helper, "def with_modal(id:, title:, close_label:, description: nil, actions: nil, dialog_data: {}, &block)"
     assert_includes helper, "dialog_data: T::Hash[Symbol, Object]"
@@ -181,7 +190,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/account/siwe_identities/show.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/edit.html.erb" => %w[fieldset fieldset-legend input btn alert],
       "app/views/notifications/show.html.erb" => %w[card-rapid card-body card-title card-actions toggle btn alert],
-      "app/views/admin/users/index.html.erb" => %w[card-rapid card-body table badge btn join join-item],
+      "app/views/admin/users/index.html.erb" => %w[card-rapid card-body table badge btn],
       "app/views/pages/_page.html.erb" => %w[card-rapid card-body],
       "app/views/faqs/index.html.erb" => %w[collapse collapse-arrow collapse-title collapse-content alert],
       "app/views/admin/pages/index.html.erb" => %w[card-rapid card-body table btn],
@@ -232,8 +241,9 @@ class RailsTemplateContractTest < Minitest::Test
     refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, views)
   end
 
-  def test_generator_view_overrides_preserve_rails_contracts_and_use_daisyui_components
+  def test_generator_overrides_paginate_scaffolds_and_preserve_rails_view_contracts
     paths = %w[
+      lib/templates/rails/scaffold_controller/controller.rb.tt
       lib/templates/erb/scaffold/index.html.erb.tt
       lib/templates/erb/scaffold/show.html.erb.tt
       lib/templates/erb/scaffold/new.html.erb.tt
@@ -248,10 +258,16 @@ class RailsTemplateContractTest < Minitest::Test
     index = templates.fetch("lib/templates/erb/scaffold/index.html.erb.tt")
     show = templates.fetch("lib/templates/erb/scaffold/show.html.erb.tt")
     partial = templates.fetch("lib/templates/erb/scaffold/partial.html.erb.tt")
-    controller = templates.fetch("lib/templates/erb/controller/view.html.erb.tt")
+    scaffold_controller = templates.fetch("lib/templates/rails/scaffold_controller/controller.rb.tt")
+    controller_view = templates.fetch("lib/templates/erb/controller/view.html.erb.tt")
 
-    assert_equal paths.sort, @source.scan(/create_file "(lib\/templates\/erb\/[^"]+)"/).flatten.sort
-    assert_includes @source, "configure_generator_view_templates\n  configure_rubocop"
+    assert_equal paths.sort, @source.scan(/create_file "(lib\/templates\/[^"]+)"/).flatten.sort
+    assert_includes @source, "configure_generator_templates\n  configure_rubocop"
+    assert_includes scaffold_controller, "<% module_namespacing do -%>"
+    assert_includes scaffold_controller, "before_action :set_<%= singular_table_name %>"
+    assert_includes scaffold_controller, '@pagy, @<%= plural_table_name %> = pagy(:offset, <%= orm_class.all(class_name) %>.order(:id), limit: 25)'
+    assert_includes scaffold_controller, '<%= orm_class.build(class_name, "#{singular_table_name}_params") %>'
+    assert_includes scaffold_controller, '<%= orm_class.find(class_name, "params.expect(:id)") %>'
     assert_includes form, "<%%= form_with(model: <%= model_resource_name %>"
     assert_includes form, "attributes.each do |attribute|"
     assert_includes form, "attribute.password_digest?"
@@ -271,6 +287,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes index, "attribute.attachment?"
     assert_includes index, "attribute.attachments?"
     assert_includes index, "model_resource_name(singular_table_name)"
+    assert_includes index, '<%%= pagination(@pagy, aria_label: "<%= human_name.pluralize %> pagination") %>'
     refute_includes index, "notice"
 
     assert_class_tokens(show, "card-rapid")
@@ -278,9 +295,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens(partial, "list")
     assert_class_tokens(partial, "list-row")
     assert_includes partial, "<%%= dom_id <%= singular_name %> %>"
-    assert_class_tokens(controller, "card-rapid")
-    assert_includes controller, "<%= class_name %>#<%= @action %>"
-    assert_includes controller, "Find me in <%= @path %>"
+    assert_class_tokens(controller_view, "card-rapid")
+    assert_includes controller_view, "<%= class_name %>#<%= @action %>"
+    assert_includes controller_view, "Find me in <%= @path %>"
 
     refute_match(/style\s*=/, combined)
     refute_match(/(?:bg|text|border)-(?:blue|gray|slate|red|green|yellow)-\d+/, combined)
@@ -669,18 +686,20 @@ class RailsTemplateContractTest < Minitest::Test
     task = generated_file_source("lib/tasks/roles.rake")
     service = generated_file_source("app/services/admin_role_grant.rb")
     local_seed = generated_file_source("db/seeds.local.rb.example")
+    helper = generated_file_source("app/helpers/application_helper.rb")
 
     assert_class_tokens view, "card-rapid"
     assert_class_tokens view, "overflow-x-auto"
     assert_class_tokens view, "table", "table-sm", "table-pin-rows"
     assert_class_tokens view, "badge"
     assert_class_tokens view, "btn", "btn-outline", "btn-error"
-    assert_class_tokens view, "join"
-    assert_class_tokens view, "btn", "join-item"
+    assert_includes view, 'pagination(@pagy, aria_label: t("admin.users.pagination"))'
+    assert_class_tokens helper, "join"
+    assert_class_tokens helper, "join-item", "btn"
     assert_includes view, 'admin_user_roles_path(user)'
     assert_includes view, 'admin_user_role_path(user, "admin")'
-    assert_includes view, '@pagy.page_url(:previous)'
-    assert_includes view, '@pagy.page_url(:next)'
+    refute_includes view, '@pagy.page_url(:previous)'
+    refute_includes view, '@pagy.page_url(:next)'
     refute_match(/(?:bg|text|border)-(?:blue|gray|slate|red|green|yellow)-\d+/, view)
     refute_includes view, "dark:"
     refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, view)
@@ -1383,6 +1402,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")'
     assert_includes evidence, "def verify_with_menu_layout_geometry"
     assert_includes evidence, "def verify_page_actions_geometry"
+    assert_includes evidence, "def verify_pagination_geometry"
+    assert_includes evidence, '@pagination_users = 48.times.map { User.create! } if @pagination_users.nil?'
+    assert_includes evidence, 'const nav = document.querySelector(\'nav[aria-label="#{translate("admin.users.pagination")}"]\')'
+    assert_includes evidence, 'assert_equal 5, geometry.fetch("directItemCount")'
+    assert_includes evidence, 'assert_equal 1, geometry.fetch("rowCount")'
     assert_includes evidence, "prepare_job_operations_data if JOB_OPERATIONS"
     assert_includes evidence, "class EvidenceFailedJob < ApplicationJob"
     assert_includes evidence, 'data-page-actions-container="card"'

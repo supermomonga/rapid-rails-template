@@ -769,7 +769,74 @@ def install_daisyui
   append_to_file ".gitignore", "\n/node_modules\n" unless File.read(".gitignore").lines.map(&:strip).include?("/node_modules")
 end
 
-def configure_generator_view_templates
+def configure_generator_templates
+  create_file "lib/templates/rails/scaffold_controller/controller.rb.tt", <<~'RUBY', force: true
+    <% module_namespacing do -%>
+    class <%= controller_class_name %>Controller < ApplicationController
+      before_action :set_<%= singular_table_name %>, only: %i[ show edit update destroy ]
+
+      # GET <%= route_url %>
+      def index
+        @pagy, @<%= plural_table_name %> = pagy(:offset, <%= orm_class.all(class_name) %>.order(:id), limit: 25)
+      end
+
+      # GET <%= route_url %>/1
+      def show
+      end
+
+      # GET <%= route_url %>/new
+      def new
+        @<%= singular_table_name %> = <%= orm_class.build(class_name) %>
+      end
+
+      # GET <%= route_url %>/1/edit
+      def edit
+      end
+
+      # POST <%= route_url %>
+      def create
+        @<%= singular_table_name %> = <%= orm_class.build(class_name, "#{singular_table_name}_params") %>
+
+        if @<%= orm_instance.save %>
+          redirect_to <%= redirect_resource_name %>, notice: <%= %("#{human_name} was successfully created.") %>
+        else
+          render :new, status: <%= ActionDispatch::Constants::UNPROCESSABLE_CONTENT.inspect %>
+        end
+      end
+
+      # PATCH/PUT <%= route_url %>/1
+      def update
+        if @<%= orm_instance.update("#{singular_table_name}_params") %>
+          redirect_to <%= redirect_resource_name %>, notice: <%= %("#{human_name} was successfully updated.") %>, status: :see_other
+        else
+          render :edit, status: <%= ActionDispatch::Constants::UNPROCESSABLE_CONTENT.inspect %>
+        end
+      end
+
+      # DELETE <%= route_url %>/1
+      def destroy
+        @<%= orm_instance.destroy %>
+        redirect_to <%= index_helper %>_path, notice: <%= %("#{human_name} was successfully destroyed.") %>, status: :see_other
+      end
+
+      private
+        # Use callbacks to share common setup or constraints between actions.
+        def set_<%= singular_table_name %>
+          @<%= singular_table_name %> = <%= orm_class.find(class_name, "params.expect(:id)") %>
+        end
+
+        # Only allow a list of trusted parameters through.
+        def <%= "#{singular_table_name}_params" %>
+          <%- if attributes_names.empty? -%>
+          params.fetch(:<%= singular_table_name %>, {})
+          <%- else -%>
+          params.expect(<%= singular_table_name %>: [ <%= permitted_params %> ])
+          <%- end -%>
+        end
+    end
+    <% end -%>
+  RUBY
+
   create_file "lib/templates/erb/scaffold/_form.html.erb.tt", <<~ERB, force: true
     <%%= form_with(model: <%= model_resource_name %>, class: "space-y-5") do |form| %>
       <%% if <%= singular_table_name %>.errors.any? %>
@@ -874,6 +941,8 @@ def configure_generator_view_templates
           </div>
         </div>
       </section>
+
+      <%%= pagination(@pagy, aria_label: "<%= human_name.pluralize %> pagination") %>
     </div>
   ERB
 
@@ -4055,23 +4124,7 @@ def configure_roles
         </div>
       </section>
 
-      <% if @pagy.last > 1 %>
-        <nav aria-label="<%= t("admin.users.pagination") %>">
-          <div class="join">
-            <% if (previous_url = @pagy.page_url(:previous)) %>
-              <%= link_to t("common.previous"), previous_url, class: "btn join-item" %>
-            <% else %>
-              <span class="btn btn-disabled join-item" role="link" aria-disabled="true"><%= t("common.previous") %></span>
-            <% end %>
-            <span class="btn btn-active join-item" aria-current="page"><%= @pagy.page %> / <%= @pagy.last %></span>
-            <% if (next_url = @pagy.page_url(:next)) %>
-              <%= link_to t("common.next"), next_url, class: "btn join-item" %>
-            <% else %>
-              <span class="btn btn-disabled join-item" role="link" aria-disabled="true"><%= t("common.next") %></span>
-            <% end %>
-          </div>
-        </nav>
-      <% end %>
+      <%= pagination(@pagy, aria_label: t("admin.users.pagination")) %>
     </div>
   ERB
 
@@ -4315,7 +4368,11 @@ def configure_roles
 
         assert_response :success
         assert_select 'nav[aria-label=?] .join', I18n.t("admin.users.pagination"), count: 1
-        assert_select '.join .join-item', count: 3
+        assert_select '.join > .join-item.btn', count: 4
+        assert_select '.join > .btn-active[aria-current="page"]', text: "1", count: 1
+        assert_select '.join > .btn-disabled[aria-label=?][aria-disabled="true"]', I18n.t("common.previous"), count: 1
+        assert_select '.join > a[href=?]', admin_users_path(page: 2), text: "2", count: 1
+        assert_select '.join > a[href=?][aria-label=?]', admin_users_path(page: 2), I18n.t("common.next"), count: 1
       end
     end
   RUBY
@@ -8082,6 +8139,60 @@ def configure_default_views
         Kernel.raise TypeError, "application translation must be a string: #{key}"
       end
 
+      sig { params(pagy: Pagy::Offset, aria_label: String).returns(T.nilable(ActiveSupport::SafeBuffer)) }
+      def pagination(pagy, aria_label:)
+        return if pagy.last <= 1
+
+        series = T.cast(
+          pagy.data_hash(data_keys: [:series]).fetch(:series),
+          T::Array[T.any(Integer, String, Symbol)]
+        )
+        items = [pagination_arrow(pagy, :previous)]
+        items.concat(series.map do |item|
+          case item
+          when Integer
+            link_to item.to_s, pagy.page_url(item), class: "join-item btn"
+          when String
+            tag.span(item, class: "join-item btn btn-active", role: "link",
+              aria: { current: "page", disabled: true })
+          when :gap
+            tag.span("…", class: "join-item btn btn-disabled", role: "separator", aria: { disabled: true })
+          else
+            Kernel.raise TypeError, "unsupported pagination item: #{item.inspect}"
+          end
+        end)
+        items << pagination_arrow(pagy, :next)
+
+        tag.nav(tag.div(safe_join(items), class: "join"), class: "overflow-x-auto", aria: { label: aria_label })
+      end
+
+      sig { params(pagy: Pagy::Offset, direction: Symbol).returns(ActiveSupport::SafeBuffer) }
+      private def pagination_arrow(pagy, direction)
+        path_data, label_key = case direction
+                               when :previous then ["M15.75 19.5 8.25 12l7.5-7.5", "common.previous"]
+                               when :next then ["m8.25 4.5 7.5 7.5-7.5 7.5", "common.next"]
+                               else Kernel.raise ArgumentError, "unsupported pagination direction: #{direction}"
+                               end
+        label = t(label_key)
+        icon = tag.svg(
+          tag.path(stroke_linecap: "round", stroke_linejoin: "round", d: path_data),
+          xmlns: "http://www.w3.org/2000/svg",
+          class: "size-5",
+          fill: "none",
+          viewBox: "0 0 24 24",
+          stroke_width: "1.5",
+          stroke: "currentColor",
+          aria: { hidden: true },
+          data: { slot: "icon" }
+        )
+        classes = "join-item btn btn-square"
+        url = pagy.page_url(direction)
+        return link_to(icon, url, class: classes, aria: { label: label }) if url
+
+        tag.span(icon, class: "#{classes} btn-disabled", tabindex: "-1", role: "link",
+          aria: { label: label, disabled: true })
+      end
+
       sig do
         params(
           id: String,
@@ -8207,6 +8318,42 @@ def configure_default_views
 
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
+
+      test "renders accessible daisyUI pagination from the Pagy series" do
+        pagy = pagination_pagy(count: 400, page: 8)
+
+        html = pagination(pagy, aria_label: "Records pagination")
+        fragment = Nokogiri::HTML5.fragment(T.must(html))
+        nav = T.must(fragment.at_css('nav.overflow-x-auto[aria-label="Records pagination"]'))
+        items = nav.css(".join > .join-item.btn")
+
+        assert_equal 9, items.size
+        assert_equal %w[1 … 7 8 9 … 16], items.drop(1).take(7).map(&:text)
+        assert_equal "8", nav.at_css(".join-item.btn-active[aria-current=page]").text
+        assert_equal 2, nav.css('.join-item.btn-disabled[role="separator"]').size
+        assert_equal "/records?page=7", nav.at_css(%(.join > a[aria-label="#{I18n.t("common.previous")}"]))["href"]
+        assert_equal "/records?page=9", nav.at_css(%(.join > a[aria-label="#{I18n.t("common.next")}"]))["href"]
+        assert_equal 2, nav.css('svg.size-5[aria-hidden="true"][data-slot="icon"]').size
+      end
+
+      test "disables unavailable pagination arrows and omits a single page" do
+        assert_nil pagination(pagination_pagy(count: 25), aria_label: "Records pagination")
+
+        first_page = Nokogiri::HTML5.fragment(T.must(
+          pagination(pagination_pagy(count: 50), aria_label: "Records pagination")
+        ))
+        previous = T.must(first_page.at_css(%(.join > .btn-disabled[aria-label="#{I18n.t("common.previous")}"])))
+        assert_equal "link", previous["role"]
+        assert_equal "true", previous["aria-disabled"]
+        assert_nil previous["href"]
+
+        last_page = Nokogiri::HTML5.fragment(T.must(
+          pagination(pagination_pagy(count: 50, page: 2), aria_label: "Records pagination")
+        ))
+        following = T.must(last_page.at_css(%(.join > .btn-disabled[aria-label="#{I18n.t("common.next")}"])))
+        assert_equal "true", following["aria-disabled"]
+        assert_nil following["href"]
+      end
 
       test "renders one accessible native dialog from captured body and actions" do
         capture_count = 0
@@ -8387,6 +8534,15 @@ def configure_default_views
           with_tab(tabs: [tab], size: :compact) { "content" }
         end
       end
+
+      private
+
+        def pagination_pagy(count:, page: 1)
+          pagy_request = Pagy::Request.new(
+            request: { base_url: "http://test.host", path: "/records", params: {}, cookie: nil }
+          )
+          Pagy::Offset.new(count:, page:, limit: 25, request: pagy_request)
+        end
     end
   RUBY
 
@@ -12029,8 +12185,6 @@ def configure_evidence_capture
             capture_page("api-credential-edit", "APIキー編集", edit_api_credential_path(credential), translate("api_credentials.edit"), viewport)
             capture_page("api-credentials-populated", "APIキー一覧（登録済み）", api_credentials_path, translate("api_credentials.title"), viewport)
           end
-          capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
-          assert_admin_navigation_active(translate("navigation.users"))
           if JOB_OPERATIONS
             visit host_routes.admin_jobs_path
             assert_equal 200, page.status_code
@@ -12111,6 +12265,11 @@ def configure_evidence_capture
           find("header details.dropdown > summary", visible: :visible).click
           assert_account_menu_visual_state
           capture_current_page("navigation-authenticated-open", "アカウントメニュー（ログイン済み）", viewport)
+
+          @pagination_users = 48.times.map { User.create! } if @pagination_users.nil?
+          verify_pagination_geometry if viewport == "desktop"
+          capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
+          assert_admin_navigation_active(translate("navigation.users"))
         end
 
         def assert_account_menu_visual_state
@@ -12840,6 +12999,46 @@ def configure_evidence_capture
             assert_equal 0, tabbed.fetch("secondaryCount")
             assert_equal [12, 12, 12, 12], tabbed.fetch("padding"),
               "tab content should use p-3 at #{width}px"
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
+        def verify_pagination_geometry
+          [320, 390].each do |width|
+            page.current_window.resize_to(width, 900)
+            visit host_routes.admin_users_path
+            assert_equal 200, page.status_code
+            geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const nav = document.querySelector('nav[aria-label="#{translate("admin.users.pagination")}"]')
+                  const join = nav.querySelector(':scope > .join')
+                  const items = Array.from(join.querySelectorAll(':scope > .join-item.btn'))
+                  const active = join.querySelector(':scope > .btn-active[aria-current="page"]')
+                  return {
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    directItemCount: items.length,
+                    childCount: join.children.length,
+                    rowCount: new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size,
+                    activeText: active.textContent.trim(),
+                    iconCount: join.querySelectorAll(':scope > .btn-square svg[aria-hidden="true"]').length,
+                    navScrollWidth: nav.scrollWidth,
+                    navClientWidth: nav.clientWidth
+                  }
+                }
+              JAVASCRIPT
+            end
+            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+              "pagination should not overflow the document at #{width}px"
+            assert_equal geometry.fetch("childCount"), geometry.fetch("directItemCount")
+            assert_equal 5, geometry.fetch("directItemCount")
+            assert_equal 1, geometry.fetch("rowCount")
+            assert_equal "1", geometry.fetch("activeText")
+            assert_equal 2, geometry.fetch("iconCount")
+            assert_operator geometry.fetch("navScrollWidth"), :>=, geometry.fetch("navClientWidth")
           end
         ensure
           desktop = VIEWPORTS.fetch("desktop")
@@ -14501,7 +14700,7 @@ after_bundle do
   install_active_storage_db
   configure_lexxy
   install_daisyui
-  configure_generator_view_templates
+  configure_generator_templates
   configure_rubocop
   configure_common_files
   configure_evidence_capture

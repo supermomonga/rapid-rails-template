@@ -69,7 +69,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_view_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
+      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
       result << "install_devise"
       result << "install_siwe" if configuration["additional_login_methods"].include?("siwe")
       result << "configure_roles"
@@ -185,6 +185,7 @@ module RapidRailsTemplate
         test/controllers/admin/footer_settings_controller_test.rb
         test/tasks/roles_task_test.rb
         app/assets/tailwind/application.css
+        lib/templates/rails/scaffold_controller/controller.rb.tt
         lib/templates/erb/scaffold/index.html.erb.tt
         lib/templates/erb/scaffold/show.html.erb.tt
         lib/templates/erb/scaffold/new.html.erb.tt

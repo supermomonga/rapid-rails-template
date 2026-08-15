@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `31738608ba374b5f499d0b1e7e025e798f4e6064724f595765205c31616065c0`
-- Base commit: `1b1308ed0dfe26b48c6d8ad4878bfd0cf4ea1dc2`
+- Source fingerprint: `95cc6241055a5e84402ac1eab3676e3fba22b67fddfafba51801901b89e4cfeb`
+- Base commit: `7a20fc079466b6836f5ba3809ce71e612c7451e6`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -192,12 +192,6 @@
 |---|---|
 |![APIキー一覧（登録済み） (desktop)](api-credentials-populated--desktop.png)|![APIキー一覧（登録済み） (mobile)](api-credentials-populated--mobile.png)|
 
-## ユーザー管理
-
-|Desktop|Mobile|
-|---|---|
-|![ユーザー管理 (desktop)](admin-users--desktop.png)|![ユーザー管理 (mobile)](admin-users--mobile.png)|
-
 ## Queues
 
 |Desktop|Mobile|
@@ -251,6 +245,12 @@
 |Desktop|Mobile|
 |---|---|
 |![アカウントメニュー（ログイン済み） (desktop)](navigation-authenticated-open--desktop.png)|![アカウントメニュー（ログイン済み） (mobile)](navigation-authenticated-open--mobile.png)|
+
+## ユーザー管理
+
+|Desktop|Mobile|
+|---|---|
+|![ユーザー管理 (desktop)](admin-users--desktop.png)|![ユーザー管理 (mobile)](admin-users--mobile.png)|
 
 ## 一般Userのナビゲーション
 

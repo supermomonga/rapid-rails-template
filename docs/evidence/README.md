@@ -3,6 +3,6 @@
 選択可能な機能をすべて有効化した日本語sampleを、CapybaraとPlaywrightで一括検証したエビデンスです。
 
 - [Full / ja](full-ja/README.md)
-- Source fingerprint: `31738608ba374b5f499d0b1e7e025e798f4e6064724f595765205c31616065c0`
+- Source fingerprint: `95cc6241055a5e84402ac1eab3676e3fba22b67fddfafba51801901b89e4cfeb`
 - 更新: `rake evidence:update`
 - 検証: `rake evidence:verify`

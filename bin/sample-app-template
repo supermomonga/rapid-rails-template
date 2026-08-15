@@ -6,6 +6,15 @@ end
 
 generate "scaffold", "Article", "title:string", "body:text", "draft:boolean"
 
+generated_article_controller = File.read("app/controllers/articles_controller.rb")
+unless generated_article_controller.include?("@pagy, @articles = pagy(:offset, Article.all.order(:id), limit: 25)")
+  raise "Article scaffold controllerにPagy paginationが生成されていません"
+end
+generated_article_index = File.read("app/views/articles/index.html.erb")
+unless generated_article_index.include?('<%= pagination(@pagy, aria_label: "Articles pagination") %>')
+  raise "Article scaffold indexにdaisyUI paginationが生成されていません"
+end
+
 article_migrations = Dir.glob("db/migrate/*_create_articles.rb")
 raise "CreateArticles migrationが一意ではありません" unless article_migrations.one?
 
@@ -225,23 +234,7 @@ create_file "app/views/articles/index.html.erb", <<~'ERB', force: true
       </div>
     </section>
 
-    <% if @pagy.last > 1 %>
-      <nav aria-label="Article pagination">
-        <div class="join">
-          <% if (previous_url = @pagy.page_url(:previous)) %>
-            <%= link_to "Previous", previous_url, class: "btn join-item" %>
-          <% else %>
-            <span class="btn btn-disabled join-item" tabindex="-1" role="button" aria-disabled="true">Previous</span>
-          <% end %>
-          <span class="btn btn-active join-item" aria-current="page"><%= @pagy.page %> / <%= @pagy.last %></span>
-          <% if (next_url = @pagy.page_url(:next)) %>
-            <%= link_to "Next", next_url, class: "btn join-item" %>
-          <% else %>
-            <span class="btn btn-disabled join-item" tabindex="-1" role="button" aria-disabled="true">Next</span>
-          <% end %>
-        </div>
-      </nav>
-    <% end %>
+    <%= pagination(@pagy, aria_label: "Article pagination") %>
   </div>
 ERB
 
@@ -481,6 +474,11 @@ create_file "test/controllers/articles_controller_test.rb", <<~'RUBY', force: tr
       assert_response :success
       assert_select "tbody#articles tr", count: 25
       assert_select 'nav[aria-label="Article pagination"] .join', count: 1
+      assert_select '.join > .join-item.btn', count: 4
+      assert_select '.join > .btn-active[aria-current="page"]', text: "1", count: 1
+      assert_select '.join > .btn-disabled[aria-label=?][aria-disabled="true"]', I18n.t("common.previous"), count: 1
+      assert_select '.join > a[href=?]', articles_path(page: 2), text: "2", count: 1
+      assert_select '.join > a[href=?][aria-label=?]', articles_path(page: 2), I18n.t("common.next"), count: 1
     end
   end
 RUBY

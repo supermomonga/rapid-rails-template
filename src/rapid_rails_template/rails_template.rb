@@ -4082,7 +4082,7 @@ def configure_roles
       </header>
 
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <div class="overflow-x-auto">
             <table class="table table-sm table-pin-rows">
               <thead>
@@ -5011,7 +5011,7 @@ def configure_content_management
     <% content_for :page_title, t("content_management.admin.pages.title") %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <div class="overflow-x-auto">
             <table class="table">
               <thead><tr><th scope="col"><%= t("content_management.admin.pages.page") %></th><th scope="col"><%= t("content_management.admin.pages.url") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
@@ -5038,7 +5038,7 @@ def configure_content_management
         <p class="text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
       </header>
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <%= form_with model: [:admin, @page], class: "space-y-5" do |form| %>
             <fieldset class="fieldset">
               <legend class="fieldset-legend"><%= form.label :content, t("content_management.admin.pages.body") %></legend>
@@ -5094,7 +5094,7 @@ def configure_content_management
     <% end %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <% if @faqs.any? %>
             <div class="overflow-x-auto">
               <table class="table">
@@ -5127,14 +5127,14 @@ def configure_content_management
   create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.add") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card-rapid"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.edit") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card-rapid"><div class="card-body"><%= render "form", faq: @faq %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
@@ -5145,7 +5145,7 @@ def configure_content_management
         <p class="text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
       </header>
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <%= form_with model: [:admin, @footer_setting], url: admin_footer_setting_path, class: "space-y-5" do |form| %>
             <% if @footer_setting.errors.any? %>
               <div class="alert alert-error" role="alert">
@@ -7130,7 +7130,7 @@ def configure_profile
     <% content_for :page_title, t("profiles.title") %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <ul class="list">
     #{profile_rows}      </ul>
           <div class="card-actions justify-end">
@@ -7145,7 +7145,7 @@ def configure_profile
     <% content_for :page_title, t("profiles.edit_title") %>
     <div class="space-y-6">
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <%= render "form", profile: @profile %>
         </div>
       </section>
@@ -7478,7 +7478,7 @@ def configure_api
       <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
 
       <section class="card-rapid">
-        <div class="card-body p-5 sm:p-6">
+        <div class="card-body p-3">
           <% if @api_credentials.any? %>
             <div class="overflow-x-auto">
               <table class="table">
@@ -7525,7 +7525,7 @@ def configure_api
       <% end %>
 
       <section class="card-rapid">
-        <div class="card-body p-5 sm:p-6">
+        <div class="card-body p-3">
           <h2 class="card-title text-base leading-[1.5]"><%= t("api_credentials.information") %></h2>
           <div class="mt-3 grid gap-4">
             <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
@@ -7553,14 +7553,14 @@ def configure_api
   create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.new") %>
     <div class="space-y-6">
-      <section class="card-rapid"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
   create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.edit") %>
     <div class="space-y-6">
-      <section class="card-rapid"><div class="card-body p-5 sm:p-6"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card-rapid"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
@@ -8248,7 +8248,7 @@ def configure_default_views
         actions = tag.div(safe_join(columns), class: "grid min-w-0 gap-4 sm:grid-cols-2", data: { page_actions: true })
         return actions unless card
 
-        tag.div(tag.div(actions, class: "card-body"), class: "card-rapid mb-6",
+        tag.div(tag.div(actions, class: "card-body p-3"), class: "card-rapid mb-6",
           data: { page_actions_container: "card" })
       end
       private :page_actions
@@ -8409,6 +8409,7 @@ def configure_default_views
         card_body = T.must(card.at_css(".card-body"))
 
         assert card_body.element_children.first["data-page-actions"]
+        assert_includes card_body["class"].split, "p-3"
         assert_nil card.at_css('[data-page-actions-column="secondary"]')
         primary = T.must(card.at_css('[data-page-actions-column="primary"]'))
         assert_includes primary["class"].split, "sm:col-start-2"
@@ -8453,6 +8454,7 @@ def configure_default_views
         assert_equal 1, capture_count
         assert_equal "tab", actions_container["data-page-actions-container"]
         assert actions_container.at_css("[data-page-actions]")
+        assert_includes tab_content["class"].split, "p-3"
         assert_equal "Tab content", tab_content.element_children.find { |node| node.name == "p" }.text
         assert_nil tab_content.at_css(".card-rapid")
         assert content_for?(:page_actions_in_tab)
@@ -8818,7 +8820,7 @@ def configure_default_views
       </header>
 
       <section class="card-rapid">
-        <div class="card-body p-5 sm:p-6">
+        <div class="card-body p-3">
           <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.show.next_step") %></h2>
           <p class="text-sm text-neutral">#{account_page_action}</p>
           <div class="card-actions mt-2 justify-end">
@@ -9890,7 +9892,7 @@ def configure_web_push
       </header>
 
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="card-title text-base leading-[1.5]">
@@ -12834,6 +12836,8 @@ def configure_evidence_capture
                     const sidebarElement = layout.querySelector(':scope > aside')
                     const sidebar = sidebarElement.getBoundingClientRect()
                     const content = layout.querySelector(':scope > div').getBoundingClientRect()
+                    const surfaceBody = layout.querySelector(':scope > div .card-rapid > .card-body')
+                    const surfaceStyle = getComputedStyle(surfaceBody)
                     const mobileCategory = sidebarElement.querySelector('[data-with-menu-mobile-category]')
                     const scroll = sidebarElement.querySelector('[data-with-menu-scroll]')
                     const menu = sidebarElement.querySelector('[data-with-menu-items]')
@@ -12848,6 +12852,12 @@ def configure_evidence_capture
                       sidebarRight: sidebar.right,
                       contentTop: content.top,
                       contentLeft: content.left,
+                      surfacePadding: [
+                        surfaceStyle.paddingTop,
+                        surfaceStyle.paddingRight,
+                        surfaceStyle.paddingBottom,
+                        surfaceStyle.paddingLeft
+                      ].map(parseFloat),
                       menuDirection: getComputedStyle(menu).flexDirection,
                       mobileCategoryDisplay: getComputedStyle(mobileCategory).display,
                       desktopTitleDisplay: getComputedStyle(desktopTitle).display,
@@ -12864,6 +12874,8 @@ def configure_evidence_capture
 
               assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
                 "#{area} with-menu layout horizontal overflow at #{width}px"
+              assert_equal [12, 12, 12, 12], geometry.fetch("surfacePadding"),
+                "#{area} standard surface should use p-3 at #{width}px"
               if width < 961
                 assert_equal "row", geometry.fetch("menuDirection"),
                   "#{area} with-menu should use a horizontal menu at #{width}px"
@@ -12912,6 +12924,7 @@ def configure_evidence_capture
                   () => {
                     const heading = document.querySelector('[data-layout="with-menu"] > div > h1')
                     const card = document.querySelector('[data-page-actions-container="card"]')
+                    const cardBodyStyle = getComputedStyle(card.querySelector(':scope > .card-body'))
                     const grid = card.querySelector('[data-page-actions]')
                     const primary = grid.querySelector('[data-page-actions-column="primary"]')
                     return {
@@ -12924,7 +12937,13 @@ def configure_evidence_capture
                       primaryLeft: primary.getBoundingClientRect().left,
                       gridLeft: grid.getBoundingClientRect().left,
                       secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length,
-                      tabContainerCount: document.querySelectorAll('[data-page-actions-container="tab"]').length
+                      tabContainerCount: document.querySelectorAll('[data-page-actions-container="tab"]').length,
+                      padding: [
+                        cardBodyStyle.paddingTop,
+                        cardBodyStyle.paddingRight,
+                        cardBodyStyle.paddingBottom,
+                        cardBodyStyle.paddingLeft
+                      ].map(parseFloat)
                     }
                   }
                 JAVASCRIPT
@@ -12935,6 +12954,8 @@ def configure_evidence_capture
                 "no-tab page actions should immediately follow the heading at #{width}px"
               assert_equal 0, no_tab.fetch("secondaryCount")
               assert_equal 0, no_tab.fetch("tabContainerCount")
+              assert_equal [12, 12, 12, 12], no_tab.fetch("padding"),
+                "no-tab page actions should use p-3 at #{width}px"
               if width < 640
                 assert_equal 1, no_tab.fetch("columnCount")
                 assert_in_delta no_tab.fetch("gridWidth"), no_tab.fetch("primaryWidth"), 1
@@ -12949,6 +12970,7 @@ def configure_evidence_capture
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
                   const panel = document.querySelector('[role="tabpanel"].tab-content')
+                  const panelStyle = getComputedStyle(panel)
                   const container = panel.querySelector(':scope > [data-page-actions-container="tab"]')
                   const grid = container.querySelector('[data-page-actions]')
                   return {
@@ -12957,7 +12979,13 @@ def configure_evidence_capture
                     containerIsFirst: panel.firstElementChild === container,
                     cardCount: container.querySelectorAll('.card-rapid').length,
                     primaryCount: grid.querySelectorAll('[data-page-actions-column="primary"]').length,
-                    secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length
+                    secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length,
+                    padding: [
+                      panelStyle.paddingTop,
+                      panelStyle.paddingRight,
+                      panelStyle.paddingBottom,
+                      panelStyle.paddingLeft
+                    ].map(parseFloat)
                   }
                 }
               JAVASCRIPT
@@ -12969,6 +12997,8 @@ def configure_evidence_capture
             assert_equal 0, tabbed.fetch("cardCount")
             assert_equal 1, tabbed.fetch("primaryCount")
             assert_equal 0, tabbed.fetch("secondaryCount")
+            assert_equal [12, 12, 12, 12], tabbed.fetch("padding"),
+              "tab content should use p-3 at #{width}px"
           end
         ensure
           desktop = VIEWPORTS.fetch("desktop")

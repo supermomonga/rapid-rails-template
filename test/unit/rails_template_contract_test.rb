@@ -1672,6 +1672,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, 'data: { page_actions_column: "primary" }'
     assert_includes helper, 'class: "grid min-w-0 gap-4 sm:grid-cols-2"'
     assert_includes helper, 'class: "card-rapid mb-6"'
+    assert_includes helper, 'class: "card-body p-3"'
     assert_includes helper, 'content_for(:page_actions_in_tab, "true", flush: true)'
     assert_operator helper.index("tab_content = capture(&block)"), :<, helper.index("page_actions(card: false)")
 
@@ -1687,6 +1688,42 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes job_show, '<header class="flex flex-wrap items-start justify-between gap-4">'
     refute_includes api_form, "content_for :page_actions_primary"
     assert_includes api_form, '<%= form.submit class: "btn btn-primary btn-rapid" %>'
+  end
+
+  def test_with_menu_standard_surfaces_use_p_3_without_changing_nested_or_variant_cards
+    standard_surface_views = %w[
+      app/views/accounts/show.html.erb
+      app/views/profiles/show.html.erb
+      app/views/profiles/edit.html.erb
+      app/views/notifications/show.html.erb
+      app/views/api_credentials/index.html.erb
+      app/views/api_credentials/show.html.erb
+      app/views/api_credentials/new.html.erb
+      app/views/api_credentials/edit.html.erb
+      app/views/admin/users/index.html.erb
+      app/views/admin/pages/index.html.erb
+      app/views/admin/pages/edit.html.erb
+      app/views/admin/faqs/index.html.erb
+      app/views/admin/faqs/new.html.erb
+      app/views/admin/faqs/edit.html.erb
+      app/views/admin/footer_settings/edit.html.erb
+    ]
+
+    standard_surface_views.each do |path|
+      view = generated_file_source(path)
+
+      assert_equal 1, view.scan('class="card-body p-3"').size, path
+      refute_includes view, "p-5 sm:p-6", path
+    end
+
+    account_delete = generated_file_source("app/views/accounts/delete.html.erb")
+    job_show = generated_file_source("app/views/mission_control/jobs/jobs/show.html.erb")
+    public_page = generated_file_source("app/views/pages/_page.html.erb")
+
+    assert_includes account_delete, '<section class="card card-border border-error bg-base-100 shadow-none">'
+    assert_includes account_delete, '<div class="card-body">'
+    assert_includes job_show, '<div class="card-body p-0">'
+    assert_includes public_page, '<div class="card-body"><%= @page.content %></div>'
   end
 
   def test_page_titles_use_one_content_for_contract_across_generated_views

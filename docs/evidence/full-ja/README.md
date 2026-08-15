@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `6be3d8bc6bfced19ca1bcf7f80b110b5f2ee1cacbb71b60aa800c17e0c886764`
-- Base commit: `cd30cb4a9bf4f3c03f1c314948c80d4685b46761`
+- Source fingerprint: `24278b7fcdbbde9fe2eaffc6992cc74c18d9d5aa844bafbbf78b1189b7e6b721`
+- Base commit: `9e1c0a53dab04bc73ce7a0dfa2229e296325f849`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -36,11 +36,11 @@
 |---|---|
 |![アカウント作成 (desktop)](registration--desktop.png)|![アカウント作成 (mobile)](registration--mobile.png)|
 
-## アカウント作成完了
+## Passkey登録後の紛失リスク警告
 
 |Desktop|Mobile|
 |---|---|
-|![アカウント作成完了 (desktop)](registration-complete--desktop.png)|![アカウント作成完了 (mobile)](registration-complete--mobile.png)|
+|![Passkey登録後の紛失リスク警告 (desktop)](passkey-registration-risk-warning--desktop.png)|![Passkey登録後の紛失リスク警告 (mobile)](passkey-registration-risk-warning--mobile.png)|
 
 ## ホーム（ログイン済み）
 
@@ -102,11 +102,47 @@
 |---|---|
 |![ホーム（画像削除後） (desktop)](home-avatar-deleted--desktop.png)|![ホーム（画像削除後） (mobile)](home-avatar-deleted--mobile.png)|
 
-## アカウント設定
+## Passkey一覧
 
 |Desktop|Mobile|
 |---|---|
-|![アカウント設定 (desktop)](account-settings--desktop.png)|![アカウント設定 (mobile)](account-settings--mobile.png)|
+|![Passkey一覧 (desktop)](passkeys--desktop.png)|![Passkey一覧 (mobile)](passkeys--mobile.png)|
+
+## Passkey追加
+
+|Desktop|Mobile|
+|---|---|
+|![Passkey追加 (desktop)](passkey-new--desktop.png)|![Passkey追加 (mobile)](passkey-new--mobile.png)|
+
+## Passkey一覧（複数登録）
+
+|Desktop|Mobile|
+|---|---|
+|![Passkey一覧（複数登録） (desktop)](passkeys-multiple--desktop.png)|![Passkey一覧（複数登録） (mobile)](passkeys-multiple--mobile.png)|
+
+## Passkey名変更
+
+|Desktop|Mobile|
+|---|---|
+|![Passkey名変更 (desktop)](passkey-edit--desktop.png)|![Passkey名変更 (mobile)](passkey-edit--mobile.png)|
+
+## Passkey一覧（名称変更後）
+
+|Desktop|Mobile|
+|---|---|
+|![Passkey一覧（名称変更後） (desktop)](passkey-renamed--desktop.png)|![Passkey一覧（名称変更後） (mobile)](passkey-renamed--mobile.png)|
+
+## Passkey解除（再認証）
+
+|Desktop|Mobile|
+|---|---|
+|![Passkey解除（再認証） (desktop)](passkey-delete-reauth--desktop.png)|![Passkey解除（再認証） (mobile)](passkey-delete-reauth--mobile.png)|
+
+## アカウント削除（再認証）
+
+|Desktop|Mobile|
+|---|---|
+|![アカウント削除（再認証） (desktop)](account-delete-reauth--desktop.png)|![アカウント削除（再認証） (mobile)](account-delete-reauth--mobile.png)|
 
 ## 通知
 

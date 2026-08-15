@@ -184,13 +184,13 @@ Maintenance TasksはActive Jobを介して実行するため、実効値が`acti
 - 表示条件: 常に表示する
 - 影響する処理: Deviseの`:siweable` module、`siwe-rb`、SIWE credential・challenge・route・管理画面
 
-Devise 5.0.4、`devise-i18n`、ユーザーID＋パスワードによる登録・ログインはすべての構成で生成します。`User`の内部識別子は標準の整数`id`、認証用IDは`login_id`です。会員登録ではpasswordとpassword confirmationだけを入力させ、`login_id`はUser作成時に`SecureRandom.hex(10)`で未使用の20文字小文字hexとして自動生成します。clientが送信した`login_id`は採用せず、作成後の変更もmodelで拒否します。
+Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`によるPasskey登録・ログインはすべての構成で生成します。`User`は内部識別子`id`、ランダムで変更不可の`webauthn_id`、`remember_created_at`を持ち、`login_id`、`encrypted_password`、パスワード画面は生成しません。Passkeyはdiscoverable credential、`residentKey: required`、`userVerification: required`、`attestation: none`で登録し、ユーザーID入力なしでログインします。
 
-登録成功後は自動ログイン状態を維持して認証必須の`/users/sign_up/complete`へ遷移し、生成したユーザーID、次回ログインに必要なため保存すべき旨、コピー操作を表示します。ユーザーIDは本人の登録完了画面とアカウント設定だけへ読み取り専用で表示し、公開Profileや管理画面には表示しません。ログイン入力では従来どおりtrim・小文字化します。email、password recovery列、`:recoverable`、`:validatable`は生成せず、passwordは`Devise.password_length`で検証し、password更新にはcurrent passwordを要求します。
+`PasskeyCredential`はUserごとに複数登録でき、credential IDを全Userで一意にします。登録時のBackup Eligibilityは変更不可で、認証時にも不変性を検証します。Backup State、sign count、last usedは認証成功時だけ更新し、`BE=0/BS=1`はdatabase・model・認証境界で拒否します。全資格情報が`BS=0`のPasskey 1件だけならログイン後に紛失リスク警告を表示します。
 
-`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。会員登録は常にpasswordを入力し、自動生成されたユーザーIDを受け取るpassword認証の基底フローで行い、ログイン後に名前付きEOA walletを複数追加できます。wallet addressは全Userで一意かつ変更不可、wallet名はUser内で大文字小文字を無視して一意です。SIWEログインは紐付いた既存UserだけをDeviseへsign inし、未登録walletからUserを作成しません。
+`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。SIWEは新規登録とログインを別purposeにし、ログインは既存identityだけを受け付けます。名前付きEOA walletをUserごとに複数登録でき、addressは全Userで一意かつ変更不可です。
 
-challengeはdatabaseへtoken digest、purpose、User、browser session、address、chain ID、server生成message、nonce、5分の期限、消費時刻を保存します。canonical originからdomainとURIを構成し、clientのHost、message、User ID、purpose、redirect先を信用しません。発行・検証はPOST＋CSRF、`Cache-Control: no-store`、IP＋sessionごとのrate limitで保護します。初期実装は正のEIP-155 chain IDを持つEOA署名だけを対象とし、RPC、ERC-1271、WalletConnect、外部SaaSは追加しません。
+WebAuthnとSIWEのchallengeはdatabaseへtoken digest、purpose、User、browser session、5分の期限、消費時刻、必要に応じて削除対象を保存します。発行・検証はPOST＋CSRF、`Cache-Control: no-store`、IP＋sessionごとのrate limitで保護します。Passkey・walletの解除は削除対象自身を候補から除外した別資格情報、アカウント削除は任意の現存資格情報による操作単位の再認証を要求します。最後の資格情報、別Userの対象、期限切れ・再利用challengeは拒否します。
 
 CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正規化します。空値を選択なしとして受け入れ、未知値、重複値、空要素を生成開始前に拒否します。旧optionのaliasや互換処理は提供しません。
 
@@ -317,7 +317,7 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 - Solid Queueを使わない場合はMaintenance Tasksを`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
 - PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
 - Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。
-- password基底構成とSIWE追加構成で購読APIと共通設定UIをDevise認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。
+- Passkey-only構成とPasskey＋SIWE構成で購読APIと共通設定UIをDevise認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。
 - Solid Queueを使わない場合、queue database、Puma plugin、production workerを生成しないこと。
 - Maintenance Tasksを使わない場合、Gem、migration、initializer、controller、route、navigationを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。

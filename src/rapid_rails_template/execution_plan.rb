@@ -53,7 +53,7 @@ module RapidRailsTemplate
 
     def build_gems
       result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
-      result.concat(%w[devise devise-i18n])
+      result.concat(%w[devise devise-i18n webauthn])
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
       result << "boring_avatars" if configuration["profile_features"].include?("avatar")
@@ -273,14 +273,37 @@ module RapidRailsTemplate
         ])
       end
       result.concat(%w[
-        app/controllers/users/registrations_controller.rb
+        app/models/passkey_credential.rb
+        app/models/webauthn_challenge.rb
+        app/services/credential_destruction.rb
+        app/controllers/concerns/webauthn_request.rb
+        app/controllers/users/passkey_sessions_controller.rb
+        app/controllers/users/passkey_registrations_controller.rb
+        app/controllers/account/passkeys_controller.rb
+        app/controllers/account/credential_destructions_controller.rb
+        app/javascript/controllers/passkey_controller.js
         app/javascript/controllers/clipboard_controller.js
-        app/views/devise/sessions/new.html.erb
-        app/views/devise/registrations/new.html.erb
-        app/views/devise/registrations/complete.html.erb
-        app/views/devise/registrations/edit.html.erb
-        config/locales/devise_views.ja.yml
-        config/locales/devise_views.en.yml
+        app/views/users/passkey_sessions/new.html.erb
+        app/views/users/passkey_registrations/new.html.erb
+        app/views/account/passkeys/index.html.erb
+        app/views/account/passkeys/new.html.erb
+        app/views/account/passkeys/show.html.erb
+        app/views/account/passkeys/edit.html.erb
+        app/views/accounts/delete.html.erb
+        app/views/layouts/account_settings.html.erb
+        config/initializers/devise_passkey_authenticatable.rb
+        config/initializers/webauthn.rb
+        config/locales/authentication.ja.yml
+        config/locales/authentication.en.yml
+        config/locales/passkeys.ja.yml
+        config/locales/passkeys.en.yml
+        lib/devise/models/passkey_authenticatable.rb
+        lib/devise/passkey_authenticatable.rb
+        db/migrate/*_create_passkey_credentials.rb
+        db/migrate/*_create_webauthn_challenges.rb
+        test/models/passkey_credential_test.rb
+        test/models/webauthn_challenge_test.rb
+        test/controllers/users/passkey_authentication_controller_test.rb
       ])
       if configuration["additional_login_methods"].include?("siwe")
         result.concat(%w[
@@ -288,15 +311,14 @@ module RapidRailsTemplate
           app/models/siwe_challenge.rb
           lib/devise/models/siweable.rb
           lib/devise/siweable.rb
-          lib/devise/siweable/routes.rb
           app/controllers/users/siwe_sessions_controller.rb
+          app/controllers/users/siwe_registrations_controller.rb
           app/controllers/account/siwe_identities_controller.rb
           app/javascript/controllers/siwe_sign_in_controller.js
           app/views/account/siwe_identities/index.html.erb
           app/views/account/siwe_identities/new.html.erb
           app/views/account/siwe_identities/show.html.erb
           app/views/account/siwe_identities/edit.html.erb
-          app/views/layouts/account_settings.html.erb
           config/initializers/devise_siweable.rb
           config/locales/siwe.ja.yml
           config/locales/siwe.en.yml

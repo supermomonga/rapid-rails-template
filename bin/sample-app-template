@@ -494,10 +494,18 @@ append_to_file "db/seeds.rb", <<~'RUBY'
     if profile
       user = profile.user
     else
-      user = User.create!(password: "password123", password_confirmation: "password123")
+      user = User.create!
       profile = T.must(user.profile)
     end
     profile.update!(screen_name: screen_name, display_name: format("Sample User %02d", number))
+    user.passkey_credentials.find_or_create_by!(webauthn_id: "sample-passkey-#{screen_name}") do |passkey|
+      passkey.name = "Sample Passkey"
+      passkey.public_key = "sample-public-key"
+      passkey.sign_count = 0
+      passkey.transports = ["internal"]
+      passkey.backup_eligible = false
+      passkey.backup_state = false
+    end
 
     50.times do |article_index|
       article_number = article_index + 1
@@ -512,9 +520,9 @@ append_to_file "db/seeds.rb", <<~'RUBY'
     user
   end
 
-  puts "Sample user credentials:"
+  puts "Sample users (seeded Passkeys are display-only and cannot authenticate):"
   sample_users.each do |user|
-    puts "  #{T.must(user.profile).screen_name}: #{user.login_id} / password123"
+    puts "  #{T.must(user.profile).screen_name}: user_id=#{user.id}"
   end
 RUBY
 
@@ -533,6 +541,7 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
       sample_users = sample_profiles.map(&:user)
 
       sample_users.each do |user|
+        assert_equal 1, user.passkey_credentials.count
         articles = T.must(user.profile).articles
         assert_equal 50, articles.count
         assert_equal 10, articles.where(draft: true).count

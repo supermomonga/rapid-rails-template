@@ -46,6 +46,7 @@ end
 
 gem "devise", "~> 5.0.4"
 gem "devise-i18n"
+gem "webauthn", "~> 3.4"
 gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_methods").include?("siwe")
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
@@ -108,18 +109,33 @@ def configure_devise_routes
   actual = source.byteslice(call.location.start_offset, call.location.length)
   raise "#{path}のdevise_for(:users)が想定外の構造です: #{actual}" unless actual == "devise_for :users"
 
-  controllers = ['registrations: "users/registrations"']
-  controllers << 'siwe_sessions: "users/siwe_sessions"' if VALUES.fetch("additional_login_methods").include?("siwe")
-  replacement = "devise_for :users, controllers: { #{controllers.join(', ')} }"
+  replacement = "devise_for :users, skip: :all"
   File.binwrite(
     path,
     source.byteslice(0, call.location.start_offset) + replacement + source.byteslice(call.location.end_offset..)
   )
 
+  siwe_routes = if VALUES.fetch("additional_login_methods").include?("siwe")
+    <<~RUBY
+      post "users/sign_in/siwe/challenge", to: "users/siwe_sessions#challenge", as: :user_siwe_challenge
+      post "users/sign_in/siwe", to: "users/siwe_sessions#create", as: :user_siwe
+      post "users/sign_up/siwe/challenge", to: "users/siwe_registrations#challenge", as: :user_siwe_registration_challenge
+      post "users/sign_up/siwe", to: "users/siwe_registrations#create", as: :user_siwe_registration
+    RUBY
+  else
+    ""
+  end
+
   route <<~RUBY
     devise_scope :user do
-      get "users/sign_up/complete", to: "users/registrations#complete", as: :user_registration_complete
-    end
+      get "users/sign_in", to: "users/passkey_sessions#new", as: :new_user_session
+      post "users/sign_in/passkey/options", to: "users/passkey_sessions#options", as: :user_passkey_session_options
+      post "users/sign_in/passkey", to: "users/passkey_sessions#create", as: :user_passkey_session
+      delete "users/sign_out", to: "users/passkey_sessions#destroy", as: :destroy_user_session
+      get "users/sign_up", to: "users/passkey_registrations#new", as: :new_user_registration
+      post "users/sign_up/passkey/options", to: "users/passkey_registrations#options", as: :user_passkey_registration_options
+      post "users/sign_up/passkey", to: "users/passkey_registrations#create", as: :user_passkey_registration
+    #{siwe_routes.lines.map { |line| "  #{line}" }.join}end
   RUBY
 end
 
@@ -319,8 +335,10 @@ def configure_application_identity
       },
       "accounts" => {
         "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "サイドメニューから利用設定を管理できます。", "action_with_profile" => "サイドメニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
+        "delete" => { "title" => "アカウント削除", "description" => "この操作は取り消せません。現在使えるログイン方法で再認証してください。", "with_passkey" => "Passkeyでアカウントを削除", "with_wallet" => "ウォレットでアカウントを削除" },
         "destroy" => { "notice" => "アカウントを削除しました", "last_admin" => "最後の管理者はアカウントを削除できません" }
       },
+      "credential_risk" => { "warning" => "現在のログイン方法は未バックアップのPasskey 1件だけです。端末の紛失・故障に備えて別のログイン方法を追加してください。", "add_login_method" => "ログイン方法を追加" },
       "siwe" => { "statement" => "Login to %{app_name}" },
       "common" => { "edit" => "編集", "delete" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
     },
@@ -341,8 +359,10 @@ def configure_application_identity
       },
       "accounts" => {
         "show" => { "title" => "Dashboard", "description" => "Review the state of your application.", "description_with_profile" => "Review your profile and application state.", "next_step" => "Next step", "action" => "Manage your preferences from the side menu.", "action_with_profile" => "Manage your profile and preferences from the side menu.", "back_home" => "Back to home" },
+        "delete" => { "title" => "Delete account", "description" => "This action cannot be undone. Reauthenticate with a sign-in method that currently works.", "with_passkey" => "Delete account with passkey", "with_wallet" => "Delete account with wallet" },
         "destroy" => { "notice" => "Your account was deleted.", "last_admin" => "The last administrator cannot delete their account." }
       },
+      "credential_risk" => { "warning" => "Your only sign-in method is a passkey that is not backed up. Add another sign-in method in case this device is lost or damaged.", "add_login_method" => "Add sign-in method" },
       "siwe" => { "statement" => "Sign in to %{app_name}" },
       "common" => { "edit" => "Edit", "delete" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
     }
@@ -956,92 +976,178 @@ end
 def install_devise
   generate "devise:install"
   generate "devise", "User"
+  generate "migration", "CreatePasskeyCredentials"
+  generate "migration", "CreateWebauthnChallenges"
 
   user_migrations = Dir.glob("db/migrate/*_devise_create_users.rb")
+  passkey_migrations = Dir.glob("db/migrate/*_create_passkey_credentials.rb")
+  challenge_migrations = Dir.glob("db/migrate/*_create_webauthn_challenges.rb")
   raise "DeviseCreateUsers migrationが一意ではありません" unless user_migrations.one?
+  raise "CreatePasskeyCredentials migrationが一意ではありません" unless passkey_migrations.one?
+  raise "CreateWebauthnChallenges migrationが一意ではありません" unless challenge_migrations.one?
 
   create_file user_migrations.first, <<~'RUBY', force: true
     class DeviseCreateUsers < ActiveRecord::Migration[8.1]
       def change
         create_table :users do |t|
-          t.string :login_id, null: false
-          t.string :encrypted_password, null: false, default: ""
+          t.string :webauthn_id, null: false
           t.datetime :remember_created_at
           t.timestamps null: false
         end
 
-        add_index :users, :login_id, unique: true
+        add_index :users, :webauthn_id, unique: true
       end
     end
   RUBY
 
-  devise_modules = %w[database_authenticatable registerable rememberable]
+  create_file passkey_migrations.first, <<~'RUBY', force: true
+    class CreatePasskeyCredentials < ActiveRecord::Migration[8.1]
+      def change
+        create_table :passkey_credentials do |t|
+          t.references :user, null: false, foreign_key: { on_delete: :cascade }
+          t.string :name, null: false
+          t.string :webauthn_id, null: false
+          t.text :public_key, null: false
+          t.bigint :sign_count, null: false, default: 0
+          t.json :transports, null: false, default: []
+          t.boolean :backup_eligible, null: false
+          t.boolean :backup_state, null: false
+          t.datetime :last_used_at
+          t.timestamps null: false
+        end
+
+        add_index :passkey_credentials, :webauthn_id, unique: true
+        add_check_constraint :passkey_credentials, "NOT backup_state OR backup_eligible",
+          name: "passkey_credentials_valid_backup_flags"
+      end
+    end
+  RUBY
+
+  create_file challenge_migrations.first, <<~'RUBY', force: true
+    class CreateWebauthnChallenges < ActiveRecord::Migration[8.1]
+      def change
+        create_table :webauthn_challenges do |t|
+          t.references :user, null: true, foreign_key: { on_delete: :cascade }
+          t.string :purpose, null: false
+          t.string :token_digest, null: false
+          t.string :session_digest, null: false
+          t.string :challenge, null: false
+          t.string :webauthn_user_id
+          t.string :action
+          t.string :target_type
+          t.bigint :target_id
+          t.datetime :expires_at, null: false
+          t.datetime :consumed_at
+          t.timestamps null: false
+        end
+
+        add_index :webauthn_challenges, :token_digest, unique: true
+        add_index :webauthn_challenges, :expires_at
+        add_index :webauthn_challenges, :consumed_at
+        add_check_constraint :webauthn_challenges, "purpose IN ('signup', 'login', 'link', 'destroy')",
+          name: "webauthn_challenges_purpose"
+        add_check_constraint :webauthn_challenges,
+          "(purpose IN ('signup', 'login') AND user_id IS NULL) OR (purpose IN ('link', 'destroy') AND user_id IS NOT NULL)",
+          name: "webauthn_challenges_user_matches_purpose"
+        add_check_constraint :webauthn_challenges,
+          "purpose = 'destroy' OR (action IS NULL AND target_type IS NULL AND target_id IS NULL)",
+          name: "webauthn_challenges_target_matches_purpose"
+      end
+    end
+  RUBY
+
+  create_file "lib/devise/models/passkey_authenticatable.rb", <<~'RUBY', force: true
+    module Devise
+      module Models
+        module PasskeyAuthenticatable
+          extend ActiveSupport::Concern
+
+          included do
+            T.bind(self, T.class_of(User))
+            has_many :passkey_credentials, dependent: :destroy
+            has_many :webauthn_challenges, dependent: :destroy
+          end
+        end
+      end
+    end
+  RUBY
+  create_file "lib/devise/passkey_authenticatable.rb", <<~'RUBY', force: true
+    require "devise"
+    require_relative "models/passkey_authenticatable"
+
+    module Devise
+      module PasskeyAuthenticatable; end
+    end
+
+    Devise.add_module(:passkey_authenticatable, model: "devise/models/passkey_authenticatable")
+  RUBY
+  create_file "config/initializers/devise_passkey_authenticatable.rb", <<~'RUBY', force: true
+    require Rails.root.join("lib/devise/passkey_authenticatable")
+
+    Rails.application.config.filter_parameters += %i[challenge_token credential signature]
+  RUBY
+  create_file "config/initializers/webauthn.rb", <<~'RUBY', force: true
+    require "uri"
+
+    identity = Rails.configuration.x.application_identity
+    origin = URI.parse(identity.canonical_origin)
+
+    WebAuthn.configure do |config|
+      config.allowed_origins = [identity.canonical_origin]
+      config.rp_id = origin.host
+      config.rp_name = identity.app_name
+    end
+  RUBY
+
+  devise_modules = %w[passkey_authenticatable rememberable]
   devise_modules << "siweable" if VALUES.fetch("additional_login_methods").include?("siwe")
   devise_declaration = devise_modules.map { |name| ":#{name}" }.join(", ")
   create_file "app/models/user.rb", <<~RUBY, force: true
-    require "securerandom"
-
     class User < ApplicationRecord
-      LOGIN_ID_BYTES = T.let(10, Integer)
+      devise #{devise_declaration}
 
-      devise #{devise_declaration}, authentication_keys: [:login_id]
+      validates :webauthn_id, presence: true, uniqueness: { case_sensitive: true }
 
-      normalizes :login_id, with: ->(login_id) { login_id.to_s.strip.downcase }
+      before_validation :assign_webauthn_id, on: :create
+      validate :webauthn_id_cannot_change, on: :update
 
-      validates :login_id,
-        presence: true,
-        format: { with: /\\A[0-9a-f]{20}\\z/ },
-        uniqueness: { case_sensitive: true }
-      validates_presence_of :password, if: :password_required?
-      validates_confirmation_of :password, if: :password_required?
-      validates_length_of :password, within: Devise.password_length, allow_blank: true
+      sig { returns(Integer) }
+      def authentication_credentials_count
+        passkey_credentials.count#{VALUES.fetch("additional_login_methods").include?("siwe") ? " + siwe_identities.count" : ""}
+      end
 
-      before_validation :assign_generated_login_id, on: :create
-      validate :login_id_cannot_change, on: :update
+      sig { returns(T::Boolean) }
+      def credential_loss_risk?
+        return false unless authentication_credentials_count == 1
+
+        only_passkey = passkey_credentials.first
+        only_passkey.present? && !only_passkey.backup_state?
+      end
 
       private
         sig { void }
-        def assign_generated_login_id
-          loop do
-            candidate = generate_login_id_candidate
-            next if self.class.exists?(login_id: candidate)
+        def assign_webauthn_id
+          return if webauthn_id.present?
 
-            self.login_id = candidate
+          loop do
+            candidate = WebAuthn.generate_user_id
+            next if self.class.exists?(webauthn_id: candidate)
+
+            self.webauthn_id = candidate
             break
           end
         end
 
-        sig { returns(String) }
-        def generate_login_id_candidate
-          SecureRandom.hex(LOGIN_ID_BYTES)
-        end
-
         sig { void }
-        def login_id_cannot_change
-          errors.add(:login_id, :login_id_readonly) if will_save_change_to_login_id?
-        end
-
-        sig { returns(T::Boolean) }
-        def password_required?
-          new_record? || password.present? || password_confirmation.present?
+        def webauthn_id_cannot_change
+          errors.add(:webauthn_id, :readonly) if will_save_change_to_webauthn_id?
         end
     end
   RUBY
 
-  initializer_marker = "Devise.setup do |config|\n"
-  devise_initializer = File.binread("config/initializers/devise.rb")
-  raise "Devise initializerのsetup blockが一意ではありません" unless devise_initializer.scan(initializer_marker).one?
-  inject_into_file "config/initializers/devise.rb", after: initializer_marker do
-    <<~RUBY
-      config.authentication_keys = [:login_id]
-      config.case_insensitive_keys = [:login_id]
-      config.strip_whitespace_keys = [:login_id]
-
-    RUBY
-  end
-
-  generate "devise:views", "-v", "sessions", "registrations"
   configure_devise_routes
+  configure_passkey_routes
+  install_passkey_runtime
   create_file "app/javascript/controllers/clipboard_controller.js", <<~JAVASCRIPT, force: true
     import { Controller } from "@hotwired/stimulus"
 
@@ -1057,42 +1163,1247 @@ def install_devise
   JAVASCRIPT
   create_file "test/fixtures/users.yml", <<~'YAML', force: true
     one:
-      login_id: "00000000000000000001"
-      encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
+      webauthn_id: "dGVzdC11c2VyLW9uZQ"
 
     two:
-      login_id: "00000000000000000002"
-      encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
+      webauthn_id: "dGVzdC11c2VyLXR3bw"
+  YAML
+  create_file "test/fixtures/passkey_credentials.yml", <<~'YAML', force: true
+    one:
+      user: one
+      name: Passkey #1
+      webauthn_id: dGVzdC1jcmVkZW50aWFsLW9uZQ
+      public_key: dGVzdC1wdWJsaWMta2V5
+      sign_count: 0
+      transports: '["internal"]'
+      backup_eligible: true
+      backup_state: false
+
+    two:
+      user: two
+      name: Passkey #1
+      webauthn_id: dGVzdC1jcmVkZW50aWFsLXR3bw
+      public_key: dGVzdC1wdWJsaWMta2V5
+      sign_count: 0
+      transports: '["internal"]'
+      backup_eligible: true
+      backup_state: true
   YAML
   create_file "test/models/user_test.rb", <<~'RUBY', force: true
     require "test_helper"
 
     class UserTest < ActiveSupport::TestCase
-      test "generates an unused login id and ignores a supplied value" do
-        candidates = [users(:one).login_id, "0123456789abcdefabcd"]
-        user = User.new(
-          login_id: "client_supplied",
-          password: "password123",
-          password_confirmation: "password123"
-        )
-        T.unsafe(user).define_singleton_method(:generate_login_id_candidate) { T.must(candidates.shift) }
-
+      test "generates an immutable WebAuthn user handle" do
+        user = User.new
         user.save!
 
-        assert_empty candidates
-        assert_equal "0123456789abcdefabcd", user.login_id
-        assert_match(/\A[0-9a-f]{20}\z/, user.login_id)
-        login_id_index = T.must(User.connection.indexes(:users).find { |index| index.columns == ["login_id"] })
-        assert_predicate login_id_index, :unique
+        original = user.webauthn_id
+        assert_predicate original, :present?
+        assert_not user.update(webauthn_id: WebAuthn.generate_user_id)
+        assert user.errors.added?(:webauthn_id, :readonly)
+        assert_equal original, user.reload.webauthn_id
       end
 
-      test "does not allow the generated login id to change" do
+      test "preserves the WebAuthn user handle bound to a registration ceremony" do
+        handle = WebAuthn.generate_user_id
+        user = User.create!(webauthn_id: handle)
+
+        assert_equal handle, user.webauthn_id
+      end
+
+      test "reports risk only for a sole passkey with backup state false" do
+        user = User.create!
+        passkey = user.passkey_credentials.create!(
+          name: "Device bound", webauthn_id: "risk-device-bound", public_key: "key",
+          backup_eligible: false, backup_state: false
+        )
+        assert_predicate user, :credential_loss_risk?
+
+        passkey.destroy!
+        passkey = user.passkey_credentials.create!(
+          name: "Sync eligible", webauthn_id: "risk-sync-eligible", public_key: "key",
+          backup_eligible: true, backup_state: false
+        )
+        assert_predicate user.reload, :credential_loss_risk?
+
+        passkey.update!(backup_state: true)
+        assert_not user.reload.credential_loss_risk?
+
+        user.passkey_credentials.create!(
+          name: "Second", webauthn_id: "risk-second", public_key: "key",
+          backup_eligible: false, backup_state: false
+        )
+        assert_not user.reload.credential_loss_risk?
+
+        if user.respond_to?(:siwe_identities)
+          user.passkey_credentials.where.not(id: passkey.id).delete_all
+          passkey.update!(backup_state: false)
+          T.unsafe(user).siwe_identities.create!(
+            name: "Wallet", address: "0xabcdef0123456789abcdef0123456789abcdef01"
+          )
+          assert_not user.reload.credential_loss_risk?
+        end
+      end
+    end
+  RUBY
+  create_file "test/models/passkey_credential_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+
+    class PasskeyCredentialTest < ActiveSupport::TestCase
+      test "rejects backup state without backup eligibility" do
+        passkey = PasskeyCredential.new(
+          user: users(:one), name: "Invalid", webauthn_id: "invalid-backup-flags",
+          public_key: "test-public-key", backup_eligible: false, backup_state: true
+        )
+
+        assert_not passkey.valid?
+        assert passkey.errors.added?(:backup_state, :invalid)
+      end
+
+      test "does not allow backup eligibility to change" do
+        passkey = passkey_credentials(:one)
+
+        assert_not passkey.update(backup_eligible: false)
+        assert passkey.errors.added?(:backup_eligible, :readonly)
+      end
+    end
+  RUBY
+end
+
+def configure_passkey_routes
+  route <<~'RUBY'
+    namespace :account do
+      resources :passkeys, except: :destroy do
+        post :options, on: :collection
+      end
+      post "credential_destructions/passkey/options",
+        to: "credential_destructions#passkey_options",
+        as: :passkey_credential_destruction_options
+      post "credential_destructions/passkey",
+        to: "credential_destructions#destroy_with_passkey",
+        as: :passkey_credential_destruction
+    end
+    get "account/delete", to: "accounts#delete", as: :delete_account
+  RUBY
+end
+
+def install_passkey_runtime
+  create_file "app/models/passkey_credential.rb", <<~'RUBY', force: true
+    class PasskeyCredential < ApplicationRecord
+      extend T::Sig
+
+      VerificationError = Class.new(StandardError)
+
+      belongs_to :user
+
+      normalizes :name, with: ->(name) { name.to_s.strip }
+
+      validates :name, presence: true, length: { maximum: 50 }
+      validates :webauthn_id, :public_key, presence: true
+      validates :webauthn_id, uniqueness: { case_sensitive: true }
+      validates :sign_count, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
+      validate :backup_flags_are_valid
+      validate :backup_eligibility_does_not_change, on: :update
+
+      sig do
+        params(credential: WebAuthn::PublicKeyCredentialWithAssertion, challenge: String).void
+      end
+      def verify_and_update!(credential, challenge:)
+        credential.verify(
+          challenge,
+          public_key:,
+          sign_count:,
+          user_verification: true
+        )
+        asserted_backup_eligible = credential.backup_eligible?
+        asserted_backup_state = credential.backed_up?
+        raise VerificationError, "invalid backup flags" if asserted_backup_state && !asserted_backup_eligible
+        raise VerificationError, "backup eligibility changed" unless asserted_backup_eligible == backup_eligible?
+
+        update!(
+          sign_count: credential.sign_count,
+          backup_state: asserted_backup_state,
+          last_used_at: Time.current
+        )
+      end
+
+      private
+        def backup_flags_are_valid
+          errors.add(:backup_state, :invalid) if backup_state? && !backup_eligible?
+        end
+
+        def backup_eligibility_does_not_change
+          errors.add(:backup_eligible, :readonly) if will_save_change_to_backup_eligible?
+        end
+    end
+  RUBY
+
+  create_file "app/models/webauthn_challenge.rb", <<~'RUBY', force: true
+    require "digest"
+    require "securerandom"
+
+    class WebauthnChallenge < ApplicationRecord
+      extend T::Sig
+
+      VerificationError = Class.new(StandardError)
+      TTL = 5.minutes
+      PURPOSES = %w[signup login link destroy].freeze
+      ACTIONS = %w[delete_passkey delete_siwe delete_account].freeze
+
+      belongs_to :user, optional: true
+
+      validates :purpose, inclusion: { in: PURPOSES }
+      validates :token_digest, :session_digest, :challenge, :expires_at, presence: true
+      validates :token_digest, uniqueness: true
+      validates :action, inclusion: { in: ACTIONS }, allow_nil: true
+      validate :context_matches_purpose
+
+      sig do
+        params(
+          purpose: String,
+          challenge: String,
+          session_binding: String,
+          user: T.nilable(User),
+          webauthn_user_id: T.nilable(String),
+          action: T.nilable(String),
+          target: T.nilable(ActiveRecord::Base)
+        ).returns([WebauthnChallenge, String])
+      end
+      def self.issue!(purpose:, challenge:, session_binding:, user: nil, webauthn_user_id: nil, action: nil, target: nil)
+        now = Time.current
+        where("expires_at <= ? OR consumed_at IS NOT NULL", now).delete_all
+        raw_token = SecureRandom.urlsafe_base64(32)
+        record = create!(
+          user:,
+          purpose:,
+          token_digest: digest(raw_token),
+          session_digest: digest(session_binding),
+          challenge:,
+          webauthn_user_id:,
+          action:,
+          target_type: target&.class&.name,
+          target_id: target&.id,
+          expires_at: now + TTL
+        )
+        [record, raw_token]
+      end
+
+      def self.for_token!(raw_token)
+        find_by!(token_digest: digest(raw_token.to_s))
+      end
+
+      def self.digest(value)
+        Digest::SHA256.hexdigest(value.to_s)
+      end
+
+      def verify_context!(purpose:, session_binding:, user: nil, action: nil, target: nil)
+        raise VerificationError, "purpose mismatch" unless self.purpose == purpose
+        raise VerificationError, "user mismatch" unless user_id == user&.id
+        raise VerificationError, "action mismatch" unless self.action == action
+        raise VerificationError, "target mismatch" unless target_type == target&.class&.name && target_id == target&.id
+        raise VerificationError, "challenge expired" unless consumed_at.nil? && expires_at.future?
+        actual_session_digest = self.class.digest(session_binding)
+        unless ActiveSupport::SecurityUtils.secure_compare(session_digest, actual_session_digest)
+          raise VerificationError, "session mismatch"
+        end
+      end
+
+      def consume!
+        # This conditional update makes challenge consumption atomic.
+        # rubocop:disable Rails/SkipsModelValidations
+        consumed = self.class.where(id:, consumed_at: nil).where("expires_at > ?", Time.current)
+          .update_all(consumed_at: Time.current)
+        # rubocop:enable Rails/SkipsModelValidations
+        raise VerificationError, "challenge already consumed" unless consumed == 1
+
+        reload
+      end
+
+      private
+        def context_matches_purpose
+          valid_user = %w[signup login].include?(purpose) ? user_id.nil? : user_id.present?
+          valid_target = if purpose == "destroy"
+            action.present? && target_type.present? && target_id.present?
+          else
+            action.nil? && target_type.nil? && target_id.nil?
+          end
+          errors.add(:user, :invalid) unless valid_user
+          errors.add(:target, :invalid) unless valid_target
+        end
+    end
+  RUBY
+
+  install_credential_destruction
+  install_passkey_controllers
+  install_passkey_javascript
+  install_passkey_views
+  install_passkey_tests
+end
+
+def install_credential_destruction
+  create_file "app/services/credential_destruction.rb", <<~'RUBY', force: true
+    class CredentialDestruction
+      extend T::Sig
+
+      Error = Class.new(StandardError)
+      ACTIONS = %w[delete_passkey delete_siwe delete_account].freeze
+
+      def self.target_for!(user:, action:, target_id:)
+        case action
+        when "delete_passkey"
+          user.passkey_credentials.find(target_id)
+        when "delete_siwe"
+          raise ActiveRecord::RecordNotFound unless defined?(SiweIdentity)
+
+          user.siwe_identities.find(target_id)
+        when "delete_account"
+          raise ActiveRecord::RecordNotFound unless user.id == target_id
+
+          user
+        else
+          raise Error, "unsupported action"
+        end
+      end
+
+      def self.passkeys_for(user:, action:, target:)
+        scope = user.passkey_credentials
+        action == "delete_passkey" ? scope.where.not(id: target.id) : scope
+      end
+
+      def self.siwe_identities_for(user:, action:, target:)
+        return PasskeyCredential.none unless defined?(SiweIdentity)
+
+        scope = user.siwe_identities
+        action == "delete_siwe" ? scope.where.not(id: target.id) : scope
+      end
+
+      def self.ensure_alternative!(user:, action:, target:)
+        return if action == "delete_account"
+        return if passkeys_for(user:, action:, target:).exists?
+        return if siwe_identities_for(user:, action:, target:).exists?
+
+        raise Error, "last authentication credential"
+      end
+
+      def self.execute!(user:, action:, target:, authenticator:)
+        User.transaction do
+          user.lock!
+          raise Error, "last administrator" if action == "delete_account" && user.last_admin?
+          locked_target = target_for!(user:, action:, target_id: target.id)
+          ensure_alternative!(user:, action:, target: locked_target)
+          eligible =
+            case authenticator
+            when PasskeyCredential
+              passkeys_for(user:, action:, target: locked_target).lock.exists?(id: authenticator.id)
+            when ->(candidate) { candidate.class.name == "SiweIdentity" }
+              siwe_identities_for(user:, action:, target: locked_target).lock.exists?(id: authenticator.id)
+            else
+              false
+            end
+          raise Error, "authentication credential is not eligible" unless eligible
+
+          locked_target.destroy!
+        end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/concerns/webauthn_request.rb", <<~'RUBY', force: true
+    module WebauthnRequest
+      extend ActiveSupport::Concern
+
+      included do
+        T.bind(self, T.class_of(ActionController::Base))
+        after_action :prevent_webauthn_caching
+      end
+
+      private
+        def webauthn_session_binding
+          T.bind(self, ActionController::Base)
+          session[:webauthn_binding] ||= SecureRandom.hex(32)
+        end
+
+        def prevent_webauthn_caching
+          T.bind(self, ActionController::Base)
+          response.set_header("Cache-Control", "no-store")
+        end
+
+        def render_webauthn_error(status: :unprocessable_content)
+          T.bind(self, ActionController::Base)
+          head status
+        end
+    end
+  RUBY
+end
+
+def install_passkey_controllers
+  create_file "app/controllers/users/passkey_registrations_controller.rb", <<~'RUBY', force: true
+    module Users
+      class PasskeyRegistrationsController < DeviseController
+        include WebauthnRequest
+
+        layout "authentication"
+        rate_limit to: 10, within: 1.minute, only: %i[options create],
+          by: -> {
+            T.bind(self, Users::PasskeyRegistrationsController)
+            "#{request.remote_ip}:#{webauthn_session_binding}"
+          },
+          with: -> {
+            T.bind(self, Users::PasskeyRegistrationsController)
+            head :too_many_requests
+          }
+
+        def new
+          redirect_to account_path if user_signed_in?
+        end
+
+        def options
+          user_handle = WebAuthn.generate_user_id
+          public_key = WebAuthn::Credential.options_for_create(
+            user: {
+              id: user_handle,
+              name: user_handle,
+              display_name: Rails.configuration.x.application_identity.app_name
+            },
+            authenticator_selection: { resident_key: "required", user_verification: "required" },
+            attestation: "none"
+          )
+          _record, raw_token = WebauthnChallenge.issue!(
+            purpose: "signup",
+            challenge: public_key.challenge,
+            webauthn_user_id: user_handle,
+            session_binding: webauthn_session_binding
+          )
+          render json: { challenge_token: raw_token, public_key: public_key.as_json }
+        rescue ActiveRecord::RecordInvalid
+          render_webauthn_error
+        end
+
+        def create
+          challenge = WebauthnChallenge.for_token!(params.require(:challenge_token))
+          challenge.verify_context!(purpose: "signup", session_binding: webauthn_session_binding)
+          credential = WebAuthn::Credential.from_create(params.require(:credential).to_unsafe_h)
+          credential.verify(challenge.challenge, user_verification: true)
+          if credential.backed_up? && !credential.backup_eligible?
+            raise WebauthnChallenge::VerificationError, "invalid backup flags"
+          end
+
+          user = T.let(nil, T.nilable(User))
+          WebauthnChallenge.transaction do
+            challenge.consume!
+            user = User.create!(webauthn_id: challenge.webauthn_user_id)
+            T.must(user).passkey_credentials.create!(passkey_attributes(credential, name: "Passkey #1"))
+          end
+          request.env["devise.skip_timeout"] = true
+          sign_in(:user, T.must(user), event: :authentication)
+          flash[:credential_risk] = true if T.must(user).credential_loss_risk?
+          render json: { redirect_url: after_sign_in_path_for(T.must(user)) }, status: :created
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+          ActiveRecord::RecordNotUnique, WebAuthn::Error, WebauthnChallenge::VerificationError
+          render_webauthn_error
+        end
+
+        private
+          def passkey_attributes(credential, name:)
+            {
+              name:,
+              webauthn_id: credential.id,
+              public_key: credential.public_key,
+              sign_count: credential.sign_count,
+              transports: credential.response.transports || [],
+              backup_eligible: credential.backup_eligible?,
+              backup_state: credential.backed_up?
+            }
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/users/passkey_sessions_controller.rb", <<~'RUBY', force: true
+    module Users
+      class PasskeySessionsController < DeviseController
+        include WebauthnRequest
+
+        layout "authentication"
+        rate_limit to: 10, within: 1.minute, only: %i[options create],
+          by: -> {
+            T.bind(self, Users::PasskeySessionsController)
+            "#{request.remote_ip}:#{webauthn_session_binding}"
+          },
+          with: -> {
+            T.bind(self, Users::PasskeySessionsController)
+            head :too_many_requests
+          }
+
+        def new
+          redirect_to account_path if user_signed_in?
+        end
+
+        def options
+          public_key = WebAuthn::Credential.options_for_get(user_verification: "required")
+          _record, raw_token = WebauthnChallenge.issue!(
+            purpose: "login", challenge: public_key.challenge, session_binding: webauthn_session_binding
+          )
+          render json: { challenge_token: raw_token, public_key: public_key.as_json }
+        rescue ActiveRecord::RecordInvalid
+          render_webauthn_error
+        end
+
+        def create
+          challenge = WebauthnChallenge.for_token!(params.require(:challenge_token))
+          challenge.verify_context!(purpose: "login", session_binding: webauthn_session_binding)
+          assertion = WebAuthn::Credential.from_get(params.require(:credential).to_unsafe_h)
+          stored = PasskeyCredential.includes(:user).find_by!(webauthn_id: assertion.id)
+          user = T.must(stored.user)
+          unless assertion.user_handle == user.webauthn_id
+            raise WebauthnChallenge::VerificationError, "user handle mismatch"
+          end
+
+          WebauthnChallenge.transaction do
+            stored.verify_and_update!(assertion, challenge: challenge.challenge)
+            challenge.consume!
+          end
+          return head :unauthorized unless user.active_for_authentication?
+
+          request.env["devise.skip_timeout"] = true
+          sign_in(:user, user, event: :authentication)
+          remember_me(user) if ActiveModel::Type::Boolean.new.cast(params[:remember_me])
+          flash[:credential_risk] = true if user.credential_loss_risk?
+          render json: { redirect_url: after_sign_in_path_for(user) }
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+          WebAuthn::Error, PasskeyCredential::VerificationError, WebauthnChallenge::VerificationError
+          render_webauthn_error(status: :unauthorized)
+        end
+
+        def destroy
+          sign_out(:user)
+          redirect_to root_path, status: :see_other
+        end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/account/passkeys_controller.rb", <<~'RUBY', force: true
+    module Account
+      class PasskeysController < ApplicationController
+        include WebauthnRequest
+
+        layout "account_settings"
+        before_action :authenticate_user!
+        before_action :set_passkey, only: %i[show edit update]
+
+        def index
+          @passkeys = account_user.passkey_credentials.order(:created_at)
+        end
+
+        def show
+          CredentialDestruction.ensure_alternative!(user: account_user, action: "delete_passkey", target: @passkey)
+        rescue CredentialDestruction::Error
+          redirect_to account_passkeys_path, alert: t("passkeys.errors.last_credential")
+        end
+
+        def new; end
+        def edit; end
+
+        def options
+          public_key = WebAuthn::Credential.options_for_create(
+            user: {
+              id: account_user.webauthn_id,
+              name: account_user.webauthn_id,
+              display_name: Rails.configuration.x.application_identity.app_name
+            },
+            exclude: account_user.passkey_credentials.map(&:webauthn_id),
+            authenticator_selection: { resident_key: "required", user_verification: "required" },
+            attestation: "none"
+          )
+          _record, raw_token = WebauthnChallenge.issue!(
+            purpose: "link", challenge: public_key.challenge, user: account_user,
+            session_binding: webauthn_session_binding
+          )
+          render json: { challenge_token: raw_token, public_key: public_key.as_json }
+        rescue ActiveRecord::RecordInvalid
+          render_webauthn_error
+        end
+
+        def create
+          challenge = WebauthnChallenge.for_token!(params.require(:challenge_token))
+          challenge.verify_context!(purpose: "link", user: account_user, session_binding: webauthn_session_binding)
+          credential = WebAuthn::Credential.from_create(params.require(:credential).to_unsafe_h)
+          credential.verify(challenge.challenge, user_verification: true)
+          if credential.backed_up? && !credential.backup_eligible?
+            raise WebauthnChallenge::VerificationError, "invalid backup flags"
+          end
+
+          passkey = T.let(nil, T.nilable(PasskeyCredential))
+          WebauthnChallenge.transaction do
+            challenge.consume!
+            passkey = account_user.passkey_credentials.create!(
+              name: "Passkey ##{account_user.passkey_credentials.count + 1}",
+              webauthn_id: credential.id,
+              public_key: credential.public_key,
+              sign_count: credential.sign_count,
+              transports: credential.response.transports || [],
+              backup_eligible: credential.backup_eligible?,
+              backup_state: credential.backed_up?
+            )
+          end
+          render json: { redirect_url: account_passkeys_path, id: T.must(passkey).id }, status: :created
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+          ActiveRecord::RecordNotUnique, WebAuthn::Error, WebauthnChallenge::VerificationError
+          render_webauthn_error
+        end
+
+        def update
+          if @passkey.update(params.expect(passkey_credential: [:name]))
+            redirect_to account_passkeys_path, notice: t("passkeys.updated")
+          else
+            render :edit, status: :unprocessable_content
+          end
+        end
+
+        private
+          def account_user
+            T.must(current_user)
+          end
+
+          def set_passkey
+            @passkey = account_user.passkey_credentials.find(params.expect(:id))
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/account/credential_destructions_controller.rb", <<~'RUBY', force: true
+    module Account
+      class CredentialDestructionsController < ApplicationController
+        include WebauthnRequest
+
+        before_action :authenticate_user!
+
+        def passkey_options
+          action, target = destruction_context
+          passkeys = CredentialDestruction.passkeys_for(user: account_user, action:, target:)
+          raise CredentialDestruction::Error, "no eligible passkey" unless passkeys.exists?
+
+          public_key = WebAuthn::Credential.options_for_get(
+            allow: passkeys.map { |passkey| { id: passkey.webauthn_id, transports: passkey.transports } },
+            user_verification: "required"
+          )
+          _record, raw_token = WebauthnChallenge.issue!(
+            purpose: "destroy", challenge: public_key.challenge, user: account_user,
+            session_binding: webauthn_session_binding, action:, target:
+          )
+          render json: { challenge_token: raw_token, public_key: public_key.as_json }
+        rescue ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid, CredentialDestruction::Error
+          render_webauthn_error
+        end
+
+        def destroy_with_passkey
+          action, target = destruction_context
+          challenge = WebauthnChallenge.for_token!(params.require(:challenge_token))
+          challenge.verify_context!(
+            purpose: "destroy", user: account_user, action:, target:,
+            session_binding: webauthn_session_binding
+          )
+          assertion = WebAuthn::Credential.from_get(params.require(:credential).to_unsafe_h)
+          authenticator = CredentialDestruction.passkeys_for(user: account_user, action:, target:)
+            .find_by!(webauthn_id: assertion.id)
+          unless assertion.user_handle == account_user.webauthn_id
+            raise WebauthnChallenge::VerificationError, "user handle mismatch"
+          end
+
+          WebauthnChallenge.transaction do
+            authenticator.verify_and_update!(assertion, challenge: challenge.challenge)
+            challenge.consume!
+            CredentialDestruction.execute!(user: account_user, action:, target:, authenticator:)
+          end
+          finish_destruction(action)
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+          CredentialDestruction::Error, WebAuthn::Error, PasskeyCredential::VerificationError,
+          WebauthnChallenge::VerificationError
+          render_webauthn_error
+        end
+
+        private
+          def account_user
+            T.must(current_user)
+          end
+
+          def destruction_context
+            action = params.require(:destruction_action)
+            target = CredentialDestruction.target_for!(
+              user: account_user,
+              action:,
+              target_id: Integer(params.require(:target_id), exception: true)
+            )
+            CredentialDestruction.ensure_alternative!(user: account_user, action:, target:)
+            [action, target]
+          end
+
+          def finish_destruction(action)
+            if action == "delete_account"
+              sign_out(:user)
+              flash[:notice] = t("accounts.destroy.notice")
+              render json: { redirect_url: root_path }
+            else
+              path = action == "delete_passkey" ? account_passkeys_path : T.unsafe(self).account_siwe_identities_path
+              render json: { redirect_url: path }
+            end
+          end
+      end
+    end
+  RUBY
+end
+
+def install_passkey_javascript
+  create_file "app/javascript/controllers/passkey_controller.js", <<~'JAVASCRIPT', force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["error", "rememberMe"]
+      static values = {
+        ceremony: String,
+        optionsUrl: String,
+        verifyUrl: String,
+        targetId: Number,
+        destructionAction: String,
+        unsupported: String,
+        failed: String
+      }
+
+      async authenticate() {
+        this.hideError()
+
+        try {
+          if (!window.PublicKeyCredential ||
+              typeof PublicKeyCredential.parseCreationOptionsFromJSON !== "function" ||
+              typeof PublicKeyCredential.parseRequestOptionsFromJSON !== "function" ||
+              typeof PublicKeyCredential.prototype.toJSON !== "function") {
+            throw new Error(this.unsupportedValue)
+          }
+
+          const context = {}
+          if (this.hasTargetIdValue) context.target_id = this.targetIdValue
+          if (this.hasDestructionActionValue) context.destruction_action = this.destructionActionValue
+          if (this.hasRememberMeTarget) context.remember_me = this.rememberMeTarget.checked
+
+          const optionsResponse = await this.post(this.optionsUrlValue, context)
+          if (!optionsResponse.ok) throw new Error(this.failedValue)
+          const options = await optionsResponse.json()
+          const credential = this.ceremonyValue === "create"
+            ? await navigator.credentials.create({
+                publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(options.public_key)
+              })
+            : await navigator.credentials.get({
+                publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(options.public_key)
+              })
+          if (!credential) throw new Error(this.failedValue)
+
+          const verificationResponse = await this.post(this.verifyUrlValue, {
+            ...context,
+            challenge_token: options.challenge_token,
+            credential: credential.toJSON()
+          })
+          if (!verificationResponse.ok) throw new Error(this.failedValue)
+          window.location.assign((await verificationResponse.json()).redirect_url)
+        } catch (error) {
+          this.showError(error.message)
+        }
+      }
+
+      post(url, body) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+        return fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, Accept: "application/json" },
+          body: JSON.stringify(body)
+        })
+      }
+
+      hideError() {
+        this.errorTarget.classList.add("hidden")
+        this.errorTarget.textContent = ""
+      }
+
+      showError(message) {
+        this.errorTarget.textContent = message
+        this.errorTarget.classList.remove("hidden")
+      }
+    }
+  JAVASCRIPT
+end
+
+def install_passkey_views
+  siwe_destruction = if VALUES.fetch("additional_login_methods").include?("siwe")
+    <<~'ERB'
+      <div data-controller="siwe-sign-in"
+           data-siwe-sign-in-mode-value="destroy"
+           data-siwe-sign-in-challenge-url-value="<%= account_siwe_credential_destruction_challenge_path %>"
+           data-siwe-sign-in-verify-url-value="<%= account_siwe_credential_destruction_path %>"
+           data-siwe-sign-in-target-id-value="<%= @passkey.id %>"
+           data-siwe-sign-in-destruction-action-value="delete_passkey"
+           data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
+           data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
+           data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+        <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("passkeys.delete_with_wallet") %></button>
+        <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+      </div>
+    ERB
+  else
+    ""
+  end
+
+  create_file "app/views/account/passkeys/index.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("passkeys.title") %>
+
+    <section class="space-y-5">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-base-content/70"><%= t("passkeys.description") %></p>
+        <%= link_to t("passkeys.add"), new_account_passkey_path, class: "btn btn-primary btn-rapid" %>
+      </div>
+
+      <ul class="list gap-3">
+        <% @passkeys.each do |passkey| %>
+          <li class="list-row border-base-300 border">
+            <div class="list-col-grow">
+              <p class="font-semibold"><%= passkey.name %></p>
+              <span class="badge badge-outline"><%= t(passkey.backup_state? ? "passkeys.backed_up" : "passkeys.not_backed_up") %></span>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+              <%= link_to t("common.edit"), edit_account_passkey_path(passkey), class: "btn btn-rapid" %>
+              <%= link_to t("passkeys.delete"), account_passkey_path(passkey), class: "btn btn-error btn-rapid" %>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  ERB
+
+  create_file "app/views/account/passkeys/new.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("passkeys.new_title") %>
+
+    <section class="space-y-5"
+             data-controller="passkey"
+             data-passkey-ceremony-value="create"
+             data-passkey-options-url-value="<%= options_account_passkeys_path %>"
+             data-passkey-verify-url-value="<%= account_passkeys_path %>"
+             data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
+             data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
+      <p class="text-base-content/70"><%= t("passkeys.new_description") %></p>
+      <div class="alert alert-error hidden" role="alert" data-passkey-target="error"></div>
+      <div class="flex justify-end gap-2">
+        <%= link_to t("common.back"), account_passkeys_path, class: "btn btn-rapid" %>
+        <button type="button" class="btn btn-primary btn-rapid" data-action="passkey#authenticate"><%= t("passkeys.register") %></button>
+      </div>
+    </section>
+  ERB
+
+  create_file "app/views/account/passkeys/edit.html.erb", <<~'ERB', force: true
+    <% content_for :page_title, t("passkeys.edit_title") %>
+
+    <%= form_with model: @passkey, url: account_passkey_path(@passkey), class: "space-y-5" do |form| %>
+      <% if @passkey.errors.any? %>
+        <div class="alert alert-error" role="alert"><span><%= @passkey.errors.full_messages.to_sentence %></span></div>
+      <% end %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :name, t("passkeys.name") %></legend>
+        <%= form.text_field :name, required: true, maxlength: 50, class: "input input-rapid w-full" %>
+      </fieldset>
+      <div class="flex justify-end gap-2">
+        <%= link_to t("common.back"), account_passkeys_path, class: "btn btn-rapid" %>
+        <%= form.submit t("common.update"), class: "btn btn-primary btn-rapid" %>
+      </div>
+    <% end %>
+  ERB
+
+  create_file "app/views/account/passkeys/show.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("passkeys.delete_title") %>
+
+    <section class="space-y-5">
+      <p class="font-semibold"><%= @passkey.name %></p>
+      <p class="text-base-content/70"><%= t("passkeys.delete_description") %></p>
+      <div class="flex flex-wrap justify-end gap-2">
+        <%= link_to t("common.back"), account_passkeys_path, class: "btn btn-rapid" %>
+        <% if CredentialDestruction.passkeys_for(user: current_user, action: "delete_passkey", target: @passkey).exists? %>
+          <div data-controller="passkey"
+               data-passkey-ceremony-value="get"
+               data-passkey-options-url-value="<%= account_passkey_credential_destruction_options_path %>"
+               data-passkey-verify-url-value="<%= account_passkey_credential_destruction_path %>"
+               data-passkey-target-id-value="<%= @passkey.id %>"
+               data-passkey-destruction-action-value="delete_passkey"
+               data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
+               data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
+            <button type="button" class="btn btn-error btn-rapid" data-action="passkey#authenticate"><%= t("passkeys.delete_with_passkey") %></button>
+            <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+          </div>
+        <% end %>
+    #{siwe_destruction.lines.map { |line| "    #{line}" }.join}  </div>
+    </section>
+  ERB
+
+  create_locale_pair(
+    "passkeys",
+    ja: {
+      "passkeys" => {
+        "title" => "Passkeys", "description" => "ログインに使用できるPasskeyを管理します。", "add" => "Passkeyを追加",
+        "new_title" => "Passkeyを登録", "new_description" => "この端末またはセキュリティキーへPasskeyを登録します。", "register" => "Passkeyを登録",
+        "edit_title" => "Passkeyを編集", "name" => "Passkey名", "updated" => "Passkey名を更新しました。",
+        "backed_up" => "同期済み", "not_backed_up" => "未バックアップ", "delete" => "解除", "delete_title" => "Passkeyを解除",
+        "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete_with_passkey" => "別のPasskeyで解除",
+        "delete_with_wallet" => "ウォレットで解除",
+        "errors" => { "unsupported" => "このブラウザは必要なWebAuthn APIに対応していません。", "verification" => "Passkeyを検証できませんでした。", "last_credential" => "最後のログイン方法は解除できません。" }
+      }
+    },
+    en: {
+      "passkeys" => {
+        "title" => "Passkeys", "description" => "Manage the passkeys that can sign in to your account.", "add" => "Add passkey",
+        "new_title" => "Register passkey", "new_description" => "Register a passkey on this device or a security key.", "register" => "Register passkey",
+        "edit_title" => "Edit passkey", "name" => "Passkey name", "updated" => "Passkey name updated.",
+        "backed_up" => "Synced", "not_backed_up" => "Not backed up", "delete" => "Remove", "delete_title" => "Remove passkey",
+        "delete_description" => "Reauthenticate with a different sign-in method before removing this passkey.", "delete_with_passkey" => "Remove with another passkey",
+        "delete_with_wallet" => "Remove with wallet",
+        "errors" => { "unsupported" => "This browser does not support the required WebAuthn APIs.", "verification" => "The passkey could not be verified.", "last_credential" => "You cannot remove your last sign-in method." }
+      }
+    }
+  )
+end
+
+def install_passkey_tests
+  create_file "test/models/webauthn_challenge_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+
+    class WebauthnChallengeTest < ActiveSupport::TestCase
+      test "binds purpose user target browser and one-time consumption" do
         user = users(:one)
+        target = passkey_credentials(:one)
+        challenge, token = WebauthnChallenge.issue!(
+          purpose: "destroy",
+          challenge: "challenge",
+          session_binding: "browser",
+          user:,
+          action: "delete_passkey",
+          target:
+        )
 
-        assert_not user.update(login_id: "0123456789abcdefabcd")
-        assert user.errors.added?(:login_id, :login_id_readonly)
-        assert_equal "00000000000000000001", user.reload.login_id
+        assert_equal challenge, WebauthnChallenge.for_token!(token)
+        challenge.verify_context!(
+          purpose: "destroy", session_binding: "browser", user:,
+          action: "delete_passkey", target:
+        )
+        assert_raises(WebauthnChallenge::VerificationError) do
+          challenge.verify_context!(
+            purpose: "destroy", session_binding: "other", user:,
+            action: "delete_passkey", target:
+          )
+        end
+        challenge.consume!
+        assert_raises(WebauthnChallenge::VerificationError) { challenge.consume! }
       end
+
+      test "rejects expired challenges" do
+        challenge, = WebauthnChallenge.issue!(
+          purpose: "login", challenge: "challenge", session_binding: "browser"
+        )
+
+        travel_to challenge.expires_at + 1.second do
+          assert_raises(WebauthnChallenge::VerificationError) do
+            challenge.verify_context!(purpose: "login", session_binding: "browser")
+          end
+        end
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/users/passkey_authentication_controller_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+    require "webauthn/fake_client"
+
+    class Users::PasskeyAuthenticationControllerTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
+
+      test "signs up and signs in with a discoverable synced passkey" do
+        client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
+
+        post user_passkey_registration_options_url, as: :json
+        registration = response.parsed_body
+        credential = client.create(
+          challenge: registration.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: true,
+          backup_state: true
+        )
+        assert_difference ["User.count", "PasskeyCredential.count"], 1 do
+          post user_passkey_registration_url,
+            params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+        end
+        assert_response :created
+        user = T.must(User.order(:id).last)
+        assert_equal registration.dig("public_key", "user", "id"), user.webauthn_id
+        stored = user.passkey_credentials.sole
+        assert_predicate stored, :backup_eligible?
+        assert_predicate stored, :backup_state?
+
+        delete destroy_user_session_url
+        post user_passkey_session_options_url, as: :json
+        authentication = response.parsed_body
+        assertion = client.get(
+          challenge: authentication.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: true,
+          backup_state: true,
+          user_handle: WebAuthn.configuration.encoder.decode(user.webauthn_id),
+          allow_credentials: [stored.webauthn_id]
+        )
+        post user_passkey_session_url,
+          params: { challenge_token: authentication.fetch("challenge_token"), credential: assertion }, as: :json
+        assert_response :success
+        assert_predicate stored.reload.last_used_at, :present?
+        assert_nil flash[:credential_risk]
+      end
+
+      test "warns for a sole passkey with BS zero and rejects invalid backup flags" do
+        client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
+        post user_passkey_registration_options_url, as: :json
+        registration = response.parsed_body
+        credential = client.create(
+          challenge: registration.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: false,
+          backup_state: false
+        )
+        post user_passkey_registration_url,
+          params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+        assert_response :created
+        assert_equal true, flash[:credential_risk]
+
+        delete destroy_user_session_url
+        invalid_client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
+        post user_passkey_registration_options_url, as: :json
+        invalid_registration = response.parsed_body
+        invalid = invalid_client.create(
+          challenge: invalid_registration.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: false,
+          backup_state: true
+        )
+        assert_no_difference ["User.count", "PasskeyCredential.count"] do
+          post user_passkey_registration_url,
+            params: { challenge_token: invalid_registration.fetch("challenge_token"), credential: invalid }, as: :json
+        end
+        assert_response :unprocessable_content
+      end
+
+      test "rejects a changed backup eligibility during authentication" do
+        client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
+        post user_passkey_registration_options_url, as: :json
+        registration = response.parsed_body
+        credential = client.create(
+          challenge: registration.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: false,
+          backup_state: false
+        )
+        post user_passkey_registration_url,
+          params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+        user = T.must(User.order(:id).last)
+        stored = user.passkey_credentials.sole
+        delete destroy_user_session_url
+
+        post user_passkey_session_options_url, as: :json
+        authentication = response.parsed_body
+        assertion = client.get(
+          challenge: authentication.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: true,
+          backup_state: false,
+          user_handle: WebAuthn.configuration.encoder.decode(user.webauthn_id),
+          allow_credentials: [stored.webauthn_id]
+        )
+        post user_passkey_session_url,
+          params: { challenge_token: authentication.fetch("challenge_token"), credential: assertion }, as: :json
+
+        assert_response :unauthorized
+        assert_nil stored.reload.last_used_at
+      end
+
+      test "removes a passkey only after authenticating with a different passkey" do
+        user = users(:one)
+        target = passkey_credentials(:one)
+        client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
+        sign_in user
+
+        post options_account_passkeys_url, as: :json
+        registration = response.parsed_body
+        credential = client.create(
+          challenge: registration.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: true,
+          backup_state: true
+        )
+        post account_passkeys_url,
+          params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+        assert_response :created
+        authenticator = T.must(user.passkey_credentials.order(:id).last)
+
+        post account_passkey_credential_destruction_options_url,
+          params: { destruction_action: "delete_passkey", target_id: target.id }, as: :json
+        destruction = response.parsed_body
+        assertion = client.get(
+          challenge: destruction.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: true,
+          backup_state: true,
+          user_handle: WebAuthn.configuration.encoder.decode(user.webauthn_id),
+          allow_credentials: [authenticator.webauthn_id]
+        )
+        post account_passkey_credential_destruction_url,
+          params: {
+            destruction_action: "delete_passkey",
+            target_id: target.id,
+            challenge_token: destruction.fetch("challenge_token"),
+            credential: assertion
+          }, as: :json
+
+        assert_response :success
+        assert_not PasskeyCredential.exists?(target.id)
+        assert PasskeyCredential.exists?(authenticator.id)
+
+        post account_passkey_credential_destruction_options_url,
+          params: { destruction_action: "delete_passkey", target_id: authenticator.id }, as: :json
+        assert_response :unprocessable_content
+      end
+
+      test "deletes the account only after a fresh passkey assertion" do
+        user = users(:one)
+        client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
+        sign_in user
+
+        post options_account_passkeys_url, as: :json
+        registration = response.parsed_body
+        credential = client.create(
+          challenge: registration.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: true,
+          backup_state: true
+        )
+        post account_passkeys_url,
+          params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+        authenticator = T.must(user.passkey_credentials.order(:id).last)
+
+        post account_passkey_credential_destruction_options_url,
+          params: { destruction_action: "delete_account", target_id: user.id }, as: :json
+        destruction = response.parsed_body
+        assertion = client.get(
+          challenge: destruction.dig("public_key", "challenge"),
+          user_verified: true,
+          backup_eligibility: true,
+          backup_state: true,
+          user_handle: WebAuthn.configuration.encoder.decode(user.webauthn_id),
+          allow_credentials: [authenticator.webauthn_id]
+        )
+
+        assert_difference "User.count", -1 do
+          post account_passkey_credential_destruction_url,
+            params: {
+              destruction_action: "delete_account",
+              target_id: user.id,
+              challenge_token: destruction.fetch("challenge_token"),
+              credential: assertion
+            }, as: :json
+        end
+        assert_response :success
+        assert_not User.exists?(user.id)
+      end
+    end
+  RUBY
+
+  create_file "test/system/passkey_authentication_test.rb", <<~'RUBY', force: true
+    require "application_system_test_case"
+    require "uri"
+
+    class PasskeyAuthenticationTest < ApplicationSystemTestCase
+      test "registers and signs in with a device-bound passkey and shows the risk warning" do
+        install_virtual_authenticator(backup_eligible: false, backup_state: false)
+        visit new_user_registration_path
+        configure_webauthn_for_current_page
+
+        click_button I18n.t("authentication.sign_up_with_passkey")
+
+        assert_current_path root_path
+        assert_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+        assert_link I18n.t("credential_risk.add_login_method"), href: account_passkeys_path
+        assert_no_selector ".alert-warning .btn"
+        assert_equal [false, false], PasskeyCredential.order(:id).last.then { |passkey| [passkey.backup_eligible?, passkey.backup_state?] }
+
+        open_account_menu_and_sign_out
+        visit new_user_session_path
+        click_button I18n.t("authentication.sign_in_with_passkey")
+        assert_current_path root_path
+        assert_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+      end
+
+      test "updates backup state after authentication and stops warning for a synced passkey" do
+        cdp = install_virtual_authenticator(backup_eligible: true, backup_state: false)
+        visit new_user_registration_path
+        configure_webauthn_for_current_page
+        click_button I18n.t("authentication.sign_up_with_passkey")
+        assert_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+
+        credential_id = cdp.send_message("WebAuthn.getCredentials", params: { authenticatorId: @authenticator_id })
+          .fetch("credentials").sole.fetch("credentialId")
+        cdp.send_message(
+          "WebAuthn.setCredentialProperties",
+          params: { authenticatorId: @authenticator_id, credentialId: credential_id, backupState: true }
+        )
+        open_account_menu_and_sign_out
+        visit new_user_session_path
+        click_button I18n.t("authentication.sign_in_with_passkey")
+
+        assert_current_path root_path
+        assert_no_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+        assert_predicate T.must(PasskeyCredential.order(:id).last).reload, :backup_state?
+      end
+
+      private
+        def open_account_menu_and_sign_out
+          find("header details.dropdown > summary", visible: :visible).click
+          click_link I18n.t("navigation.sign_out")
+          assert_current_path root_path
+          assert_selector %(header a[href="#{new_user_session_path}"]), visible: :visible
+        end
+
+        def install_virtual_authenticator(backup_eligible:, backup_state:)
+          page.driver.with_playwright_page do |playwright_page|
+            cdp = playwright_page.context.new_cdp_session(playwright_page)
+            cdp.send_message("WebAuthn.enable")
+            result = cdp.send_message(
+              "WebAuthn.addVirtualAuthenticator",
+              params: {
+                options: {
+                  protocol: "ctap2",
+                  transport: "internal",
+                  hasResidentKey: true,
+                  hasUserVerification: true,
+                  isUserVerified: true,
+                  automaticPresenceSimulation: true,
+                  defaultBackupEligibility: backup_eligible,
+                  defaultBackupState: backup_state
+                }
+              }
+            )
+            @authenticator_id = result.fetch("authenticatorId")
+            cdp
+          end
+        end
+
+        def configure_webauthn_for_current_page
+          origin = URI(page.current_url)
+          canonical_origin = "#{origin.scheme}://#{origin.host}:#{origin.port}"
+          WebAuthn.configure do |config|
+            config.allowed_origins = [canonical_origin]
+            config.rp_id = origin.host
+          end
+        end
     end
   RUBY
 end
@@ -1132,6 +2443,9 @@ def install_siwe
           t.integer :chain_id, null: false
           t.text :message, null: false
           t.string :nonce, null: false
+          t.string :action
+          t.string :target_type
+          t.bigint :target_id
           t.datetime :expires_at, null: false
           t.datetime :consumed_at
           t.timestamps null: false
@@ -1140,11 +2454,14 @@ def install_siwe
         add_index :siwe_challenges, :token_digest, unique: true
         add_index :siwe_challenges, :expires_at
         add_index :siwe_challenges, :consumed_at
-        add_check_constraint :siwe_challenges, "purpose IN ('login', 'link')", name: "siwe_challenges_purpose"
+        add_check_constraint :siwe_challenges, "purpose IN ('signup', 'login', 'link', 'destroy')", name: "siwe_challenges_purpose"
         add_check_constraint :siwe_challenges, "chain_id > 0", name: "siwe_challenges_positive_chain_id"
         add_check_constraint :siwe_challenges,
-          "(purpose = 'login' AND user_id IS NULL) OR (purpose = 'link' AND user_id IS NOT NULL)",
+          "(purpose IN ('signup', 'login') AND user_id IS NULL) OR (purpose IN ('link', 'destroy') AND user_id IS NOT NULL)",
           name: "siwe_challenges_user_matches_purpose"
+        add_check_constraint :siwe_challenges,
+          "purpose = 'destroy' OR (action IS NULL AND target_type IS NULL AND target_id IS NULL)",
+          name: "siwe_challenges_target_matches_purpose"
       end
     end
   RUBY
@@ -1164,41 +2481,31 @@ def install_siwe
       end
     end
   RUBY
-  create_file "lib/devise/siweable/routes.rb", <<~'RUBY', force: true
-    module Devise
-      module Siweable
-        module Routes
-          private
-            def devise_siwe_session(mapping, controllers)
-              T.bind(self, ActionDispatch::Routing::Mapper)
-              post "#{mapping.path_names[:sign_in]}/siwe/challenge",
-                to: "#{controllers.fetch(:siwe_sessions)}#challenge",
-                as: :siwe_challenge
-              post "#{mapping.path_names[:sign_in]}/siwe",
-                to: "#{controllers.fetch(:siwe_sessions)}#create",
-                as: :siwe
-            end
-        end
-      end
-    end
-  RUBY
   create_file "lib/devise/siweable.rb", <<~'RUBY', force: true
     require "devise"
     require_relative "models/siweable"
-    require_relative "siweable/routes"
 
-    Devise.add_module(
-      :siweable,
-      model: "devise/models/siweable",
-      controller: :siwe_sessions,
-      route: :siwe_session
-    )
-    ActionDispatch::Routing::Mapper.include(Devise::Siweable::Routes)
+    module Devise
+      module Siweable; end
+    end
+
+    Devise.add_module(:siweable, model: "devise/models/siweable")
   RUBY
   create_file "config/initializers/devise_siweable.rb", <<~'RUBY', force: true
     require Rails.root.join("lib/devise/siweable")
 
-    Rails.application.config.filter_parameters += %i[challenge_token signature current_password]
+    Rails.application.config.filter_parameters += %i[challenge_token signature]
+  RUBY
+
+  route <<~'RUBY'
+    namespace :account do
+      post "credential_destructions/siwe/challenge",
+        to: "credential_destructions#siwe_challenge",
+        as: :siwe_credential_destruction_challenge
+      post "credential_destructions/siwe",
+        to: "credential_destructions#destroy_with_siwe",
+        as: :siwe_credential_destruction
+    end
   RUBY
 
   create_file "app/models/siwe_identity.rb", <<~'RUBY', force: true
@@ -1232,7 +2539,8 @@ def install_siwe
 
       VerificationError = Class.new(StandardError)
       TTL = 5.minutes
-      PURPOSES = %w[login link].freeze
+      PURPOSES = %w[signup login link destroy].freeze
+      ACTIONS = %w[delete_passkey delete_siwe delete_account].freeze
       EOA_VERIFICATION = Siwe::Config.new.freeze
 
       belongs_to :user, optional: true
@@ -1242,7 +2550,8 @@ def install_siwe
       validates :token_digest, uniqueness: true
       validates :address, format: { with: /\A0x[0-9a-f]{40}\z/ }
       validates :chain_id, numericality: { only_integer: true, greater_than: 0 }
-      validate :user_matches_purpose
+      validates :action, inclusion: { in: ACTIONS }, allow_nil: true
+      validate :context_matches_purpose
 
       sig do
         params(
@@ -1250,10 +2559,12 @@ def install_siwe
           address: String,
           chain_id: T.any(String, Integer),
           session_binding: String,
-          user: T.nilable(User)
+          user: T.nilable(User),
+          action: T.nilable(String),
+          target: T.nilable(ActiveRecord::Base)
         ).returns([SiweChallenge, String])
       end
-      def self.issue!(purpose:, address:, chain_id:, session_binding:, user: nil)
+      def self.issue!(purpose:, address:, chain_id:, session_binding:, user: nil, action: nil, target: nil)
         now = Time.current
         where("expires_at <= ? OR consumed_at IS NOT NULL", now).delete_all
         numeric_chain_id = T.let(Integer(chain_id, exception: false), T.nilable(Integer))
@@ -1283,6 +2594,9 @@ def install_siwe
           chain_id: numeric_chain_id,
           message: siwe_message.prepare_message,
           nonce:,
+          action:,
+          target_type: target&.class&.name,
+          target_id: target&.id,
           expires_at:,
           created_at: now,
           updated_at: now
@@ -1313,16 +2627,33 @@ def install_siwe
 
       sig { params(purpose: String).returns(String) }
       def self.path_for(purpose)
-        purpose == "login" ? "/users/sign_in/siwe" : "/account/siwe_identities"
+        case purpose
+        when "signup" then "/users/sign_up/siwe"
+        when "login" then "/users/sign_in/siwe"
+        when "link" then "/account/siwe_identities"
+        when "destroy" then "/account/credential_destructions/siwe"
+        else raise VerificationError, "invalid purpose"
+        end
       end
 
       sig do
-        params(signature: String, purpose: String, session_binding: String, user: T.nilable(User))
+        params(
+          signature: String,
+          purpose: String,
+          session_binding: String,
+          user: T.nilable(User),
+          action: T.nilable(String),
+          target: T.nilable(ActiveRecord::Base)
+        )
           .returns(Siwe::Message)
       end
-      def verify!(signature:, purpose:, session_binding:, user: nil)
+      def verify!(signature:, purpose:, session_binding:, user: nil, action: nil, target: nil)
         raise VerificationError, "challenge purpose mismatch" unless self.purpose == purpose
         raise VerificationError, "challenge user mismatch" unless user_id == user&.id
+        raise VerificationError, "challenge action mismatch" unless self.action == action
+        unless target_type == target&.class&.name && target_id == target&.id
+          raise VerificationError, "challenge target mismatch"
+        end
         raise VerificationError, "challenge expired" unless consumed_at.nil? && expires_at.future?
         actual_session_digest = self.class.digest(session_binding)
         unless ActiveSupport::SecurityUtils.secure_compare(session_digest, actual_session_digest)
@@ -1378,9 +2709,15 @@ def install_siwe
           raise VerificationError, "challenge address mismatch" unless parsed.address.downcase == address
         end
 
-        def user_matches_purpose
-          valid = (purpose == "login" && user_id.nil?) || (purpose == "link" && user_id.present?)
-          errors.add(:user, :invalid) unless valid
+        def context_matches_purpose
+          valid_user = %w[signup login].include?(purpose) ? user_id.nil? : user_id.present?
+          valid_target = if purpose == "destroy"
+            action.present? && target_type.present? && target_id.present?
+          else
+            action.nil? && target_type.nil? && target_id.nil?
+          end
+          errors.add(:user, :invalid) unless valid_user
+          errors.add(:target, :invalid) unless valid_target
         end
     end
   RUBY
@@ -1432,6 +2769,8 @@ def install_siwe
 
           request.env["devise.skip_timeout"] = true
           sign_in(:user, user, event: :authentication)
+          remember_me(user) if ActiveModel::Type::Boolean.new.cast(params[:remember_me])
+          flash[:credential_risk] = true if user.credential_loss_risk?
           render json: { redirect_url: after_sign_in_path_for(user) }
         rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, SiweChallenge::VerificationError
           head :unauthorized
@@ -1449,6 +2788,136 @@ def install_siwe
     end
   RUBY
 
+  create_file "app/controllers/users/siwe_registrations_controller.rb", <<~'RUBY', force: true
+    module Users
+      class SiweRegistrationsController < DeviseController
+        extend T::Sig
+
+        after_action :prevent_challenge_caching
+        rate_limit to: 10, within: 1.minute, only: %i[challenge create],
+          by: -> {
+            T.bind(self, Users::SiweRegistrationsController)
+            "#{request.remote_ip}:#{session_binding}"
+          },
+          with: -> {
+            T.bind(self, Users::SiweRegistrationsController)
+            head :too_many_requests
+          }
+
+        def challenge
+          record, raw_token = SiweChallenge.issue!(
+            purpose: "signup",
+            address: params.require(:address),
+            chain_id: params.require(:chain_id),
+            session_binding:
+          )
+          render json: { challenge_token: raw_token, message: record.message }
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordInvalid, SiweChallenge::VerificationError
+          head :unprocessable_content
+        end
+
+        def create
+          challenge = SiweChallenge.for_token!(params.require(:challenge_token))
+          message = challenge.verify!(
+            signature: params.require(:signature),
+            purpose: "signup",
+            session_binding:
+          )
+          user = T.let(nil, T.nilable(User))
+          SiweChallenge.transaction do
+            raise ActiveRecord::RecordNotUnique if SiweIdentity.exists?(address: message.address.downcase)
+
+            challenge.consume!
+            user = User.create!
+            T.must(user).siwe_identities.create!(name: "Wallet #1", address: message.address)
+          end
+          request.env["devise.skip_timeout"] = true
+          sign_in(:user, T.must(user), event: :authentication)
+          render json: { redirect_url: after_sign_in_path_for(T.must(user)) }, status: :created
+        rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+          ActiveRecord::RecordNotUnique, SiweChallenge::VerificationError
+          head :unprocessable_content
+        end
+
+        private
+          def session_binding
+            session[:siwe_binding] ||= SecureRandom.hex(32)
+          end
+
+          def prevent_challenge_caching
+            response.set_header("Cache-Control", "no-store")
+          end
+      end
+    end
+  RUBY
+
+  inject_into_class "app/controllers/account/credential_destructions_controller.rb", "CredentialDestructionsController", <<~'RUBY'
+      after_action :prevent_siwe_challenge_caching, only: %i[siwe_challenge destroy_with_siwe]
+      rate_limit to: 10, within: 1.minute, only: %i[siwe_challenge destroy_with_siwe],
+        by: -> {
+          T.bind(self, Account::CredentialDestructionsController)
+          "#{request.remote_ip}:#{siwe_session_binding}"
+        },
+        with: -> {
+          T.bind(self, Account::CredentialDestructionsController)
+          head :too_many_requests
+        }
+
+      def siwe_challenge
+        action, target = destruction_context
+        identities = CredentialDestruction.siwe_identities_for(user: account_user, action:, target:)
+        address = params.require(:address).downcase
+        raise CredentialDestruction::Error, "ineligible wallet" unless identities.exists?(address:)
+
+        record, raw_token = SiweChallenge.issue!(
+          purpose: "destroy",
+          user: account_user,
+          address:,
+          chain_id: params.require(:chain_id),
+          session_binding: siwe_session_binding,
+          action:,
+          target:
+        )
+        render json: { challenge_token: raw_token, message: record.message }
+      rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+        CredentialDestruction::Error, SiweChallenge::VerificationError
+        head :unprocessable_content
+      end
+
+      def destroy_with_siwe
+        action, target = destruction_context
+        challenge = SiweChallenge.for_token!(params.require(:challenge_token))
+        message = challenge.verify!(
+          signature: params.require(:signature),
+          purpose: "destroy",
+          user: account_user,
+          session_binding: siwe_session_binding,
+          action:,
+          target:
+        )
+        authenticator = CredentialDestruction.siwe_identities_for(user: account_user, action:, target:)
+          .find_by!(address: message.address.downcase)
+        SiweChallenge.transaction do
+          challenge.consume!
+          CredentialDestruction.execute!(user: account_user, action:, target:, authenticator:)
+        end
+        finish_destruction(action)
+      rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
+        CredentialDestruction::Error, SiweChallenge::VerificationError
+        head :unprocessable_content
+      end
+
+      def siwe_session_binding
+        session[:siwe_binding] ||= SecureRandom.hex(32)
+      end
+
+      def prevent_siwe_challenge_caching
+        response.set_header("Cache-Control", "no-store")
+      end
+      private :siwe_session_binding, :prevent_siwe_challenge_caching
+
+  RUBY
+
   create_file "app/controllers/account/siwe_identities_controller.rb", <<~'RUBY', force: true
     module Account
       class SiweIdentitiesController < ApplicationController
@@ -1456,7 +2925,7 @@ def install_siwe
 
         layout "account_settings"
         before_action :authenticate_user!
-        before_action :set_siwe_identity, only: %i[show edit update destroy]
+        before_action :set_siwe_identity, only: %i[show edit update]
         after_action :prevent_challenge_caching, only: %i[challenge create]
         rate_limit(
           to: 10,
@@ -1478,7 +2947,11 @@ def install_siwe
         end
 
         sig { void }
-        def show; end
+        def show
+          CredentialDestruction.ensure_alternative!(user: account_user, action: "delete_siwe", target: @siwe_identity)
+        rescue CredentialDestruction::Error
+          redirect_to account_siwe_identities_path, alert: t("siwe.identities.last_credential")
+        end
 
         sig { void }
         def new; end
@@ -1532,18 +3005,6 @@ def install_siwe
           end
         end
 
-        sig { void }
-        def destroy
-          unless account_user.valid_password?(params.require(:current_password))
-            redirect_to account_siwe_identity_path(@siwe_identity),
-              alert: t("siwe.identities.password_invalid"), status: :see_other
-            return
-          end
-
-          @siwe_identity.destroy!
-          redirect_to account_siwe_identities_path, notice: t("siwe.identities.deleted"), status: :see_other
-        end
-
         private
           sig { returns(User) }
           def account_user
@@ -1569,11 +3030,13 @@ def install_siwe
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
-      static targets = ["error"]
+      static targets = ["error", "rememberMe"]
       static values = {
         mode: String,
         challengeUrl: String,
         verifyUrl: String,
+        targetId: Number,
+        destructionAction: String,
         walletMissing: String,
         challengeError: String,
         verificationError: String
@@ -1586,7 +3049,11 @@ def install_siwe
           if (!window.ethereum) throw new Error(this.walletMissingValue)
           const [address] = await window.ethereum.request({ method: "eth_requestAccounts" })
           const chainIdHex = await window.ethereum.request({ method: "eth_chainId" })
-          const challengePayload = { address, chain_id: Number.parseInt(chainIdHex, 16) }
+          const context = {}
+          if (this.hasTargetIdValue) context.target_id = this.targetIdValue
+          if (this.hasDestructionActionValue) context.destruction_action = this.destructionActionValue
+          if (this.hasRememberMeTarget) context.remember_me = this.rememberMeTarget.checked
+          const challengePayload = { address, chain_id: Number.parseInt(chainIdHex, 16), ...context }
 
           const challengeResponse = await this.post(this.challengeUrlValue, challengePayload)
           if (!challengeResponse.ok) throw new Error(this.challengeErrorValue)
@@ -1595,7 +3062,7 @@ def install_siwe
             method: "personal_sign",
             params: [challenge.message, address]
           })
-          const verifyPayload = { challenge_token: challenge.challenge_token, signature }
+          const verifyPayload = { challenge_token: challenge.challenge_token, signature, ...context }
 
           const verificationResponse = await this.post(this.verifyUrlValue, verifyPayload)
           if (!verificationResponse.ok) throw new Error(this.verificationErrorValue)
@@ -1704,16 +3171,36 @@ def install_siwe
       <p class="font-semibold"><%= @siwe_identity.name %></p>
       <p class="break-all font-mono text-sm text-base-content/70"><%= @siwe_identity.address %></p>
       <p class="text-base-content/70"><%= t("siwe.identities.delete_description") %></p>
-      <%= form_with url: account_siwe_identity_path(@siwe_identity), method: :delete, class: "space-y-5" do |form| %>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend"><%= form.label :current_password, t("siwe.identities.current_password") %></legend>
-          <%= form.password_field :current_password, required: true, autocomplete: "current-password", class: "input input-rapid w-full" %>
-        </fieldset>
-        <div class="flex justify-end gap-2">
-          <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
-          <%= form.submit t("siwe.identities.delete"), class: "btn btn-error btn-rapid", data: { turbo_confirm: t("siwe.identities.delete_confirm") } %>
-        </div>
-      <% end %>
+      <div class="flex flex-wrap justify-end gap-2">
+        <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
+        <% if current_user.passkey_credentials.exists? %>
+          <div data-controller="passkey"
+               data-passkey-ceremony-value="get"
+               data-passkey-options-url-value="<%= account_passkey_credential_destruction_options_path %>"
+               data-passkey-verify-url-value="<%= account_passkey_credential_destruction_path %>"
+               data-passkey-target-id-value="<%= @siwe_identity.id %>"
+               data-passkey-destruction-action-value="delete_siwe"
+               data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
+               data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
+            <button type="button" class="btn btn-error btn-rapid" data-action="passkey#authenticate"><%= t("siwe.identities.delete_with_passkey") %></button>
+            <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+          </div>
+        <% end %>
+        <% if current_user.siwe_identities.where.not(id: @siwe_identity.id).exists? %>
+          <div data-controller="siwe-sign-in"
+               data-siwe-sign-in-mode-value="destroy"
+               data-siwe-sign-in-challenge-url-value="<%= account_siwe_credential_destruction_challenge_path %>"
+               data-siwe-sign-in-verify-url-value="<%= account_siwe_credential_destruction_path %>"
+               data-siwe-sign-in-target-id-value="<%= @siwe_identity.id %>"
+               data-siwe-sign-in-destruction-action-value="delete_siwe"
+               data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
+               data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
+               data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+            <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.delete_with_wallet") %></button>
+            <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+          </div>
+        <% end %>
+      </div>
     </section>
   ERB
 
@@ -1723,7 +3210,7 @@ def install_siwe
       "siwe" => {
         "sign_in" => { "title" => "Ethereumでログイン", "description" => "登録済みのEOAウォレットで署名してログインします。", "connect" => "ウォレットでログイン" },
         "account_settings" => { "basic" => "基本設定" },
-        "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。ウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "ウォレット名", "current_password" => "現在のパスワード", "connect" => "ウォレットを接続", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "解除すると、このウォレットではログインできなくなります。", "delete" => "解除", "delete_confirm" => "このウォレットを解除しますか？", "password_invalid" => "現在のパスワードが正しくありません。", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
+        "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。ウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "ウォレット名", "connect" => "ウォレットを接続", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete" => "解除", "delete_with_passkey" => "Passkeyで解除", "delete_with_wallet" => "別のウォレットで解除", "last_credential" => "最後のログイン方法は解除できません。", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
         "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。" }
       }
     },
@@ -1731,7 +3218,7 @@ def install_siwe
       "siwe" => {
         "sign_in" => { "title" => "Sign in with Ethereum", "description" => "Sign in with an EOA wallet already linked to your account.", "connect" => "Sign in with wallet" },
         "account_settings" => { "basic" => "Basic settings" },
-        "identities" => { "title" => "EVM wallet login", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add wallet", "new_title" => "Add EVM wallet", "new_description" => "Sign with the EOA wallet you want to connect. Its name will be assigned automatically after registration.", "edit_title" => "Edit EVM wallet login", "name" => "Wallet name", "current_password" => "Current password", "connect" => "Connect wallet", "delete_title" => "Unlink EVM wallet login", "delete_description" => "After unlinking, this wallet can no longer be used to sign in.", "delete" => "Unlink", "delete_confirm" => "Unlink this wallet?", "password_invalid" => "The current password is incorrect.", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
+        "identities" => { "title" => "EVM wallet login", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add wallet", "new_title" => "Add EVM wallet", "new_description" => "Sign with the EOA wallet you want to connect. Its name will be assigned automatically after registration.", "edit_title" => "Edit EVM wallet login", "name" => "Wallet name", "connect" => "Connect wallet", "delete_title" => "Unlink EVM wallet login", "delete_description" => "Reauthenticate with a different sign-in method before unlinking this wallet.", "delete" => "Unlink", "delete_with_passkey" => "Unlink with passkey", "delete_with_wallet" => "Unlink with another wallet", "last_credential" => "You cannot remove your last sign-in method.", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
         "errors" => { "wallet_missing" => "No EOA wallet was found.", "challenge" => "Could not create an authentication request.", "verification" => "Could not verify the signature." }
       }
     }
@@ -1739,7 +3226,7 @@ def install_siwe
 
   route <<~'RUBY'
     namespace :account do
-      resources :siwe_identities, only: %i[index show new create edit update destroy] do
+      resources :siwe_identities, only: %i[index show new create edit update] do
         post :challenge, on: :collection
       end
     end
@@ -1990,41 +3477,33 @@ def install_siwe
         end
         assert_equal ["Wallet #1", "Wallet #2"], users(:one).siwe_identities.order(:created_at).pluck(:name)
 
-        identity = T.must(users(:one).siwe_identities.first)
-        delete account_siwe_identity_url(identity), params: { current_password: "password123" }
-        assert_redirected_to account_siwe_identities_url
-        assert_not SiweIdentity.exists?(identity.id)
-
         key = keys.last
         post challenge_account_siwe_identities_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
         challenge = response.parsed_body
         post account_siwe_identities_url,
           params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
         assert_response :created
-        assert_equal ["Wallet #2", "Wallet #2"], users(:one).siwe_identities.order(:created_at).pluck(:name)
+        assert_equal ["Wallet #1", "Wallet #2", "Wallet #3"], users(:one).siwe_identities.order(:created_at).pluck(:name)
       end
 
-      test "requires the current password only to unlink a wallet" do
+      test "renders target-excluding reauthentication instead of a password field" do
         sign_in users(:one)
         key = Eth::Key.new
-
-        post challenge_account_siwe_identities_url,
-          params: { address: key.address.to_s, chain_id: 1 }, as: :json
-        assert_response :success
-
         identity = users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
-        delete account_siwe_identity_url(identity), params: { current_password: "wrong" }
-        assert_redirected_to account_siwe_identity_url(identity)
-        assert_equal I18n.t("siwe.identities.password_invalid"), flash[:alert]
-        assert SiweIdentity.exists?(identity.id)
+
+        get account_siwe_identity_url(identity)
+
+        assert_response :success
+        assert_select 'input[type="password"]', count: 0
+        assert_select '[data-passkey-destruction-action-value="delete_siwe"]', count: 1
       end
 
       test "renders separate index, new, edit, and unlink pages" do
         sign_in users(:one)
 
-        get edit_user_registration_url
+        get account_passkeys_url
         assert_response :success
-        assert_select '.tab-active[aria-current="page"][href=?]', edit_user_registration_path, count: 1
+        assert_select '.tab-active[aria-current="page"][href=?]', account_passkeys_path, count: 1
         assert_select '.tab[href=?]', account_siwe_identities_path, count: 1
         assert_select '.tabs.tabs-lift > .tab-active + .tab-content[role="tabpanel"]', count: 1
 
@@ -2038,7 +3517,7 @@ def install_siwe
         assert_select '.tabs.tabs-lift > .tab-content', count: 1
         assert_select '.tab-content > .card-border.border-base-300', count: 0
         assert_select 'nav[aria-label=?] a.menu-active[href=?]', I18n.t("navigation.account_menu"),
-          edit_user_registration_path, count: 1
+          account_passkeys_path, count: 1
 
         get new_account_siwe_identity_url
         assert_response :success
@@ -2062,7 +3541,8 @@ def install_siwe
 
         get account_siwe_identity_url(identity)
         assert_response :success
-        assert_select 'form input[name="current_password"][type="password"]', count: 1
+        assert_select 'form input[type="password"]', count: 0
+        assert_select '[data-passkey-destruction-action-value="delete_siwe"]', count: 1
         assert_select 'form input[name="siwe_identity[name]"]', count: 0
         assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
       end
@@ -2108,6 +3588,83 @@ def install_siwe
         assert_response :unprocessable_content
         assert_equal users(:two), SiweIdentity.find_by!(address: key.address.to_s.downcase).user
       end
+
+      test "unlinks a wallet only with another wallet and rejects replay and self authentication" do
+        user = users(:one)
+        target_key = Eth::Key.new
+        authenticator_key = Eth::Key.new
+        target = user.siwe_identities.create!(name: "Target", address: target_key.address.to_s)
+        authenticator = user.siwe_identities.create!(name: "Authenticator", address: authenticator_key.address.to_s)
+        sign_in user
+
+        post account_siwe_credential_destruction_challenge_url,
+          params: {
+            address: target_key.address.to_s,
+            chain_id: 1,
+            destruction_action: "delete_siwe",
+            target_id: target.id
+          }, as: :json
+        assert_response :unprocessable_content
+
+        post account_siwe_credential_destruction_challenge_url,
+          params: {
+            address: authenticator_key.address.to_s,
+            chain_id: 1,
+            destruction_action: "delete_siwe",
+            target_id: target.id
+          }, as: :json
+        challenge = response.parsed_body
+        payload = {
+          challenge_token: challenge.fetch("challenge_token"),
+          signature: authenticator_key.personal_sign(challenge.fetch("message")),
+          destruction_action: "delete_siwe",
+          target_id: target.id
+        }
+        post account_siwe_credential_destruction_url, params: payload, as: :json
+        assert_response :success
+        assert_not SiweIdentity.exists?(target.id)
+        assert SiweIdentity.exists?(authenticator.id)
+
+        post account_siwe_credential_destruction_url, params: payload, as: :json
+        assert_response :unprocessable_content
+        assert SiweIdentity.exists?(authenticator.id)
+      end
+
+      test "rejects unlinking the last wallet and deletes an account with fresh wallet authentication" do
+        user = User.create!
+        key = Eth::Key.new
+        identity = user.siwe_identities.create!(name: "Only wallet", address: key.address.to_s)
+        sign_in user
+
+        post account_siwe_credential_destruction_challenge_url,
+          params: {
+            address: key.address.to_s,
+            chain_id: 1,
+            destruction_action: "delete_siwe",
+            target_id: identity.id
+          }, as: :json
+        assert_response :unprocessable_content
+
+        post account_siwe_credential_destruction_challenge_url,
+          params: {
+            address: key.address.to_s,
+            chain_id: 1,
+            destruction_action: "delete_account",
+            target_id: user.id
+          }, as: :json
+        challenge = response.parsed_body
+        assert_difference "User.count", -1 do
+          post account_siwe_credential_destruction_url,
+            params: {
+              challenge_token: challenge.fetch("challenge_token"),
+              signature: key.personal_sign(challenge.fetch("message")),
+              destruction_action: "delete_account",
+              target_id: user.id
+            }, as: :json
+        end
+        assert_response :success
+        assert_not User.exists?(user.id)
+      end
     end
   RUBY
 
@@ -2116,6 +3673,23 @@ def install_siwe
     require "eth"
 
     class Users::SiweSessionsControllerTest < ActionDispatch::IntegrationTest
+      test "creates an account only through the SIWE signup ceremony" do
+        key = Eth::Key.new
+        post user_siwe_registration_challenge_url,
+          params: { address: key.address.to_s, chain_id: 1 }, as: :json
+        challenge = response.parsed_body
+
+        assert_difference ["User.count", "SiweIdentity.count"], 1 do
+          post user_siwe_registration_url,
+            params: {
+              challenge_token: challenge.fetch("challenge_token"),
+              signature: key.personal_sign(challenge.fetch("message"))
+            }, as: :json
+        end
+        assert_response :created
+        assert_equal key.address.to_s.downcase, T.must(User.order(:id).last).siwe_identities.sole.address
+      end
+
       test "signs in the existing user without creating another user" do
         key = Eth::Key.new
         users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
@@ -2654,8 +4228,8 @@ def configure_roles
       include Devise::Test::IntegrationHelpers
 
       setup do
-        @admin = User.create!(password: "password123", password_confirmation: "password123")
-        @regular = User.create!(password: "password123", password_confirmation: "password123")
+        @admin = User.create!
+        @regular = User.create!
         @admin.grant_role!(:admin)
       end
 
@@ -2666,10 +4240,7 @@ def configure_roles
 
         def create_additional_users(count)
           count.times do
-            User.create!(
-              password: "password123",
-              password_confirmation: "password123"
-            )
+            User.create!
           end
         end
   RUBY
@@ -2678,9 +4249,9 @@ def configure_roles
     test "refuses deletion of the last admin account" do
       sign_in_as(@admin)
 
-      delete user_registration_url
+      get delete_account_url
 
-      assert_redirected_to edit_user_registration_url
+      assert_redirected_to account_url
       assert User.exists?(@admin.id)
       assert @admin.reload.has_role?(:admin)
     end
@@ -2834,43 +4405,6 @@ def configure_roles
     end
   RUBY
 
-  create_file "app/controllers/users/registrations_controller.rb", <<~RUBY, force: true
-    module Users
-      class RegistrationsController < Devise::RegistrationsController
-        extend T::Sig
-
-        before_action :authenticate_user_for_completion!, only: :complete
-
-        sig { void }
-        def complete
-          self.resource = T.must(current_user)
-          render template: "devise/registrations/complete"
-        end
-
-        sig { void }
-        def destroy
-          if resource.last_admin?
-            redirect_to edit_user_registration_path, alert: I18n.t("accounts.destroy.last_admin"), status: :see_other
-            return
-          end
-
-          super
-        end
-
-        private
-          sig { void }
-          def authenticate_user_for_completion!
-            authenticate_user!(force: true)
-          end
-
-        protected
-          sig { params(_resource: User).returns(String) }
-          def after_sign_up_path_for(_resource)
-            user_registration_complete_path
-          end
-      end
-    end
-  RUBY
 end
 
 def configure_content_management
@@ -3573,14 +5107,8 @@ def configure_content_management
 
       private
         def setup_content_management_users
-          @admin = User.create!(
-            password: "password123",
-            password_confirmation: "password123"
-          )
-          @regular = User.create!(
-            password: "password123",
-            password_confirmation: "password123"
-          )
+          @admin = User.create!
+          @regular = User.create!
           @admin.grant_role!(:admin)
         end
 
@@ -5328,11 +6856,7 @@ def configure_profile
 
         private
           def sign_in(user)
-            visit new_user_session_path
-            fill_in User.human_attribute_name(:login_id), with: user.login_id
-            fill_in User.human_attribute_name(:password), with: "password123"
-            click_button I18n.t("devise_views.sessions.submit")
-            assert_current_path root_path
+            login_as user, scope: :user
           end
 
           def selected_file_metadata
@@ -6083,58 +7607,9 @@ def configure_api
 end
 
 def configure_devise_views
-  create_locale_pair(
-    "devise_views",
-    ja: {
-      "devise_views" => {
-        "links" => { "sign_in" => "ログイン画面へ", "sign_up" => "アカウントを作成" },
-        "sessions" => { "title" => "ログイン", "description" => "登録済みのユーザーIDとパスワードを入力してください。", "remember_me" => "ログイン状態を保持する", "submit" => "ログイン", "siwe_divider" => "または" },
-        "registrations" => { "new_title" => "アカウント作成", "new_description" => "パスワードを設定してアカウントを作成します。ユーザーIDは登録完了後に発行されます。", "minimum_password" => "%{count}文字以上で入力してください。", "create" => "アカウントを作成", "complete_title" => "アカウントを作成しました", "complete_description" => "次回のログインには以下のユーザーIDとパスワードが必要です。ユーザーIDを安全な場所に保存してください。", "login_id_hint" => "このユーザーIDは変更できません。", "continue" => "マイページへ", "edit_title" => "アカウント設定", "password_hint" => "変更しない場合は空欄にしてください。", "update" => "設定を更新", "delete_title" => "アカウントの削除", "delete_description" => "この操作は取り消せません。", "delete" => "アカウントを削除", "delete_confirm" => "本当に削除しますか？" }
-      },
-      "activerecord" => { "attributes" => { "user" => { "login_id" => "ユーザーID" } } },
-      "errors" => { "messages" => { "login_id_readonly" => "は変更できません" } }
-    },
-    en: {
-      "devise_views" => {
-        "links" => { "sign_in" => "Back to sign in", "sign_up" => "Create an account" },
-        "sessions" => { "title" => "Sign in", "description" => "Enter your registered user ID and password.", "remember_me" => "Keep me signed in", "submit" => "Sign in", "siwe_divider" => "or" },
-        "registrations" => { "new_title" => "Create account", "new_description" => "Set a password to create your account. Your user ID will be issued after registration.", "minimum_password" => "Enter at least %{count} characters.", "create" => "Create account", "complete_title" => "Your account has been created", "complete_description" => "You will need the user ID below and your password the next time you sign in. Save the user ID in a secure place.", "login_id_hint" => "This user ID cannot be changed.", "continue" => "Go to your account", "edit_title" => "Account settings", "password_hint" => "Leave blank if you do not want to change it.", "update" => "Update settings", "delete_title" => "Delete account", "delete_description" => "This action cannot be undone.", "delete" => "Delete account", "delete_confirm" => "Are you sure you want to delete your account?" }
-      },
-      "activerecord" => { "attributes" => { "user" => { "login_id" => "User ID" } } },
-      "errors" => { "messages" => { "login_id_readonly" => "cannot be changed" } }
-    }
-  )
-
-  create_file "app/views/devise/shared/_error_messages.html.erb", <<~'ERB', force: true
-    <% if resource.errors.any? %>
-      <div class="alert alert-error mb-6" role="alert">
-        <div>
-          <h2 class="font-bold leading-[1.5]"><%= t("errors.messages.not_saved", count: resource.errors.count, resource: resource.class.model_name.human.downcase) %></h2>
-          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
-            <% resource.errors.full_messages.each do |message| %>
-              <li><%= message %></li>
-            <% end %>
-          </ul>
-        </div>
-      </div>
-    <% end %>
-  ERB
-
-  create_file "app/views/devise/shared/_links.html.erb", <<~'ERB', force: true
-    <div class="divider"></div>
-    <ul class="menu menu-sm w-full">
-      <% if controller_name != "sessions" %>
-        <li><%= link_to t("devise_views.links.sign_in"), new_session_path(resource_name) %></li>
-      <% end %>
-      <% if devise_mapping.registerable? && controller_name != "registrations" %>
-        <li><%= link_to t("devise_views.links.sign_up"), new_registration_path(resource_name) %></li>
-      <% end %>
-    </ul>
-  ERB
-
-  siwe_sign_in = if VALUES.fetch("additional_login_methods").include?("siwe")
+  siwe_login = if VALUES.fetch("additional_login_methods").include?("siwe")
     <<~'ERB'
-      <div class="divider"><%= t("devise_views.sessions.siwe_divider") %></div>
+      <div class="divider"><%= t("authentication.or") %></div>
       <div data-controller="siwe-sign-in"
            data-siwe-sign-in-mode-value="login"
            data-siwe-sign-in-challenge-url-value="<%= user_siwe_challenge_path %>"
@@ -6142,135 +7617,102 @@ def configure_devise_views
            data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-        <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.sign_in.connect") %></button>
+        <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_in_with_wallet") %></button>
         <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
       </div>
     ERB
   else
     ""
   end
-  create_file "app/views/devise/sessions/new.html.erb", <<~ERB, force: true
-    <% content_for :page_title, t("devise_views.sessions.title") %>
+  siwe_signup = if VALUES.fetch("additional_login_methods").include?("siwe")
+    <<~'ERB'
+      <div class="divider"><%= t("authentication.or") %></div>
+      <div data-controller="siwe-sign-in"
+           data-siwe-sign-in-mode-value="signup"
+           data-siwe-sign-in-challenge-url-value="<%= user_siwe_registration_challenge_path %>"
+           data-siwe-sign-in-verify-url-value="<%= user_siwe_registration_path %>"
+           data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
+           data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
+           data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+        <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_up_with_wallet") %></button>
+        <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+      </div>
+    ERB
+  else
+    ""
+  end
+
+  create_file "app/views/users/passkey_sessions/new.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("authentication.sign_in_title") %>
     <header class="mb-8">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-      <p class="mt-2 text-sm text-base-content/70"><%= t("devise_views.sessions.description") %></p>
+      <p class="mt-2 text-sm text-base-content/70"><%= t("authentication.sign_in_description") %></p>
     </header>
 
-    <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "space-y-5" }) do |f| %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= f.label :login_id %></legend>
-        <%= f.text_field :login_id, autofocus: true, autocomplete: "username", required: true, class: "input input-rapid w-full" %>
-      </fieldset>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= f.label :password %></legend>
-        <%= f.password_field :password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
-      </fieldset>
-      <% if devise_mapping.rememberable? %>
-        <label class="label cursor-pointer justify-start gap-3 text-base-content">
-          <%= f.check_box :remember_me, class: "checkbox checkbox-sm" %>
-          <span><%= t("devise_views.sessions.remember_me") %></span>
-        </label>
-      <% end %>
-      <%= f.submit t("devise_views.sessions.submit"), class: "btn btn-primary btn-block btn-rapid" %>
-    <% end %>
+    <div data-controller="passkey"
+         data-passkey-ceremony-value="get"
+         data-passkey-options-url-value="<%= user_passkey_session_options_path %>"
+         data-passkey-verify-url-value="<%= user_passkey_session_path %>"
+         data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
+         data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
+      <label class="label mb-4 cursor-pointer justify-start gap-3 text-base-content">
+        <input type="checkbox" class="checkbox checkbox-sm" data-passkey-target="rememberMe">
+        <span><%= t("authentication.remember_me") %></span>
+      </label>
+      <button type="button" class="btn btn-primary btn-block btn-rapid" data-action="passkey#authenticate"><%= t("authentication.sign_in_with_passkey") %></button>
+      <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+    </div>
 
-    #{siwe_sign_in}
-    <%= render "devise/shared/links" %>
+    #{siwe_login}
+    <div class="divider"></div>
+    <%= link_to t("authentication.create_account"), new_user_registration_path, class: "btn btn-block btn-rapid" %>
   ERB
 
-  create_file "app/views/devise/registrations/new.html.erb", <<~'ERB', force: true
-    <% content_for :page_title, t("devise_views.registrations.new_title") %>
+  create_file "app/views/users/passkey_registrations/new.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("authentication.sign_up_title") %>
     <header class="mb-8">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-      <p class="mt-2 text-sm text-base-content/70"><%= t("devise_views.registrations.new_description") %></p>
+      <p class="mt-2 text-sm text-base-content/70"><%= t("authentication.sign_up_description") %></p>
     </header>
 
-    <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "space-y-5" }) do |f| %>
-      <%= render "devise/shared/error_messages", resource: resource %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= f.label :password %></legend>
-        <%= f.password_field :password, autofocus: true, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
-        <% if @minimum_password_length %>
-          <p class="label"><%= t("devise_views.registrations.minimum_password", count: @minimum_password_length) %></p>
-        <% end %>
-      </fieldset>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= f.label :password_confirmation %></legend>
-        <%= f.password_field :password_confirmation, autocomplete: "new-password", required: true, class: "input input-rapid w-full" %>
-      </fieldset>
-      <%= f.submit t("devise_views.registrations.create"), class: "btn btn-primary btn-block btn-rapid" %>
-    <% end %>
-
-    <%= render "devise/shared/links" %>
-  ERB
-
-  create_file "app/views/devise/registrations/complete.html.erb", <<~'ERB', force: true
-    <% content_for :page_title, t("devise_views.registrations.complete_title") %>
-    <header class="mb-8">
-      <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-    </header>
-
-    <div class="alert alert-warning alert-soft alert-vertical grid-cols-1 justify-items-stretch" role="status">
-      <p class="font-bold"><%= t("devise_views.registrations.complete_description") %></p>
-      <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
-        <legend class="fieldset-legend"><%= User.human_attribute_name(:login_id) %></legend>
-        <div class="join w-full">
-          <input type="text" value="<%= resource.login_id %>" readonly autocomplete="off" aria-label="<%= User.human_attribute_name(:login_id) %>" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-          <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
-        </div>
-        <p class="label"><%= t("devise_views.registrations.login_id_hint") %></p>
-      </fieldset>
+    <div data-controller="passkey"
+         data-passkey-ceremony-value="create"
+         data-passkey-options-url-value="<%= user_passkey_registration_options_path %>"
+         data-passkey-verify-url-value="<%= user_passkey_registration_path %>"
+         data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
+         data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
+      <button type="button" class="btn btn-primary btn-block btn-rapid" data-action="passkey#authenticate"><%= t("authentication.sign_up_with_passkey") %></button>
+      <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
     </div>
 
-    <div class="mt-6">
-      <%= link_to t("devise_views.registrations.continue"), account_path, class: "btn btn-primary btn-block btn-rapid" %>
-    </div>
+    #{siwe_signup}
+    <div class="divider"></div>
+    <%= link_to t("authentication.back_to_sign_in"), new_user_session_path, class: "btn btn-block btn-rapid" %>
   ERB
 
-  create_file "app/views/devise/registrations/edit.html.erb", <<~'ERB', force: true
-    <% content_for :page_title, t("devise_views.registrations.edit_title") %>
-    <div class="space-y-6">
-      <section class="card bg-base-100 shadow-none">
-        <div class="card-body">
-          <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
-            <legend class="fieldset-legend"><%= User.human_attribute_name(:login_id) %></legend>
-            <div class="join w-full">
-              <input type="text" value="<%= resource.login_id %>" readonly autocomplete="off" aria-label="<%= User.human_attribute_name(:login_id) %>" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-              <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
-            </div>
-            <p class="label"><%= t("devise_views.registrations.login_id_hint") %></p>
-          </fieldset>
-          <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { method: :put, class: "space-y-5" }) do |f| %>
-            <%= render "devise/shared/error_messages", resource: resource %>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= f.label :password %></legend>
-              <%= f.password_field :password, autofocus: true, autocomplete: "new-password", class: "input input-rapid w-full" %>
-              <p class="label"><%= t("devise_views.registrations.password_hint") %></p>
-            </fieldset>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= f.label :password_confirmation %></legend>
-              <%= f.password_field :password_confirmation, autocomplete: "new-password", class: "input input-rapid w-full" %>
-            </fieldset>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= f.label :current_password %></legend>
-              <%= f.password_field :current_password, autocomplete: "current-password", required: true, class: "input input-rapid w-full" %>
-            </fieldset>
-            <%= f.submit t("devise_views.registrations.update"), class: "btn btn-primary btn-block btn-rapid" %>
-          <% end %>
-        </div>
-      </section>
-
-      <section class="card card-border border-error bg-base-100 shadow-none">
-        <div class="card-body">
-          <h2 class="card-title leading-[1.5]"><%= t("devise_views.registrations.delete_title") %></h2>
-          <p class="text-base-content/70"><%= t("devise_views.registrations.delete_description") %></p>
-          <div class="card-actions justify-start">
-            <%= button_to t("devise_views.registrations.delete"), registration_path(resource_name), method: :delete, class: "btn btn-error btn-rapid", data: { turbo_confirm: t("devise_views.registrations.delete_confirm") } %>
-          </div>
-        </div>
-      </section>
-    </div>
-  ERB
+  create_locale_pair(
+    "authentication",
+    ja: {
+      "authentication" => {
+        "sign_in_title" => "ログイン", "sign_in_description" => "Passkeyまたは登録済みウォレットでログインします。",
+        "sign_up_title" => "アカウント作成", "sign_up_description" => "Passkeyまたはウォレットで、パスワードなしのアカウントを作成します。",
+        "sign_in_with_passkey" => "Passkeyでログイン", "sign_up_with_passkey" => "Passkeyでアカウントを作成",
+        "sign_in_with_wallet" => "ウォレットでログイン", "sign_up_with_wallet" => "ウォレットでアカウントを作成",
+        "remember_me" => "ログイン状態を保持する", "or" => "または", "create_account" => "アカウントを作成",
+        "back_to_sign_in" => "ログイン画面へ"
+      }
+    },
+    en: {
+      "authentication" => {
+        "sign_in_title" => "Sign in", "sign_in_description" => "Sign in with a passkey or a linked wallet.",
+        "sign_up_title" => "Create account", "sign_up_description" => "Create a passwordless account with a passkey or wallet.",
+        "sign_in_with_passkey" => "Sign in with passkey", "sign_up_with_passkey" => "Create account with passkey",
+        "sign_in_with_wallet" => "Sign in with wallet", "sign_up_with_wallet" => "Create account with wallet",
+        "remember_me" => "Keep me signed in", "or" => "or", "create_account" => "Create account",
+        "back_to_sign_in" => "Back to sign in"
+      }
+    }
+  )
 end
 
 def configure_default_views
@@ -6322,10 +7764,10 @@ def configure_default_views
       </li>
     ERB
   end
-  account_settings_path = "application_routes.edit_user_registration_path"
+  account_settings_path = "application_routes.account_passkeys_path"
   account_navigation_items += <<~ERB
     <li>
-      <% account_settings_active = current_page?(#{account_settings_path}) || controller_path == "account/siwe_identities" %>
+      <% account_settings_active = controller_path.in?(["account/passkeys", "account/siwe_identities"]) || current_page?(application_routes.delete_account_path) %>
       <%= link_to #{account_settings_path}, class: ("menu-active" if account_settings_active), aria: { current: ("page" if account_settings_active) } do %>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
@@ -6486,8 +7928,7 @@ def configure_default_views
       </summary>
     ERB
   end
-  account_settings_layout = siwe_enabled ? "account_settings" : "account"
-  layout_method = %(devise_controller? ? (controller_name == "registrations" && %w[edit update].include?(action_name) ? "#{account_settings_layout}" : "authentication") : "application")
+  layout_method = %(devise_controller? ? "authentication" : "application")
   wallet_script = ""
   pwa_head = if pwa_enabled
     <<~ERB
@@ -6538,11 +7979,25 @@ def configure_default_views
     class AccountsController < ApplicationController
       extend T::Sig
 
-      layout "account"
+      layout :account_layout
       before_action :authenticate_user!
 
       sig { void }
       def show; end
+
+      sig { void }
+      def delete
+        if T.must(current_user).last_admin?
+          redirect_to account_path, alert: t("accounts.destroy.last_admin")
+        end
+      end
+
+      private
+
+        sig { returns(String) }
+        def account_layout
+          action_name == "delete" ? "account_settings" : "account"
+        end
     end
   RUBY
   create_file "app/controllers/accounts_controller.rb", accounts_controller, force: true
@@ -6670,7 +8125,7 @@ def configure_default_views
           next [link] unless active
 
           [link, tag.div(tab_content, role: "tabpanel",
-            class: "tab-content sticky [contain:inline-size] bg-base-100 border-base-300 p-3")]
+            class: "tab-content sticky left-0 max-w-[100cqw] [contain:inline-size] bg-base-100 border-base-300 p-3")]
         end
 
         tablist = tag.div(safe_join(items), role: "tablist",
@@ -6748,6 +8203,8 @@ def configure_default_views
         assert_equal 1, fragment.css(".overflow-x-auto > .tabs.tabs-lift.min-w-max").size
         assert_equal 1, fragment.css(".tabs.tabs-lift > .tab-content").size
         assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "sticky"
+        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "left-0"
+        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "max-w-[100cqw]"
         assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "[contain:inline-size]"
         assert_equal "Tab content", fragment.at_css(".tab-active + .tab-content p").text
         assert_equal "/account/siwe_identities", fragment.at_css(".tab-active")["href"]
@@ -6863,7 +8320,7 @@ def configure_default_views
     <% content_for :content, flush: true do %>
       <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="with-menu">
         <aside class="h-fit"><%= yield :with_menu_navigation %></aside>
-        <div class="min-w-0">
+        <div class="min-w-0 [container-type:inline-size]">
           <h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
           <%= yield %>
         </div>
@@ -6892,14 +8349,16 @@ def configure_default_views
     <% end %>
   ERB
 
-  if siwe_enabled
-    create_file "app/views/layouts/account_settings.html.erb", <<~'ERB', force: true
+  account_settings_tabs = [
+    'ApplicationHelper::Tab.new(name: t("passkeys.title"), path: account_passkeys_path)',
+    ('ApplicationHelper::Tab.new(name: t("siwe.identities.title"), path: account_siwe_identities_path)' if siwe_enabled),
+    'ApplicationHelper::Tab.new(name: t("accounts.delete.title"), path: delete_account_path)'
+  ].compact.join(",\n          ")
+  create_file "app/views/layouts/account_settings.html.erb", <<~ERB, force: true
       <% content_for :account_settings_content, flush: true do %>
         <nav aria-label="<%= t('navigation.account_settings') %>">
           <%= with_tab(tabs: [
-            ApplicationHelper::Tab.new(name: t("siwe.account_settings.basic"), path: edit_user_registration_path,
-              is_active: -> { request.path == edit_user_registration_path || request.path == user_registration_path }),
-            ApplicationHelper::Tab.new(name: t("siwe.identities.title"), path: account_siwe_identities_path)
+          #{account_settings_tabs}
           ]) do %>
             <%= yield %>
           <% end %>
@@ -6909,7 +8368,6 @@ def configure_default_views
         <%= yield :account_settings_content %>
       <% end %>
     ERB
-  end
 
   create_file "app/views/shared/_admin_navigation.html.erb", admin_navigation_items, force: true
   create_file "app/views/layouts/admin.html.erb", <<~ERB, force: true
@@ -6962,6 +8420,16 @@ def configure_default_views
   ERB
 
   create_file "app/views/shared/_flash.html.erb", <<~ERB, force: true
+    <% if flash[:credential_risk] %>
+      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
+        <div class="alert alert-warning alert-soft" role="alert">
+          <span>
+            <%= t("credential_risk.warning") %>
+            <%= link_to t("credential_risk.add_login_method"), application_routes.account_passkeys_path, class: "link whitespace-nowrap" %>
+          </span>
+        </div>
+      </div>
+    <% end %>
     <% if notice.present? %>
       <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
         <div class="alert alert-success" role="status"><span><%= notice %></span></div>
@@ -7062,6 +8530,52 @@ def configure_default_views
         </div>
       </section>
     </div>
+  ERB
+
+  account_delete_siwe = if siwe_enabled
+    <<~'ERB'
+      <% if current_user.siwe_identities.exists? %>
+        <div data-controller="siwe-sign-in"
+             data-siwe-sign-in-mode-value="destroy"
+             data-siwe-sign-in-challenge-url-value="<%= account_siwe_credential_destruction_challenge_path %>"
+             data-siwe-sign-in-verify-url-value="<%= account_siwe_credential_destruction_path %>"
+             data-siwe-sign-in-target-id-value="<%= current_user.id %>"
+             data-siwe-sign-in-destruction-action-value="delete_account"
+             data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
+             data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
+             data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+          <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("accounts.delete.with_wallet") %></button>
+          <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        </div>
+      <% end %>
+    ERB
+  else
+    ""
+  end
+  create_file "app/views/accounts/delete.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("accounts.delete.title") %>
+
+    <section class="card card-border border-error bg-base-100 shadow-none">
+      <div class="card-body">
+        <p class="text-base-content/70"><%= t("accounts.delete.description") %></p>
+        <div class="card-actions flex-wrap justify-end">
+          <%= link_to t("common.back"), account_path, class: "btn btn-rapid" %>
+          <% if current_user.passkey_credentials.exists? %>
+            <div data-controller="passkey"
+                 data-passkey-ceremony-value="get"
+                 data-passkey-options-url-value="<%= account_passkey_credential_destruction_options_path %>"
+                 data-passkey-verify-url-value="<%= account_passkey_credential_destruction_path %>"
+                 data-passkey-target-id-value="<%= current_user.id %>"
+                 data-passkey-destruction-action-value="delete_account"
+                 data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
+                 data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
+              <button type="button" class="btn btn-error btn-rapid" data-action="passkey#authenticate"><%= t("accounts.delete.with_passkey") %></button>
+              <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+            </div>
+          <% end %>
+    #{account_delete_siwe.lines.map { |line| "      #{line}" }.join}    </div>
+      </div>
+    </section>
   ERB
 
   configure_devise_views
@@ -7333,144 +8847,63 @@ def configure_default_views
   end
 
   default_pages_test = <<~RUBY
-      require "test_helper"
-      require "stringio"
+    require "test_helper"
 
-      class DefaultPagesTest < ActionDispatch::IntegrationTest
-        include Devise::Test::IntegrationHelpers
+    class DefaultPagesTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
 
-        test "renders public and authentication pages with the custom theme" do
-          get root_url
+      test "renders public and passwordless authentication pages" do
+        get root_url
+        assert_response :success
+        assert_select 'header a[href=?]', new_user_session_path, count: 2
+        assert_select 'header a[href=?]', new_user_registration_path, count: 2
+
+        {
+          new_user_session_url => I18n.t("authentication.sign_in_title"),
+          new_user_registration_url => I18n.t("authentication.sign_up_title")
+        }.each do |url, title|
+          get url
           assert_response :success
-          app_name = Rails.configuration.x.application_identity.app_name
-          assert_select "title", text: app_name, count: 1
-          assert_select 'meta[property="og:title"][content=?]', app_name, count: 1
-          assert_select 'html[data-theme="rapid-rails"]'
-          assert_select 'nav.navbar.mx-auto.w-full.max-w-6xl.px-5[aria-label=?]', I18n.t("navigation.main")
-          assert_select 'header details.dropdown.dropdown-end > summary.btn.btn-ghost + ul.menu.menu-sm.dropdown-content', count: 1
-          assert_select 'header ul.menu.dropdown-content > li > a', count: 2
-          assert_select 'header ul.menu.dropdown-content > li > a[class]', count: 0
-          assert_select 'header ul.menu.dropdown-content .divider, header ul.menu.dropdown-content .btn', count: 0
-          assert_select 'header a[href=?].btn.btn-ghost.btn-rapid', new_user_session_path, count: 1
-          assert_select 'header a[href=?].btn.btn-outline.btn-rapid', new_user_registration_path, count: 1
-          assert_select '.hero > .hero-content', count: 1
-          assert_select '#features article.card > .card-body', count: 3
-          assert_select '#features .card-title', count: 3
-          assert_select 'footer.footer.mx-auto.w-full.max-w-6xl.px-5', count: 1
-          refute_includes response.body, 'Rails 8.1 / Tailwind CSS 4 / daisyUI 5'
-
-          [
-            [new_user_session_url, I18n.t("devise_views.sessions.title")],
-            [new_user_registration_url, I18n.t("devise_views.registrations.new_title")]
-          ].each do |url, page_title|
-            get url
-            assert_response :success
-            assert_select "h1", text: page_title, count: 1
-            assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
-            assert_select 'meta[property="og:title"][content=?]', "\#{page_title} | \#{app_name}", count: 1
-            assert_select '[data-layout="authentication"].hero > .hero-content .card > .card-body'
-            assert_select 'form fieldset.fieldset', minimum: 1
-            assert_select 'form fieldset.fieldset > legend.fieldset-legend > label', minimum: 1
-            assert_select 'form .input.input-rapid', minimum: 1
-            assert_select 'form .btn.btn-block.btn-rapid', minimum: 1
-            assert_select '.divider + .menu > li > a', minimum: 1
-            assert_select '.divider + .menu > li > a[class]', count: 0
-          end
+          assert_select "h1", text: title, count: 1
+          assert_select '[data-controller="passkey"]', count: 1
+          assert_select 'input[type="password"]', count: 0
+          assert_select 'input[name*="login_id"]', count: 0
         end
-
-        test "signs up with a generated login id and presents it to the authenticated user" do
-          get user_registration_complete_url
-          assert_redirected_to new_user_session_url
-
-          get new_user_registration_url
-          assert_response :success
-          assert_select 'input[name="user[login_id]"]', count: 0
-          assert_select 'input[name="user[password]"][autocomplete="new-password"]', count: 1
-          assert_select 'input[name="user[password_confirmation]"][autocomplete="new-password"]', count: 1
-
-          assert_difference("User.count", 1) do
-            post user_registration_url, params: {
-              user: {
-                login_id: "client_supplied",
-                password: "password123",
-                password_confirmation: "password123"
-              }
-            }
-          end
-
-          user = T.must(User.order(:id).last)
-          assert_match(/\\A[0-9a-f]{20}\\z/, user.login_id)
-          refute_equal "client_supplied", user.login_id
-          assert_redirected_to user_registration_complete_url
-
-          follow_redirect!
-          assert_response :success
-          assert_select "h1", text: I18n.t("devise_views.registrations.complete_title"), count: 1
-          assert_select 'input[readonly][data-clipboard-target="source"][value=?]', user.login_id, count: 1
-          assert_select 'button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 1
-          assert_select 'a[href=?].btn.btn-primary', account_path, count: 1
-          refute_includes response.body, "client_supplied"
-
-          delete destroy_user_session_url
-          post user_session_url, params: { user: { login_id: user.login_id, password: "password123" } }
-          assert_redirected_to root_url
-        end
-
-        test "protects account and renders its sub-layout after login" do
-          get account_url
-          assert_redirected_to new_user_session_url
-
-          user = User.create!(password: "password123", password_confirmation: "password123")
-    #{profile_binding}#{generated_profile_assertion}#{profile_setup}      user.grant_role!(:admin)
-          sign_in user
-          get account_url
-          assert_response :success
-          page_title = I18n.t("accounts.show.title")
-          app_name = Rails.configuration.x.application_identity.app_name
-          assert_select '[data-layout="with-menu"] > div > h1', text: page_title, count: 1
-          assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
-          assert_select 'meta[property="og:title"][content=?]', "\#{page_title} | \#{app_name}", count: 1
-          assert_select '[data-layout="with-menu"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-    #{profile_trigger_assertion}
-          assert_select 'header ul.menu.dropdown-content > li > a', count: #{account_navigation_count + 1}
-    #{profile_identity_assertion}      assert_select 'header ul.menu.dropdown-content a[data-turbo-method="delete"][href=?]', destroy_user_session_path, count: 1
-          account_menu = I18n.t("navigation.account_menu")
-          assert_select 'nav[aria-label=?] > .menu > li.menu-title', account_menu, text: I18n.t("navigation.dashboard"), count: 1
-          assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
-          assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
-          assert_select 'nav[aria-label=?] a[href=?]', account_menu, root_path, count: 0
-          assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', account_menu, account_path, count: 1
-          assert_select 'nav[aria-label=?] a.menu-active', account_menu, count: 1
-          assert_select 'nav[aria-label=?] a.menu-active[class="menu-active"]', account_menu, count: 1
-          assert_select 'nav[aria-label=?] > .menu > li > a[class]', account_menu, count: 1
-          assert_select 'nav[aria-label=?] > .menu > li > a.min-h-11', account_menu, count: 0
-          assert_select 'nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 0
-          assert_select 'header li.menu-title', text: I18n.t("navigation.admin"), count: 0
-          assert_select 'header a[href=?]', admin_users_path, count: 0
-          assert_select '.card > .card-body', count: 1
-
-    #{profile_page_assertions}
-
-          get edit_user_registration_url
-          assert_response :success
-          page_title = I18n.t("devise_views.registrations.edit_title")
-          assert_select '[data-layout="with-menu"] > div > h1', text: page_title, count: 1
-          assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
-          assert_select '[data-layout="with-menu"].mx-auto.w-full.max-w-6xl.px-5', count: 1
-          assert_select 'nav[aria-label=?] > .menu > li > a', account_menu, count: #{account_navigation_count}
-          assert_select 'nav[aria-label=?] > .menu > li > a > svg.size-5[aria-hidden="true"][data-slot="icon"]', account_menu, count: #{account_navigation_count}
-          assert_select 'nav[aria-label=?] a[href=?]', account_menu, root_path, count: 0
-          assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', account_menu, edit_user_registration_path, count: 1
-          assert_select 'nav[aria-label=?] a.menu-active', account_menu, count: 1
-          assert_select 'nav[aria-label=?] a.menu-active[class="menu-active"]', account_menu, count: 1
-          assert_select 'nav[aria-label=?] > .menu > li > a[class]', account_menu, count: 1
-          assert_select 'nav[aria-label=?] > .menu > li > a.min-h-11', account_menu, count: 0
-          assert_select '.card .fieldset', minimum: 1
-          assert_select '.card-actions .btn.btn-error', count: 1
-        end
-    #{job_operations_route_test}#{maintenance_route_test}
       end
-    RUBY
+
+      test "protects account pages and renders passkey settings" do
+        get account_url
+        assert_redirected_to new_user_session_url
+
+        user = User.create!
+        user.passkey_credentials.create!(
+          name: "Primary",
+          webauthn_id: "generated-default-pages-credential",
+          public_key: "test-public-key",
+          sign_count: 0,
+          transports: ["internal"],
+          backup_eligible: true,
+          backup_state: false
+        )
+    #{profile_binding}#{generated_profile_assertion}#{profile_setup}      user.grant_role!(:admin)
+        sign_in user
+
+        get account_url
+        assert_response :success
+        assert_select 'nav[aria-label=?] a.menu-active[href=?]', I18n.t("navigation.account_menu"), account_path, count: 1
+
+        get account_passkeys_url
+        assert_response :success
+        assert_select '.tab-active[href=?]', account_passkeys_path, count: 1
+        assert_select 'ul.list > li.list-row', count: 1
+        assert_select 'input[type="password"]', count: 0
+
+        get delete_account_url
+        assert_redirected_to account_url
+      end
+    #{job_operations_route_test}#{maintenance_route_test}
+    end
+  RUBY
 
   create_file "test/integration/default_pages_test.rb", default_pages_test, force: true
 end
@@ -9074,8 +10507,8 @@ def install_job_operations
       include Devise::Test::IntegrationHelpers
 
       setup do
-        @admin = User.create!(password: "password123", password_confirmation: "password123")
-        @regular = User.create!(password: "password123", password_confirmation: "password123")
+        @admin = User.create!
+        @regular = User.create!
         @admin.grant_role!(:admin)
       end
 
@@ -9784,8 +11217,8 @@ def install_maintenance_tasks
       include Devise::Test::IntegrationHelpers
 
       setup do
-        @admin = User.create!(password: "password123", password_confirmation: "password123")
-        @regular = User.create!(password: "password123", password_confirmation: "password123")
+        @admin = User.create!
+        @regular = User.create!
         @admin.grant_role!(:admin)
       end
 
@@ -9970,7 +11403,11 @@ def configure_common_files
   create_file "test/application_system_test_case.rb", <<~RUBY
     require "test_helper"
 
+    Capybara.server_host = "localhost"
+
     class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
+      include Warden::Test::Helpers
+
       driven_by :playwright,
         using: :chromium,
         screen_size: [1400, 900],
@@ -9978,6 +11415,9 @@ def configure_common_files
           headless: true,
           playwright_cli_executable_path: Rails.root.join("node_modules/.bin/playwright").to_s
         }
+
+      setup { Warden.test_mode! }
+      teardown { Warden.test_reset! }
     end
   RUBY
   create_file "test/support/factory_bot.rb", "ActiveSupport.on_load(:active_support_test_case) { include FactoryBot::Syntax::Methods }\n"
@@ -10020,7 +11460,6 @@ def configure_evidence_capture
       }.freeze
       PRIVATE_KEY = "1".rjust(64, "0")
       REGULAR_PRIVATE_KEY = "2".rjust(64, "0")
-      PASSWORD = "password123"
 
       test "captures every generated page and key visual state" do
         @output_directory = Pathname(ENV.fetch("EVIDENCE_OUTPUT_DIR")).expand_path
@@ -10062,12 +11501,7 @@ def configure_evidence_capture
         end
 
         def capture_siwe_scenarios
-          @user ||= with_deterministic_login_id("00000000000000000005") do
-            User.create! do |user|
-              user.password = PASSWORD
-              user.password_confirmation = PASSWORD
-            end
-          end
+          @user ||= create_evidence_user("evidence-primary")
           T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
 
           VIEWPORTS.each do |viewport_name, viewport|
@@ -10079,7 +11513,7 @@ def configure_evidence_capture
               "siwe-login-option",
               translate("siwe.sign_in.title"),
               new_user_session_path,
-              translate("devise_views.sessions.title"),
+              translate("authentication.sign_in_title"),
               viewport_name
             )
             assert_selector '[data-controller="siwe-sign-in"][data-siwe-sign-in-mode-value="login"]'
@@ -10132,7 +11566,7 @@ def configure_evidence_capture
               translate("siwe.identities.delete_title"),
               viewport_name
             )
-            assert_selector 'input[name="current_password"]', count: 1
+            assert_selector '[data-controller="passkey"], [data-controller="siwe-sign-in"]', minimum: 1
             assert_no_selector 'input[name="siwe_identity[name]"]'
             assert_account_settings_tabs_geometry
             visit edit_account_siwe_identity_path(main_identity)
@@ -10267,7 +11701,7 @@ def configure_evidence_capture
             authenticate
             profile = T.must(@user.profile)
             profile.avatar.purge if profile.avatar.attached?
-            profile.update!(avatar_upload: AvatarTestImage.upload(width: 320, height: 320))
+            profile.update!(avatar_upload: T.unsafe(Object.const_get("AvatarTestImage")).upload(width: 320, height: 320))
             capture_page(
               "avatar-home",
               "アバター（ホーム）",
@@ -10279,7 +11713,7 @@ def configure_evidence_capture
             capture_page(
               "avatar-profile",
               "アバター（プロフィール）",
-              profile_path,
+              host_routes.profile_path,
               translate("profiles.title"),
               viewport_name
             )
@@ -10323,12 +11757,7 @@ def configure_evidence_capture
             github_url: "https://github.com/example/example"
           )
 
-          @user ||= with_deterministic_login_id("00000000000000000005") do
-            User.create! do |user|
-              user.password = PASSWORD
-              user.password_confirmation = PASSWORD
-            end
-          end
+          @user ||= create_evidence_user("evidence-primary")
           T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
         end
 
@@ -10337,19 +11766,9 @@ def configure_evidence_capture
           capture_page("about", "アプリについて", about_path, Page::TITLES.fetch("about"), viewport)
           assert_selector ".lexxy-content", text: "管理画面から更新したAction Text本文"
           capture_faq_page(viewport)
-          capture_page("login", translate("devise_views.sessions.title"), new_user_session_path, translate("devise_views.sessions.title"), viewport)
-          capture_page("registration", "アカウント作成", new_user_registration_path, translate("devise_views.registrations.new_title"), viewport)
-
-          generated_login_id = viewport == "desktop" ? "00000000000000000003" : "00000000000000000004"
-          fill_in User.human_attribute_name(:password), with: PASSWORD
-          fill_in User.human_attribute_name(:password_confirmation), with: PASSWORD
-          with_deterministic_login_id(generated_login_id) do
-            click_button translate("devise_views.registrations.create")
-            assert_current_path user_registration_complete_path
-            assert_selector %(input[readonly][data-clipboard-target="source"][value="#{generated_login_id}"])
-          end
-          assert_text translate("devise_views.registrations.complete_description")
-          capture_current_page("registration-complete", "アカウント作成完了", viewport)
+          capture_page("login", translate("authentication.sign_in_title"), new_user_session_path, translate("authentication.sign_in_title"), viewport)
+          capture_page("registration", "アカウント作成", new_user_registration_path, translate("authentication.sign_up_title"), viewport)
+          capture_passkey_signup(viewport)
           Capybara.reset_sessions!
 
           return unless viewport == "mobile"
@@ -10362,10 +11781,8 @@ def configure_evidence_capture
         end
 
         def authenticate
-          visit new_user_session_path
-          fill_in User.human_attribute_name(:login_id), with: @user.login_id
-          fill_in User.human_attribute_name(:password), with: PASSWORD
-          click_button translate("devise_views.sessions.submit")
+          login_as(@user, scope: :user)
+          visit root_path
           assert_current_path root_path
         end
 
@@ -10374,19 +11791,16 @@ def configure_evidence_capture
           profile.update!(screen_name: "evidence_user", display_name: "Evidence User")
           profile.avatar.purge if profile.avatar.attached?
           @user.grant_role!(:admin)
+          if @backup_admin.nil?
+            @backup_admin = create_evidence_user("evidence-backup-admin")
+            @backup_admin.grant_role!(:admin)
+          end
           if MAINTENANCE_TASKS
             MaintenanceTasks::Run.delete_all
             clear_enqueued_jobs
             clear_performed_jobs
           end
-          unless @regular_user
-            @regular_user = with_deterministic_login_id("00000000000000000006") do
-              User.create! do |user|
-                user.password = PASSWORD
-                user.password_confirmation = PASSWORD
-              end
-            end
-          end
+          @regular_user = create_evidence_user("evidence-regular") if @regular_user.nil?
         end
 
         def capture_authenticated_pages(viewport)
@@ -10394,7 +11808,7 @@ def configure_evidence_capture
           capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
           capture_avatar_states(viewport)
-          capture_page("account-settings", "アカウント設定", edit_user_registration_path, translate("devise_views.registrations.edit_title"), viewport)
+          capture_passkey_pages(viewport)
           if WEB_PUSH
             set_evidence_web_push_mode("granted")
             capture_page("notifications", "通知", notification_path, translate("web_push.page.title"), viewport)
@@ -10501,14 +11915,98 @@ def configure_evidence_capture
           capture_current_page("navigation-authenticated-open", "モバイルメニュー（ログイン済み）", viewport)
         end
 
+        def capture_passkey_pages(viewport)
+          capture_page("passkeys", "Passkey一覧", account_passkeys_path, translate("passkeys.title"), viewport)
+          assert_account_settings_tabs_geometry
+          capture_page("passkey-new", "Passkey追加", new_account_passkey_path, translate("passkeys.new_title"), viewport)
+          assert_account_settings_tabs_geometry
+
+          second = @user.passkey_credentials.find_or_create_by!(webauthn_id: "evidence-secondary-#{@user.id}") do |passkey|
+            passkey.name = "Security Key"
+            passkey.public_key = "evidence-public-key"
+            passkey.sign_count = 0
+            passkey.transports = ["usb"]
+            passkey.backup_eligible = false
+            passkey.backup_state = false
+          end
+          capture_page("passkeys-multiple", "Passkey一覧（複数登録）", account_passkeys_path, translate("passkeys.title"), viewport)
+          assert_account_settings_tabs_geometry
+          capture_page("passkey-edit", "Passkey名変更", edit_account_passkey_path(second), translate("passkeys.edit_title"), viewport)
+          assert_account_settings_tabs_geometry
+          fill_in translate("passkeys.name"), with: "Backup Security Key"
+          click_button translate("common.update")
+          assert_current_path account_passkeys_path
+          capture_current_page("passkey-renamed", "Passkey一覧（名称変更後）", viewport)
+          capture_page("passkey-delete-reauth", "Passkey解除（再認証）", account_passkey_path(second), translate("passkeys.delete_title"), viewport)
+          assert_selector '[data-passkey-destruction-action-value="delete_passkey"]', count: 1
+          assert_account_settings_tabs_geometry
+          capture_page("account-delete-reauth", "アカウント削除（再認証）", delete_account_path, translate("accounts.delete.title"), viewport)
+          assert_selector '[data-passkey-destruction-action-value="delete_account"]', count: 1
+          assert_account_settings_tabs_geometry
+        end
+
+        def capture_passkey_signup(viewport)
+          install_virtual_authenticator(backup_eligible: false, backup_state: false)
+          visit new_user_registration_path
+          configure_webauthn_for_current_page
+          click_button translate("authentication.sign_up_with_passkey")
+          assert_current_path root_path
+          assert_selector ".alert-warning", text: translate("credential_risk.warning")
+          assert_link translate("credential_risk.add_login_method"), href: account_passkeys_path
+          assert_no_selector ".alert-warning .btn"
+          capture_current_page("passkey-registration-risk-warning", "Passkey登録後の紛失リスク警告", viewport)
+        end
+
+        def install_virtual_authenticator(backup_eligible:, backup_state:)
+          page.driver.with_playwright_page do |playwright_page|
+            cdp = playwright_page.context.new_cdp_session(playwright_page)
+            cdp.send_message("WebAuthn.enable")
+            cdp.send_message(
+              "WebAuthn.addVirtualAuthenticator",
+              params: {
+                options: {
+                  protocol: "ctap2",
+                  transport: "internal",
+                  hasResidentKey: true,
+                  hasUserVerification: true,
+                  isUserVerified: true,
+                  automaticPresenceSimulation: true,
+                  defaultBackupEligibility: backup_eligible,
+                  defaultBackupState: backup_state
+                }
+              }
+            )
+          end
+        end
+
+        def configure_webauthn_for_current_page
+          origin = URI(page.current_url)
+          WebAuthn.configure do |config|
+            config.allowed_origins = ["#{origin.scheme}://#{origin.host}:#{origin.port}"]
+            config.rp_id = origin.host
+          end
+        end
+
+        def create_evidence_user(identifier)
+          user = User.create!
+          user.passkey_credentials.create!(
+            name: "Passkey",
+            webauthn_id: "#{identifier}-#{user.id}",
+            public_key: "evidence-public-key",
+            sign_count: 0,
+            transports: ["internal"],
+            backup_eligible: false,
+            backup_state: false
+          )
+          user
+        end
+
         def capture_regular_user_navigation(viewport)
           Capybara.reset_sessions!
           viewport_size = VIEWPORTS.fetch(viewport)
           page.current_window.resize_to(viewport_size.fetch("width"), viewport_size.fetch("height"))
-          visit new_user_session_path
-          fill_in User.human_attribute_name(:login_id), with: @regular_user.login_id
-          fill_in User.human_attribute_name(:password), with: PASSWORD
-          click_button translate("devise_views.sessions.submit")
+          login_as(@regular_user, scope: :user)
+          visit root_path
           assert_current_path root_path
 
           visit root_path
@@ -10527,12 +12025,12 @@ def configure_evidence_capture
         end
 
         def capture_avatar_states(viewport)
-          capture_page("profile-boring-avatar", "プロフィール（自動生成アバター）", profile_path, translate("profiles.title"), viewport)
-          capture_page("profile-edit-boring-avatar", "プロフィール編集（自動生成アバター）", edit_profile_path, translate("profiles.edit_title"), viewport)
+          capture_page("profile-boring-avatar", "プロフィール（自動生成アバター）", host_routes.profile_path, translate("profiles.title"), viewport)
+          capture_page("profile-edit-boring-avatar", "プロフィール編集（自動生成アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport)
 
-          source = AvatarTestImage.image_file(width: 320, height: 180)
-          visit edit_profile_path
-          attach_file Profile.human_attribute_name(:avatar_upload), source.path
+          source = T.unsafe(Object.const_get("AvatarTestImage")).image_file(width: 320, height: 180)
+          visit host_routes.edit_profile_path
+          attach_file translate("activerecord.attributes.profile.avatar_upload"), source.path
           assert_selector "dialog#avatar-crop-modal[open]"
           if viewport == "desktop"
             [320, 390, 640, 960, 961].each do |width|
@@ -10555,19 +12053,19 @@ def configure_evidence_capture
           JAVASCRIPT
           assert_equal({ "width" => 512, "height" => 512, "type" => "image/png" }, cropped)
           click_button translate("common.save")
-          assert_current_path profile_path
+          assert_current_path host_routes.profile_path
           stored = Vips::Image.new_from_buffer(T.must(@user.profile).reload.avatar.blob.download, "")
           assert_equal [512, 512], [stored.width, stored.height]
 
           capture_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport)
           assert_avatar_image_geometry(40)
-          capture_page("profile-uploaded-avatar", "プロフィール（画像アバター）", profile_path, translate("profiles.title"), viewport)
+          capture_page("profile-uploaded-avatar", "プロフィール（画像アバター）", host_routes.profile_path, translate("profiles.title"), viewport)
           assert_avatar_image_geometry(40, 64)
-          capture_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", edit_profile_path, translate("profiles.edit_title"), viewport)
+          capture_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport)
           assert_avatar_image_geometry(40, 64)
 
           accept_confirm { click_button translate("profiles.avatar_delete") }
-          assert_current_path profile_path
+          assert_current_path host_routes.profile_path
           assert_selector ".alert.alert-success", text: translate("profiles.avatar.destroy.notice")
           capture_current_page("profile-avatar-deleted", "プロフィール（画像削除後）", viewport)
           capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, translate("home.heading"), viewport)
@@ -11174,17 +12672,6 @@ def configure_evidence_capture
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
-        def with_deterministic_login_id(login_id)
-          singleton_class = SecureRandom.singleton_class
-          original_method = SecureRandom.method(:hex)
-          singleton_class.define_method(:hex) do |length|
-            length == User::LOGIN_ID_BYTES ? login_id : original_method.call(length)
-          end
-          yield
-        ensure
-          T.must(singleton_class).define_method(:hex, T.must(original_method))
-        end
-
         def with_deterministic_secure_random
           singleton_class = SecureRandom.singleton_class
           original_method = SecureRandom.method(:urlsafe_base64)
@@ -11240,7 +12727,6 @@ def configure_evidence_capture
     disabled_constants << :ADDITIONAL_LOGIN_METHODS
     disabled_methods.concat(%i[
       capture_siwe_scenarios
-      assert_account_settings_tabs_geometry
       authenticate_with_siwe
       browser_post_json
     ])
@@ -11647,6 +13133,17 @@ def configure_sorbet_shims
 
       sig { params(options: T.untyped).void }
       def authenticate_user!(options = T.unsafe(nil)); end
+
+      sig { returns(T::Boolean) }
+      def user_signed_in?; end
+
+      sig { params(resource: User).void }
+      def remember_me(resource); end
+    end
+
+    module Warden
+      sig { void }
+      def self.test_reset!; end
     end
 
     class DeviseController < ActionController::Base
@@ -11660,6 +13157,12 @@ def configure_sorbet_shims
 
       sig { params(options: T.untyped).void }
       def authenticate_user!(options = T.unsafe(nil)); end
+
+      sig { returns(T::Boolean) }
+      def user_signed_in?; end
+
+      sig { params(resource: User).void }
+      def remember_me(resource); end
     end
 
     module ApplicationHelper
@@ -11676,10 +13179,6 @@ def configure_sorbet_shims
 
     class User
       include Devise::Models::Authenticatable
-      include Devise::Models::DatabaseAuthenticatable
-
-      sig { returns(T.nilable(String)) }
-      def password; end
     end
 
     class ActiveStorage::Attached::One
@@ -11911,8 +13410,9 @@ after_bundle do
     require "action_policy/test_helper"
     require "action_mailer"
     require "mail"
+    require "webauthn/fake_client"
   RUBY
-  run_checked "bin/tapioca gem action_policy actionmailer mail"
+  run_checked "bin/tapioca gem action_policy actionmailer mail webauthn"
   append_to_file "sorbet/config", <<~CONFIG
     --suppress-payload-superclass-redefinition-for=Net::IMAP::Literal
     --suppress-payload-superclass-redefinition-for=Net::IMAP::QuotedString

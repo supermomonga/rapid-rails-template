@@ -84,9 +84,9 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、themeのbase-100、primary、base-200、secondary、base-300に対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
-- login、passwordだけを入力するaccount登録、登録直後のユーザーID提示はauthentication sub-layoutで表示し、認証後のaccount設定はaccount sub-layoutで表示する。password recoveryは生成しない。
-- Deviseのsessionsとregistrationsのapplication Viewをgeneratorで展開し、loginではユーザーID＋password、account登録ではpassword＋password confirmation、登録完了とaccount設定では読み取り専用ユーザーIDを表示する。コピー操作はAPI optionに依存しない共通Stimulus controllerを使用する。
-- SIWE選択時だけlogin画面へ明示的な署名buttonを追加する。account navigationへ独立項目は追加せず、「アカウント設定」内の`tabs-lift`で「基本設定」と「EVMウォレットログイン」を切り替える。wallet管理はresourcefulな一覧・新規登録・編集・解除画面へ分離し、解除画面だけでcurrent passwordを要求する。
+- Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。
+- ブラウザ側はWebAuthn Level 3の`parseCreationOptionsFromJSON`、`parseRequestOptionsFromJSON`、credentialの`toJSON`を使用する。未対応ブラウザは利用不可を明示し、独自変換のfallbackは追加しない。
+- SIWE選択時だけsignup・login画面へ明示的な署名buttonを追加する。「アカウント設定」の`tabs-lift`でPasskeys、EVMウォレット、アカウント削除を切り替え、解除・削除は操作ごとの別資格情報による再認証画面へ分離する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
 - account sub-layoutの左ペインにはユーザー向けmenuだけを表示し、管理項目を混在させない。admin sub-layoutの左ペインには見出し「管理画面」と、ユーザー管理、固定ページ管理、FAQ管理、外部リンク設定の管理menuだけを表示し、account項目を混在させない。現在のControllerに対応するlinkは`menu-active`と`aria-current="page"`で示す。
@@ -199,7 +199,7 @@ factory_bot_rails
 
 Playwright driverはChromium・headlessへ固定し、`playwright-ruby-client`が公開する互換CLI versionを`package.json`へ導入します。実行時は生成アプリケーションの`node_modules/.bin/playwright`を明示し、`playwright install chromium`でbrowser binaryを準備します。必要な実行ファイルがない場合にSeleniumへ戻すフォールバックは設けません。
 
-UIエビデンスはCapybaraのroute遷移・入力・表示確認と、Playwright native pageのfull-page screenshotを組み合わせます。password基底の共通画面、SIWE固有差分、画像配信差分を重複しないscenario setとして1400×900と390×844で撮影します。共通画面は実際のDevise login form、SIWE差分はdatabase challengeと署名検証で同じUserへsessionを作成し、テスト専用認証routeは生成しません。
+UIエビデンスはCapybaraのroute遷移・入力・表示確認と、Playwright native pageのfull-page screenshotを組み合わせます。CDP virtual authenticatorによるPasskey登録とリスク警告、複数Passkey管理・削除時再認証、SIWE固有差分、画像配信差分を1400×900と390×844で撮影します。SIWE差分はdatabase challengeと署名検証で同じUserへsessionを作成し、テスト専用認証routeは生成しません。
 
 ## 型検査・Schema annotation・Linter・Formatter・開発支援
 
@@ -413,12 +413,12 @@ Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queu
 
 `rails new`開始前にSolid系のgenerator optionを確定し、標準の一括導入を`--skip-solid`で抑止したうえで、選択したcomponentだけを公式install generatorで導入します。Solid Cacheは既定で使用し、質問で無効化できます。
 
-## Deviseと追加SIWEログイン
+## Devise、Passkey、追加SIWEログイン
 
-Devise 5.0.4と`devise-i18n`は常設し、Userは標準の整数`id`、`login_id`、`encrypted_password`、`remember_created_at`を持ちます。`login_id`はUser作成時に`SecureRandom.hex(10)`から未使用の20文字小文字hexを生成し、client入力を採用せず、永続化後の変更をmodel validationで拒否します。databaseの`NOT NULL`制約とunique indexを最終的な一意性境界として維持します。
+Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`は常設し、Userは標準の整数`id`、ランダムで一意かつ変更不可の`webauthn_id`、`remember_created_at`を持ちます。`:database_authenticatable`、`:registerable`、`login_id`、`encrypted_password`、password recoveryは生成しません。`:passkey_authenticatable`と`:rememberable`を使い、検証成功後はDeviseの公開`sign_in` APIでsessionを確立します。
 
-会員登録はpasswordとpassword confirmationだけを受け付け、成功時はDeviseの自動ログイン状態を維持して`/users/sign_up/complete`へ遷移します。この認証必須画面とaccount設定だけが本人へ`login_id`を読み取り専用で表示し、保存を促す文面とコピー操作を提供します。関連・認可・監査は`users.id`だけを参照し、公開Profileと管理画面へ`login_id`を露出しません。email、password recovery列、`:recoverable`、`:validatable`は生成しません。
+Passkeyはdiscoverable credentialとして複数登録でき、platformとcross-platform authenticatorの両方を許可します。credential IDは全Userで一意、BEは登録後不変、`BE=0/BS=1`は全境界で拒否し、BS・sign count・last usedは認証成功時だけ更新します。全資格情報が`BS=0`のPasskey 1件だけなら、登録・ログイン成功後に追加資格情報へのwarningを1回表示します。
 
 `additional_login_methods`へ`siwe`を選択した場合だけ`siwe-rb` 0.2.xと`:siweable`を追加します。`:siweable`はDeviseの公開module登録契約に従ってmodel、controller、routeを登録し、Warden strategyは追加しません。mapper拡張をroutes評価前に読み込み、成功時は紐付いた既存Userの`active_for_authentication?`を確認してDeviseの`sign_in`を呼びます。
 
-`SiweIdentity`はUserごとに複数の名前付きEOA addressを保持します。登録時はpasswordや名前を入力させず、serverが`Wallet #<現在の登録数+1>`を設定します。名前の重複は許可し、一覧から分離された編集画面で後から変更できます。解除は編集画面へ混在させず、専用のresource詳細画面でcurrent passwordを検証してから実行します。一覧の各wallet rowは間隔を空け、編集と解除への遷移を個別に表示します。`SiweChallenge`はraw tokenのdigest、login/link purpose、link対象User、browser session binding、address、chain ID、server生成message、nonce、5分の期限、消費時刻をdatabaseで管理します。署名済みmessageからaddressを導出し、canonical originからdomainとURIを構成します。challengeの発行・検証はPOST＋CSRF、no-store、IP＋session rate limitで保護し、同一challengeの並行consumeは1件だけ成功します。RPC、ERC-1271、WalletConnect、外部SaaSは導入しません。
+`SiweIdentity`はUserごとに複数の名前付きEOA addressを保持します。signupは署名検証後にUserと最初のidentityをtransactionで作成し、loginは既存identityだけを受け付けます。名称変更はedit、解除は別資格情報による対象外再認証を行うshowへ分離します。WebAuthn／SIWE challengeはpurpose、User、browser session、5分の期限、消費時刻、破壊操作では削除対象へbindingし、transaction内で一度だけ消費します。最後の資格情報、対象自身による再認証、別User、期限切れ、replayを拒否します。RPC、ERC-1271、WalletConnect、外部SaaSは導入しません。

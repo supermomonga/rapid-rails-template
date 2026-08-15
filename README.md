@@ -56,7 +56,7 @@ mise run evidence-verify
 
 `--profile-features`は`screen_name`、`display_name`、`avatar`をカンマ区切りで指定します。既定では3機能すべてを選択し、`--profile-features=`と空値を指定するとProfile modelとプロフィール管理画面を生成しません。対話時はGumの複数選択を使用します。`screen_name`と`display_name`は選択時に必須かつ一意となり、User作成時にHaikunatorで自動生成されます。両方を選択した場合、`display_name`には自動生成した`screen_name`のCamelCaseを設定します。`avatar`を選択した場合、Cropper.js 2.1.1と汎用`image_crop` Stimulus controllerを生成し、プロフィールViewから1:1と512×512を設定してupload前にcropします。controllerはアスペクト比未指定の自由crop、任意比率、任意の出力幅・高さにも再利用でき、avatarのサーバー側policyは正方形を必須にします。画像未設定時はUser IDから決定的に生成したBoring Avatarを表示し、設定済み画像はプロフィール編集画面から削除してBoring Avatarへ戻せます。生成seedを保存する追加columnは作りません。
 
-DeviseによるユーザーID＋パスワード認証は全構成で必須です。会員登録ではpasswordとpassword confirmationだけを入力し、登録成功後に20文字の小文字hexで自動生成された変更不可のユーザーIDを表示します。ユーザーIDは登録完了画面と本人のアカウント設定からコピーでき、次回以降のログインに使用します。`--additional-login-methods`は既存Userへ後付けできる追加ログイン方法をカンマ区切りで指定し、現在は`siwe`だけを選択できます。既定値および`--additional-login-methods=`は追加方式なしです。SIWEを選択しても会員登録はpassword認証の基底フローで行い、ログイン後の「アカウント設定」内にある「EVMウォレットログイン」タブからEOA walletを追加します。登録名は`Wallet #<現在の登録数+1>`として自動設定され、編集画面で変更できます。解除は編集とは別画面で、現在のパスワードを確認して実行します。アプリ内の関連・認可・監査には`users.id`を使用し、`login_id`やwallet addressを内部識別子にしません。
+Passkeyによるパスワードレス認証は全構成で必須です。登録・ログインはいずれもユーザーIDを入力しないdiscoverable credential方式で、複数のPasskeyを登録できます。`--additional-login-methods`は追加方式をカンマ区切りで指定し、現在は`siwe`だけを選択できます。SIWE選択時は新規登録と既存Userへのログインを別ceremonyとして提供し、複数のEOA walletを登録できます。未知のwalletによるログインからUserを暗黙作成しません。Passkey・wallet・アカウントの削除は操作ごとのchallengeと別資格情報による再認証を要求し、最後のログイン手段は削除できません。全認証資格情報が未バックアップのPasskey 1件だけなら、ログイン後にPasskey一覧へ進む「ログイン方法を追加」リンク付きのwarningを表示します。アプリ内の関連・認可・監査には`users.id`を使用し、credential IDやwallet addressを内部識別子にしません。
 
 画像は全環境でActive Storage DBの専用SQLite databaseへ保存し、libvipsでvariantを生成します。画像URLはActive Storage公式のproxy routeへ解決し、productionではThrusterのHTTP cacheがwarmなrequestをPuma、Rails、SQLiteへ転送せず返します。生成アプリの`docs/image_delivery.md`にnamed variant、公開signed URL、cache制約を記載します。
 
@@ -70,9 +70,9 @@ DeviseによるユーザーID＋パスワード認証は全構成で必須です
 
 リポジトリの`mise run generate-sampleapp`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mail、Dokployを有効にした全部入りの日本語sampleを生成します。既存の`sample/`は削除してから同じ場所へ再生成します。
 
-生成後はsample専用のArticle scaffoldを`/articles`へ追加し、`sample_user_01`から`sample_user_10`までのscreen nameを持つ10ユーザーと、各ユーザー50件（公開40件、draft 10件）、合計500件の記事をseedします。ユーザーIDは通常のUser作成と同じく自動生成し、seed完了時にscreen name、ユーザーID、共通password `password123`の対応をterminalへ表示します。公開済み記事は誰でも閲覧でき、ログインしたユーザーは自分のdraftを含む記事の作成・閲覧・編集・削除ができます。このArticleはscaffold templateの確認用であり、配布用`bootstrap.rb`や`rake evidence:update`の生成アプリには含めません。
+生成後はsample専用のArticle scaffoldを`/articles`へ追加し、`sample_user_01`から`sample_user_10`までのscreen nameを持つ10ユーザーと、各ユーザー50件（公開40件、draft 10件）、合計500件の記事をseedします。各Userにはsample表示用のPasskey credentialを1件作成しますが、秘密鍵は保存しないため、そのcredentialを使った実ログインはできません。公開済み記事は誰でも閲覧でき、認証済みUserは自分のdraftを含む記事の作成・閲覧・編集・削除ができます。このArticleはscaffold templateの確認用であり、配布用`bootstrap.rb`や`rake evidence:update`の生成アプリには含めません。
 
-`rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、password基底の共通画面、SIWE、avatarを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。さらに実際のThrusterを非特権portで起動し、Active Storage variantがcache miss後の再requestでhitすることを検証します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、Sorbet・RBI検証、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
+`rake evidence:update`（`mise run evidence-update`）は同じ全部入り日本語sampleを1回だけ生成し、Passkey登録・紛失リスク警告・複数Passkey管理・削除時再認証、SIWE、avatarを含む全シナリオをCapybaraとPlaywright Chromiumで一括撮影します。さらに実際のThrusterを非特権portで起動し、Active Storage variantがcache miss後の再requestでhitすることを検証します。成果物は`docs/evidence/full-ja`へ保存され、生成、全Rails test、Sorbet・RBI検証、RuboCop、撮影、整合性検証が完了するまで既存エビデンスは置換しません。
 
 `rake evidence:verify`（`mise run evidence-verify`）はブラウザを起動せず、生成元fingerprint、manifest、README、PNGの欠落・余剰・SHA-256・寸法を検証します。通常のリポジトリMinitestにも同じ検証を含むため、テンプレート変更後にエビデンスを更新し忘れるとテストが失敗します。MD内のbase commitは追跡情報であり、鮮度判定には未コミット変更も反映できる内容fingerprintを使用します。
 

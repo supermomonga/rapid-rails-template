@@ -74,7 +74,7 @@ Rails 8.1.3の`bin/rails app:templates:copy`で取得した標準ERB templateを
 
 全生成Viewの主見出しは`content_for :page_title`へ文字列を1回だけ設定し、Viewまたは`with_menu` layoutの`h1`とdocument titleから再利用します。document titleと`og:title`は通常ページで「page title | application name」、`page_title`を持たない公開homeだけapplication nameとします。主見出し直前のeyebrowは置かず、カードや機能紹介など主見出しではないsection headingは維持します。
 
-account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`、Web Push使用時の通知には`bell`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目だけを表示します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
+account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`、Web Push使用時の通知には`bell`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。accountとadminの`with_menu` navigationは960px以下でカテゴリ名を横スクロール領域の上へ固定表示し、リンク一覧をdaisyUIの`menu-horizontal`で1段表示します。はみ出したリンクだけをnavigation内で横スクロールさせ、page全体には横overflowを発生させません。961px以上ではカテゴリ名を`menu-title`として含む`menu-vertical`へ戻し、従来の2column sidebarを維持します。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目だけを表示します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
 

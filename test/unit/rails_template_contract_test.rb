@@ -1347,6 +1347,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '{ "account" => account_path, "admin" => admin_pages_path }.each'
     assert_includes evidence, "[320, 390, 640, 960, 961].each"
     assert_includes evidence, "visit path"
+    assert_includes evidence, '"#{area} with-menu should use a horizontal menu at #{width}px"'
+    assert_includes evidence, '"#{area} with-menu mobile category should be visible at #{width}px"'
+    assert_includes evidence, '"#{area} with-menu category should remain fixed while scrolling at #{width}px"'
+    assert_includes evidence, '"#{area} with-menu should be horizontally scrollable at #{width}px"'
+    assert_includes evidence, '"#{area} with-menu should use a vertical menu at #{width}px"'
     assert_includes evidence, '"#{area} with-menu layout should use one column at #{width}px"'
     assert_includes evidence, '"#{area} with-menu layout should use two columns at #{width}px"'
     assert_includes evidence, "def assert_admin_navigation_active"
@@ -1451,6 +1456,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes footer, "Rails 8.1 / Tailwind CSS 4 / daisyUI 5"
 
     assert_class_tokens with_menu_layout, "mx-auto", "w-full", "max-w-6xl", "px-5"
+    assert_class_tokens with_menu_layout, "min-w-0", "h-fit"
     assert_includes with_menu_layout, 'data-layout="with-menu"'
     assert_includes with_menu_layout, 'min-[961px]:grid-cols-[220px_minmax(0,1fr)]'
     assert_includes with_menu_layout, '<%= yield :with_menu_navigation %>'
@@ -1463,14 +1469,24 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes with_menu_layout, '<%= render template: "layouts/application" %>'
     %w[account admin controller_path layout_name].each { |consumer_detail| refute_includes with_menu_layout, consumer_detail }
 
-    assert_class_tokens account_layout, "menu"
-    assert_class_tokens account_layout, "menu-title"
+    assert_class_tokens account_layout, "menu", "menu-horizontal", "min-[961px]:menu-vertical"
+    assert_class_tokens account_layout, "w-max", "min-w-full", "min-[961px]:w-full"
+    assert_class_tokens account_layout, "overflow-x-auto", "min-[961px]:overflow-visible"
+    assert_class_tokens account_layout, "menu-title", "max-[961px]:hidden"
+    assert_includes account_layout, "data-with-menu-mobile-category"
+    assert_includes account_layout, "data-with-menu-scroll"
+    assert_includes account_layout, "data-with-menu-items"
     assert_includes account_layout, '<% content_for :with_menu_navigation, flush: true do %>'
     assert_includes account_layout, '<%= render "shared/account_navigation" %>'
     assert_includes account_layout, '<%= render layout: "layouts/with_menu" do %>'
     refute_includes account_layout, "grid-cols"
-    assert_class_tokens admin_layout, "menu"
-    assert_class_tokens admin_layout, "menu-title"
+    assert_class_tokens admin_layout, "menu", "menu-horizontal", "min-[961px]:menu-vertical"
+    assert_class_tokens admin_layout, "w-max", "min-w-full", "min-[961px]:w-full"
+    assert_class_tokens admin_layout, "overflow-x-auto", "min-[961px]:overflow-visible"
+    assert_class_tokens admin_layout, "menu-title", "max-[961px]:hidden"
+    assert_includes admin_layout, "data-with-menu-mobile-category"
+    assert_includes admin_layout, "data-with-menu-scroll"
+    assert_includes admin_layout, "data-with-menu-items"
     assert_includes admin_layout, '<% content_for :with_menu_navigation, flush: true do %>'
     assert_includes admin_layout, '<%= render "shared/admin_navigation" %>'
     assert_includes admin_layout, '<%= render layout: "layouts/with_menu" do %>'

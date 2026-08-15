@@ -8342,7 +8342,7 @@ def configure_default_views
   create_file "app/views/layouts/_with_menu.html.erb", <<~ERB, force: true
     <% content_for :content, flush: true do %>
       <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="with-menu">
-        <aside class="h-fit"><%= yield :with_menu_navigation %></aside>
+        <aside class="min-w-0 h-fit"><%= yield :with_menu_navigation %></aside>
         <div class="min-w-0 [container-type:inline-size]">
           <h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
           <%= yield %>
@@ -8355,11 +8355,14 @@ def configure_default_views
   create_file "app/views/shared/_account_navigation.html.erb", account_navigation_items, force: true
   create_file "app/views/layouts/_account_shell.html.erb", <<~ERB, force: true
     <% content_for :with_menu_navigation, flush: true do %>
-      <nav aria-label="<%= t('navigation.account_menu') %>">
-        <ul class="menu w-full rounded-box bg-base-100">
-          <li class="menu-title"><span><%= t("navigation.dashboard") %></span></li>
-          <%= render "shared/account_navigation" %>
-        </ul>
+      <nav class="w-full rounded-box bg-base-100" aria-label="<%= t('navigation.account_menu') %>">
+        <p class="px-4 pt-3 text-sm font-semibold text-neutral min-[961px]:hidden" data-with-menu-mobile-category><%= t("navigation.dashboard") %></p>
+        <div class="overflow-x-auto min-[961px]:overflow-visible" data-with-menu-scroll>
+          <ul class="menu menu-horizontal w-max min-w-full min-[961px]:menu-vertical min-[961px]:w-full" data-with-menu-items>
+            <li class="menu-title max-[961px]:hidden"><span><%= t("navigation.dashboard") %></span></li>
+            <%= render "shared/account_navigation" %>
+          </ul>
+        </div>
       </nav>
     <% end %>
     <%= render layout: "layouts/with_menu" do %>
@@ -8395,11 +8398,14 @@ def configure_default_views
   create_file "app/views/shared/_admin_navigation.html.erb", admin_navigation_items, force: true
   create_file "app/views/layouts/admin.html.erb", <<~ERB, force: true
     <% content_for :with_menu_navigation, flush: true do %>
-      <nav aria-label="<%= application_translate('navigation.admin_menu') %>">
-        <ul class="menu w-full rounded-box bg-base-100">
-          <li class="menu-title"><span><%= application_translate("navigation.admin") %></span></li>
-          <%= render "shared/admin_navigation" %>
-        </ul>
+      <nav class="w-full rounded-box bg-base-100" aria-label="<%= application_translate('navigation.admin_menu') %>">
+        <p class="px-4 pt-3 text-sm font-semibold text-neutral min-[961px]:hidden" data-with-menu-mobile-category><%= application_translate("navigation.admin") %></p>
+        <div class="overflow-x-auto min-[961px]:overflow-visible" data-with-menu-scroll>
+          <ul class="menu menu-horizontal w-max min-w-full min-[961px]:menu-vertical min-[961px]:w-full" data-with-menu-items>
+            <li class="menu-title max-[961px]:hidden"><span><%= application_translate("navigation.admin") %></span></li>
+            <%= render "shared/admin_navigation" %>
+          </ul>
+        </div>
       </nav>
     <% end %>
     <%= render layout: "layouts/with_menu" do %>
@@ -12095,7 +12101,6 @@ def configure_evidence_capture
           perform_enqueued_jobs(only: ActiveStorage::TransformJob)
           stored = Vips::Image.new_from_buffer(T.must(@user.profile).reload.avatar.blob.download, "")
           assert_equal [512, 512], [stored.width, stored.height]
-
           capture_avatar_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport, [40])
           capture_avatar_page("profile-uploaded-avatar", "プロフィール（画像アバター）", host_routes.profile_path, translate("profiles.title"), viewport, [40, 64])
           capture_avatar_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport, [40, 64])
@@ -12384,7 +12389,7 @@ def configure_evidence_capture
 
         def assert_admin_navigation_active(label)
           assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"])
-          assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] li.menu-title), text: host_translate("navigation.admin"), count: 1
+          assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] :is([data-with-menu-mobile-category], li.menu-title)), text: host_translate("navigation.admin"), count: 1
           assert_no_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.account_menu")}"])
           assert_selector '[data-layout="with-menu"] a.menu-active[aria-current="page"]', text: label, count: 1
           assert_selector 'header li.menu-title', text: host_translate("navigation.admin"), count: 1, visible: :all
@@ -12448,8 +12453,15 @@ def configure_evidence_capture
                 playwright_page.evaluate(<<~JAVASCRIPT)
                   () => {
                     const layout = document.querySelector('[data-layout="with-menu"]')
-                    const sidebar = layout.querySelector(':scope > aside').getBoundingClientRect()
+                    const sidebarElement = layout.querySelector(':scope > aside')
+                    const sidebar = sidebarElement.getBoundingClientRect()
                     const content = layout.querySelector(':scope > div').getBoundingClientRect()
+                    const mobileCategory = sidebarElement.querySelector('[data-with-menu-mobile-category]')
+                    const scroll = sidebarElement.querySelector('[data-with-menu-scroll]')
+                    const menu = sidebarElement.querySelector('[data-with-menu-items]')
+                    const desktopTitle = menu.querySelector(':scope > .menu-title')
+                    const mobileCategoryLeftBeforeScroll = mobileCategory.getBoundingClientRect().left
+                    scroll.scrollLeft = scroll.scrollWidth
                     return {
                       documentWidth: document.documentElement.scrollWidth,
                       viewportWidth: window.innerWidth,
@@ -12457,7 +12469,16 @@ def configure_evidence_capture
                       sidebarBottom: sidebar.bottom,
                       sidebarRight: sidebar.right,
                       contentTop: content.top,
-                      contentLeft: content.left
+                      contentLeft: content.left,
+                      menuDirection: getComputedStyle(menu).flexDirection,
+                      mobileCategoryDisplay: getComputedStyle(mobileCategory).display,
+                      desktopTitleDisplay: getComputedStyle(desktopTitle).display,
+                      scrollOverflowX: getComputedStyle(scroll).overflowX,
+                      scrollClientWidth: scroll.clientWidth,
+                      scrollWidth: scroll.scrollWidth,
+                      scrollLeft: scroll.scrollLeft,
+                      mobileCategoryLeftBeforeScroll,
+                      mobileCategoryLeftAfterScroll: mobileCategory.getBoundingClientRect().left
                     }
                   }
                 JAVASCRIPT
@@ -12466,9 +12487,32 @@ def configure_evidence_capture
               assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
                 "#{area} with-menu layout horizontal overflow at #{width}px"
               if width < 961
+                assert_equal "row", geometry.fetch("menuDirection"),
+                  "#{area} with-menu should use a horizontal menu at #{width}px"
+                refute_equal "none", geometry.fetch("mobileCategoryDisplay"),
+                  "#{area} with-menu mobile category should be visible at #{width}px"
+                assert_equal "none", geometry.fetch("desktopTitleDisplay"),
+                  "#{area} with-menu desktop title should be hidden at #{width}px"
+                assert_equal "auto", geometry.fetch("scrollOverflowX"),
+                  "#{area} with-menu should scroll internally at #{width}px"
+                assert_in_delta geometry.fetch("mobileCategoryLeftBeforeScroll"),
+                  geometry.fetch("mobileCategoryLeftAfterScroll"), 0.5,
+                  "#{area} with-menu category should remain fixed while scrolling at #{width}px"
                 assert_operator geometry.fetch("contentTop"), :>=, geometry.fetch("sidebarBottom"),
                   "#{area} with-menu layout should use one column at #{width}px"
+                if width <= 390
+                  assert_operator geometry.fetch("scrollWidth"), :>, geometry.fetch("scrollClientWidth"),
+                    "#{area} with-menu should overflow its scroll region at #{width}px"
+                  assert_operator geometry.fetch("scrollLeft"), :>, 0,
+                    "#{area} with-menu should be horizontally scrollable at #{width}px"
+                end
               else
+                assert_equal "column", geometry.fetch("menuDirection"),
+                  "#{area} with-menu should use a vertical menu at #{width}px"
+                assert_equal "none", geometry.fetch("mobileCategoryDisplay"),
+                  "#{area} with-menu mobile category should be hidden at #{width}px"
+                refute_equal "none", geometry.fetch("desktopTitleDisplay"),
+                  "#{area} with-menu desktop title should be visible at #{width}px"
                 assert_in_delta geometry.fetch("sidebarTop"), geometry.fetch("contentTop"), 0.5
                 assert_operator geometry.fetch("contentLeft"), :>=, geometry.fetch("sidebarRight"),
                   "#{area} with-menu layout should use two columns at #{width}px"

@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `a3c43f2f662023363a5d289288bad4024194fc0c1dc609deb09932d920d861ad`
-- Base commit: `1245441bad252387e15b8eee0f0ae06aa1ad8af8`
+- Source fingerprint: `c5d59148c9852331ed3049740696f48f730864cbecdaacd4070c93c0c21ca63d`
+- Base commit: `2fa30771825ab12b7548a7b8d9f0a1aefc78392e`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`

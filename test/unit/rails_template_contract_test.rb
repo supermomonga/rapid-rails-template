@@ -480,6 +480,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes jobs_index, 'class="overflow-x-auto"'
     assert_includes jobs_index, '<% content_for :page_title, "#{jobs_status.titleize} jobs" %>'
     assert_includes jobs_index, 'class="table min-w-max"'
+    assert_includes jobs_index, '<section class="card-rapid" aria-label="Job filters">'
+    assert_includes jobs_index, '<div class="card-body">'
+    refute_includes jobs_index, "content_for :page_actions_secondary"
     assert_includes jobs_index, 'class: "btn btn-error btn-rapid"'
     assert_includes jobs_index, 'class: "btn btn-warning btn-rapid"'
     refute_includes jobs_index, "btn-sm"
@@ -1695,7 +1698,7 @@ class RailsTemplateContractTest < Minitest::Test
       refute_includes view, "content_for :page_actions_secondary"
     end
     assert_includes application_selection, "content_for :page_actions_secondary"
-    assert_includes jobs_index, "content_for :page_actions_secondary"
+    refute_includes jobs_index, "content_for :page_actions_secondary"
     assert_includes jobs_index, "content_for :page_actions_primary"
 
     refute_includes job_show, "content_for :page_actions_primary"

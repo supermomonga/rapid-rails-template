@@ -10377,8 +10377,8 @@ def install_job_operations
     <span class="badge <%= job_operation_status_class(jobs_status) %>"><%= jobs_status %></span>
 
     <% unless @jobs_page.empty? && !active_filters? %>
-      <% content_for :page_actions_secondary do %>
-        <section aria-label="Job filters">
+      <section class="card-rapid" aria-label="Job filters">
+        <div class="card-body">
           <%= form_for :filter, url: application_jobs_path(MissionControl::Jobs::Current.application, jobs_status), method: :get,
             html: { class: "grid gap-4 md:grid-cols-2" },
             data: { controller: "form", action: "input->form#debouncedSubmit" } do |form| %>
@@ -10407,8 +10407,8 @@ def install_job_operations
               <%= link_to "Clear filters", application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: "btn btn-rapid" %>
             </div>
           <% end %>
-        </section>
-      <% end %>
+        </div>
+      </section>
     <% end %>
 
     <% if jobs_status.failed? && !@jobs_page.empty? %>
@@ -10822,13 +10822,12 @@ def install_job_operations
           server_id: server.to_param
         )
         assert_response :success
-        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"] section[aria-label="Job filters"]', count: 1
-        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"] section[aria-label="Job filters"] > .card-rapid', count: 0
-        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"] section[aria-label="Job filters"] > .card-body', count: 0
+        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"]', count: 0
         assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"]', count: 1 do
           assert_select "form button.btn.btn-rapid", text: /Discard all/, count: 1
           assert_select "form button.btn.btn-rapid", text: /Retry all/, count: 1
         end
+        assert_select '.tab-content > [data-mission-control-jobs-root] > section.card-rapid[aria-label="Job filters"] > .card-body > form.grid', count: 1
         assert_select '[data-mission-control-jobs-root] > .card-rapid > .card-body > .overflow-x-auto > table.table.min-w-max', count: 1
         assert_select '[data-mission-control-jobs-root] table form button.btn.btn-rapid', minimum: 2
         assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
@@ -12964,9 +12963,10 @@ def configure_evidence_capture
                   const root = tabContent.querySelector("[data-mission-control-jobs-root]")
                   const actionsContainer = tabContent.querySelector(':scope > [data-page-actions-container="tab"]')
                   const actions = actionsContainer.querySelector('[data-page-actions]')
-                  const secondary = actions.querySelector('[data-page-actions-column="secondary"]')
                   const primary = actions.querySelector('[data-page-actions-column="primary"]')
                   const actionButtons = Array.from(actions.querySelectorAll(".btn"))
+                  const filter = root.querySelector(':scope > section[aria-label="Job filters"]')
+                  const tableCard = root.querySelector(':scope > .card-rapid:has(table)')
                   const tableScroller = root.querySelector(".card-rapid > .card-body > .overflow-x-auto")
                   return {
                     activeTabBottom: activeTabRect.bottom,
@@ -12987,16 +12987,15 @@ def configure_evidence_capture
                     tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
                     actionContainerIsFirst: tabContent.firstElementChild === actionsContainer,
                     actionColumnCount: getComputedStyle(actions).gridTemplateColumns.split(" ").length,
+                    secondaryCount: actions.querySelectorAll('[data-page-actions-column="secondary"]').length,
                     actionButtonsUseRapid: actionButtons.every((button) => button.classList.contains("btn-rapid")),
                     actionButtonFontSizes: [...new Set(actionButtons.map((button) => getComputedStyle(button).fontSize))],
-                    filterHasCardShell: secondary.querySelector(".card-rapid, .card-body") !== null,
+                    filterInsideContent: filter.parentElement === root,
+                    filterUsesCardShell: filter.classList.contains("card-rapid") && filter.firstElementChild.classList.contains("card-body"),
+                    filterTop: filter.getBoundingClientRect().top,
+                    tableCardTop: tableCard.getBoundingClientRect().top,
                     tableScrollerScrollWidth: tableScroller.scrollWidth,
-                    tableScrollerClientWidth: tableScroller.clientWidth,
-                    secondaryLeft: secondary.getBoundingClientRect().left,
-                    secondaryTop: secondary.getBoundingClientRect().top,
-                    secondaryBottom: secondary.getBoundingClientRect().bottom,
-                    primaryLeft: primary.getBoundingClientRect().left,
-                    primaryTop: primary.getBoundingClientRect().top
+                    tableScrollerClientWidth: tableScroller.clientWidth
                   }
                 }
               JAVASCRIPT
@@ -13029,22 +13028,22 @@ def configure_evidence_capture
               "Mission Control Jobs page action buttons should use btn-rapid at #{width}px"
             assert_equal ["16px"], failed_geometry.fetch("actionButtonFontSizes"),
               "Mission Control Jobs page action buttons should use the shared font size at #{width}px"
-            refute failed_geometry.fetch("filterHasCardShell"),
-              "Mission Control Jobs filters should not add a nested card shell at #{width}px"
+            assert_equal 0, failed_geometry.fetch("secondaryCount"),
+              "Mission Control Jobs complex filters should stay out of secondary page actions at #{width}px"
+            assert failed_geometry.fetch("filterInsideContent"),
+              "Mission Control Jobs complex filters should be in the content area at #{width}px"
+            assert failed_geometry.fetch("filterUsesCardShell"),
+              "Mission Control Jobs complex filters should use the shared card shell at #{width}px"
+            assert_operator failed_geometry.fetch("tableCardTop"), :>, failed_geometry.fetch("filterTop"),
+              "Mission Control Jobs results should follow complex filters at #{width}px"
             if width < 640
+              assert_equal 1, failed_geometry.fetch("actionColumnCount"),
+                "Mission Control Jobs page actions should use one column at #{width}px"
               assert_operator failed_geometry.fetch("tableScrollerScrollWidth"), :>, failed_geometry.fetch("tableScrollerClientWidth"),
                 "Mission Control Jobs failed table should scroll horizontally at #{width}px"
-              assert_equal 1, failed_geometry.fetch("actionColumnCount"),
-                "Mission Control Jobs page actions should stack at #{width}px"
-              assert_operator failed_geometry.fetch("primaryTop"), :>=, failed_geometry.fetch("secondaryBottom"),
-                "Mission Control Jobs primary actions should follow secondary actions at #{width}px"
             else
               assert_equal 2, failed_geometry.fetch("actionColumnCount"),
-                "Mission Control Jobs page actions should use two columns at #{width}px"
-              assert_in_delta failed_geometry.fetch("secondaryTop"), failed_geometry.fetch("primaryTop"), 1,
-                "Mission Control Jobs action columns should align at #{width}px"
-              assert_operator failed_geometry.fetch("primaryLeft"), :>, failed_geometry.fetch("secondaryLeft"),
-                "Mission Control Jobs primary actions should be on the right at #{width}px"
+                "Mission Control Jobs page actions should keep the shared desktop grid at #{width}px"
             end
           end
         ensure

@@ -7922,9 +7922,9 @@ def configure_default_views
     ].compact.join(" || ")
     <<~ERB
       <% if #{condition} %>
-        <li class="menu-title">
-          <span>
-      #{display_name.lines.map { |line| "      #{line}" }.join}#{screen_name.lines.map { |line| "      #{line}" }.join}    </span>
+        <li>
+          <div class="menu-title">
+      #{display_name.lines.map { |line| "      #{line}" }.join}#{screen_name.lines.map { |line| "      #{line}" }.join}    </div>
         </li>
       <% end %>
     ERB
@@ -8359,7 +8359,7 @@ def configure_default_views
         <p class="px-4 pt-3 text-sm font-semibold text-neutral min-[961px]:hidden" data-with-menu-mobile-category><%= t("navigation.dashboard") %></p>
         <div class="overflow-x-auto min-[961px]:overflow-visible" data-with-menu-scroll>
           <ul class="menu menu-horizontal w-max min-w-full min-[961px]:menu-vertical min-[961px]:w-full" data-with-menu-items>
-            <li class="menu-title max-[961px]:hidden"><span><%= t("navigation.dashboard") %></span></li>
+            <li class="menu-title max-[961px]:hidden"><%= t("navigation.dashboard") %></li>
             <%= render "shared/account_navigation" %>
           </ul>
         </div>
@@ -8402,7 +8402,7 @@ def configure_default_views
         <p class="px-4 pt-3 text-sm font-semibold text-neutral min-[961px]:hidden" data-with-menu-mobile-category><%= application_translate("navigation.admin") %></p>
         <div class="overflow-x-auto min-[961px]:overflow-visible" data-with-menu-scroll>
           <ul class="menu menu-horizontal w-max min-w-full min-[961px]:menu-vertical min-[961px]:w-full" data-with-menu-items>
-            <li class="menu-title max-[961px]:hidden"><span><%= application_translate("navigation.admin") %></span></li>
+            <li class="menu-title max-[961px]:hidden"><%= application_translate("navigation.admin") %></li>
             <%= render "shared/admin_navigation" %>
           </ul>
         </div>
@@ -8424,12 +8424,20 @@ def configure_default_views
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
     #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if #{admin_controller_condition} %>
-                <li class="menu-title"><span><%= application_translate("navigation.admin") %></span></li>
+                <li class="menu-title"><%= application_translate("navigation.admin") %></li>
                 <%= render "shared/admin_navigation" %>
               <% else %>
                 <%= render "shared/account_navigation" %>
               <% end %>
-              <li class="border-t border-base-300"><%= link_to t("navigation.sign_out"), #{logout_path}, data: { turbo_method: :delete } %></li>
+              <li role="separator"></li>
+              <li>
+                <%= link_to #{logout_path}, data: { turbo_method: :delete } do %>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9m9.75 0-3-3m3 3-3 3" />
+                  </svg>
+                  <%= t("navigation.sign_out") %>
+                <% end %>
+              </li>
               </ul>
             </details>
           </div>
@@ -8652,14 +8660,27 @@ def configure_default_views
       end
     RUBY
   end
+  profile_identity_selector = "header ul.menu.dropdown-content > li > .menu-title"
   profile_identity_assertion = if display_name_enabled && screen_name_enabled
-    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', text: /Sample User.*@sample_user/m, count: 1\n"
+    <<~RUBY.lines.map { |line| "      #{line}" }.join
+      assert_select '#{profile_identity_selector}', text: /Sample User.*@sample_user/m, count: 1 do
+        assert_select "a, button", count: 0
+      end
+    RUBY
   elsif display_name_enabled
-    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', text: 'Sample User', count: 1\n"
+    <<~RUBY.lines.map { |line| "      #{line}" }.join
+      assert_select '#{profile_identity_selector}', text: "Sample User", count: 1 do
+        assert_select "a, button", count: 0
+      end
+    RUBY
   elsif screen_name_enabled
-    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', text: '@sample_user', count: 1\n"
+    <<~RUBY.lines.map { |line| "      #{line}" }.join
+      assert_select '#{profile_identity_selector}', text: "@sample_user", count: 1 do
+        assert_select "a, button", count: 0
+      end
+    RUBY
   else
-    "      assert_select 'header ul.menu.dropdown-content > li.menu-title', count: 0\n"
+    "      assert_select '#{profile_identity_selector}', count: 0\n"
   end
   profile_page_assertions = if profile_enabled
     form_assertions = []
@@ -8924,6 +8945,11 @@ def configure_default_views
         get account_url
         assert_response :success
         assert_select 'nav[aria-label=?] a.menu-active[href=?]', I18n.t("navigation.account_menu"), account_path, count: 1
+    #{profile_trigger_assertion}#{profile_identity_assertion}        assert_select 'header ul.menu.dropdown-content > li[role="separator"]:empty', count: 1
+        assert_select 'header ul.menu.dropdown-content a[href=?][data-turbo-method="delete"]', destroy_user_session_path,
+          text: I18n.t("navigation.sign_out"), count: 1 do
+          assert_select 'svg.size-5[aria-hidden="true"][data-slot="icon"]', count: 1
+        end
 
         get account_passkeys_url
         assert_response :success
@@ -11943,11 +11969,68 @@ def configure_evidence_capture
           )
           assert_admin_navigation_active(translate("content_management.admin.footer_settings.title"))
 
-          return unless viewport == "mobile"
-
           visit root_path
           find("header details.dropdown > summary", visible: :visible).click
-          capture_current_page("navigation-authenticated-open", "モバイルメニュー（ログイン済み）", viewport)
+          assert_account_menu_visual_state
+          capture_current_page("navigation-authenticated-open", "アカウントメニュー（ログイン済み）", viewport)
+        end
+
+        def assert_account_menu_visual_state
+          identity_selector = "header ul.menu.dropdown-content > li > .menu-title"
+          separator_selector = 'header ul.menu.dropdown-content > li[role="separator"]:empty'
+          assert_selector identity_selector, text: /Evidence User.*@evidence_user/m, count: 1
+          assert_no_selector "#{identity_selector} a, #{identity_selector} button"
+          assert_selector separator_selector, count: 1
+          assert_selector %(
+            header ul.menu.dropdown-content
+            a[href="#{host_routes.destroy_user_session_path}"]
+            svg.size-5[aria-hidden="true"][data-slot="icon"]
+          ).squish, count: 1
+
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            identity = playwright_page.locator(identity_selector)
+            read_identity_style = <<~JAVASCRIPT
+              (element) => {
+                const style = getComputedStyle(element)
+                return {
+                  color: style.color,
+                  backgroundColor: style.backgroundColor,
+                  cursor: style.cursor
+                }
+              }
+            JAVASCRIPT
+            before_hover = identity.evaluate(read_identity_style)
+            identity.hover
+            after_hover = identity.evaluate(read_identity_style)
+            separator = playwright_page.locator(separator_selector)
+            separator_geometry = separator.evaluate(<<~JAVASCRIPT)
+              (element) => {
+                const style = getComputedStyle(element)
+                const bounds = element.getBoundingClientRect()
+                const menuBounds = element.parentElement.getBoundingClientRect()
+                return {
+                  height: bounds.height,
+                  width: bounds.width,
+                  menuWidth: menuBounds.width,
+                  marginTop: parseFloat(style.marginTop),
+                  marginBottom: parseFloat(style.marginBottom)
+                }
+              }
+            JAVASCRIPT
+            {
+              "beforeHover" => before_hover,
+              "afterHover" => after_hover,
+              "separator" => separator_geometry
+            }
+          end
+
+          assert_equal geometry.fetch("beforeHover"), geometry.fetch("afterHover")
+          refute_equal "pointer", geometry.dig("afterHover", "cursor")
+          separator = geometry.fetch("separator")
+          assert_in_delta 1, separator.fetch("height"), 0.1
+          assert_in_delta separator.fetch("marginTop"), separator.fetch("marginBottom"), 0.1
+          assert_operator separator.fetch("width"), :>, 0
+          assert_operator separator.fetch("width"), :<, separator.fetch("menuWidth")
         end
 
         def capture_passkey_pages(viewport)

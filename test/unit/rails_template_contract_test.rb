@@ -1531,7 +1531,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'controller_path.start_with?("maintenance_tasks/")'
     assert_includes header, 'application_translate("navigation.admin")'
     assert_includes header, '<%= render "shared/account_navigation" %>'
-    refute_includes @source, '<li class="menu-title"><span>管理</span></li>'.b
+    assert_includes header, '<li class="menu-title"><%= application_translate("navigation.admin") %></li>'
+    assert_includes @source, '<div class="menu-title">'
+    refute_match(/<li class="menu-title[^\"]*">\s*<span>/, @source)
+    assert_includes header, '<li role="separator"></li>'
+    refute_includes header, "border-t border-base-300"
+    assert_includes header, '<%= link_to #{logout_path}, data: { turbo_method: :delete } do %>'
+    assert_includes header, 'M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3'
+    assert_match(/<svg[^>]+class="size-5"[^>]+aria-hidden="true"[^>]+data-slot="icon">\s*<path[^>]+M15\.75 9V5\.25/m, header)
     assert_includes header, 'data: { turbo_method: :delete }'
     assert_includes @source, 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'
     assert_includes @source, 't("common.menu")'

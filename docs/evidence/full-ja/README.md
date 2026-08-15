@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `c5d59148c9852331ed3049740696f48f730864cbecdaacd4070c93c0c21ca63d`
-- Base commit: `2fa30771825ab12b7548a7b8d9f0a1aefc78392e`
+- Source fingerprint: `f05a4ba1610549f745014ed70211341739fc949753b9c9a61600adeea72af834`
+- Base commit: `b83332331893aa5094bc8af7c83c84240be4def3`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -246,6 +246,12 @@
 |---|---|
 |![外部リンク設定 (desktop)](admin-footer-setting--desktop.png)|![外部リンク設定 (mobile)](admin-footer-setting--mobile.png)|
 
+## アカウントメニュー（ログイン済み）
+
+|Desktop|Mobile|
+|---|---|
+|![アカウントメニュー（ログイン済み） (desktop)](navigation-authenticated-open--desktop.png)|![アカウントメニュー（ログイン済み） (mobile)](navigation-authenticated-open--mobile.png)|
+
 ## 一般Userのナビゲーション
 
 |Desktop|Mobile|
@@ -269,12 +275,6 @@
 ### Mobile
 
 ![運用タスクのモバイルメニュー (mobile)](admin-maintenance-tasks-navigation-open--mobile.png)
-
-## モバイルメニュー（ログイン済み）
-
-### Mobile
-
-![モバイルメニュー（ログイン済み） (mobile)](navigation-authenticated-open--mobile.png)
 
 ## Ethereumでログイン
 

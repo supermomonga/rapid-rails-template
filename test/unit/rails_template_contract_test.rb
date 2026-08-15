@@ -127,7 +127,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper_test, 'assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "max-w-[100cqw]"'
     assert_includes helper_test, 'assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "[contain:inline-size]"'
     assert_includes account_tabs, "with_tab(tabs:"
-    assert_includes job_tabs, "with_tab(tabs:, size: :xs)"
+    assert_includes job_tabs, "with_tab(tabs:)"
+    refute_includes job_tabs, "size:"
     refute_includes account_tabs, "tab-content"
     refute_includes job_tabs, "tab-content"
     assert_includes agents, "ApplicationHelper#with_tab"
@@ -405,6 +406,21 @@ class RailsTemplateContractTest < Minitest::Test
     job_show = generated_file_source("app/views/mission_control/jobs/jobs/show.html.erb")
     queues_index = generated_file_source("app/views/mission_control/jobs/queues/index.html.erb")
     pagination = generated_file_source("app/views/mission_control/jobs/shared/_pagination_toolbar.html.erb")
+    job_operation_views = %w[
+      app/views/layouts/mission_control/jobs/application.html.erb
+      app/views/layouts/mission_control/jobs/_application_selection.html.erb
+      app/views/layouts/mission_control/jobs/_flash.html.erb
+      app/views/layouts/mission_control/jobs/_navigation.html.erb
+      app/views/mission_control/jobs/shared/_pagination_toolbar.html.erb
+      app/views/mission_control/jobs/queues/index.html.erb
+      app/views/mission_control/jobs/queues/show.html.erb
+      app/views/mission_control/jobs/jobs/index.html.erb
+      app/views/mission_control/jobs/jobs/show.html.erb
+      app/views/mission_control/jobs/recurring_tasks/index.html.erb
+      app/views/mission_control/jobs/recurring_tasks/show.html.erb
+      app/views/mission_control/jobs/workers/index.html.erb
+      app/views/mission_control/jobs/workers/show.html.erb
+    ].map { |path| generated_file_source(path) }.join("\n")
     controller_test = generated_file_source("test/controllers/admin/job_operations_controller_test.rb")
     cleanup_test = generated_file_source("test/models/solid_queue_cleanup_test.rb")
     application_layout = generated_file_source("app/views/layouts/application.html.erb")
@@ -437,7 +453,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator layout.index("admin_content"), :<, layout.index('render layout: "layouts/mission_control/jobs/navigation"')
     assert_equal 1, layout.scan('render layout: "layouts/mission_control/jobs/navigation"').size
     refute_includes navigation, '<nav aria-label="Job operations sections" class="overflow-x-auto">'
-    assert_includes navigation, "with_tab(tabs:, size: :xs)"
+    assert_includes navigation, "with_tab(tabs:)"
+    refute_includes navigation, "size:"
     assert_includes navigation, "is_active: -> { key == current_section }"
     assert_includes navigation, '<%= yield %>'
     refute_includes navigation, "tab-content"
@@ -449,29 +466,51 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes navigation, "h-auto"
     refute_includes navigation, "row-start-2"
     refute_includes navigation, "col-[1/-1]"
-    assert_includes application_selection, 'class="card card-border border-base-300 bg-base-100"'
+    assert_includes application_selection, 'class="flex flex-wrap items-center justify-end gap-3"'
     assert_includes application_selection, '<% if @application.servers.many? || selectable_applications.any? %>'
-    assert_includes application_selection, 'class="card-body flex-row flex-wrap items-center justify-end gap-4 py-4"'
-    assert_includes application_selection, 'class="tabs tabs-lift tabs-sm"'
+    assert_includes application_selection, 'class="tabs tabs-lift"'
+    assert_includes application_selection, 'class="btn btn-rapid"'
+    refute_includes application_selection, "tabs-sm"
+    refute_includes application_selection, "btn-sm"
+    refute_includes application_selection, "card-body"
     refute_includes application_selection, "Back to main app"
     refute_includes application_selection, "main_app.root_path"
-    assert_includes jobs_index, 'class="card card-border overflow-x-auto border-base-300 bg-base-100"'
+    assert_includes jobs_index, 'class="card-rapid"'
+    assert_includes jobs_index, 'class="card-body"'
+    assert_includes jobs_index, 'class="overflow-x-auto"'
     assert_includes jobs_index, '<% content_for :page_title, "#{jobs_status.titleize} jobs" %>'
-    assert_includes jobs_index, 'class="table"'
-    assert_includes jobs_index, 'class: "btn btn-error"'
-    assert_includes jobs_index, 'class: "btn btn-warning"'
+    assert_includes jobs_index, 'class="table min-w-max"'
+    assert_includes jobs_index, 'class: "btn btn-error btn-rapid"'
+    assert_includes jobs_index, 'class: "btn btn-warning btn-rapid"'
+    refute_includes jobs_index, "btn-sm"
+    refute_includes jobs_index, '<section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">'
     assert_includes job_show, 'class="mockup-code overflow-x-auto"'
     assert_includes job_show, '<% content_for :page_title, job_title(@job) %>'
-    assert_includes job_show, 'class="collapse collapse-arrow card card-border border-base-300 bg-base-100"'
-    assert_includes queues_index, 'class: "btn btn-sm btn-warning"'
+    assert_includes job_show, 'class="collapse collapse-arrow card-rapid"'
+    assert_includes job_show, 'class="tabs tabs-box justify-end"'
+    refute_includes job_show, "tabs-sm"
+    assert_includes queues_index, 'class: "btn btn-warning btn-rapid"'
+    refute_includes queues_index, "btn-sm"
     assert_includes queues_index, '<% content_for :page_title, "Queues" %>'
     assert_includes pagination, 'class="join"'
+    assert_includes pagination, 'class: "btn btn-rapid join-item"'
+    refute_includes pagination, "btn-sm"
     assert_includes helper, '"failed" => "badge-error"'
     assert_includes helper, '"finished" => "badge-success"'
     refute_includes layout, "bulma.min.css"
     refute_includes job_operations, 'mission_control/jobs/bulma.min.css'
     refute_includes job_operations, "mission_control_jobs_scoped"
     refute_includes job_operations, "@scope"
+    %w[tabs-xs tabs-sm btn-xs btn-sm].each do |small_modifier|
+      refute_includes job_operation_views, small_modifier
+    end
+    refute_includes job_operation_views, "card card-border"
+    job_operation_views.scan(/<table class="([^"]*)">/).flatten.each do |table_class|
+      assert_includes table_class.split, "min-w-max", table_class
+    end
+    job_operation_views.scan(/class(?::|=)\s*["']([^"']*\bbtn\b[^"']*)["']/).flatten.each do |button_class|
+      assert_includes button_class.split, "btn-rapid", button_class
+    end
     %w[is-boxed is-active navbar-item navbar-menu message-body is-hoverable is-fullwidth].each do |bulma_class|
       refute_includes [layout, navigation, application_selection, jobs_index, job_show, queues_index, pagination].join, bulma_class
     end

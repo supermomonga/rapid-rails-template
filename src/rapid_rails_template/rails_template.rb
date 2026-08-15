@@ -10215,35 +10215,31 @@ def install_job_operations
   create_file "app/views/layouts/mission_control/jobs/_application_selection.html.erb", <<~'ERB', force: true
     <% if @application.servers.many? || selectable_applications.any? %>
       <% content_for :page_actions_secondary do %>
-        <section class="card card-border border-base-300 bg-base-100" aria-label="Application selection">
-          <div class="card-body flex-row flex-wrap items-center justify-end gap-4 py-4">
-            <div class="flex flex-wrap items-center justify-end gap-3">
-              <% if @application.servers.many? %>
-                <div role="tablist" class="tabs tabs-lift tabs-sm" aria-label="Servers">
-                  <% @application.servers.each do |server| %>
-                    <%= link_to server.name, application_queues_path(@application, server_id: server),
-                      role: "tab", class: class_names("tab", "tab-active": selected_server?(server)),
-                      aria: { current: ("page" if selected_server?(server)) } %>
-                  <% end %>
-                </div>
-              <% end %>
-
-              <% if selectable_applications.any? %>
-                <div class="dropdown dropdown-end">
-                  <button type="button" tabindex="0" class="btn btn-sm">
-                    <%= MissionControl::Jobs::Current.application.name %>
-                  </button>
-                  <ul tabindex="0" class="dropdown-content menu z-10 mt-2 w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow">
-                    <% selectable_applications.each do |application| %>
-                      <li><%= link_to application.name, application_queues_path(application, server_id: nil) %></li>
-                    <% end %>
-                  </ul>
-                </div>
-              <% else %>
-                <span class="badge badge-outline"><%= MissionControl::Jobs::Current.application.name %></span>
+        <section class="flex flex-wrap items-center justify-end gap-3" aria-label="Application selection">
+          <% if @application.servers.many? %>
+            <div role="tablist" class="tabs tabs-lift" aria-label="Servers">
+              <% @application.servers.each do |server| %>
+                <%= link_to server.name, application_queues_path(@application, server_id: server),
+                  role: "tab", class: class_names("tab", "tab-active": selected_server?(server)),
+                  aria: { current: ("page" if selected_server?(server)) } %>
               <% end %>
             </div>
-          </div>
+          <% end %>
+
+          <% if selectable_applications.any? %>
+            <div class="dropdown dropdown-end">
+              <button type="button" tabindex="0" class="btn btn-rapid">
+                <%= MissionControl::Jobs::Current.application.name %>
+              </button>
+              <ul tabindex="0" class="dropdown-content menu z-10 mt-2 w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow">
+                <% selectable_applications.each do |application| %>
+                  <li><%= link_to application.name, application_queues_path(application, server_id: nil) %></li>
+                <% end %>
+              </ul>
+            </div>
+          <% else %>
+            <span class="badge badge-outline"><%= MissionControl::Jobs::Current.application.name %></span>
+          <% end %>
         </section>
       <% end %>
     <% end %>
@@ -10262,7 +10258,7 @@ def install_job_operations
          ApplicationHelper::Tab.new(name: label, path: url, is_active: -> { key == current_section })
        end %>
     <nav aria-label="Job operations sections">
-      <%= with_tab(tabs:, size: :xs) do %>
+      <%= with_tab(tabs:) do %>
         <%= yield %>
       <% end %>
     </nav>
@@ -10273,14 +10269,14 @@ def install_job_operations
       <span class="text-sm text-base-content/70"><%= page.index %> / <%= page.pages_count || "..." %></span>
       <div class="join">
         <% if page.first? %>
-          <span class="btn join-item btn-disabled" aria-disabled="true">Previous page</span>
+          <span class="btn btn-rapid join-item btn-disabled" aria-disabled="true">Previous page</span>
         <% else %>
-          <%= link_to "Previous page", url_for(page: page.previous_index, **filter_param), class: "btn join-item" %>
+          <%= link_to "Previous page", url_for(page: page.previous_index, **filter_param), class: "btn btn-rapid join-item" %>
         <% end %>
         <% if page.last? %>
-          <span class="btn join-item btn-disabled" aria-disabled="true">Next page</span>
+          <span class="btn btn-rapid join-item btn-disabled" aria-disabled="true">Next page</span>
         <% else %>
-          <%= link_to "Next page", url_for(page: page.next_index, **filter_param), class: "btn join-item" %>
+          <%= link_to "Next page", url_for(page: page.next_index, **filter_param), class: "btn btn-rapid join-item" %>
         <% end %>
       </div>
     </nav>
@@ -10293,35 +10289,39 @@ def install_job_operations
     <% if @queues.empty? %>
       <div class="alert" role="status"><span>There are no queues.</span></div>
     <% else %>
-      <div class="card card-border overflow-x-auto border-base-300 bg-base-100">
-        <table class="table">
-          <thead><tr><th>Queue</th><th>Pending jobs</th><th><span class="sr-only">Actions</span></th></tr></thead>
-          <tbody>
-            <% @queues.each do |queue| %>
-              <tr>
-                <td>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <%= link_to queue.name, application_queue_path(@application, queue), class: "link link-hover font-semibold" %>
-                    <% if queue.paused? %><span class="badge badge-warning">Paused</span><% end %>
-                  </div>
-                </td>
-                <td><%= queue.size %></td>
-                <td>
-                  <% if queue_pausing_supported? %>
-                    <div class="flex justify-end">
-                      <% if queue.active? %>
-                        <%= button_to "Pause", application_queue_pause_path(@application, queue.name), method: :post, class: "btn btn-sm btn-warning" %>
-                      <% else %>
-                        <%= button_to "Resume", application_queue_pause_path(@application, queue.name), method: :delete, class: "btn btn-sm" %>
+      <section class="card-rapid">
+        <div class="card-body">
+          <div class="overflow-x-auto">
+            <table class="table min-w-max">
+              <thead><tr><th>Queue</th><th>Pending jobs</th><th><span class="sr-only">Actions</span></th></tr></thead>
+              <tbody>
+                <% @queues.each do |queue| %>
+                  <tr>
+                    <td>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <%= link_to queue.name, application_queue_path(@application, queue), class: "link link-hover font-semibold" %>
+                        <% if queue.paused? %><span class="badge badge-warning">Paused</span><% end %>
+                      </div>
+                    </td>
+                    <td><%= queue.size %></td>
+                    <td>
+                      <% if queue_pausing_supported? %>
+                        <div class="flex justify-end">
+                          <% if queue.active? %>
+                            <%= button_to "Pause", application_queue_pause_path(@application, queue.name), method: :post, class: "btn btn-warning btn-rapid" %>
+                          <% else %>
+                            <%= button_to "Resume", application_queue_pause_path(@application, queue.name), method: :delete, class: "btn btn-rapid" %>
+                          <% end %>
+                        </div>
                       <% end %>
-                    </div>
-                  <% end %>
-                </td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      </div>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     <% end %>
   ERB
 
@@ -10336,9 +10336,9 @@ def install_job_operations
       </div>
       <% if queue_pausing_supported? %>
         <% if @queue.active? %>
-          <%= button_to "Pause", application_queue_pause_path(@application, @queue.name), method: :post, class: "btn btn-warning" %>
+          <%= button_to "Pause", application_queue_pause_path(@application, @queue.name), method: :post, class: "btn btn-warning btn-rapid" %>
         <% else %>
-          <%= button_to "Resume", application_queue_pause_path(@application, @queue.name), method: :delete, class: "btn" %>
+          <%= button_to "Resume", application_queue_pause_path(@application, @queue.name), method: :delete, class: "btn btn-rapid" %>
         <% end %>
       <% end %>
     </header>
@@ -10346,22 +10346,26 @@ def install_job_operations
     <% if @jobs_page.empty? %>
       <div class="alert" role="status"><span>The queue is empty.</span></div>
     <% else %>
-      <div class="card card-border overflow-x-auto border-base-300 bg-base-100">
-        <table class="table">
-          <thead><tr><th>Job</th><th>Arguments</th></tr></thead>
-          <tbody>
-            <% @jobs_page.records.each do |job| %>
-              <tr>
-                <td>
-                  <%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "link link-hover font-semibold" %>
-                  <div class="text-sm text-base-content/70">Enqueued <%= time_distance_in_words_with_title(job.enqueued_at.to_datetime) %> ago</div>
-                </td>
-                <td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      </div>
+      <section class="card-rapid">
+        <div class="card-body">
+          <div class="overflow-x-auto">
+            <table class="table min-w-max">
+              <thead><tr><th>Job</th><th>Arguments</th></tr></thead>
+              <tbody>
+                <% @jobs_page.records.each do |job| %>
+                  <tr>
+                    <td>
+                      <%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "link link-hover font-semibold" %>
+                      <div class="text-sm text-base-content/70">Enqueued <%= time_distance_in_words_with_title(job.enqueued_at.to_datetime) %> ago</div>
+                    </td>
+                    <td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
       <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: {} %>
     <% end %>
   ERB
@@ -10374,37 +10378,35 @@ def install_job_operations
 
     <% unless @jobs_page.empty? && !active_filters? %>
       <% content_for :page_actions_secondary do %>
-        <section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">
-          <div class="card-body">
-            <%= form_for :filter, url: application_jobs_path(MissionControl::Jobs::Current.application, jobs_status), method: :get,
-              html: { class: "grid gap-4 md:grid-cols-2" },
-              data: { controller: "form", action: "input->form#debouncedSubmit" } do |form| %>
+        <section aria-label="Job filters">
+          <%= form_for :filter, url: application_jobs_path(MissionControl::Jobs::Current.application, jobs_status), method: :get,
+            html: { class: "grid gap-4 md:grid-cols-2" },
+            data: { controller: "form", action: "input->form#debouncedSubmit" } do |form| %>
+            <fieldset class="fieldset">
+              <%= form.label :job_class_name, class: "fieldset-legend" %>
+              <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: "input input-rapid w-full", list: "job-classes", placeholder: "Filter by job class...", autocomplete: "off" %>
+            </fieldset>
+            <fieldset class="fieldset">
+              <%= form.label :queue_name, class: "fieldset-legend" %>
+              <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: "input input-rapid w-full", list: "queue-names", placeholder: "Filter by queue name...", autocomplete: "off" %>
+            </fieldset>
+            <% if jobs_status == "finished" %>
               <fieldset class="fieldset">
-                <%= form.label :job_class_name, class: "fieldset-legend" %>
-                <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: "input input-rapid w-full", list: "job-classes", placeholder: "Filter by job class...", autocomplete: "off" %>
+                <%= form.label :finished_at_start, class: "fieldset-legend" %>
+                <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: "input input-rapid w-full" %>
               </fieldset>
               <fieldset class="fieldset">
-                <%= form.label :queue_name, class: "fieldset-legend" %>
-                <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: "input input-rapid w-full", list: "queue-names", placeholder: "Filter by queue name...", autocomplete: "off" %>
+                <%= form.label :finished_at_end, class: "fieldset-legend" %>
+                <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: "input input-rapid w-full" %>
               </fieldset>
-              <% if jobs_status == "finished" %>
-                <fieldset class="fieldset">
-                  <%= form.label :finished_at_start, class: "fieldset-legend" %>
-                  <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: "input input-rapid w-full" %>
-                </fieldset>
-                <fieldset class="fieldset">
-                  <%= form.label :finished_at_end, class: "fieldset-legend" %>
-                  <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: "input input-rapid w-full" %>
-                </fieldset>
-              <% end %>
-              <%= hidden_field_tag :server_id, MissionControl::Jobs::Current.server.id %>
-              <datalist id="job-classes"><% @job_class_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
-              <datalist id="queue-names"><% @queue_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
-              <div class="card-actions items-end md:col-span-2">
-                <%= link_to "Clear filters", application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: "btn" %>
-              </div>
             <% end %>
-          </div>
+            <%= hidden_field_tag :server_id, MissionControl::Jobs::Current.server.id %>
+            <datalist id="job-classes"><% @job_class_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
+            <datalist id="queue-names"><% @queue_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
+            <div class="card-actions items-end md:col-span-2">
+              <%= link_to "Clear filters", application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: "btn btn-rapid" %>
+            </div>
+          <% end %>
         </section>
       <% end %>
     <% end %>
@@ -10415,10 +10417,10 @@ def install_job_operations
         <div class="flex flex-wrap items-center justify-end gap-3">
           <% if active_filters? %><span class="text-sm text-base-content/70"><%= @jobs_count %> jobs found</span><% end %>
           <%= button_to "Discard #{target}", application_bulk_discards_path(@application, **jobs_filter_param), method: :post,
-            disabled: @jobs_count == 0, class: "btn btn-error",
+            disabled: @jobs_count == 0, class: "btn btn-error btn-rapid",
             form: { data: { turbo_confirm: "This will delete #{@jobs_count} jobs and can't be undone. Are you sure?" } } %>
           <%= button_to "Retry #{target}", application_bulk_retries_path(@application, **jobs_filter_param), method: :post,
-            disabled: @jobs_count == 0, class: "btn btn-warning" %>
+            disabled: @jobs_count == 0, class: "btn btn-warning btn-rapid" %>
         </div>
       <% end %>
     <% end %>
@@ -10428,42 +10430,46 @@ def install_job_operations
         <span><%= active_filters? ? "No #{jobs_status.dasherize} jobs found with the given filters." : "There are no #{jobs_status.dasherize} jobs #{blank_status_emoji(jobs_status)}" %></span>
       </div>
     <% else %>
-      <div class="card card-border overflow-x-auto border-base-300 bg-base-100">
-        <table class="table">
-          <thead><tr><th>Job</th><% attribute_names_for_job_status(jobs_status).each do |attribute| %><th><%= attribute %></th><% end %></tr></thead>
-          <tbody>
-            <% @jobs_page.records.each do |job| %>
-              <tr>
-                <td>
-                  <%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover font-semibold" %>
-                  <% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %>
-                  <div class="text-sm text-base-content/70">Enqueued <%= time_distance_in_words_with_title(job.enqueued_at.to_datetime) %> ago</div>
-                </td>
-                <% case jobs_status.to_s %>
-                <% when "failed" %>
-                  <td><%= link_to failed_job_error(job), application_job_path(@application, job.job_id, anchor: "error"), class: "link link-hover" %><div class="text-sm text-base-content/70"><%= time_distance_in_words_with_title(job.failed_at) %> ago</div></td>
-                  <td><div class="flex justify-end gap-2"><%= button_to "Discard", application_job_discard_path(@application, job.job_id, params: jobs_filter_param), class: "btn btn-sm btn-error", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %><%= button_to "Retry", application_job_retry_path(@application, job.job_id, params: jobs_filter_param), class: "btn btn-sm btn-warning" %></div></td>
-                <% when "blocked" %>
-                  <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                  <td><div class="font-mono text-sm"><%= job.blocked_by %></div><div class="text-sm text-base-content/70"><%= job.blocked_until ? "Expires #{bidirectional_time_distance_in_words_with_title(job.blocked_until)}" : "" %></div></td>
-                  <td><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: "btn btn-sm btn-warning" %></td>
-                <% when "scheduled" %>
-                  <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                  <td><%= bidirectional_time_distance_in_words_with_title(job.scheduled_at) %> <% if job_delayed?(job) %><span class="badge badge-error">delayed</span><% end %></td>
-                  <td><div class="flex justify-end gap-2"><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: "btn btn-sm btn-warning" %><%= button_to "Discard", application_job_discard_path(@application, job.job_id), class: "btn btn-sm btn-error", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %></div></td>
-                <% when "in_progress" %>
-                  <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                  <td><% if job.worker_id %><%= link_to "worker #{job.worker_id}", application_worker_path(@application, job.worker_id), class: "link link-hover" %><% else %>—<% end %></td>
-                  <td class="text-base-content/70"><%= job.started_at ? time_distance_in_words_with_title(job.started_at) : "(Finished)" %></td>
-                <% when "finished" %>
-                  <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                  <td class="text-base-content/70"><%= time_distance_in_words_with_title(job.finished_at) %> ago</td>
+      <section class="card-rapid">
+        <div class="card-body">
+          <div class="overflow-x-auto">
+            <table class="table min-w-max">
+              <thead><tr><th>Job</th><% attribute_names_for_job_status(jobs_status).each do |attribute| %><th><%= attribute %></th><% end %></tr></thead>
+              <tbody>
+                <% @jobs_page.records.each do |job| %>
+                  <tr>
+                    <td>
+                      <%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover font-semibold" %>
+                      <% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %>
+                      <div class="text-sm text-base-content/70">Enqueued <%= time_distance_in_words_with_title(job.enqueued_at.to_datetime) %> ago</div>
+                    </td>
+                    <% case jobs_status.to_s %>
+                    <% when "failed" %>
+                      <td><%= link_to failed_job_error(job), application_job_path(@application, job.job_id, anchor: "error"), class: "link link-hover" %><div class="text-sm text-base-content/70"><%= time_distance_in_words_with_title(job.failed_at) %> ago</div></td>
+                      <td><div class="flex justify-end gap-2"><%= button_to "Discard", application_job_discard_path(@application, job.job_id, params: jobs_filter_param), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %><%= button_to "Retry", application_job_retry_path(@application, job.job_id, params: jobs_filter_param), class: "btn btn-warning btn-rapid" %></div></td>
+                    <% when "blocked" %>
+                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
+                      <td><div class="font-mono text-sm"><%= job.blocked_by %></div><div class="text-sm text-base-content/70"><%= job.blocked_until ? "Expires #{bidirectional_time_distance_in_words_with_title(job.blocked_until)}" : "" %></div></td>
+                      <td><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: "btn btn-warning btn-rapid" %></td>
+                    <% when "scheduled" %>
+                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
+                      <td><%= bidirectional_time_distance_in_words_with_title(job.scheduled_at) %> <% if job_delayed?(job) %><span class="badge badge-error">delayed</span><% end %></td>
+                      <td><div class="flex justify-end gap-2"><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: "btn btn-warning btn-rapid" %><%= button_to "Discard", application_job_discard_path(@application, job.job_id), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %></div></td>
+                    <% when "in_progress" %>
+                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
+                      <td><% if job.worker_id %><%= link_to "worker #{job.worker_id}", application_worker_path(@application, job.worker_id), class: "link link-hover" %><% else %>—<% end %></td>
+                      <td class="text-base-content/70"><%= job.started_at ? time_distance_in_words_with_title(job.started_at) : "(Finished)" %></td>
+                    <% when "finished" %>
+                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
+                      <td class="text-base-content/70"><%= time_distance_in_words_with_title(job.finished_at) %> ago</td>
+                    <% end %>
+                  </tr>
                 <% end %>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      </div>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
       <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param %>
     <% end %>
   ERB
@@ -10476,32 +10482,34 @@ def install_job_operations
       <span class="badge <%= job_operation_status_class(@job.status) %>"><%= @job.status %></span>
       <div class="flex flex-wrap justify-end gap-2">
         <% if @job.failed? %>
-          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id, params: jobs_filter_param), class: "btn btn-error", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
-          <%= button_to "Retry", application_job_retry_path(@application, @job.job_id, params: jobs_filter_param), class: "btn btn-warning" %>
+          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id, params: jobs_filter_param), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
+          <%= button_to "Retry", application_job_retry_path(@application, @job.job_id, params: jobs_filter_param), class: "btn btn-warning btn-rapid" %>
         <% elsif @job.blocked? %>
-          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: "btn btn-warning" %>
+          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: "btn btn-warning btn-rapid" %>
         <% elsif @job.scheduled? %>
-          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: "btn btn-warning" %>
-          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id), class: "btn btn-error", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
+          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: "btn btn-warning btn-rapid" %>
+          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
         <% end %>
       </div>
     </header>
 
-    <section class="card card-border overflow-x-auto border-base-300 bg-base-100" aria-labelledby="job-information">
-      <div class="card-body p-0">
-        <h2 id="job-information" class="sr-only leading-[1.5]">Job information</h2>
-        <table class="table">
-          <tbody>
-            <tr><th>Arguments</th><td class="font-mono text-sm"><%= job_arguments(@job) %></td></tr>
-            <tr><th>Job id</th><td class="break-all font-mono text-sm"><%= @job.job_id %></td></tr>
-            <tr><th>Queue</th><td><%= link_to @job.queue_name, application_queue_path(@application, @job.queue), class: "badge badge-outline link link-hover" %></td></tr>
-            <tr><th>Enqueued</th><td><%= time_distance_in_words_with_title(@job.enqueued_at.to_datetime) %> ago</td></tr>
-            <% if @job.scheduled? %><tr><th>Scheduled</th><td><%= bidirectional_time_distance_in_words_with_title(@job.scheduled_at) %> <% if job_delayed?(@job) %><span class="badge badge-error">delayed</span><% end %></td></tr><% end %>
-            <% if @job.failed? %><tr><th>Failed</th><td><%= time_distance_in_words_with_title(@job.failed_at) %> ago</td></tr><% end %>
-            <% if @job.finished_at.present? %><tr><th>Finished</th><td><%= time_distance_in_words_with_title(@job.finished_at) %> ago</td></tr><tr><th>Duration</th><td><%= @job.duration.round(3) %> seconds</td></tr><% end %>
-            <% if @job.worker_id.present? %><tr><th>Processed by</th><td><%= link_to "worker #{@job.worker_id}", application_worker_path(@application, @job.worker_id), class: "link link-hover" %></td></tr><% end %>
-          </tbody>
-        </table>
+    <section class="card-rapid" aria-labelledby="job-information">
+      <div class="card-body">
+        <div class="overflow-x-auto">
+          <h2 id="job-information" class="sr-only leading-[1.5]">Job information</h2>
+          <table class="table min-w-max">
+            <tbody>
+              <tr><th>Arguments</th><td class="font-mono text-sm"><%= job_arguments(@job) %></td></tr>
+              <tr><th>Job id</th><td class="break-all font-mono text-sm"><%= @job.job_id %></td></tr>
+              <tr><th>Queue</th><td><%= link_to @job.queue_name, application_queue_path(@application, @job.queue), class: "badge badge-outline link link-hover" %></td></tr>
+              <tr><th>Enqueued</th><td><%= time_distance_in_words_with_title(@job.enqueued_at.to_datetime) %> ago</td></tr>
+              <% if @job.scheduled? %><tr><th>Scheduled</th><td><%= bidirectional_time_distance_in_words_with_title(@job.scheduled_at) %> <% if job_delayed?(@job) %><span class="badge badge-error">delayed</span><% end %></td></tr><% end %>
+              <% if @job.failed? %><tr><th>Failed</th><td><%= time_distance_in_words_with_title(@job.failed_at) %> ago</td></tr><% end %>
+              <% if @job.finished_at.present? %><tr><th>Finished</th><td><%= time_distance_in_words_with_title(@job.finished_at) %> ago</td></tr><tr><th>Duration</th><td><%= @job.duration.round(3) %> seconds</td></tr><% end %>
+              <% if @job.worker_id.present? %><tr><th>Processed by</th><td><%= link_to "worker #{@job.worker_id}", application_worker_path(@application, @job.worker_id), class: "link link-hover" %></td></tr><% end %>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -10513,7 +10521,7 @@ def install_job_operations
           <p><%= @job.last_execution_error.try(:message) || @job.last_execution_error.inspect %></p>
         </div>
         <% if @server.backtrace_cleaner %>
-          <div role="tablist" class="tabs tabs-box tabs-sm justify-end" aria-label="Backtrace detail">
+          <div role="tablist" class="tabs tabs-box justify-end" aria-label="Backtrace detail">
             <%= link_to "Clean", application_job_path(@application, @job.job_id, clean_backtrace: true), role: "tab", class: class_names("tab", "tab-active": clean_backtrace?) %>
             <%= link_to "Full", application_job_path(@application, @job.job_id, clean_backtrace: false), role: "tab", class: class_names("tab", "tab-active": !clean_backtrace?) %>
           </div>
@@ -10522,7 +10530,7 @@ def install_job_operations
       </section>
     <% end %>
 
-    <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100">
+    <details class="collapse collapse-arrow card-rapid">
       <summary class="collapse-title text-lg font-semibold">Raw data</summary>
       <div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@job.raw_data.without("backtrace")) %></code></pre></div></div>
     </details>
@@ -10535,23 +10543,27 @@ def install_job_operations
     <% if @recurring_tasks.empty? %>
       <div class="alert" role="status"><span>There are no recurring tasks.</span></div>
     <% else %>
-      <div class="card card-border overflow-x-auto border-base-300 bg-base-100">
-        <table class="table">
-          <thead><tr><th>Task</th><th>Job</th><th>Schedule</th><th>Last enqueued</th><th>Next</th><th><span class="sr-only">Actions</span></th></tr></thead>
-          <tbody>
-            <% @recurring_tasks.each do |task| %>
-              <tr>
-                <td><%= link_to task.id, application_recurring_task_path(@application, task.id), class: "link link-hover font-semibold" %></td>
-                <td><% if task.job_class_name.present? %><%= task.job_class_name %><% if task.arguments.present? %><div class="font-mono text-sm"><%= task.arguments.join(",") %></div><% end %><% elsif task.command.present? %><div class="font-mono text-sm"><%= task.command %></div><% end %></td>
-                <td><%= task.schedule %></td>
-                <td class="text-base-content/70"><%= task.last_enqueued_at ? bidirectional_time_distance_in_words_with_title(task.last_enqueued_at) : "Never" %></td>
-                <td class="text-base-content/70"><%= bidirectional_time_distance_in_words_with_title(task.next_time) %></td>
-                <td><% if task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, task.id), class: "btn btn-sm btn-warning", method: :put %><% end %></td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      </div>
+      <section class="card-rapid">
+        <div class="card-body">
+          <div class="overflow-x-auto">
+            <table class="table min-w-max">
+              <thead><tr><th>Task</th><th>Job</th><th>Schedule</th><th>Last enqueued</th><th>Next</th><th><span class="sr-only">Actions</span></th></tr></thead>
+              <tbody>
+                <% @recurring_tasks.each do |task| %>
+                  <tr>
+                    <td><%= link_to task.id, application_recurring_task_path(@application, task.id), class: "link link-hover font-semibold" %></td>
+                    <td><% if task.job_class_name.present? %><%= task.job_class_name %><% if task.arguments.present? %><div class="font-mono text-sm"><%= task.arguments.join(",") %></div><% end %><% elsif task.command.present? %><div class="font-mono text-sm"><%= task.command %></div><% end %></td>
+                    <td><%= task.schedule %></td>
+                    <td class="text-base-content/70"><%= task.last_enqueued_at ? bidirectional_time_distance_in_words_with_title(task.last_enqueued_at) : "Never" %></td>
+                    <td class="text-base-content/70"><%= bidirectional_time_distance_in_words_with_title(task.next_time) %></td>
+                    <td><% if task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, task.id), class: "btn btn-warning btn-rapid", method: :put %><% end %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     <% end %>
   ERB
 
@@ -10560,25 +10572,25 @@ def install_job_operations
     <% content_for :page_title, @recurring_task.id %>
 
     <div class="flex justify-end">
-      <% if @recurring_task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, @recurring_task.id), class: "btn btn-warning", method: :put %><% end %>
+      <% if @recurring_task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, @recurring_task.id), class: "btn btn-warning btn-rapid", method: :put %><% end %>
     </div>
 
-    <section class="card card-border overflow-x-auto border-base-300 bg-base-100">
-      <div class="card-body p-0"><table class="table"><tbody>
+    <section class="card-rapid">
+      <div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><tbody>
         <% if @recurring_task.job_class_name.present? %><tr><th>Job class</th><td><%= @recurring_task.job_class_name %></td></tr><tr><th>Arguments</th><td class="font-mono text-sm"><%= @recurring_task.arguments.join(",") %></td></tr><% elsif @recurring_task.command.present? %><tr><th>Command</th><td class="font-mono text-sm"><%= @recurring_task.command %></td></tr><% end %>
         <tr><th>Schedule</th><td><%= @recurring_task.schedule %></td></tr>
         <% if @recurring_task.queue_name.present? %><tr><th>Queue</th><td><%= @recurring_task.queue_name %></td></tr><% end %>
         <% if @recurring_task.priority.present? %><tr><th>Priority</th><td><%= @recurring_task.priority %></td></tr><% end %>
-      </tbody></table></div>
+      </tbody></table></div></div>
     </section>
 
     <% if @jobs_page.empty? %>
       <div class="alert" role="status"><span>No jobs found for this recurring task.</span></div>
     <% else %>
       <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]"><%= pluralize @recurring_task.jobs.count, "job" %></h2>
-        <div class="card card-border overflow-x-auto border-base-300 bg-base-100"><table class="table"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
+        <div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
           <% @jobs_page.records.each do |job| %><tr><td><%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "link link-hover font-semibold" %><div class="text-sm text-base-content/70">Enqueued <%= time_distance_in_words_with_title(job.enqueued_at.to_datetime) %> ago</div></td><td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td><td><span class="badge <%= job_operation_status_class(job.status) %>"><%= job.status %></span></td></tr><% end %>
-        </tbody></table></div>
+        </tbody></table></div></div></div>
         <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param %>
       </section>
     <% end %>
@@ -10591,9 +10603,9 @@ def install_job_operations
     <% if @workers_page.empty? %>
       <div class="alert" role="status"><span>There are no workers.</span></div>
     <% else %>
-      <div class="card card-border overflow-x-auto border-base-300 bg-base-100"><table class="table"><thead><tr><th>Worker</th><th>Hostname</th><th>Jobs</th><th>Last heartbeat</th></tr></thead><tbody>
+      <div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Worker</th><th>Hostname</th><th>Jobs</th><th>Last heartbeat</th></tr></thead><tbody>
         <% @workers_page.records.each do |worker| %><tr><td><%= link_to "worker #{worker.id}", application_worker_path(@application, worker.id), class: "link link-hover font-semibold" %><br><%= worker.name %></td><td><%= worker.hostname %></td><td><% worker.jobs.each do |job| %><div><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover" %><% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %></div><% end %></td><td class="text-base-content/70"><%= time_distance_in_words_with_title(worker.last_heartbeat_at) %> ago</td></tr><% end %>
-      </tbody></table></div>
+      </tbody></table></div></div></div>
       <%= render "mission_control/jobs/shared/pagination_toolbar", page: @workers_page, filter_param: {} %>
     <% end %>
   ERB
@@ -10604,17 +10616,17 @@ def install_job_operations
 
     <p class="text-base-content/70"><%= @worker.name %> · <%= @worker.hostname %></p>
 
-    <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100" open><summary class="collapse-title text-lg font-semibold">Configuration</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.configuration) %></code></pre></div></div></details>
+    <details class="collapse collapse-arrow card-rapid" open><summary class="collapse-title text-lg font-semibold">Configuration</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.configuration) %></code></pre></div></div></details>
 
     <% if @worker.jobs.empty? %>
       <div class="alert" role="status"><span>This worker is idle.</span></div>
     <% else %>
-      <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]">Running <%= pluralize @worker.jobs.size, "job" %></h2><div class="card card-border overflow-x-auto border-base-300 bg-base-100"><table class="table"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
+      <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]">Running <%= pluralize @worker.jobs.size, "job" %></h2><div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
         <% @worker.jobs.each do |job| %><tr><td><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover font-semibold" %></td><td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td><td><span class="badge <%= job_operation_status_class(job.status) %>"><%= job.status %></span></td></tr><% end %>
-      </tbody></table></div></section>
+      </tbody></table></div></div></div></section>
     <% end %>
 
-    <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100"><summary class="collapse-title text-lg font-semibold">Raw data</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.raw_data) %></code></pre></div></div></details>
+    <details class="collapse collapse-arrow card-rapid"><summary class="collapse-title text-lg font-semibold">Raw data</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.raw_data) %></code></pre></div></div></details>
   ERB
 
   create_locale_pair(
@@ -10713,6 +10725,7 @@ def install_job_operations
 
       test "renders the console for admins inside the admin layout" do
         sign_in_as(@admin)
+        RetryProbeJob.perform_later
 
         get admin_jobs_url
 
@@ -10720,6 +10733,7 @@ def install_job_operations
         assert_select "[data-mission-control-jobs-root]", count: 1
         assert_select '[data-layout="with-menu"] > div > h1', text: "Queues", count: 1
         assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] > .overflow-x-auto > [role="tablist"].tabs.tabs-lift.min-w-max', count: 1
+        assert_select '[role="tablist"].tabs-xs, [role="tablist"].tabs-sm', count: 0
         assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"] > .tab-content[role="tabpanel"]', count: 1
         assert_select '[data-layout="with-menu"] > div > nav[aria-label="Job operations sections"] [role="tablist"] > .tab-active + .tab-content.sticky.bg-base-100.border-base-300.p-3', count: 1 do |panels|
           assert_includes panels.first["class"].split, "[contain:inline-size]"
@@ -10731,6 +10745,11 @@ def install_job_operations
         assert_select 'meta[property="og:title"][content=?]', "Queues | \#{app_name}", count: 1
         assert_select 'a[role="tab"].tab.tab-active.z-10', minimum: 1
         assert_select 'section[aria-label="Application selection"]', count: 0
+        assert_select '[data-mission-control-jobs-root] > .card-rapid > .card-body > .overflow-x-auto > table.table.min-w-max', minimum: 1
+        assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
+        assert_select '[data-mission-control-jobs-root] .btn' do |buttons|
+          buttons.each { |button| assert_includes button["class"].split, "btn-rapid" }
+        end
         assert_not_includes response.body, "bulma.min.css"
         assert_not_includes response.body, "is-boxed"
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', host_translate("navigation.admin_menu"), count: 1
@@ -10804,10 +10823,15 @@ def install_job_operations
         )
         assert_response :success
         assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"] section[aria-label="Job filters"]', count: 1
+        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"] section[aria-label="Job filters"] > .card-rapid', count: 0
+        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"] section[aria-label="Job filters"] > .card-body', count: 0
         assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"]', count: 1 do
-          assert_select "form button", text: /Discard all/, count: 1
-          assert_select "form button", text: /Retry all/, count: 1
+          assert_select "form button.btn.btn-rapid", text: /Discard all/, count: 1
+          assert_select "form button.btn.btn-rapid", text: /Retry all/, count: 1
         end
+        assert_select '[data-mission-control-jobs-root] > .card-rapid > .card-body > .overflow-x-auto > table.table.min-w-max', count: 1
+        assert_select '[data-mission-control-jobs-root] table form button.btn.btn-rapid', minimum: 2
+        assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
         assert_select '[data-page-actions-container="card"]', count: 0
 
         post retry_path
@@ -12838,6 +12862,7 @@ def configure_evidence_capture
                   const activeTabRect = activeTab.getBoundingClientRect()
                   const tabContentRect = tabContent.getBoundingClientRect()
                   const root = document.querySelector("[data-mission-control-jobs-root]")
+                  const tableScroller = root.querySelector(".card-rapid > .card-body > .overflow-x-auto")
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
@@ -12866,9 +12891,12 @@ def configure_evidence_capture
                     tabContentIsSticky: tabContent.classList.contains("sticky"),
                     tabContentContain: getComputedStyle(tabContent).contain,
                     tabContentCount: tablist.querySelectorAll(':scope > .tab-content').length,
+                    tablistHasSmallModifier: tablist.classList.contains("tabs-xs") || tablist.classList.contains("tabs-sm"),
                     tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
                     scrollerScrollWidth: scroller.scrollWidth,
-                    scrollerClientWidth: scroller.clientWidth
+                    scrollerClientWidth: scroller.clientWidth,
+                    tableScrollerScrollWidth: tableScroller.scrollWidth,
+                    tableScrollerClientWidth: tableScroller.clientWidth
                   }
                 }
               JAVASCRIPT
@@ -12903,6 +12931,8 @@ def configure_evidence_capture
               "Mission Control Jobs tab content should use inline-size containment at #{width}px"
             assert_equal 1, geometry.fetch("tabContentCount"),
               "Mission Control Jobs should render only the active tab content at #{width}px"
+            refute geometry.fetch("tablistHasSmallModifier"),
+              "Mission Control Jobs tabs should use the default size at #{width}px"
             assert_equal 1, geometry.fetch("tabRowCount"),
               "Mission Control Jobs tabs should stay on one row at #{width}px"
             assert_operator geometry.fetch("rootTop"), :>=, geometry.fetch("tabContentTop"),
@@ -12916,6 +12946,8 @@ def configure_evidence_capture
             if width <= 390
               assert_operator geometry.fetch("scrollerScrollWidth"), :>, geometry.fetch("scrollerClientWidth"),
                 "Mission Control Jobs tabs should scroll horizontally at #{width}px"
+              assert_operator geometry.fetch("tableScrollerScrollWidth"), :>, geometry.fetch("tableScrollerClientWidth"),
+                "Mission Control Jobs table should scroll horizontally at #{width}px"
             end
 
             find('[role="tab"]', text: /^Failed jobs/).click
@@ -12934,6 +12966,8 @@ def configure_evidence_capture
                   const actions = actionsContainer.querySelector('[data-page-actions]')
                   const secondary = actions.querySelector('[data-page-actions-column="secondary"]')
                   const primary = actions.querySelector('[data-page-actions-column="primary"]')
+                  const actionButtons = Array.from(actions.querySelectorAll(".btn"))
+                  const tableScroller = root.querySelector(".card-rapid > .card-body > .overflow-x-auto")
                   return {
                     activeTabBottom: activeTabRect.bottom,
                     activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
@@ -12953,6 +12987,11 @@ def configure_evidence_capture
                     tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
                     actionContainerIsFirst: tabContent.firstElementChild === actionsContainer,
                     actionColumnCount: getComputedStyle(actions).gridTemplateColumns.split(" ").length,
+                    actionButtonsUseRapid: actionButtons.every((button) => button.classList.contains("btn-rapid")),
+                    actionButtonFontSizes: [...new Set(actionButtons.map((button) => getComputedStyle(button).fontSize))],
+                    filterHasCardShell: secondary.querySelector(".card-rapid, .card-body") !== null,
+                    tableScrollerScrollWidth: tableScroller.scrollWidth,
+                    tableScrollerClientWidth: tableScroller.clientWidth,
                     secondaryLeft: secondary.getBoundingClientRect().left,
                     secondaryTop: secondary.getBoundingClientRect().top,
                     secondaryBottom: secondary.getBoundingClientRect().bottom,
@@ -12986,7 +13025,15 @@ def configure_evidence_capture
               "Mission Control Jobs middle tab content should contain its body at #{width}px"
             assert failed_geometry.fetch("actionContainerIsFirst"),
               "Mission Control Jobs page actions should lead the tab content at #{width}px"
+            assert failed_geometry.fetch("actionButtonsUseRapid"),
+              "Mission Control Jobs page action buttons should use btn-rapid at #{width}px"
+            assert_equal ["16px"], failed_geometry.fetch("actionButtonFontSizes"),
+              "Mission Control Jobs page action buttons should use the shared font size at #{width}px"
+            refute failed_geometry.fetch("filterHasCardShell"),
+              "Mission Control Jobs filters should not add a nested card shell at #{width}px"
             if width < 640
+              assert_operator failed_geometry.fetch("tableScrollerScrollWidth"), :>, failed_geometry.fetch("tableScrollerClientWidth"),
+                "Mission Control Jobs failed table should scroll horizontally at #{width}px"
               assert_equal 1, failed_geometry.fetch("actionColumnCount"),
                 "Mission Control Jobs page actions should stack at #{width}px"
               assert_operator failed_geometry.fetch("primaryTop"), :>=, failed_geometry.fetch("secondaryBottom"),

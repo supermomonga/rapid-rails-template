@@ -277,7 +277,7 @@ Rails標準のDocker/Kamal生成を有効にし、Application TemplateがKamal `
 
 primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLitestream対象とし、queueとcableは対応機能を選択した場合だけ追加します。cacheは復元時点を揃える必要がない再構築可能データなので対象外です。replicaはCloudflare R2へ固定し、各DBのobject prefixを分けます。destinationごとに別bucket・別bucket限定Object Read & Write tokenを使い、認証情報が不足した場合は失敗させます。
 
-生成する`litestream:configure:r2`はローカルWrangler v4とGumを使い、ログイン中のCloudflare identity、account、production/staging、bucket、1Password account/vault/item、Kamal secret参照の適用予定を表示します。既定で両destinationを選択し、既定値「中止」の確認後だけ未存在bucket、1Password item、`.kamal/secrets.<destination>`を変更します。資格情報本体はJSON標準入力で1Passwordへ保存し、repositoryやargvへ書きません。
+生成する`litestream:configure:r2`はローカルWrangler v4とGumを使い、ログイン中のCloudflare identity、account、production/staging、bucket、1Password account/vault/item、Kamal secret参照の適用予定を表示します。bucket名の既定値は`<正規化済みapp_id>-db-production`と`<正規化済みapp_id>-db-staging`とし、確認前に変更できます。既定で両destinationを選択し、既定値「中止」の確認後だけ未存在bucket、1Password item、`.kamal/secrets.<destination>`を変更します。資格情報本体はJSON標準入力で1Passwordへ保存し、repositoryやargvへ書きません。
 
 空volumeではLitestreamの`restore-if-db-not-exists`を使用し、backupが存在すれば復元してからcontrol socketを公開します。既存DBを上書きしません。既存DBの手動復元はdestination指定必須の`bin/kamal-restore`だけを入口とし、plan表示、RFC3339時点指定、TTY、アプリID・destination・対象を含む完全一致確認、全DBのfull integrity check、destination別deploy lockとmarker、復元前DBの保存を必須にします。確認回避、`force`、単一DBだけの復元は提供しません。
 

@@ -14840,7 +14840,7 @@ def configure_litestream_r2(app_id)
         def bucket_names(destinations)
           destinations.to_h do |destination|
             initial = self.class.default_bucket_name(APP_ID, destination)
-            requested = "#{APP_ID}-litestream-#{destination}"
+            requested = "#{APP_ID}-db-#{destination}"
             @output.puts "R2 bucket初期値を正規化しました: #{requested} -> #{initial}" unless requested == initial
             value = String(@prompt.input(header: "#{destination} R2 bucket", value: initial)).strip
             validate_bucket_name!(value)
@@ -15088,7 +15088,7 @@ def configure_litestream_r2(app_id)
 
           sig { params(app_id: String, destination: String).returns(String) }
           def default_bucket_name(app_id, destination)
-            suffix = "-litestream-#{destination}"
+            suffix = "-db-#{destination}"
             normalized = app_id.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
             normalized = "app" if normalized.empty?
             normalized = normalized.byteslice(0, 63 - suffix.bytesize).to_s.gsub(/-+\z/, "")
@@ -15144,7 +15144,7 @@ def configure_litestream_r2(app_id)
 
       class RejectingPrompt
         def initialize
-          @inputs = %w[example-litestream-production example-litestream-staging]
+          @inputs = %w[example-db-production example-db-staging]
         end
 
         def choose(choices, header:, selected:, no_limit: false)
@@ -15164,7 +15164,7 @@ def configure_litestream_r2(app_id)
       end
 
       test "normalizes deterministic destination bucket names" do
-        assert_equal "my-app-litestream-production", Litestream::R2Configurator.default_bucket_name("My App!", "production")
+        assert_equal "my-app-db-production", Litestream::R2Configurator.default_bucket_name("My App!", "production")
         assert_operator Litestream::R2Configurator.default_bucket_name("a" * 100, "staging").bytesize, :<=, 63
       end
 
@@ -15443,6 +15443,8 @@ def configure_kamal
     Both destinations are selected initially. The task shows the signed-in Cloudflare identity,
     lets you choose its account and a 1Password account/vault, checks existing buckets, and prints
     the complete non-secret plan before asking for confirmation. It creates only missing buckets.
+    Default bucket names are `<normalized-app-id>-db-production` and
+    `<normalized-app-id>-db-staging`; you can change either name before confirmation.
     Wrangler cannot issue R2 S3 credentials, so the task then directs you to create a bucket-scoped
     **Object Read & Write** API token in the Cloudflare Dashboard and collects the Access Key ID and
     Secret Access Key with masked input.

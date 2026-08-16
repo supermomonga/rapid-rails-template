@@ -438,7 +438,7 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-other", name: "Other Cloudflare" }, { id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
-        result.new(stdout: JSON.generate(name: "sample-litestream-staging"), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(name: "sample-db-staging"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate([{ account_uuid: "op-other", name: "Other 1Password" }, { account_uuid: "op-account", name: "1Password" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate([{ id: "vault-other", name: "Other Vault" }, { id: "vault-id", name: "Deploy" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate([{ id: "staging-item", title: "sample Litestream R2 staging" }]), stderr: "", success: true, exitstatus: 0),
@@ -464,7 +464,7 @@ class KamalRestoreTemplateTest < Minitest::Test
       prompt = Class.new do
         def initialize
           @inputs = %w[
-            sample-litestream-production sample-litestream-staging
+            sample-db-production sample-db-staging
             production-access production-secret staging-access staging-secret
           ]
         end
@@ -490,8 +490,8 @@ class KamalRestoreTemplateTest < Minitest::Test
 
       create_calls = runner.calls.select { |call| call.fetch(:command).include?("create") }
       assert_equal 2, create_calls.length
-      assert create_calls.any? { |call| call.fetch(:command).include?("sample-litestream-production") }
-      refute create_calls.any? { |call| call.fetch(:command).include?("sample-litestream-staging") && call.fetch(:command).include?("bucket") }
+      assert create_calls.any? { |call| call.fetch(:command).include?("sample-db-production") }
+      refute create_calls.any? { |call| call.fetch(:command).include?("sample-db-staging") && call.fetch(:command).include?("bucket") }
       assert runner.calls.grep_v(nil).all? do |call|
         (call.fetch(:command) & %w[production-access production-secret staging-access staging-secret]).empty?
       end

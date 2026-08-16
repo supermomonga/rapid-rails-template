@@ -52,7 +52,7 @@ module RapidRailsTemplate
     private
 
     def build_gems
-      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism]
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism gum]
       result.concat(%w[devise devise-i18n webauthn])
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
@@ -401,14 +401,19 @@ module RapidRailsTemplate
       result.concat(%w[
         Dockerfile
         .dockerignore
-        .kamal/secrets
+        .kamal/secrets-common
         .kamal/hooks/pre-deploy
         config/deploy.yml
+        config/deploy.production.yml
+        config/deploy.staging.yml
         config/litestream.yml
         bin/docker-entrypoint
         bin/wait-for-litestream
         bin/kamal-restore
         bin/kamal-restore-volume
+        lib/litestream/r2_configurator.rb
+        lib/tasks/litestream.rake
+        test/lib/litestream/r2_configurator_test.rb
         docs/deployment.md
       ])
       result << "mise.local.toml" if configuration["web_push"] == "use"

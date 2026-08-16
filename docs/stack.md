@@ -317,7 +317,7 @@ productionの`config/database.yml`には、常設のstorage databaseに加え、
 
 `Dockerfile`はRails標準構成を基礎に、Ruby 4.0.0のmulti-stage build、Node.js/npmによるasset build、libvips、jemalloc、YJIT、Thrusterを維持します。LitestreamとForemanはアプリimageへ含めません。Webはprimary role、Solid Queue使用時だけ`worker` roleを生成します。
 
-production SQLiteは`<app_id>_storage` named volumeの`/rails/storage`へ配置します。
+production SQLiteは`<app_id>_<destination>_storage` named volumeの`/rails/storage`へ配置し、`production`と`staging`を分離します。Kamalはdestination指定を必須にします。
 
 | database | path | 条件 | Litestream |
 | --- | --- | --- | --- |
@@ -331,29 +331,28 @@ SQLite共通設定は`transaction_mode: immediate`、`timeout: 20000`とし、co
 
 ### Litestream Accessory
 
-Litestream 0.5.15をKamal Accessoryとして起動し、Web・Workerと同じnamed volumeをuser `1000:1000`でmountします。各databaseは別のreplica URLを使い、認証情報をファイルへ埋め込みません。
+Litestream 0.5.15をKamal Accessoryとして起動し、Web・Workerと同じdestination別named volumeをuser `1000:1000`でmountします。replicaはCloudflare R2のS3互換endpointへ固定し、各databaseは同じdestination bucket内の別object prefixを使います。
 
 | 用途 | 環境変数 |
 | --- | --- |
-| primary replica | `LITESTREAM_REPLICA_URL` |
-| storage replica | `LITESTREAM_STORAGE_REPLICA_URL` |
-| queue replica | `LITESTREAM_QUEUE_REPLICA_URL` |
-| cable replica | `LITESTREAM_CABLE_REPLICA_URL` |
-| access key | `AWS_ACCESS_KEY_ID` |
-| secret key | `AWS_SECRET_ACCESS_KEY` |
-| region | `AWS_REGION` |
+| Cloudflare account | `CF_ACCOUNT_ID` |
+| destination bucket | `LITESTREAM_R2_BUCKET` |
+| access key | `R2_ACCESS_KEY` |
+| secret key | `R2_SECRET_KEY` |
+
+endpointは`${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`、regionは`auto`です。object prefixは`primary`、`storage`、条件付き`queue`・`cable`です。資格情報の正本はdestination別の1Password itemとし、`.kamal/secrets.production`・`.kamal/secrets.staging`にはKamal公式1Password adapterのID参照だけを生成します。共通secretは`.kamal/secrets-common`に置きます。ローカルWrangler v4とGumを使う`litestream:configure:r2`がbucket確認・作成と参照生成を担当します。
 
 各DBへ`restore-if-db-not-exists`を設定します。空volumeかつbackupがある場合だけ起動時に復元し、既存DBは上書きしません。初回でbackupが存在しない場合は新規DB作成へ進み、それ以外の復元・接続エラーではAccessoryを失敗させます。Litestreamは復元とDB openの後にcontrol socketを公開し、Web entrypointはsocketのstatus応答後に`db:prepare`、Workerはstatus応答後に`bin/jobs`を開始します。
 
-Accessoryは通常の`kamal deploy`では更新されないため、設定・image・secret変更時は`bin/kamal accessory reboot litestream`を実行します。状態とログは`bin/kamal accessory details litestream`、`bin/kamal accessory logs litestream`で確認します。
+Accessoryは通常の`kamal deploy`では更新されないため、設定・image・secret変更時はdestinationを付けて`bin/kamal accessory reboot litestream -d DESTINATION`を実行します。
 
 ### 確認付き手動復元
 
-`bin/kamal-restore`は最新時点、`--timestamp=RFC3339`はpoint-in-time、`--plan`はdry-runだけを実行します。書き込み操作はTTYと`RESTORE <app_id> <target>`の完全一致入力を必須にし、確認回避やforce optionは提供しません。
+`bin/kamal-restore`は`--destination=production|staging`を必須とし、最新時点、`--timestamp=RFC3339`によるpoint-in-time、`--plan`によるdry-runを提供します。書き込み操作はTTYと`RESTORE <app_id> <destination> <target>`の完全一致入力を必須にし、確認回避やforce optionは提供しません。
 
 確認後はmaintenance化、Web/Worker停止、全DBの`sync -wait`、Accessory停止、deploy lock取得、全DBの一時領域へのrestoreとfull integrity check、同一volume内renameの順で処理します。primary、storage、条件付きqueue/cableを常に一組で扱い、部分的な復元は許可しません。切替途中の失敗は補償renameで元へ戻します。
 
-復元前DBとWAL/SHM/journalは操作ID別に保持し、`bin/kamal-restore --rollback=OPERATION_ID`で確認付きrollbackを行います。復元中はremote markerと`pre-deploy` hookで新規deployを拒否し、破壊的な切替中はdeploy lockを保持します。切替後の起動失敗では自動rollbackせず、サービスとmarkerを停止状態で残して調査可能にします。
+復元前DBとWAL/SHM/journalは操作ID別に保持し、destination付きの`bin/kamal-restore --rollback=OPERATION_ID`で確認付きrollbackを行います。復元中はdestination別remote markerと`pre-deploy` hookで新規deployを拒否し、破壊的な切替中はdeploy lockを保持します。切替後の起動失敗では自動rollbackせず、サービスとmarkerを停止状態で残して調査可能にします。
 
 ## Rails 8.1のSolid系既定値
 

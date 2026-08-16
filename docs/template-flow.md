@@ -68,6 +68,8 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 ### `post_bundle`
 
+development依存にはGumとローカルWrangler v4を固定します。Kamal/Litestream生成ではCloudflare R2固定設定、production/staging overlay、1Passwordを正本とする型付きR2設定service、薄いRake task、destination必須の復元CLIを配置します。
+
 最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。直後に`active_storage_db`の公式migration taskを実行し、生成されたファイル本体用migrationを`db/storage_migrate`へ移します。続けてLexxyとActive StorageをImportmapへ登録します。`avatar`選択時だけImportmapの公式`pin` commandでCropper.js 2.1.1とtransitive dependencyを`vendor/javascript`へ固定し、任意または自由なアスペクト比とoptionalな出力寸法をvaluesで設定できる`image_crop` Stimulus controllerを生成します。プロフィールViewはこのcontrollerへ1:1と512×512を指定します。Deviseの公式generatorは全構成で実行し、migrationとUser modelをPasskey専用契約へ構造的に置き換えます。WebAuthn credential・database challenge・route・管理画面は常設し、SIWE選択時だけ`:siweable`とSIWE identity・challenge・route・管理画面を追加します。
 
 認証生成より前にApplication Identity、ja/en locale、request locale境界、canonical originを設定します。認証Userを生成した直後にAction Policy、`UserRole`、policy、`/admin`のOverviewと基本統計、管理画面、`users.id`を受け取るadmin付与taskを生成し、全機能をDeviseの`current_user`へ接続します。Overviewは`UserPolicy#overview?`で認可し、全ユーザー、管理者、直近30日の新規ユーザー、公開FAQ、管理対象ページをrequestごとに集計します。固定ページ、FAQ、footer設定、Profile、API、PWA、Web Push、Solid系機能は追加ログイン方法を参照しません。Maintenance Tasks metadataには`triggered_by_user_id`を保存します。

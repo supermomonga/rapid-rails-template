@@ -1091,14 +1091,23 @@ class RailsTemplateContractTest < Minitest::Test
   def test_kamal_uses_a_litestream_accessory_and_confirmed_restore
     kamal = source_between("def configure_kamal", "after_bundle do")
     restore = source_between("def kamal_restore_cli_body", "def configure_kamal_restore")
-    volume_helper = source_between("def configure_kamal_restore", "def configure_kamal")
+    volume_helper = source_between("def configure_kamal_restore", "def configure_litestream_r2")
+    r2 = source_between("def configure_litestream_r2", "def configure_kamal")
 
     assert_includes @source, 'gem "kamal", "~> 2.11", require: false'
     assert_includes kamal, "minimum_version: 2.11.0"
     assert_includes kamal, "litestream/litestream:0.5.15"
     assert_includes kamal, '"restore-if-db-not-exists" => true'
-    assert_includes kamal, "LITESTREAM_STORAGE_REPLICA_URL"
-    assert_includes kamal, '"#{app_id}_storage:/rails/storage"'
+    assert_includes kamal, '"type" => "s3"'
+    assert_includes kamal, '"endpoint" => "$" + "{CF_ACCOUNT_ID}.r2.cloudflarestorage.com"'
+    assert_includes kamal, '"region" => "auto"'
+    assert_includes kamal, '"#{app_id}_<%= ENV.fetch(\\"KAMAL_DESTINATION\\") %>_storage:/rails/storage"'
+    assert_includes kamal, "require_destination: true"
+    assert_includes kamal, 'create_file ".kamal/secrets-common"'
+    assert_includes kamal, 'remove_file ".kamal/secrets"'
+    assert_includes kamal, 'create_file "config/deploy.production.yml"'
+    assert_includes kamal, 'create_file "config/deploy.staging.yml"'
+    refute_match(/AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|LITESTREAM_STORAGE_REPLICA_URL/, kamal)
     assert_includes kamal, 'cmd: bin/jobs --mode async'
     assert_includes kamal, 'GET /status HTTP/1.0'
     assert_includes kamal, 'CMD ["./bin/thrust", "./bin/rails", "server"]'
@@ -1111,8 +1120,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes restore, 'option_parser.on("--plan")'
     assert_includes restore, 'option_parser.on("--timestamp=RFC3339")'
     assert_includes restore, 'option_parser.on("--rollback=OPERATION_ID")'
+    assert_includes restore, 'option_parser.on("--destination=DESTINATION")'
     assert_includes restore, 'unless @input.tty? && @output.tty?'
-    assert_includes restore, 'confirm!("RESTORE #{APP_ID} #{target}")'
+    assert_includes restore, 'confirm!("RESTORE #{APP_ID} #{@destination} #{target}")'
+    assert_includes restore, '@runner.run!(*arguments, "-d", @destination)'
     assert_includes restore, '"-integrity-check", "full"'
     assert_includes restore, '"-dry-run"'
     assert_includes restore, '"lock", "acquire"'
@@ -1127,6 +1138,17 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes volume_helper, "installed.reverse_each"
     assert_includes volume_helper, "moved_previous.reverse_each"
     assert_includes volume_helper, "replaced-by-rollback"
+
+    assert_includes r2, "DESTINATIONS = %w[production staging].freeze"
+    assert_includes r2, "Kamal destination"
+    assert_includes r2, "selected: DESTINATIONS"
+    assert_includes r2, '[@wrangler, "whoami", "--json"]'
+    assert_includes r2, '[@wrangler, "r2", "bucket", "info", bucket, "--json"]'
+    assert_includes r2, '/\[code: 10006\]/'
+    assert_includes r2, '"CLOUDFLARE_ACCOUNT_ID" => account_id'
+    assert_includes r2, 'password: true'
+    assert_includes r2, 'stdin_data: JSON.generate(item)'
+    assert_includes r2, 'default: false'
   end
 
   def test_generates_fixed_pages_faqs_footer_settings_and_admin_management

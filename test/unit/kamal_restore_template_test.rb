@@ -3,7 +3,9 @@
 require_relative "../test_helper"
 require "fileutils"
 require "erb"
+require "json"
 require "open3"
+require "pathname"
 require "rbconfig"
 require "tmpdir"
 require "yaml"
@@ -18,31 +20,35 @@ class KamalRestoreTemplateTest < Minitest::Test
   end
 
   class FakeRunner
-    attr_reader :commands
+    attr_reader :commands, :raw_commands
 
     def initialize(fail_when: nil)
       @commands = []
+      @raw_commands = []
       @fail_when = fail_when
     end
 
     def run!(*arguments)
-      @commands << arguments
-      raise KamalRestore::Error, "expected failure" if @fail_when&.call(arguments)
+      @raw_commands << arguments
+      command = arguments.last(2) == %w[-d production] ? arguments.first(arguments.length - 2) : arguments
+      @commands << command
+      raise KamalRestore::Error, "expected failure" if @fail_when&.call(command)
 
       ""
     end
 
     def ignore_failure(*arguments)
-      @commands << arguments
+      @raw_commands << arguments
+      @commands << (arguments.last(2) == %w[-d production] ? arguments.first(arguments.length - 2) : arguments)
       ""
     end
   end
 
   def setup
     @databases = [
-      { "name" => "primary", "path" => "/rails/storage/production.sqlite3", "replica_env" => "LITESTREAM_REPLICA_URL" },
-      { "name" => "storage", "path" => "/rails/storage/production_storage.sqlite3", "replica_env" => "LITESTREAM_STORAGE_REPLICA_URL" },
-      { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3", "replica_env" => "LITESTREAM_QUEUE_REPLICA_URL" }
+      { "name" => "primary", "path" => "/rails/storage/production.sqlite3" },
+      { "name" => "storage", "path" => "/rails/storage/production_storage.sqlite3" },
+      { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3" }
     ]
     @files = build_restore_files(@databases)
     RubyVM::InstructionSequence.compile(@files.fetch("bin/kamal-restore"))
@@ -63,13 +69,15 @@ class KamalRestoreTemplateTest < Minitest::Test
     )
 
     RubyVM::InstructionSequence.compile(files.fetch("bin/wait-for-litestream"))
+    RubyVM::InstructionSequence.compile(files.fetch("lib/litestream/r2_configurator.rb"))
+    RubyVM::InstructionSequence.compile(files.fetch("test/lib/litestream/r2_configurator_test.rb"))
   end
 
   def test_plan_only_uses_litestream_dry_run_without_mutating_kamal
     runner = FakeRunner.new
 
     status = KamalRestore::CLI.new(
-      ["--plan"],
+      ["--destination=production", "--plan"],
       input: StringIO.new,
       output: StringIO.new,
       error: StringIO.new,
@@ -85,13 +93,29 @@ class KamalRestoreTemplateTest < Minitest::Test
       refute_includes command, "-force"
       refute_includes command, "-if-replica-exists"
     end
+    assert runner.raw_commands.all? { |command| command.last(2) == %w[-d production] }
+  end
+
+  def test_destination_is_required
+    runner = FakeRunner.new
+
+    status = KamalRestore::CLI.new(
+      ["--plan"],
+      input: StringIO.new,
+      output: StringIO.new,
+      error: StringIO.new,
+      runner:
+    ).run
+
+    assert_equal 1, status
+    assert_empty runner.commands
   end
 
   def test_plan_normalizes_rfc3339_timestamp
     runner = FakeRunner.new
 
     status = KamalRestore::CLI.new(
-      ["--plan", "--timestamp=2026-08-16T09:00:00+09:00"],
+      ["--destination=production", "--plan", "--timestamp=2026-08-16T09:00:00+09:00"],
       input: StringIO.new,
       output: StringIO.new,
       error: StringIO.new,
@@ -110,8 +134,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     runner = FakeRunner.new(fail_when: ->(command) { command.include?("-dry-run") })
 
     status = KamalRestore::CLI.new(
-      [],
-      input: TTYIO.new("RESTORE sample latest\n"),
+      ["--destination=production"],
+      input: TTYIO.new("RESTORE sample production latest\n"),
       output: TTYIO.new,
       error: StringIO.new,
       runner:
@@ -125,8 +149,8 @@ class KamalRestoreTemplateTest < Minitest::Test
   def test_write_operation_requires_tty_and_exact_confirmation
     non_tty_runner = FakeRunner.new
     non_tty_status = KamalRestore::CLI.new(
-      [],
-      input: StringIO.new("RESTORE sample latest\n"),
+      ["--destination=production"],
+      input: StringIO.new("RESTORE sample production latest\n"),
       output: StringIO.new,
       error: StringIO.new,
       runner: non_tty_runner
@@ -137,7 +161,7 @@ class KamalRestoreTemplateTest < Minitest::Test
 
     mismatch_runner = FakeRunner.new
     mismatch_status = KamalRestore::CLI.new(
-      [],
+      ["--destination=production"],
       input: TTYIO.new("yes\n"),
       output: TTYIO.new,
       error: StringIO.new,
@@ -152,7 +176,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     runner = FakeRunner.new
 
     status = KamalRestore::CLI.new(
-      ["--yes"],
+      ["--destination=production", "--yes"],
       input: TTYIO.new,
       output: TTYIO.new,
       error: StringIO.new,
@@ -168,8 +192,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     runner = FakeRunner.new
 
     status = KamalRestore::CLI.new(
-      ["--rollback=#{operation_id}"],
-      input: TTYIO.new("ROLLBACK sample #{operation_id}\n"),
+      ["--destination=production", "--rollback=#{operation_id}"],
+      input: TTYIO.new("ROLLBACK sample production #{operation_id}\n"),
       output: TTYIO.new,
       error: StringIO.new,
       runner:
@@ -187,8 +211,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     runner = FakeRunner.new
 
     status = KamalRestore::CLI.new(
-      [],
-      input: TTYIO.new("RESTORE sample latest\n"),
+      ["--destination=production"],
+      input: TTYIO.new("RESTORE sample production latest\n"),
       output: TTYIO.new,
       error: StringIO.new,
       runner:
@@ -207,15 +231,15 @@ class KamalRestoreTemplateTest < Minitest::Test
     refute_nil worker_start
     assert_operator web_start, :<, worker_start
     assert runner.commands.any? { |command| command == %w[app live] }
-    assert runner.commands.any? { |command| command.last == "rm -f .kamal/sample-restore-in-progress" }
+    assert runner.commands.any? { |command| command.last == "rm -f .kamal/sample-production-restore-in-progress" }
   end
 
   def test_failure_before_install_restarts_original_services_without_install
     runner = FakeRunner.new(fail_when: ->(command) { command.include?("-integrity-check") })
 
     status = KamalRestore::CLI.new(
-      [],
-      input: TTYIO.new("RESTORE sample latest\n"),
+      ["--destination=production"],
+      input: TTYIO.new("RESTORE sample production latest\n"),
       output: TTYIO.new,
       error: StringIO.new,
       runner:
@@ -225,7 +249,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     refute runner.commands.any? { |command| command.include?("install") }
     assert runner.commands.any? { |command| command == %w[accessory start litestream] }
     assert runner.commands.any? { |command| command == %w[app start -r web] }
-    assert runner.commands.any? { |command| command.last == "rm -f .kamal/sample-restore-in-progress" }
+    assert runner.commands.any? { |command| command.last == "rm -f .kamal/sample-production-restore-in-progress" }
   end
 
   def test_lock_conflict_aborts_before_application_stop
@@ -234,8 +258,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     end)
 
     status = KamalRestore::CLI.new(
-      [],
-      input: TTYIO.new("RESTORE sample latest\n"),
+      ["--destination=production"],
+      input: TTYIO.new("RESTORE sample production latest\n"),
       output: TTYIO.new,
       error: StringIO.new,
       runner:
@@ -243,7 +267,7 @@ class KamalRestoreTemplateTest < Minitest::Test
 
     assert_equal 1, status
     refute runner.commands.any? { |command| command == %w[app stop] }
-    assert runner.commands.any? { |command| command.last == "rm -f .kamal/sample-restore-in-progress" }
+    assert runner.commands.any? { |command| command.last == "rm -f .kamal/sample-production-restore-in-progress" }
   end
 
   def test_install_failure_keeps_services_stopped_and_marker_present
@@ -252,8 +276,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     end)
 
     status = KamalRestore::CLI.new(
-      [],
-      input: TTYIO.new("RESTORE sample latest\n"),
+      ["--destination=production"],
+      input: TTYIO.new("RESTORE sample production latest\n"),
       output: TTYIO.new,
       error: StringIO.new,
       runner:
@@ -263,7 +287,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     assert runner.commands.any? { |command| command == %w[app stop] }
     assert runner.commands.any? { |command| command == %w[accessory stop litestream] }
     refute runner.commands.any? { |command| command == %w[app start -r web] }
-    refute runner.commands.any? { |command| command.last == "rm -f .kamal/sample-restore-in-progress" }
+    refute runner.commands.any? { |command| command.last == "rm -f .kamal/sample-production-restore-in-progress" }
   end
 
   def test_volume_helper_installs_and_rolls_back_the_database_set
@@ -339,28 +363,44 @@ class KamalRestoreTemplateTest < Minitest::Test
       "action_cable" => "solid_cable",
       "web_push" => "use"
     )
-    original_environment = %w[KAMAL_DEPLOY_HOST KAMAL_PROXY_HOST AWS_REGION].to_h { |name| [name, ENV[name]] }
+    original_environment = %w[KAMAL_DEPLOY_HOST KAMAL_PROXY_HOST KAMAL_DESTINATION].to_h { |name| [name, ENV[name]] }
     ENV.update(
       "KAMAL_DEPLOY_HOST" => "192.0.2.10",
       "KAMAL_PROXY_HOST" => "app.example.com",
-      "AWS_REGION" => "ap-northeast-1"
+      "KAMAL_DESTINATION" => "production"
     )
     deploy = YAML.safe_load(ERB.new(files.fetch("config/deploy.yml")).result, aliases: true)
     litestream = YAML.safe_load(files.fetch("config/litestream.yml"), aliases: true)
 
     assert_equal "sample", deploy.fetch("service")
     assert_equal "2.11.0", deploy.fetch("minimum_version")
+    assert_equal true, deploy.fetch("require_destination")
     assert_equal "web", deploy.fetch("primary_role")
     assert_equal "amd64", deploy.dig("builder", "arch")
     assert_equal ["192.0.2.10"], deploy.dig("servers", "web")
     assert_equal "bin/jobs --mode async", deploy.dig("servers", "worker", "cmd")
     assert_equal "litestream/litestream:0.5.15", deploy.dig("accessories", "litestream", "image")
-    assert_equal ["sample_storage:/rails/storage"], deploy.dig("accessories", "litestream", "volumes")
+    assert_equal ["sample_production_storage:/rails/storage"], deploy.dig("accessories", "litestream", "volumes")
     assert_equal "1000:1000", deploy.dig("accessories", "litestream", "options", "user")
     assert_equal %w[primary storage queue cable], litestream.fetch("dbs").map { |database| File.basename(database.fetch("path")).sub(/\Aproduction_?/, "").sub(".sqlite3", "").then { |name| name.empty? ? "primary" : name } }
     assert litestream.fetch("dbs").all? { |database| database.fetch("restore-if-db-not-exists") }
+    assert_equal %w[primary storage queue cable], litestream.fetch("dbs").map { |database| database.dig("replica", "path") }
+    litestream.fetch("dbs").each do |database|
+      replica = database.fetch("replica")
+      assert_equal "s3", replica.fetch("type")
+      assert_equal "${LITESTREAM_R2_BUCKET}", replica.fetch("bucket")
+      assert_equal "${CF_ACCOUNT_ID}.r2.cloudflarestorage.com", replica.fetch("endpoint")
+      assert_equal "auto", replica.fetch("region")
+      assert_equal "${R2_ACCESS_KEY}", replica.fetch("access-key-id")
+      assert_equal "${R2_SECRET_KEY}", replica.fetch("secret-access-key")
+    end
     refute files.fetch("config/litestream.yml").include?("production_cache.sqlite3")
-    assert_includes files.fetch(".kamal/secrets"), "LITESTREAM_CABLE_REPLICA_URL=${LITESTREAM_CABLE_REPLICA_URL:?LITESTREAM_CABLE_REPLICA_URL is required}"
+    refute_match(/AWS_|LITESTREAM_(?:REPLICA|STORAGE_REPLICA|QUEUE_REPLICA|CABLE_REPLICA)_URL/, files.fetch("config/litestream.yml"))
+    assert_includes files.fetch(".kamal/secrets-common"), "RAILS_MASTER_KEY=$(cat config/master.key)"
+    refute files.key?(".kamal/secrets")
+    assert_equal "--- {}\n", files.fetch("config/deploy.production.yml")
+    assert_equal "--- {}\n", files.fetch("config/deploy.staging.yml")
+    assert_includes files.fetch("lib/tasks/litestream.rake"), "Litestream::R2Configurator.new(root: Rails.root).run!"
 
     minimal_files = build_kamal_files(
       "active_job" => "skip",
@@ -375,6 +415,165 @@ class KamalRestoreTemplateTest < Minitest::Test
     original_environment&.each do |name, value|
       value.nil? ? ENV.delete(name) : ENV[name] = value
     end
+  end
+
+  def test_r2_configurator_creates_only_missing_bucket_and_writes_id_based_secret_references
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    Dir.mktmpdir("r2-configurator") do |directory|
+      root = Pathname(directory)
+      wrangler = root.join("node_modules/.bin/wrangler")
+      FileUtils.mkdir_p(wrangler.dirname)
+      wrangler.write("#!/bin/sh\n")
+      wrangler.chmod(0o755)
+      result = Litestream::R2Configurator::Result
+      responses = [
+        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-other", name: "Other Cloudflare" }, { id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
+        result.new(stdout: JSON.generate(name: "sample-litestream-staging"), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate([{ account_uuid: "op-other", name: "Other 1Password" }, { account_uuid: "op-account", name: "1Password" }]), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate([{ id: "vault-other", name: "Other Vault" }, { id: "vault-id", name: "Deploy" }]), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate([{ id: "staging-item", title: "sample Litestream R2 staging" }]), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: "created\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(fields: []), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(id: "production-item"), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(id: "staging-item", title: "sample Litestream R2 staging", fields: []), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(id: "staging-item"), stderr: "", success: true, exitstatus: 0)
+      ]
+      runner = Class.new do
+        attr_reader :calls
+
+        define_method(:initialize) do |scripted|
+          @scripted = scripted
+          @calls = []
+        end
+
+        define_method(:capture) do |command, environment:, stdin_data:|
+          @calls << { command:, environment:, stdin_data: }
+          @scripted.fetch(@calls.length - 1)
+        end
+      end.new(responses)
+      prompt = Class.new do
+        def initialize
+          @inputs = %w[
+            sample-litestream-production sample-litestream-staging
+            production-access production-secret staging-access staging-secret
+          ]
+        end
+
+        def choose(choices, header:, selected:, no_limit: false)
+          return choices if no_limit
+
+          header.to_s
+          choices.last || selected.fetch(0)
+        end
+
+        def input(**)
+          @inputs.shift
+        end
+
+        def confirm(*)
+          true
+        end
+      end.new
+
+      output = StringIO.new
+      Litestream::R2Configurator.new(root:, prompt:, runner:, output:).run!
+
+      create_calls = runner.calls.select { |call| call.fetch(:command).include?("create") }
+      assert_equal 2, create_calls.length
+      assert create_calls.any? { |call| call.fetch(:command).include?("sample-litestream-production") }
+      refute create_calls.any? { |call| call.fetch(:command).include?("sample-litestream-staging") && call.fetch(:command).include?("bucket") }
+      assert runner.calls.grep_v(nil).all? do |call|
+        (call.fetch(:command) & %w[production-access production-secret staging-access staging-secret]).empty?
+      end
+      refute_match(/production-access|production-secret|staging-access|staging-secret/, output.string)
+      assert runner.calls.select { |call| call.fetch(:stdin_data)&.match?(/production-access|production-secret|staging-access|staging-secret/) }.all? do |call|
+        call.fetch(:command).first(2) == %w[op item]
+      end
+      assert runner.calls.select { |call| call.fetch(:command).include?("bucket") }.all? do |call|
+        call.fetch(:environment) == { "CLOUDFLARE_ACCOUNT_ID" => "cf-account" }
+      end
+      assert runner.calls.any? do |call|
+        call.fetch(:command) == %w[op vault list --format json --account op-account]
+      end
+      production_secrets = root.join(".kamal/secrets.production").read
+      staging_secrets = root.join(".kamal/secrets.staging").read
+      assert_includes production_secrets, "vault-id/production-item"
+      assert_includes staging_secrets, "vault-id/staging-item"
+      refute_match(/production-access|production-secret|staging-access|staging-secret/, production_secrets + staging_secrets)
+      assert_equal 0o600, root.join(".kamal/secrets.production").stat.mode & 0o777
+    end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_does_not_treat_wrangler_errors_as_a_missing_bucket
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    %w[authentication permission network].each do |failure|
+      Dir.mktmpdir("r2-configurator-error") do |directory|
+        root = Pathname(directory)
+        wrangler = root.join("node_modules/.bin/wrangler")
+        FileUtils.mkdir_p(wrangler.dirname)
+        wrangler.write("#!/bin/sh\n")
+        wrangler.chmod(0o755)
+        result = Litestream::R2Configurator::Result
+        responses = [
+          result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
+          result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
+          result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
+          result.new(stdout: "", stderr: "#{failure} failure", success: false, exitstatus: 1)
+        ]
+        runner = Class.new do
+          attr_reader :calls
+
+          define_method(:initialize) do |scripted|
+            @scripted = scripted
+            @calls = []
+          end
+
+          define_method(:capture) do |command, environment:, stdin_data:|
+            @calls << { command:, environment:, stdin_data: }
+            @scripted.fetch(@calls.length - 1)
+          end
+        end.new(responses)
+        prompt = Class.new do
+          def choose(choices, **options)
+            options.fetch(:no_limit, false) ? choices : options.fetch(:selected).fetch(0)
+          end
+
+          def input(header:, value:)
+            [header, value]
+            value
+          end
+        end.new
+
+        error = assert_raises(Litestream::R2Configurator::Error) do
+          Litestream::R2Configurator.new(root:, prompt:, runner:, output: StringIO.new).run!
+        end
+
+        assert_includes error.message, "#{failure} failure"
+        refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
+        refute_path_exists root.join(".kamal/secrets.production")
+      end
+    end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
   end
 
   private
@@ -416,6 +615,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     builder.define_singleton_method(:append_to_file) do |path, content|
       files[path] = files.fetch(path, "") + content
     end
+    builder.define_singleton_method(:remove_file) { |path| files.delete(path) }
     builder.define_singleton_method(:chmod) { |_path, _mode| nil }
     builder.send(:configure_kamal)
     files

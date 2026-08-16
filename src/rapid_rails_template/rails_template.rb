@@ -26,6 +26,7 @@ gem "sorbet-runtime"
 
 gem_group :development do
   gem "annotaterb"
+  gem "gum", "0.3.2"
   gem "sorbet", require: false
   gem "ruby-lsp", require: false
   gem "ruby-lsp-rails", require: false
@@ -659,8 +660,10 @@ def install_daisyui
 
   create_file "package.json", JSON.pretty_generate("private" => true) + "\n"
   run_checked "npm install --save-dev daisyui@latest"
+  run_checked "npm install --save-dev wrangler@^4"
   package = JSON.parse(File.read("package.json"))
   raise "package.jsonにdaisyUIが登録されていません" unless package.dig("devDependencies", "daisyui")
+  raise "package.jsonにWrangler v4が登録されていません" unless package.dig("devDependencies", "wrangler")&.match?(/\A\^?4\./)
   raise "package-lock.jsonが生成されませんでした" unless File.file?("package-lock.json")
 
   append_to_file stylesheet_path, <<~CSS
@@ -11962,6 +11965,7 @@ def configure_evidence_capture
     require "application_system_test_case"
     require "digest"
     require "fileutils"
+    require "gum"
     require "json"
     require "uri"
 
@@ -13785,6 +13789,7 @@ def configure_sorbet
         app/services/push_notifier.rb
         app/services/vapid_configuration.rb
         lib/application_identity.rb
+        lib/litestream/r2_configurator.rb
       ].freeze
 
       APPLICATION_DSL_RBI_SOURCES = {
@@ -13905,6 +13910,7 @@ def configure_application_typechecking
     app/services/push_notifier.rb
     app/services/vapid_configuration.rb
     lib/application_identity.rb
+    lib/litestream/r2_configurator.rb
   ].select { |path| File.exist?(path) }
 
   paths.each do |path|
@@ -14239,6 +14245,8 @@ def kamal_restore_cli_body
 
         def run
           options = parse_options
+          @destination = options.fetch(:destination)
+          @marker = ".kamal/#{APP_ID}-#{@destination}-restore-in-progress"
           if options.fetch(:rollback)
             run_rollback(options.fetch(:rollback))
           else
@@ -14256,15 +14264,20 @@ def kamal_restore_cli_body
         private
 
         def parse_options
-          options = { timestamp: nil, plan: false, rollback: nil }
+          options = { destination: nil, timestamp: nil, plan: false, rollback: nil }
           parser = OptionParser.new do |option_parser|
-            option_parser.banner = "Usage: bin/kamal-restore [--plan] [--timestamp=RFC3339] | --rollback=OPERATION_ID"
+            option_parser.banner = "Usage: bin/kamal-restore --destination=production|staging [--plan] [--timestamp=RFC3339] | --rollback=OPERATION_ID"
+            option_parser.on("--destination=DESTINATION") do |value|
+              options[:destination] = value if %w[production staging].include?(value)
+              raise OptionParser::InvalidArgument, "--destination must be production or staging" unless options[:destination]
+            end
             option_parser.on("--timestamp=RFC3339") { |value| options[:timestamp] = normalize_timestamp(value) }
             option_parser.on("--plan") { options[:plan] = true }
             option_parser.on("--rollback=OPERATION_ID") { |value| options[:rollback] = validate_operation_id(value) }
           end
           parser.parse!(@argv)
           raise OptionParser::InvalidArgument, @argv.join(" ") unless @argv.empty?
+          raise OptionParser::MissingArgument, "--destination" unless options.fetch(:destination)
           if options.fetch(:rollback) && (options.fetch(:timestamp) || options.fetch(:plan))
             raise OptionParser::InvalidArgument, "--rollback cannot be combined with --timestamp or --plan"
           end
@@ -14287,17 +14300,18 @@ def kamal_restore_cli_body
         def run_restore(timestamp:, plan_only:)
           target = timestamp || "latest"
           @output.puts "Application: #{APP_ID}"
+          @output.puts "Destination: #{@destination}"
           @output.puts "Restore target: #{target}"
           preview_restore(timestamp)
           return if plan_only
 
-          confirm!("RESTORE #{APP_ID} #{target}")
+          confirm!("RESTORE #{APP_ID} #{@destination} #{target}")
           operation_id = "#{Time.now.utc.strftime(TIMESTAMP_FORMAT)}-#{SecureRandom.hex(6)}"
           begin
             begin_restore_operation(operation_id)
             quiesce_application
             sync_databases
-            @runner.run!("accessory", "stop", "litestream")
+            run_kamal!("accessory", "stop", "litestream")
             acquire_lock!("Restore #{APP_ID} #{operation_id}")
             app_exec!("bin/kamal-restore-volume", "prepare", operation_id)
             restore_databases(operation_id, timestamp)
@@ -14312,18 +14326,19 @@ def kamal_restore_cli_body
           end
 
           @output.puts "Restore completed: #{operation_id}"
-          @output.puts "Rollback: bin/kamal-restore --rollback=#{operation_id}"
+          @output.puts "Rollback: bin/kamal-restore --destination=#{@destination} --rollback=#{operation_id}"
         end
 
         def run_rollback(operation_id)
           @output.puts "Application: #{APP_ID}"
+          @output.puts "Destination: #{@destination}"
           @output.puts "Rollback operation: #{operation_id}"
-          confirm!("ROLLBACK #{APP_ID} #{operation_id}")
+          confirm!("ROLLBACK #{APP_ID} #{@destination} #{operation_id}")
           begin
             begin_restore_operation(operation_id)
             quiesce_application
             sync_databases
-            @runner.run!("accessory", "stop", "litestream")
+            run_kamal!("accessory", "stop", "litestream")
             acquire_lock!("Rollback #{APP_ID} #{operation_id}")
             @database_swapped = true
             app_exec!("bin/kamal-restore-volume", "rollback", operation_id)
@@ -14354,7 +14369,7 @@ def kamal_restore_cli_body
         def preview_restore(timestamp)
           DATABASES.each do |database|
             @output.puts "\nDatabase: #{database.fetch("name")}"
-            @runner.run!(*accessory_restore_command(
+            run_kamal!(*accessory_restore_command(
               database,
               output_path: "/tmp/#{APP_ID}-#{database.fetch("name")}-restore-preview.sqlite3",
               timestamp:,
@@ -14365,7 +14380,7 @@ def kamal_restore_cli_body
 
         def begin_restore_operation(operation_id)
           server_exec!("mkdir", "-p", ".kamal")
-          server_exec!("touch", MARKER)
+          server_exec!("touch", @marker)
           @marker_created = true
           acquire_lock!("Restore barrier #{APP_ID} #{operation_id}")
           release_lock!
@@ -14375,14 +14390,14 @@ def kamal_restore_cli_body
         end
 
         def quiesce_application
-          @runner.run!("app", "maintenance")
+          run_kamal!("app", "maintenance")
           @quiesced = true
-          @runner.run!("app", "stop")
+          run_kamal!("app", "stop")
         end
 
         def sync_databases
           DATABASES.each do |database|
-            @runner.run!(
+            run_kamal!(
               "accessory", "exec", "litestream", "--reuse",
               "litestream", "sync", "-socket", SOCKET_PATH, "-wait", "-timeout", "120",
               database.fetch("path")
@@ -14393,8 +14408,8 @@ def kamal_restore_cli_body
         def restore_databases(operation_id, timestamp)
           DATABASES.each do |database|
             output_path = "/rails/storage/.restore/#{operation_id}/staged/#{database.fetch("name")}.sqlite3"
-            @runner.run!(*accessory_restore_command(database, output_path:, timestamp:, dry_run: true))
-            @runner.run!(*accessory_restore_command(database, output_path:, timestamp:, dry_run: false))
+            run_kamal!(*accessory_restore_command(database, output_path:, timestamp:, dry_run: true))
+            run_kamal!(*accessory_restore_command(database, output_path:, timestamp:, dry_run: false))
           end
         end
 
@@ -14411,68 +14426,76 @@ def kamal_restore_cli_body
         end
 
         def app_exec!(*command)
-          @runner.run!("app", "exec", "-p", "-r", "web", *command)
+          run_kamal!("app", "exec", "-p", "-r", "web", *command)
         end
 
         def server_exec!(*command)
-          @runner.run!("server", "exec", Shellwords.join(command))
+          run_kamal!("server", "exec", Shellwords.join(command))
         end
 
         def acquire_lock!(message)
-          @runner.run!("lock", "acquire", "-m", message)
+          run_kamal!("lock", "acquire", "-m", message)
           @lock_held = true
         end
 
         def release_lock!
           return unless @lock_held
 
-          @runner.run!("lock", "release")
+          run_kamal!("lock", "release")
           @lock_held = false
         end
 
         def start_application
-          @runner.run!("accessory", "start", "litestream")
+          run_kamal!("accessory", "start", "litestream")
           app_exec!("bin/wait-for-litestream")
-          @runner.run!("app", "start", "-r", "web")
-          @runner.run!("app", "start", "-r", "worker") if HAS_WORKER
-          @runner.run!("app", "live")
+          run_kamal!("app", "start", "-r", "web")
+          run_kamal!("app", "start", "-r", "worker") if HAS_WORKER
+          run_kamal!("app", "live")
           @quiesced = false
         end
 
         def remove_marker
           return unless @marker_created
 
-          server_exec!("rm", "-f", MARKER)
+          server_exec!("rm", "-f", @marker)
           @marker_created = false
         end
 
         def recover_after_failure(operation_id: nil)
           if @lock_held
-            @runner.ignore_failure("lock", "release")
+            ignore_kamal_failure("lock", "release")
             @lock_held = false
           end
 
           if @database_swapped
-            @runner.ignore_failure("app", "maintenance")
-            @runner.ignore_failure("app", "stop")
-            @runner.ignore_failure("accessory", "stop", "litestream")
+            ignore_kamal_failure("app", "maintenance")
+            ignore_kamal_failure("app", "stop")
+            ignore_kamal_failure("accessory", "stop", "litestream")
             @error.puts "Database files changed; services remain stopped for inspection."
-            @error.puts "Rollback: bin/kamal-restore --rollback=#{operation_id}" if operation_id
+            @error.puts "Rollback: bin/kamal-restore --destination=#{@destination} --rollback=#{operation_id}" if operation_id
             return
           end
 
           if @quiesced
-            @runner.ignore_failure("accessory", "start", "litestream")
-            @runner.ignore_failure("app", "exec", "-p", "-r", "web", "bin/wait-for-litestream")
-            @runner.ignore_failure("app", "start", "-r", "web")
-            @runner.ignore_failure("app", "start", "-r", "worker") if HAS_WORKER
-            @runner.ignore_failure("app", "live")
+            ignore_kamal_failure("accessory", "start", "litestream")
+            ignore_kamal_failure("app", "exec", "-p", "-r", "web", "bin/wait-for-litestream")
+            ignore_kamal_failure("app", "start", "-r", "web")
+            ignore_kamal_failure("app", "start", "-r", "worker") if HAS_WORKER
+            ignore_kamal_failure("app", "live")
             @quiesced = false
           end
           if @marker_created
-            @runner.ignore_failure("server", "exec", Shellwords.join(["rm", "-f", MARKER]))
+            ignore_kamal_failure("server", "exec", Shellwords.join(["rm", "-f", @marker]))
             @marker_created = false
           end
+        end
+
+        def run_kamal!(*arguments)
+          @runner.run!(*arguments, "-d", @destination)
+        end
+
+        def ignore_kamal_failure(*arguments)
+          @runner.ignore_failure(*arguments, "-d", @destination)
         end
       end
     end
@@ -14650,7 +14673,6 @@ def configure_kamal_restore(app_id, databases)
       APP_ID = #{app_id.inspect}
       DATABASES = #{databases.inspect}.freeze
       HAS_WORKER = #{databases.any? { |database| database.fetch("name") == "queue" }}
-      MARKER = ".kamal/#{app_id}-restore-in-progress"
   RUBY
   restore_cli << <<~'RUBY'
       SOCKET_PATH = "/rails/storage/.litestream.sock"
@@ -14665,17 +14687,531 @@ def configure_kamal_restore(app_id, databases)
   chmod "bin/kamal-restore", 0o755
 end
 
+def configure_litestream_r2(app_id)
+  configurator = <<~RUBY
+    # typed: strict
+    # frozen_string_literal: true
+
+    require "fileutils"
+    require "json"
+    require "open3"
+    require "pathname"
+    require "shellwords"
+    require "sorbet-runtime"
+    require "stringio"
+    require "tempfile"
+
+    module Litestream
+      class R2Configurator
+        extend T::Sig
+
+        APP_ID = #{app_id.inspect}
+  RUBY
+  configurator << <<~'RUBY'
+        DESTINATIONS = %w[production staging].freeze
+        SECRET_FIELDS = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY].freeze
+        BUCKET_PATTERN = /\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/
+
+        Error = Class.new(StandardError)
+
+        class Result < T::Struct
+          const :stdout, String
+          const :stderr, String
+          const :success, T::Boolean
+          const :exitstatus, Integer
+        end
+
+        class CommandRunner
+          extend T::Sig
+
+          sig do
+            params(
+              command: T::Array[String],
+              environment: T::Hash[String, String],
+              stdin_data: T.nilable(String)
+            ).returns(Result)
+          end
+          def capture(command, environment: {}, stdin_data: nil)
+            stdout, stderr, status = T.unsafe(Open3).capture3(environment, *command, stdin_data: stdin_data)
+            Result.new(stdout:, stderr:, success: status.success?, exitstatus: status.exitstatus || 1)
+          end
+        end
+
+        sig do
+          params(
+            root: Pathname,
+            prompt: T.untyped,
+            runner: T.untyped,
+            output: T.any(IO, StringIO)
+          ).void
+        end
+        def initialize(root: Pathname.pwd, prompt: Gum, runner: CommandRunner.new, output: $stdout)
+          @root = root
+          @prompt = prompt
+          @runner = runner
+          @output = output
+          @wrangler = T.let(root.join("node_modules/.bin/wrangler").to_s, String)
+        end
+
+        sig { void }
+        def run!
+          validate_dependencies!
+          destinations = choose_destinations
+          cloudflare = cloudflare_identity
+          account = choose_record(cloudflare.fetch("accounts"), "Cloudflare account")
+          account_id = String(account.fetch("id"))
+          buckets = bucket_names(destinations)
+          existing_buckets = existing_buckets(account_id, buckets.values)
+          op_account = choose_record(json_command!(%w[op account list --format json]), "1Password account")
+          op_account_id = record_id(op_account)
+          vault = choose_record(
+            json_command!(%W[op vault list --format json --account #{op_account_id}]),
+            "1Password vault"
+          )
+          vault_id = record_id(vault)
+          items = json_command!(%W[op item list --format json --vault #{vault_id} --account #{op_account_id}])
+          item_plans = plan_items(destinations, items)
+
+          print_plan(cloudflare, account, op_account, vault, destinations, buckets, existing_buckets, item_plans)
+          unless @prompt.confirm(
+            "この内容でR2と1Passwordを構成しますか？",
+            default: false,
+            affirmative: "実行",
+            negative: "中止"
+          )
+            @output.puts "中止しました。変更はありません。"
+            return
+          end
+
+          destinations.each do |destination|
+            bucket = buckets.fetch(destination)
+            create_bucket(account_id, bucket) unless existing_buckets.include?(bucket)
+            credentials = prompt_credentials(destination, bucket, account_id)
+            item_id = upsert_item(
+              item_plans.fetch(destination),
+              op_account_id:,
+              vault_id:,
+              fields: credentials.merge("CF_ACCOUNT_ID" => account_id, "LITESTREAM_R2_BUCKET" => bucket)
+            )
+            write_kamal_secrets(destination, op_account_id, vault_id, item_id)
+          end
+
+          @output.puts "R2設定が完了しました。デプロイ時は bin/kamal deploy -d production|staging を使用してください。"
+        end
+
+        private
+
+        sig { void }
+        def validate_dependencies!
+          raise Error, "Wrangler v4が見つかりません。npm installを実行してください: #{@wrangler}" unless File.executable?(@wrangler)
+
+          version = command!([@wrangler, "--version"])
+          raise Error, "Wrangler v4が必要です: #{version.strip}" unless version.match?(/\b4\.\d+\.\d+\b/)
+
+          command!(%w[op --version])
+        end
+
+        sig { returns(T::Array[String]) }
+        def choose_destinations
+          selected = @prompt.choose(
+            DESTINATIONS,
+            header: "構成するKamal destination",
+            selected: DESTINATIONS,
+            no_limit: true
+          )
+          unless selected.is_a?(Array) && selected.any? && (selected - DESTINATIONS).empty?
+            raise Error, "productionまたはstagingを1つ以上選択してください"
+          end
+
+          DESTINATIONS.select { |destination| selected.include?(destination) }
+        end
+
+        sig { returns(T::Hash[String, T.untyped]) }
+        def cloudflare_identity
+          identity = json_command!([@wrangler, "whoami", "--json"])
+          raise Error, "WranglerはCloudflareへログインしていません" unless identity.is_a?(Hash) && identity["loggedIn"]
+          accounts = identity["accounts"]
+          raise Error, "Wranglerのログイン先Cloudflare accountがありません" unless accounts.is_a?(Array) && accounts.any?
+
+          identity
+        end
+
+        sig { params(destinations: T::Array[String]).returns(T::Hash[String, String]) }
+        def bucket_names(destinations)
+          destinations.to_h do |destination|
+            initial = self.class.default_bucket_name(APP_ID, destination)
+            requested = "#{APP_ID}-litestream-#{destination}"
+            @output.puts "R2 bucket初期値を正規化しました: #{requested} -> #{initial}" unless requested == initial
+            value = String(@prompt.input(header: "#{destination} R2 bucket", value: initial)).strip
+            validate_bucket_name!(value)
+            [destination, value]
+          end
+        end
+
+        sig { params(account_id: String, buckets: T::Array[String]).returns(T::Array[String]) }
+        def existing_buckets(account_id, buckets)
+          buckets.filter_map do |bucket|
+            command = [@wrangler, "r2", "bucket", "info", bucket, "--json"]
+            result = @runner.capture(command, environment: cloudflare_environment(account_id), stdin_data: nil)
+            unless result.success
+              diagnostic = [result.stdout, result.stderr].join("\n")
+              next if diagnostic.match?(/\[code: 10006\]/)
+
+              detail = [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
+              detail = "exit status #{result.exitstatus}" if detail.empty?
+              raise Error, "R2 bucket確認に失敗しました (#{bucket}): #{detail}"
+            end
+
+            parsed = JSON.parse(result.stdout)
+            raise Error, "Wranglerのbucket情報応答が不正です: #{bucket}" unless parsed.is_a?(Hash) && parsed["name"] == bucket
+
+            bucket
+          end
+        rescue JSON::ParserError
+          raise Error, "Wranglerのbucket情報JSON応答が不正です"
+        end
+
+        sig do
+          params(
+            destinations: T::Array[String],
+            items: T.untyped
+          ).returns(T::Hash[String, T::Hash[String, T.untyped]])
+        end
+        def plan_items(destinations, items)
+          raise Error, "1Password item一覧応答が不正です" unless items.is_a?(Array)
+
+          destinations.to_h do |destination|
+            title = "#{APP_ID} Litestream R2 #{destination}"
+            matches = items.select { |item| item.is_a?(Hash) && item["title"] == title }
+            raise Error, "同名の1Password itemが複数あります: #{title}" if matches.length > 1
+
+            [destination, { "title" => title, "id" => matches.first&.fetch("id", nil) }]
+          end
+        end
+
+        sig do
+          params(
+            cloudflare: T::Hash[String, T.untyped],
+            account: T::Hash[String, T.untyped],
+            op_account: T::Hash[String, T.untyped],
+            vault: T::Hash[String, T.untyped],
+            destinations: T::Array[String],
+            buckets: T::Hash[String, String],
+            existing_buckets: T::Array[String],
+            item_plans: T::Hash[String, T::Hash[String, T.untyped]]
+          ).void
+        end
+        def print_plan(cloudflare, account, op_account, vault, destinations, buckets, existing_buckets, item_plans)
+          user = cloudflare["user"]
+          email = user.is_a?(Hash) ? user["email"] : nil
+          @output.puts "Cloudflare login: #{email || "unknown"} (#{cloudflare.fetch("authType", "unknown")})"
+          @output.puts "Cloudflare account: #{record_name(account)} (#{record_id(account)})"
+          @output.puts "1Password account: #{record_name(op_account)} (#{record_id(op_account)})"
+          @output.puts "1Password vault: #{record_name(vault)} (#{record_id(vault)})"
+          @output.puts "適用予定:"
+          destinations.each do |destination|
+            bucket = buckets.fetch(destination)
+            bucket_action = existing_buckets.include?(bucket) ? "既存を使用" : "新規作成"
+            item_action = item_plans.fetch(destination).fetch("id") ? "更新" : "作成"
+            @output.puts "  #{destination}: bucket=#{bucket} (#{bucket_action}), 1Password item=#{item_plans.fetch(destination).fetch("title")} (#{item_action})"
+            @output.puts "    .kamal/secrets.#{destination}: 1Password ID参照を生成"
+          end
+        end
+
+        sig { params(account_id: String, bucket: String).void }
+        def create_bucket(account_id, bucket)
+          command!([@wrangler, "r2", "bucket", "create", bucket], environment: cloudflare_environment(account_id))
+          @output.puts "R2 bucketを作成しました: #{bucket}"
+        end
+
+        sig { params(destination: String, bucket: String, account_id: String).returns(T::Hash[String, String]) }
+        def prompt_credentials(destination, bucket, account_id)
+          @output.puts <<~MESSAGE
+
+            Cloudflare Dashboardで #{bucket} のみに限定した Object Read & Write API tokenを作成してください。
+            Account ID: #{account_id}
+            Destination: #{destination}
+          MESSAGE
+          ready = @prompt.confirm(
+            "#{destination}用tokenのAccess Key IDとSecret Access Keyを取得しましたか？",
+            default: false,
+            affirmative: "取得済み",
+            negative: "中断"
+          )
+          raise Error, "token入力前に中断しました。作成済みbucketは保持されています。再実行してください。" unless ready
+
+          access_key = String(@prompt.input(header: "#{destination} R2 Access Key ID", password: true)).strip
+          secret_key = String(@prompt.input(header: "#{destination} R2 Secret Access Key", password: true)).strip
+          raise Error, "R2 Access Key IDは空にできません" if access_key.empty?
+          raise Error, "R2 Secret Access Keyは空にできません" if secret_key.empty?
+
+          { "R2_ACCESS_KEY" => access_key, "R2_SECRET_KEY" => secret_key }
+        end
+
+        sig do
+          params(
+            plan: T::Hash[String, T.untyped],
+            op_account_id: String,
+            vault_id: String,
+            fields: T::Hash[String, String]
+          ).returns(String)
+        end
+        def upsert_item(plan, op_account_id:, vault_id:, fields:)
+          item_id = plan.fetch("id")
+          item = if item_id
+            json_command!(%W[op item get #{item_id} --format json --vault #{vault_id} --account #{op_account_id}])
+          else
+            json_command!(%W[op item template get API\ Credential --account #{op_account_id}])
+          end
+          raise Error, "1Password item応答が不正です" unless item.is_a?(Hash)
+
+          item["title"] = plan.fetch("title")
+          current_fields = item.fetch("fields", [])
+          raise Error, "1Password item fields応答が不正です" unless current_fields.is_a?(Array)
+          item["fields"] = current_fields.reject do |field|
+            field.is_a?(Hash) && SECRET_FIELDS.include?(field["label"] || field["id"])
+          end
+          SECRET_FIELDS.each do |name|
+            item.fetch("fields") << {
+              "id" => name,
+              "label" => name,
+              "type" => %w[R2_ACCESS_KEY R2_SECRET_KEY].include?(name) ? "CONCEALED" : "STRING",
+              "value" => fields.fetch(name)
+            }
+          end
+
+          command = if item_id
+            %W[op item edit #{item_id} --format json --vault #{vault_id} --account #{op_account_id}]
+          else
+            %W[op item create --format json --vault #{vault_id} --account #{op_account_id} -]
+          end
+          saved = json_command!(command, stdin_data: JSON.generate(item))
+          saved_id = saved["id"] if saved.is_a?(Hash)
+          raise Error, "保存した1Password itemのIDを取得できません" unless saved_id.is_a?(String) && !saved_id.empty?
+
+          saved_id
+        end
+
+        sig { params(destination: String, account_id: String, vault_id: String, item_id: String).void }
+        def write_kamal_secrets(destination, account_id, vault_id, item_id)
+          path = @root.join(".kamal/secrets.#{destination}")
+          FileUtils.mkdir_p(path.dirname)
+          account = Shellwords.escape(account_id)
+          source = Shellwords.escape("#{vault_id}/#{item_id}")
+          content = <<~SECRETS
+            R2_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{source} #{SECRET_FIELDS.join(" ")})
+            #{SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $R2_SECRETS)" }.join("\n")}
+          SECRETS
+          Tempfile.create(["secrets-#{destination}", ".tmp"], path.dirname.to_s) do |file|
+            file.write(content)
+            file.flush
+            file.fsync
+            File.chmod(0o600, file.path)
+            File.rename(file.path, path)
+          end
+          @output.puts "Kamal secret参照を生成しました: #{path.relative_path_from(@root)}"
+        end
+
+        sig { params(records: T.untyped, header: String).returns(T::Hash[String, T.untyped]) }
+        def choose_record(records, header)
+          raise Error, "#{header}の候補がありません" unless records.is_a?(Array) && records.any?
+          typed = records.map do |record|
+            raise Error, "#{header}の応答が不正です" unless record.is_a?(Hash)
+
+            record
+          end
+          return typed.fetch(0) if typed.one?
+
+          labels = typed.to_h { |record| ["#{record_name(record)} (#{record_id(record)})", record] }
+          choice = @prompt.choose(labels.keys, header:, selected: [labels.keys.fetch(0)])
+          labels.fetch(String(choice))
+        end
+
+        sig { params(record: T::Hash[String, T.untyped]).returns(String) }
+        def record_id(record)
+          value = record["id"] || record["uuid"] || record["account_uuid"] || record["user_uuid"]
+          raise Error, "account/vault IDを取得できません" unless value.is_a?(String) && !value.empty?
+
+          value
+        end
+
+        sig { params(record: T::Hash[String, T.untyped]).returns(String) }
+        def record_name(record)
+          value = record["name"] || record["title"] || record["account_name"] || record["email"] || record["url"]
+          value.is_a?(String) && !value.empty? ? value : "unknown"
+        end
+
+        sig { params(account_id: String).returns(T::Hash[String, String]) }
+        def cloudflare_environment(account_id)
+          { "CLOUDFLARE_ACCOUNT_ID" => account_id }
+        end
+
+        sig do
+          params(
+            command: T::Array[String],
+            environment: T::Hash[String, String],
+            stdin_data: T.nilable(String)
+          ).returns(String)
+        end
+        def command!(command, environment: {}, stdin_data: nil)
+          result = @runner.capture(command, environment:, stdin_data:)
+          return result.stdout if result.success
+
+          sensitive = !stdin_data.nil? || command.first(2) == %w[op item]
+          detail = sensitive ? "" : [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
+          detail = "exit status #{result.exitstatus}" if detail.empty?
+          raise Error, "コマンドに失敗しました (#{command.first}): #{detail}"
+        end
+
+        sig do
+          params(
+            command: T::Array[String],
+            environment: T::Hash[String, String],
+            stdin_data: T.nilable(String)
+          ).returns(T.untyped)
+        end
+        def json_command!(command, environment: {}, stdin_data: nil)
+          JSON.parse(command!(command, environment:, stdin_data:))
+        rescue JSON::ParserError
+          raise Error, "コマンドのJSON応答が不正です (#{command.first})"
+        end
+
+        sig { params(value: String).void }
+        def validate_bucket_name!(value)
+          return if value.bytesize.between?(3, 63) && BUCKET_PATTERN.match?(value)
+
+          raise Error, "R2 bucket名は3〜63文字の小文字英数字とハイフンのみで、先頭・末尾は英数字にしてください: #{value.inspect}"
+        end
+
+        class << self
+          extend T::Sig
+
+          sig { params(app_id: String, destination: String).returns(String) }
+          def default_bucket_name(app_id, destination)
+            suffix = "-litestream-#{destination}"
+            normalized = app_id.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
+            normalized = "app" if normalized.empty?
+            normalized = normalized.byteslice(0, 63 - suffix.bytesize).to_s.gsub(/-+\z/, "")
+            "#{normalized}#{suffix}"
+          end
+        end
+      end
+    end
+  RUBY
+  create_file "lib/litestream/r2_configurator.rb", configurator, force: true
+
+  create_file "lib/tasks/litestream.rake", <<~'RAKE', force: true
+    # typed: true
+    # frozen_string_literal: true
+
+    require Rails.root.join("lib/litestream/r2_configurator")
+
+    namespace :litestream do
+      namespace :configure do
+        desc "Cloudflare R2とKamal destination secretsを構成する"
+        task r2: :environment do
+          Litestream::R2Configurator.new(root: Rails.root).run!
+        end
+      end
+    end
+  RAKE
+
+  create_file "test/lib/litestream/r2_configurator_test.rb", <<~'RUBY', force: true
+    # typed: true
+    # frozen_string_literal: true
+
+    require "test_helper"
+    require "litestream/r2_configurator"
+    require "stringio"
+    require "tmpdir"
+
+    class LitestreamR2ConfiguratorTest < ActiveSupport::TestCase
+      FakeResult = Data.define(:stdout, :stderr, :success, :exitstatus)
+
+      class FakeRunner
+        attr_reader :calls
+
+        def initialize(responses)
+          @responses = responses
+          @calls = []
+        end
+
+        def capture(command, environment:, stdin_data:)
+          @calls << { command:, environment:, stdin_data: }
+          @responses.fetch(@calls.length - 1)
+        end
+      end
+
+      class RejectingPrompt
+        def initialize
+          @inputs = %w[example-litestream-production example-litestream-staging]
+        end
+
+        def choose(choices, header:, selected:, no_limit: false)
+          header.to_s
+          return choices if no_limit
+
+          selected.fetch(0)
+        end
+
+        def input(**)
+          @inputs.shift
+        end
+
+        def confirm(*) # rubocop:disable Naming/PredicateMethod
+          false
+        end
+      end
+
+      test "normalizes deterministic destination bucket names" do
+        assert_equal "my-app-litestream-production", Litestream::R2Configurator.default_bucket_name("My App!", "production")
+        assert_operator Litestream::R2Configurator.default_bucket_name("a" * 100, "staging").bytesize, :<=, 63
+      end
+
+      test "confirmation rejection has no external mutations" do
+        Dir.mktmpdir do |directory|
+          root = Pathname(directory)
+          wrangler = root.join("node_modules/.bin/wrangler")
+          FileUtils.mkdir_p(wrangler.dirname)
+          wrangler.write("#!/bin/sh\n")
+          wrangler.chmod(0o755)
+          responses = [
+            FakeResult.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
+            FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
+            FakeResult.new(stdout: JSON.generate([{ id: "op-id", name: "1Password" }]), stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: JSON.generate([{ id: "vault-id", name: "Deploy" }]), stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: "[]", stderr: "", success: true, exitstatus: 0)
+          ]
+          runner = FakeRunner.new(responses)
+          output = StringIO.new
+
+          Litestream::R2Configurator.new(root:, prompt: RejectingPrompt.new, runner:, output:).run!
+
+          assert_equal 8, runner.calls.length
+          refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
+          refute_path_exists root.join(".kamal/secrets.production")
+          assert_includes output.string, "Cloudflare login: person@example.com (OAuth Token)"
+          assert_includes output.string, "中止しました。変更はありません。"
+        end
+      end
+    end
+  RUBY
+end
+
 def configure_kamal
   app_id = PLAN.fetch("app_id")
   databases = [
-    { "name" => "primary", "path" => "/rails/storage/production.sqlite3", "replica_env" => "LITESTREAM_REPLICA_URL" },
-    { "name" => "storage", "path" => "/rails/storage/production_storage.sqlite3", "replica_env" => "LITESTREAM_STORAGE_REPLICA_URL" }
+    { "name" => "primary", "path" => "/rails/storage/production.sqlite3" },
+    { "name" => "storage", "path" => "/rails/storage/production_storage.sqlite3" }
   ]
   if VALUES.fetch("active_job") == "solid_queue"
-    databases << { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3", "replica_env" => "LITESTREAM_QUEUE_REPLICA_URL" }
+    databases << { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3" }
   end
   if VALUES.fetch("action_cable") == "solid_cable"
-    databases << { "name" => "cable", "path" => "/rails/storage/production_cable.sqlite3", "replica_env" => "LITESTREAM_CABLE_REPLICA_URL" }
+    databases << { "name" => "cable", "path" => "/rails/storage/production_cable.sqlite3" }
   end
 
   litestream_config = {
@@ -14688,30 +15224,38 @@ def configure_kamal
       {
         "path" => database.fetch("path"),
         "restore-if-db-not-exists" => true,
-        "replica" => { "url" => "$" + "{#{database.fetch("replica_env")}}" }
+        "replica" => {
+          "type" => "s3",
+          "bucket" => "$" + "{LITESTREAM_R2_BUCKET}",
+          "path" => database.fetch("name"),
+          "endpoint" => "$" + "{CF_ACCOUNT_ID}.r2.cloudflarestorage.com",
+          "region" => "auto",
+          "access-key-id" => "$" + "{R2_ACCESS_KEY}",
+          "secret-access-key" => "$" + "{R2_SECRET_KEY}"
+        }
       }
     end
   }
   create_file "config/litestream.yml", YAML.dump(litestream_config, line_width: -1), force: true
 
-  secret_names = %w[RAILS_MASTER_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY]
-  secret_names.concat(databases.map { |database| database.fetch("replica_env") })
-  secret_names.concat(%w[VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT]) if VALUES.fetch("web_push") == "use"
-  kamal_secrets = secret_names.map do |name|
+  common_secret_names = %w[RAILS_MASTER_KEY]
+  common_secret_names.concat(%w[VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT]) if VALUES.fetch("web_push") == "use"
+  kamal_secrets = common_secret_names.map do |name|
     if name == "RAILS_MASTER_KEY"
       "RAILS_MASTER_KEY=$(cat config/master.key)"
     else
       "#{name}=$" + "{#{name}:?#{name} is required}"
     end
   end
-  create_file ".kamal/secrets", kamal_secrets.join("\n") + "\n", force: true
+  remove_file ".kamal/secrets"
+  create_file ".kamal/secrets-common", kamal_secrets.join("\n") + "\n", force: true
 
   worker_role = if VALUES.fetch("active_job") == "solid_queue"
     "  worker:\n    hosts:\n      - <%= ENV.fetch(\"KAMAL_DEPLOY_HOST\") %>\n    cmd: bin/jobs --mode async\n"
   else
     ""
   end
-  accessory_secret_lines = secret_names.reject { |name| name == "RAILS_MASTER_KEY" || name.start_with?("VAPID_") }
+  accessory_secret_lines = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY]
     .map { |name| "        - #{name}" }.join("\n")
   vapid_secret_lines = if VALUES.fetch("web_push") == "use"
     "    - VAPID_PUBLIC_KEY\n    - VAPID_PRIVATE_KEY\n    - VAPID_SUBJECT\n"
@@ -14722,6 +15266,7 @@ def configure_kamal
     service: #{app_id}
     image: #{app_id}
     minimum_version: 2.11.0
+    require_destination: true
     primary_role: web
 
     servers:
@@ -14748,7 +15293,7 @@ def configure_kamal
         - RAILS_MASTER_KEY
     #{vapid_secret_lines}
     volumes:
-      - "#{app_id}_storage:/rails/storage"
+      - "#{app_id}_<%= ENV.fetch(\"KAMAL_DESTINATION\") %>_storage:/rails/storage"
 
     asset_path: /rails/public/assets
 
@@ -14760,15 +15305,15 @@ def configure_kamal
         files:
           - config/litestream.yml:/etc/litestream.yml
         volumes:
-          - "#{app_id}_storage:/rails/storage"
+          - "#{app_id}_<%= ENV.fetch(\"KAMAL_DESTINATION\") %>_storage:/rails/storage"
         env:
-          clear:
-            AWS_REGION: <%= ENV.fetch("AWS_REGION", "us-east-1") %>
           secret:
     #{accessory_secret_lines}
         options:
           user: "1000:1000"
   YAML
+  create_file "config/deploy.production.yml", "--- {}\n", force: true
+  create_file "config/deploy.staging.yml", "--- {}\n", force: true
 
   create_file ".dockerignore", <<~IGNORE, force: true
     .git
@@ -14862,66 +15407,84 @@ def configure_kamal
   RUBY
   chmod "bin/wait-for-litestream", 0o755
 
+  configure_litestream_r2(app_id)
   configure_kamal_restore(app_id, databases)
 
-  escaped_restore_marker = Shellwords.escape(".kamal/#{app_id}-restore-in-progress")
   create_file ".kamal/hooks/pre-deploy", <<~SH, force: true
     #!/bin/sh
     set -eu
-    if ! bin/kamal server exec "test ! -e #{escaped_restore_marker}"; then
-      echo "#{app_id}: database restore is in progress; deploy aborted" >&2
+    : "\${KAMAL_DESTINATION:?KAMAL_DESTINATION is required}"
+    marker=".kamal/#{app_id}-\${KAMAL_DESTINATION}-restore-in-progress"
+    if ! bin/kamal server exec "test ! -e \$marker" -d "\$KAMAL_DESTINATION"; then
+      echo "#{app_id} (\$KAMAL_DESTINATION): database restore is in progress; deploy aborted" >&2
       exit 1
     fi
   SH
   chmod ".kamal/hooks/pre-deploy", 0o755
 
   database_rows = databases.map do |database|
-    "| #{database.fetch("name")} | `#{database.fetch("path")}` | `#{database.fetch("replica_env")}` |"
+    "| #{database.fetch("name")} | `#{database.fetch("path")}` | `#{database.fetch("name")}` |"
   end.join("\n")
   create_file "docs/deployment.md", <<~MARKDOWN, force: true
-    # Kamal deployment and SQLite recovery
+    # Kamal, Cloudflare R2, and SQLite recovery
 
-    This application supports Kamal 2.11 on one Linux host. Web, the optional Solid Queue worker,
-    and the Litestream 0.5.15 accessory share the `#{app_id}_storage` Docker volume. Multiple
-    deployment hosts and network filesystems are outside the supported topology.
+    This application requires the `production` or `staging` Kamal destination. Each destination
+    uses its own Docker volume, Cloudflare R2 bucket, and bucket-scoped R2 API token. Web, the
+    optional Solid Queue worker, and Litestream 0.5.15 share that destination's volume on one Linux
+    host. Multiple deployment hosts and network filesystems are outside the supported topology.
 
-    ## Required local environment
+    ## One-time R2 configuration
 
-    Set `KAMAL_DEPLOY_HOST`, `KAMAL_PROXY_HOST`, `AWS_ACCESS_KEY_ID`,
-    `AWS_SECRET_ACCESS_KEY`, and every replica URL listed below before running Kamal.
-    Set `AWS_REGION` when the replica does not use `us-east-1`, and set `KAMAL_BUILD_ARCH`
-    when the host architecture is not `amd64`. Keep all credential values outside the
-    repository; `.kamal/secrets` only reads them from the local environment.
+    Install dependencies and authenticate the local deployment workstation with Wrangler and
+    1Password CLI. Then run:
 
-    | Database | Local path | Replica URL variable |
+        bin/rails litestream:configure:r2
+
+    Both destinations are selected initially. The task shows the signed-in Cloudflare identity,
+    lets you choose its account and a 1Password account/vault, checks existing buckets, and prints
+    the complete non-secret plan before asking for confirmation. It creates only missing buckets.
+    Wrangler cannot issue R2 S3 credentials, so the task then directs you to create a bucket-scoped
+    **Object Read & Write** API token in the Cloudflare Dashboard and collects the Access Key ID and
+    Secret Access Key with masked input.
+
+    The credentials are stored only in environment-specific 1Password items named
+    `#{app_id} Litestream R2 production` and `#{app_id} Litestream R2 staging`. Generated
+    `.kamal/secrets.production` and `.kamal/secrets.staging` files contain stable 1Password IDs and
+    Kamal's 1Password adapter commands, not credentials. `.kamal/secrets-common` provides only
+    secrets shared by both destinations. If configuration stops after bucket creation, the bucket
+    is intentionally retained; rerun the task to continue.
+
+    | Database | Local path | R2 object prefix |
     | --- | --- | --- |
     #{database_rows}
 
     ## Setup and routine operations
 
-    Run `bin/kamal setup` for the first deployment. Litestream restores a database only when
+    Set `KAMAL_DEPLOY_HOST` and `KAMAL_PROXY_HOST`, then run `bin/kamal setup -d production` or
+    `bin/kamal setup -d staging`. Set `KAMAL_BUILD_ARCH` only when the host architecture is not
+    `amd64`. Litestream restores a database only when
     its local file does not exist. A replica with no backup is treated as a new database;
     every other restore or replication error prevents the application from becoming ready.
 
     Accessories are not replaced by a normal application deploy. After changing the Litestream
-    image, configuration, files, or secrets, run `bin/kamal accessory reboot litestream`.
-    Use `bin/kamal accessory details litestream` and `bin/kamal accessory logs litestream`
-    for status and logs. The application entrypoint waits for the Litestream control socket
-    before `db:prepare` or the Solid Queue worker starts.
+    image, configuration, files, or secrets, run `bin/kamal accessory reboot litestream -d DESTINATION`.
+    Include `-d production` or `-d staging` in every Kamal operation. The application entrypoint
+    waits for the Litestream control socket before `db:prepare` or the Solid Queue worker starts.
 
     ## Manual restore
 
-    Preview the latest available restore without changing production:
+    Preview the latest available restore without changing a destination:
 
-        bin/kamal-restore --plan
+        bin/kamal-restore --destination=production --plan
 
     Preview or restore a point in time:
 
-        bin/kamal-restore --plan --timestamp=2026-08-16T00:00:00Z
-        bin/kamal-restore --timestamp=2026-08-16T00:00:00Z
+        bin/kamal-restore --destination=staging --plan --timestamp=2026-08-16T00:00:00Z
+        bin/kamal-restore --destination=staging --timestamp=2026-08-16T00:00:00Z
 
-    `bin/kamal-restore` with no arguments restores the latest available state. A write operation
-    requires a TTY and an exact phrase containing the application ID and target. There is no
+    `--destination=production|staging` is mandatory. Omitting `--timestamp` restores the latest
+    available state. A write operation requires a TTY and an exact phrase containing the application
+    ID, destination, and target. There is no
     confirmation bypass or force option. All replicated databases are restored and fully checked
     before any current database is replaced.
 
@@ -14929,15 +15492,16 @@ def configure_kamal
     WAL, SHM, and journal sidecars, under `/rails/storage/.restore/OPERATION_ID/previous`.
     Roll back with:
 
-        bin/kamal-restore --rollback=OPERATION_ID
+        bin/kamal-restore --destination=production --rollback=OPERATION_ID
 
     Rollback also requires an exact typed confirmation. Retained restore directories are never
     deleted automatically. Remove one only after separately confirming that both the restored
     application and its remote replicas are correct.
 
-    During restore, a remote marker makes the generated `pre-deploy` hook reject new deployments.
-    The destructive file switch runs while the Kamal deploy lock is held. If startup fails after
-    the switch, services remain stopped and the marker remains present for inspection.
+    During restore, a destination-specific remote marker makes the generated `pre-deploy` hook
+    reject new deployments for that destination. The destructive file switch runs while the Kamal
+    deploy lock is held. If startup fails after the switch, services remain stopped and the marker
+    remains present for inspection.
   MARKDOWN
   append_to_file "README.md", "\n## Deployment and recovery\n\nSee [docs/deployment.md](docs/deployment.md) for Kamal, Litestream, and confirmed restore operations.\n"
 end

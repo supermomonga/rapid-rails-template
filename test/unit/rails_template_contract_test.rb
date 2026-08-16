@@ -191,6 +191,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/account/siwe_identities/show.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/edit.html.erb" => %w[fieldset fieldset-legend input btn alert],
       "app/views/notifications/show.html.erb" => %w[card-rapid card-body card-title card-actions toggle btn alert],
+      "app/views/admin/overview/show.html.erb" => %w[card-rapid card-body stats stat stat-title stat-value],
       "app/views/admin/users/index.html.erb" => %w[card-rapid card-body table badge btn],
       "app/views/pages/_page.html.erb" => %w[card-rapid card-body],
       "app/views/faqs/index.html.erb" => %w[collapse collapse-arrow collapse-title collapse-content alert],
@@ -685,6 +686,8 @@ class RailsTemplateContractTest < Minitest::Test
     roles = source_between("def configure_roles", "def configure_profile")
     model = generated_file_source("app/models/user_role.rb")
     policy = generated_file_source("app/policies/user_policy.rb")
+    overview_controller = generated_file_source("app/controllers/admin/overview_controller.rb")
+    overview_view = generated_file_source("app/views/admin/overview/show.html.erb")
     users_controller = generated_file_source("app/controllers/admin/users_controller.rb")
     roles_controller = generated_file_source("app/controllers/admin/user_roles_controller.rb")
 
@@ -710,9 +713,20 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes roles, 'sig { params(_error: ActionPolicy::Unauthorized).void }'
     assert_includes roles, 'def render_forbidden(_error)'
     assert_includes roles, 'include Pagy::Method'
+    assert_includes policy, 'def overview?'
     assert_includes policy, 'def index?'
     assert_includes policy, 'def manage_roles?'
     assert_includes policy, 'relation_scope do |relation|'
+    assert_includes overview_controller, 'authorize! User, to: :overview?'
+    assert_includes overview_controller, '@total_users = User.count'
+    assert_includes overview_controller, '@administrators = User.where(id: UserRole.admin.select(:user_id)).count'
+    assert_includes overview_controller, '@new_users_last_30_days = User.where(created_at: 30.days.ago..).count'
+    assert_includes overview_controller, '@published_faqs = Faq.where(published: true).count'
+    assert_includes overview_controller, '@managed_pages = Page.count'
+    assert_includes overview_view, 'content_for :page_title, t("admin.overview.title")'
+    assert_includes overview_view, 'data-admin-overview-stats'
+    assert_class_tokens overview_view, "grid", "sm:grid-cols-2", "xl:grid-cols-3"
+    assert_includes roles, 'root "overview#show"'
     assert_includes users_controller, 'authorize! User, to: :index?'
     assert_includes users_controller, 'authorized_scope(#{user_scope})'
     assert_includes users_controller, 'pagy(:offset, users, limit: 25)'
@@ -1424,6 +1438,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"admin-page-edit"'
     assert_includes evidence, '"admin-faq-edit"'
     assert_includes evidence, '"admin-footer-setting"'
+    assert_includes evidence, '"admin-overview"'
+    assert_includes evidence, "def assert_admin_overview_geometry"
+    assert_includes evidence, 'document.querySelector("[data-admin-overview-stats]")'
+    assert_includes evidence, 'assert_equal(viewport == "mobile" ? 1 : 3, geometry.fetch("columnCount"))'
+    assert_includes evidence, 'text: translate("navigation.admin"), count: 2, visible: :all'
+    assert_includes evidence, 'assert_no_selector %(header a[href="#{host_routes.admin_root_path}"]), visible: :all'
     assert_includes evidence, '"web-push-enabled"'
     assert_includes evidence, 'set_evidence_web_push_mode("granted")'
     assert_includes evidence, "def reconnect_web_push_controller"
@@ -1454,7 +1474,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'data-page-actions-container="card"'
     assert_includes evidence, 'data-page-actions-container="tab"'
     assert_includes evidence, 'actionColumnCount: getComputedStyle(actions).gridTemplateColumns.split(" ").length'
-    assert_includes evidence, '{ "account" => account_path, "admin" => admin_pages_path }.each'
+    assert_includes evidence, '{ "account" => account_path, "admin" => admin_root_path }.each'
     assert_includes evidence, "[320, 390, 640, 960, 961].each"
     assert_includes evidence, "visit path"
     assert_includes evidence, '"#{area} with-menu should use a horizontal menu at #{width}px"'
@@ -1465,6 +1485,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"#{area} with-menu layout should use one column at #{width}px"'
     assert_includes evidence, '"#{area} with-menu layout should use two columns at #{width}px"'
     assert_includes evidence, "def assert_admin_navigation_active"
+    assert_includes evidence, 'text: translate("navigation.dashboard"), count: 2, visible: :all'
+    assert_includes evidence, "assert_equal account_path, URI.parse(admin_links.last[:href]).path"
     assert_includes evidence, "def assert_account_navigation_scope"
     assert_includes evidence, 'translate("navigation.account_menu")'
     assert_includes evidence, 'translate("navigation.admin_menu")'
@@ -1613,9 +1635,9 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, '"bg-base-content text-base-100" if current_page?'
     refute_includes account_navigation, "min-h-11"
     refute_includes account_navigation, "ホームへ戻る".b
-    refute_includes account_navigation, "root_path"
-    assert_equal 5, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 5, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    refute_includes account_navigation, "application_routes.root_path"
+    assert_equal 6, account_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 6, account_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes account_navigation, "profile_path"
     assert_includes account_navigation, 't("navigation.dashboard")'
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
@@ -1626,12 +1648,20 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "account_siwe_identities_path"
     refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
     refute_includes account_navigation, 'allowed_to?(:index?, User)'
+    assert_includes account_navigation, 'allowed_to?(:overview?, User)'
+    assert_includes account_navigation, 'application_routes.admin_root_path'
+    assert_includes account_navigation, 't("navigation.admin")'
+    assert_operator account_navigation.index("application_routes.admin_root_path"), :>,
+      account_navigation.index("application_routes.api_credentials_path")
     refute_includes account_navigation, 'admin_users_path'
     refute_includes account_navigation, "admin_pages_path"
     refute_includes account_navigation, "admin_faqs_path"
     refute_includes account_navigation, "edit_admin_footer_setting_path"
-    assert_equal 6, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 6, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 8, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 8, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_includes admin_navigation, 'application_routes.admin_root_path'
+    assert_includes admin_navigation, '"menu-active" if controller_path == "admin/overview"'
+    assert_includes admin_navigation, 'application_translate("navigation.overview")'
     assert_includes admin_navigation, '"menu-active" if controller_path.in?(%w[admin/users admin/user_roles])'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/pages"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/faqs"'
@@ -1640,6 +1670,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_navigation, "application_routes.admin_jobs_path"
     assert_includes admin_navigation, '"menu-active" if controller_path.start_with?("mission_control/jobs/")'
     assert_includes admin_navigation, '"menu-active" if controller_path.start_with?("maintenance_tasks/")'
+    assert_includes admin_navigation, 'link_to application_routes.account_path'
+    assert_includes admin_navigation, 'application_translate("navigation.dashboard")'
+    assert_operator admin_navigation.index("application_routes.account_path"), :>,
+      admin_navigation.index("application_routes.admin_maintenance_tasks_path")
     assert_includes @source, 'controller_path.start_with?("admin/")'
     assert_includes @source, 'controller_path.start_with?("mission_control/jobs/")'
     assert_includes @source, 'controller_path.start_with?("maintenance_tasks/")'

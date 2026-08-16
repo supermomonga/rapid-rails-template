@@ -326,7 +326,7 @@ def configure_application_identity
       "navigation" => {
         "main" => "メインナビゲーション", "account_menu" => "アカウントメニュー", "admin_menu" => "管理メニュー", "open_account_menu" => "アカウントメニューを開く",
         "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "notifications" => "通知",
-        "api_credentials" => "APIキーの管理", "users" => "ユーザー管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
+        "api_credentials" => "APIキーの管理", "overview" => "概要", "users" => "ユーザー管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
         "admin" => "管理画面", "sign_in" => "ログイン", "sign_up" => "アカウント作成", "sign_out" => "ログアウト"
       },
       "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営会社", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
@@ -350,7 +350,7 @@ def configure_application_identity
       "navigation" => {
         "main" => "Main navigation", "account_menu" => "Account menu", "admin_menu" => "Administration menu", "open_account_menu" => "Open account menu",
         "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "notifications" => "Notifications",
-        "api_credentials" => "API credentials", "users" => "Users", "pages" => "Pages", "faqs" => "FAQs",
+        "api_credentials" => "API credentials", "overview" => "Overview", "users" => "Users", "pages" => "Pages", "faqs" => "FAQs",
         "admin" => "Administration", "sign_in" => "Sign in", "sign_up" => "Create account", "sign_out" => "Sign out"
       },
       "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Company", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
@@ -3983,6 +3983,11 @@ def configure_roles
   create_file "app/policies/user_policy.rb", <<~RUBY, force: true
     class UserPolicy < ApplicationPolicy
       T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def overview?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def index?
         admin?
       end
@@ -4003,6 +4008,24 @@ def configure_roles
       class BaseController < ApplicationController
         layout "admin"
         before_action :authenticate_user!
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/overview_controller.rb", <<~RUBY, force: true
+    module Admin
+      class OverviewController < BaseController
+        extend T::Sig
+
+        sig { void }
+        def show
+          authorize! User, to: :overview?
+          @total_users = User.count
+          @administrators = User.where(id: UserRole.admin.select(:user_id)).count
+          @new_users_last_30_days = User.where(created_at: 30.days.ago..).count
+          @published_faqs = Faq.where(published: true).count
+          @managed_pages = Page.count
+        end
       end
     end
   RUBY
@@ -4068,11 +4091,42 @@ def configure_roles
 
   route <<~RUBY
     namespace :admin do
+      root "overview#show"
       resources :users, only: :index do
         resources :roles, only: %i[create destroy], controller: "user_roles", param: :role
       end
     end
   RUBY
+
+  create_file "app/views/admin/overview/show.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("admin.overview.title") %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm text-neutral"><%= t("admin.overview.description") %></p>
+      </header>
+
+      <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="<%= t('admin.overview.statistics.label') %>" data-admin-overview-stats>
+        <% [
+          [t("admin.overview.statistics.total_users"), @total_users],
+          [t("admin.overview.statistics.administrators"), @administrators],
+          [t("admin.overview.statistics.new_users_last_30_days"), @new_users_last_30_days],
+          [t("admin.overview.statistics.published_faqs"), @published_faqs],
+          [t("admin.overview.statistics.managed_pages"), @managed_pages]
+        ].each do |title, value| %>
+          <article class="card-rapid">
+            <div class="card-body p-3">
+              <div class="stats w-full">
+                <div class="stat">
+                  <div class="stat-title"><%= title %></div>
+                  <div class="stat-value"><%= number_with_delimiter(value) %></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        <% end %>
+      </section>
+    </div>
+  ERB
 
   create_file "app/views/admin/users/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("admin.users.title") %>
@@ -4173,6 +4227,11 @@ def configure_roles
     ja: {
       "roles" => { "errors" => { "last_admin" => "最後の管理者roleは解除できません" } },
       "admin" => {
+        "overview" => {
+          "title" => "管理画面",
+          "description" => "アプリケーションの現在の状態を確認できます。",
+          "statistics" => { "label" => "基本統計", "total_users" => "ユーザー数", "administrators" => "管理者数", "new_users_last_30_days" => "直近30日の新規ユーザー", "published_faqs" => "公開FAQ数", "managed_pages" => "管理対象ページ数" }
+        },
         "users" => { "title" => "ユーザー管理", "description" => "内部ユーザーIDを基準に固定roleを付与または解除します。", "profile_name" => "表示名", "role" => "Role", "admin" => "管理者", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "管理者roleを解除しますか？", "grant" => "管理者にする", "pagination" => "ユーザー一覧のページング" },
         "user_roles" => { "create" => { "notice" => "管理者roleを付与しました" }, "destroy" => { "notice" => "管理者roleを解除しました", "self_forbidden" => "自分自身の管理者roleは解除できません" } }
       },
@@ -4181,6 +4240,11 @@ def configure_roles
     en: {
       "roles" => { "errors" => { "last_admin" => "The final administrator role cannot be revoked" } },
       "admin" => {
+        "overview" => {
+          "title" => "Administration",
+          "description" => "View the current state of the application.",
+          "statistics" => { "label" => "Core statistics", "total_users" => "Users", "administrators" => "Administrators", "new_users_last_30_days" => "New users in the last 30 days", "published_faqs" => "Published FAQs", "managed_pages" => "Managed pages" }
+        },
         "users" => { "title" => "User management", "description" => "Grant or revoke fixed roles by internal user ID.", "profile_name" => "Display name", "role" => "Role", "admin" => "Administrator", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role?", "grant" => "Make administrator", "pagination" => "User list pagination" },
         "user_roles" => { "create" => { "notice" => "Administrator role granted" }, "destroy" => { "notice" => "Administrator role revoked", "self_forbidden" => "You cannot revoke your own administrator role" } }
       },
@@ -4273,8 +4337,10 @@ def configure_roles
         regular = users(:two)
         admin.grant_role!(:admin)
 
+        assert UserPolicy.new(User, user: admin).apply(:overview?)
         assert UserPolicy.new(User, user: admin).apply(:index?)
         assert UserPolicy.new(regular, user: admin).apply(:manage_roles?)
+        assert_not UserPolicy.new(User, user: regular).apply(:overview?)
         assert_not UserPolicy.new(User, user: regular).apply(:index?)
         assert_not UserPolicy.new(admin, user: regular).apply(:manage_roles?)
       end
@@ -4323,6 +4389,77 @@ def configure_roles
     end
   RUBY
 
+  create_file "test/controllers/admin/overview_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::OverviewControllerTest < ActionDispatch::IntegrationTest
+    #{controller_test_support}
+      test "requires authentication" do
+        get admin_root_url
+
+        assert_redirected_to new_user_session_url
+      end
+
+      test "denies regular users" do
+        sign_in_as(@regular)
+        get admin_root_url
+
+        assert_response :forbidden
+      end
+
+      test "shows the admin entry in both account menus only to admins" do
+        sign_in_as(@admin)
+        get account_url
+
+        assert_response :success
+        assert_select 'a[href=?]', admin_root_path, text: I18n.t("navigation.admin"), count: 2
+
+        sign_out @admin
+        sign_in_as(@regular)
+        get account_url
+
+        assert_response :success
+        assert_select 'a[href=?]', admin_root_path, count: 0
+      end
+
+      test "renders current core statistics for admins" do
+        travel_to Time.zone.local(2026, 1, 31, 12) do
+          @admin.update!(created_at: 31.days.ago)
+          @regular.update!(created_at: 30.days.ago)
+          User.create!(created_at: 1.day.ago)
+          second_admin = User.create!(created_at: 40.days.ago)
+          second_admin.grant_role!(:admin)
+          Faq.create!(question: "Published overview FAQ", answer: "Published answer", position: 0, published: true)
+          Faq.create!(question: "Draft overview FAQ", answer: "Draft answer", position: 1, published: false)
+          expected = {
+            I18n.t("admin.overview.statistics.total_users") => User.count,
+            I18n.t("admin.overview.statistics.administrators") => User.where(id: UserRole.admin.select(:user_id)).count,
+            I18n.t("admin.overview.statistics.new_users_last_30_days") => User.where(created_at: 30.days.ago..).count,
+            I18n.t("admin.overview.statistics.published_faqs") => Faq.where(published: true).count,
+            I18n.t("admin.overview.statistics.managed_pages") => Page.count
+          }
+          sign_in_as(@admin)
+
+          get admin_root_url
+          assert_response :success
+          assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_root_path,
+            text: I18n.t("navigation.overview"), count: 1
+          admin_navigation_links = css_select('[data-layout="with-menu"] nav a')
+          assert_equal account_path, admin_navigation_links.last["href"]
+          assert_equal I18n.t("navigation.dashboard"), admin_navigation_links.last.text.strip
+          assert_select '[data-admin-overview-stats] > article.card-rapid', count: 5
+          statistics = css_select("[data-admin-overview-stats] .stat")
+          assert_equal 5, statistics.size
+          expected.each do |title, value|
+            matching = statistics.select { |statistic| statistic.at_css(".stat-title")&.text == title }
+            assert_equal 1, matching.size
+            assert_equal value.to_s, matching.first.at_css(".stat-value").text
+          end
+        end
+      end
+    end
+  RUBY
+
   create_file "test/controllers/admin/users_controller_test.rb", <<~RUBY, force: true
     require "test_helper"
 
@@ -4353,7 +4490,7 @@ def configure_roles
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.account_menu"), count: 0
         assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_users_path, text: I18n.t("navigation.users"), count: 1
         assert_select 'header li.menu-title', text: I18n.t("navigation.admin"), count: 1
-        assert_select 'header a[href=?]', account_path, count: 0
+        assert_select 'a[href=?]', account_path, text: I18n.t("navigation.dashboard"), count: 2
         assert_select "table.table.table-sm.table-pin-rows"
         assert_select ".badge", text: I18n.t("admin.users.admin"), minimum: 1
         assert_select ".join", count: 0
@@ -7822,7 +7959,7 @@ def configure_default_views
   avatar_enabled = profile_features.include?("avatar")
   screen_name_enabled = profile_features.include?("screen_name")
   display_name_enabled = profile_features.include?("display_name")
-  account_navigation_count = 2 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) +
+  account_navigation_count = 3 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) +
     (web_push_enabled ? 1 : 0)
   account_page_description = if profile_enabled
     '<%= t("accounts.show.description_with_profile") %>'
@@ -7894,7 +8031,27 @@ def configure_default_views
       </li>
     ERB
   end
+  account_navigation_items += <<~ERB
+    <% if allowed_to?(:overview?, User) %>
+      <li>
+        <%= link_to application_routes.admin_root_path do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" />
+          </svg>
+          <%= t("navigation.admin") %>
+        <% end %>
+      </li>
+    <% end %>
+  ERB
   admin_navigation_items = <<~ERB
+      <li>
+        <%= link_to application_routes.admin_root_path, class: ("menu-active" if controller_path == "admin/overview"), aria: { current: ("page" if controller_path == "admin/overview") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" />
+          </svg>
+          <%= application_translate("navigation.overview") %>
+        <% end %>
+      </li>
       <li>
         <%= link_to application_routes.admin_users_path, class: ("menu-active" if controller_path.in?(%w[admin/users admin/user_roles])), aria: { current: ("page" if controller_path.in?(%w[admin/users admin/user_roles])) } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
@@ -7952,6 +8109,16 @@ def configure_default_views
       </li>
     ERB
   end
+  admin_navigation_items += <<~ERB
+    <li>
+      <%= link_to application_routes.account_path do %>
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955a1.125 1.125 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+        </svg>
+        <%= application_translate("navigation.dashboard") %>
+      <% end %>
+    </li>
+  ERB
   signed_in_condition = "user_signed_in?"
   admin_controller_conditions = ['controller_path.start_with?("admin/")']
   admin_controller_conditions << 'controller_path.start_with?("mission_control/jobs/")' if job_operations_enabled
@@ -9206,6 +9373,7 @@ def configure_default_views
         get account_url
         assert_response :success
         assert_select 'nav[aria-label=?] a.menu-active[href=?]', I18n.t("navigation.account_menu"), account_path, count: 1
+        assert_select 'a[href=?]', admin_root_path, text: I18n.t("navigation.admin"), count: 2
     #{profile_trigger_assertion}#{profile_identity_assertion}        assert_select 'header ul.menu.dropdown-content > li[role="separator"]:empty', count: 1
         assert_select 'header ul.menu.dropdown-content a[href=?][data-turbo-method="delete"]', destroy_user_session_path,
           text: I18n.t("navigation.sign_out"), count: 1 do
@@ -12185,6 +12353,9 @@ def configure_evidence_capture
           capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, translate("home.heading"), viewport)
           capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
+          capture_page("admin-overview", "管理画面", admin_root_path, translate("admin.overview.title"), viewport)
+          assert_admin_navigation_active(translate("navigation.overview"))
+          assert_admin_overview_geometry(viewport)
           capture_avatar_states(viewport)
           capture_passkey_pages(viewport)
           if WEB_PUSH
@@ -12301,6 +12472,8 @@ def configure_evidence_capture
           assert_selector identity_selector, text: /Evidence User.*@evidence_user/m, count: 1
           assert_no_selector "#{identity_selector} a, #{identity_selector} button"
           assert_selector separator_selector, count: 1
+          assert_selector %(header a[href="#{host_routes.admin_root_path}"]),
+            text: translate("navigation.admin"), count: 1
           assert_selector %(
             header ul.menu.dropdown-content
             a[href="#{host_routes.destroy_user_session_path}"]
@@ -12449,6 +12622,7 @@ def configure_evidence_capture
 
           visit root_path
           find("header details.dropdown > summary", visible: :visible).click if viewport == "mobile"
+          assert_no_selector %(header a[href="#{host_routes.admin_root_path}"]), visible: :all
           assert_no_selector %(header a[href="#{host_routes.admin_users_path}"]), visible: :all
           assert_no_selector %(header a[href="#{host_routes.admin_jobs_path}"]), visible: :all if JOB_OPERATIONS
           assert_no_selector %(header a[href="#{host_routes.admin_maintenance_tasks_path}"]), visible: :all if MAINTENANCE_TASKS
@@ -12796,14 +12970,41 @@ def configure_evidence_capture
           assert_no_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.account_menu")}"])
           assert_selector '[data-layout="with-menu"] a.menu-active[aria-current="page"]', text: label, count: 1
           assert_selector 'header li.menu-title', text: host_translate("navigation.admin"), count: 1, visible: :all
-          assert_no_selector %(header a[href="\#{account_path}"]), visible: :all
+          assert_selector %(a[href="#{account_path}"]),
+            text: translate("navigation.dashboard"), count: 2, visible: :all
+          admin_links = all(%([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] a), visible: :all)
+          assert_equal account_path, URI.parse(admin_links.last[:href]).path
         end
 
         def assert_account_navigation_scope
           assert_selector %([data-layout="with-menu"] nav[aria-label="#{translate("navigation.account_menu")}"])
           assert_no_selector %([data-layout="with-menu"] nav[aria-label="#{translate("navigation.admin_menu")}"])
           assert_no_selector 'header li.menu-title', text: translate("navigation.admin"), visible: :all
+          assert_selector %(a[href="#{admin_root_path}"]),
+            text: translate("navigation.admin"), count: 2, visible: :all
           assert_no_selector %(header a[href="\#{admin_users_path}"]), visible: :all
+        end
+
+        def assert_admin_overview_geometry(viewport)
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const grid = document.querySelector("[data-admin-overview-stats]")
+                const cards = Array.from(grid.querySelectorAll(":scope > .card-rapid"))
+                return {
+                  documentWidth: document.documentElement.scrollWidth,
+                  viewportWidth: window.innerWidth,
+                  columnCount: getComputedStyle(grid).gridTemplateColumns.split(" ").length,
+                  cardCount: cards.length,
+                  cardsWithinGrid: cards.every((card) => card.getBoundingClientRect().right <= grid.getBoundingClientRect().right)
+                }
+              }
+            JAVASCRIPT
+          end
+          assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")
+          assert_equal(viewport == "mobile" ? 1 : 3, geometry.fetch("columnCount"))
+          assert_equal 5, geometry.fetch("cardCount")
+          assert geometry.fetch("cardsWithinGrid")
         end
 
         def capture_faq_page(viewport)
@@ -12848,7 +13049,7 @@ def configure_evidence_capture
         end
 
         def verify_with_menu_layout_geometry
-          { "account" => account_path, "admin" => admin_pages_path }.each do |area, path|
+          { "account" => account_path, "admin" => admin_root_path }.each do |area, path|
             [320, 390, 640, 960, 961].each do |width|
               page.current_window.resize_to(width, 900)
               visit path

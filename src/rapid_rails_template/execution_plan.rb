@@ -133,8 +133,10 @@ module RapidRailsTemplate
         app/policies/application_policy.rb
         app/policies/user_policy.rb
         app/controllers/admin/base_controller.rb
+        app/controllers/admin/overview_controller.rb
         app/controllers/admin/users_controller.rb
         app/controllers/admin/user_roles_controller.rb
+        app/views/admin/overview/show.html.erb
         app/views/admin/users/index.html.erb
         app/services/admin_role_grant.rb
         app/models/page.rb
@@ -172,6 +174,7 @@ module RapidRailsTemplate
         test/fixtures/user_roles.yml
         test/models/user_role_test.rb
         test/policies/user_policy_test.rb
+        test/controllers/admin/overview_controller_test.rb
         test/controllers/admin/users_controller_test.rb
         test/controllers/admin/user_roles_controller_test.rb
         test/models/page_test.rb

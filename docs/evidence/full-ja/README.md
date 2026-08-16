@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `f56dc1e7f8f13aa24880603a304827bf0b118f41bb9125b17bcb2524bba74ef0`
-- Base commit: `c01c1ecf7328ddf7f7960ac450c6ed0b31337825`
+- Source fingerprint: `4ae600e7c19ba59c53e7f903947262206687dd4a5b749b4af55032dbedb67d8d`
+- Base commit: `0b7fe20e963e116aaea9b2d552481729569911b4`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -53,6 +53,12 @@
 |Desktop|Mobile|
 |---|---|
 |![マイページ (desktop)](account--desktop.png)|![マイページ (mobile)](account--mobile.png)|
+
+## 管理画面
+
+|Desktop|Mobile|
+|---|---|
+|![管理画面 (desktop)](admin-overview--desktop.png)|![管理画面 (mobile)](admin-overview--mobile.png)|
 
 ## プロフィール（自動生成アバター）
 

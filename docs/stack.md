@@ -340,7 +340,9 @@ Litestream 0.5.15をKamal Accessoryとして起動し、Web・Workerと同じdes
 | access key | `R2_ACCESS_KEY` |
 | secret key | `R2_SECRET_KEY` |
 
-endpointは`${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`、regionは`auto`です。object prefixは`primary`、`storage`、条件付き`queue`・`cable`です。資格情報の正本は1Password service accountから見えるdestination別vault内のitemとし、`.kamal/secrets.production`・`.kamal/secrets.staging`にはKamal公式1Password adapterが使うservice account ID、vault ID、item IDだけを生成します。共通secretは`.kamal/secrets-common`に置きます。ローカルWrangler v4とGumを使う`mise exec -- bin/rails litestream:configure:r2`がservice account認証、vault、bucket、item、参照生成を担当します。初回にservice accountを作成した場合はtokenをgit/Docker管理外かつ`0600`の`mise.local.toml`へ平文保存して終了し、再実行時に構成を続けます。
+endpointは`${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`、regionは`auto`です。object prefixは`primary`、`storage`、条件付き`queue`・`cable`です。資格情報の正本は1Password service accountから見えるdestination別vault内のitemとし、`.kamal/secrets.production`・`.kamal/secrets.staging`にはKamal公式1Password adapterが使うservice account ID、vault ID、item IDだけを生成します。共通secretは`.kamal/secrets-common`に置きます。ローカルWrangler v4とGumを使う`mise exec -- bin/rails litestream:configure:r2`がservice account認証、vault、bucket、Cloudflare account-owned API token、item、参照生成を担当します。初回に1Password service accountを作成した場合は、そのservice account tokenだけをgit/Docker管理外かつ`0600`の`mise.local.toml`へ平文保存して終了し、再実行時に構成を続けます。
+
+Cloudflare token作成用の`CLOUDFLARE_INITIAL_API_TOKEN`は`Account API Tokens: Edit`だけを持たせて実行環境から毎回渡し、保存しません。未設定なら最小権限のToken Template URLを表示して無変更で正常終了します。destinationごとのtoken名は`<正規化済みapp_id>-r2-<destination>`、権限は対象bucketの`Workers R2 Storage Bucket Item Write`だけです。同名tokenがCloudflareと1Passwordの両方で完全一致する場合だけ再利用し、重複・無効・policy差異・secret欠落や不一致では自動rotationせず停止します。Cloudflare token本体は1Password itemの`CLOUDFLARE_R2_API_TOKEN`へconcealed fieldとして保存し、token IDとtoken本体のSHA-256から派生したS3資格情報も同じitemへ保存します。Kamalが取得するのは`CF_ACCOUNT_ID`、`LITESTREAM_R2_BUCKET`、`R2_ACCESS_KEY`、`R2_SECRET_KEY`だけです。
 
 各DBへ`restore-if-db-not-exists`を設定します。空volumeかつbackupがある場合だけ起動時に復元し、既存DBは上書きしません。初回でbackupが存在しない場合は新規DB作成へ進み、それ以外の復元・接続エラーではAccessoryを失敗させます。Litestreamは復元とDB openの後にcontrol socketを公開し、Web entrypointはsocketのstatus応答後に`db:prepare`、Workerはstatus応答後に`bin/jobs`を開始します。
 

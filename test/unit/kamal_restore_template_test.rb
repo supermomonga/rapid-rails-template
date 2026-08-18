@@ -446,10 +446,10 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: JSON.generate(id: "vault-production", name: "sample-production"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate([{ id: "staging-item", title: "sample Litestream R2 staging" }]), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(id: "staging-item", title: "sample Litestream R2 staging", fields: []), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "created\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(fields: []), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "production-item"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "staging-item", title: "sample Litestream R2 staging", fields: []), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "staging-item"), stderr: "", success: true, exitstatus: 0)
       ]
       runner = Class.new do
@@ -467,10 +467,7 @@ class KamalRestoreTemplateTest < Minitest::Test
       end.new(responses)
       prompt = Class.new do
         def initialize
-          @inputs = %w[
-            sample-db-production sample-db-staging
-            production-access production-secret staging-access staging-secret
-          ]
+          @inputs = %w[sample-db-production sample-db-staging]
         end
 
         def choose(choices, header:, selected:, no_limit: false)
@@ -488,6 +485,34 @@ class KamalRestoreTemplateTest < Minitest::Test
           true
         end
       end.new
+      cloudflare_client = Class.new do
+        attr_reader :calls
+
+        def initialize
+          @calls = []
+        end
+
+        def permission_groups(account_id, name:)
+          @calls << { method: :permission_groups, account_id:, name: }
+          [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+        end
+
+        def tokens(account_id)
+          @calls << { method: :tokens, account_id: }
+          []
+        end
+
+        def create_token(account_id, name:, policy:)
+          @calls << { method: :create_token, account_id:, name:, policy: }
+          {
+            "id" => "#{name}-access",
+            "name" => name,
+            "status" => "active",
+            "policies" => [policy],
+            "value" => "#{name}-raw-token"
+          }
+        end
+      end.new
 
       output = StringIO.new
       Litestream::R2Configurator.new(
@@ -495,7 +520,11 @@ class KamalRestoreTemplateTest < Minitest::Test
         prompt:,
         runner:,
         output:,
-        environment: { "OP_SERVICE_ACCOUNT_TOKEN" => "service-token" }
+        environment: {
+          "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+          "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
+        },
+        cloudflare_client:
       ).run!
 
       create_calls = runner.calls.select { |call| call.fetch(:command).include?("create") }
@@ -503,12 +532,43 @@ class KamalRestoreTemplateTest < Minitest::Test
       assert create_calls.any? { |call| call.fetch(:command).include?("sample-db-production") }
       refute create_calls.any? { |call| call.fetch(:command).include?("sample-db-staging") && call.fetch(:command).include?("bucket") }
       assert create_calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json --account=op-account] }
+      raw_tokens = %w[sample-r2-production-raw-token sample-r2-staging-raw-token]
       assert runner.calls.grep_v(nil).all? do |call|
-        (call.fetch(:command) & %w[production-access production-secret staging-access staging-secret]).empty?
+        (call.fetch(:command) & raw_tokens).empty?
       end
-      refute_match(/production-access|production-secret|staging-access|staging-secret/, output.string)
-      assert runner.calls.select { |call| call.fetch(:stdin_data)&.match?(/production-access|production-secret|staging-access|staging-secret/) }.all? do |call|
+      refute_match(/sample-r2-(production|staging)-raw-token/, output.string)
+      assert runner.calls.select { |call| call.fetch(:stdin_data)&.match?(/sample-r2-(production|staging)-raw-token/) }.all? do |call|
         call.fetch(:command).first(2) == %w[op item]
+      end
+      item_writes = runner.calls.select do |call|
+        call.fetch(:command).first(2) == %w[op item] && call.fetch(:stdin_data)
+      end.map { |call| JSON.parse(call.fetch(:stdin_data)) }
+      assert_equal 2, item_writes.length
+      %w[production staging].each do |destination|
+        item = item_writes.find { |candidate| candidate.fetch("title").end_with?(destination) }
+        refute_nil item
+        fields = item.fetch("fields").to_h { |field| [field.fetch("label"), field] }
+        token_value = "sample-r2-#{destination}-raw-token"
+        assert_equal token_value, fields.fetch("CLOUDFLARE_R2_API_TOKEN").fetch("value")
+        assert_equal "sample-r2-#{destination}-access", fields.fetch("R2_ACCESS_KEY").fetch("value")
+        assert_equal Digest::SHA256.hexdigest(token_value), fields.fetch("R2_SECRET_KEY").fetch("value")
+        assert_equal "CONCEALED", fields.fetch("CLOUDFLARE_R2_API_TOKEN").fetch("type")
+        assert_equal "CONCEALED", fields.fetch("R2_ACCESS_KEY").fetch("type")
+        assert_equal "CONCEALED", fields.fetch("R2_SECRET_KEY").fetch("type")
+        assert_equal "cf-account", fields.fetch("CF_ACCOUNT_ID").fetch("value")
+        assert_equal "sample-db-#{destination}", fields.fetch("LITESTREAM_R2_BUCKET").fetch("value")
+      end
+      refute runner.calls.any? { |call| call.fetch(:stdin_data)&.include?("initial-token") }
+      refute_includes output.string, "initial-token"
+      assert_equal %w[sample-r2-production sample-r2-staging], cloudflare_client.calls
+        .select { |call| call.fetch(:method) == :create_token }
+        .map { |call| call.fetch(:name) }
+      cloudflare_client.calls.select { |call| call.fetch(:method) == :create_token }.each do |call|
+        policy = call.fetch(:policy)
+        destination = call.fetch(:name).delete_prefix("sample-r2-")
+        expected_resource = "com.cloudflare.edge.r2.bucket.cf-account_default_sample-db-#{destination}"
+        assert_equal({ expected_resource => "*" }, policy.fetch("resources"))
+        assert_equal [{ "id" => "r2-write" }], policy.fetch("permission_groups")
       end
       assert runner.calls.select { |call| call.fetch(:command).include?("bucket") }.all? do |call|
         call.fetch(:environment) == { "CLOUDFLARE_ACCOUNT_ID" => "cf-account" }
@@ -520,7 +580,282 @@ class KamalRestoreTemplateTest < Minitest::Test
       assert_includes production_secrets, "vault-production/production-item"
       assert_includes staging_secrets, "vault-staging/staging-item"
       refute_match(/production-access|production-secret|staging-access|staging-secret/, production_secrets + staging_secrets)
+      refute_includes production_secrets + staging_secrets, "CLOUDFLARE_R2_API_TOKEN"
       assert_equal 0o600, root.join(".kamal/secrets.production").stat.mode & 0o777
+    end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_without_initial_token_prints_template_url_without_side_effects
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    Dir.mktmpdir("r2-missing-initial-token") do |directory|
+      root = Pathname(directory)
+      runner = Object.new
+      def runner.capture(*)
+        raise "runner must not be called"
+      end
+      output = StringIO.new
+
+      Litestream::R2Configurator.new(
+        root:,
+        prompt: Object.new,
+        runner:,
+        output:,
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "   " }
+      ).run!
+
+      template_url = output.string.lines.find { |line| line.start_with?("https://dash.cloudflare.com/") }
+      refute_nil template_url
+      query = URI.decode_www_form(URI(template_url.strip).query).to_h
+      assert_equal "/:account/api-tokens", query.fetch("to")
+      assert_equal [{ "key" => "account_api_tokens", "type" => "edit" }], JSON.parse(query.fetch("permissionGroupKeys"))
+      assert_equal "sample-api-token-creator", query.fetch("name")
+      assert_includes output.string, "CLOUDFLARE_INITIAL_API_TOKEN"
+      assert_includes output.string, "account-owned-token-template"
+      assert_empty Dir.children(root)
+    end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_cloudflare_token_names_are_deterministic_and_bounded
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    assert_equal "my-app-r2-production", Litestream::R2Configurator.cloudflare_token_name("My App!", "production")
+    long_name = Litestream::R2Configurator.cloudflare_token_name("a" * 200, "staging")
+    assert_operator long_name.bytesize, :<=, 120
+    assert_match(/-[0-9a-f]{12}-r2-staging\z/, long_name)
+    assert_equal long_name, Litestream::R2Configurator.cloudflare_token_name("a" * 200, "staging")
+    refute_equal long_name, Litestream::R2Configurator.cloudflare_token_name("a" * 199 + "b", "staging")
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_cloudflare_client_uses_account_token_api_and_never_exposes_bearer_in_errors
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    response = Data.define(:code, :body)
+    responses = [
+      response.new("200", JSON.generate(success: true, result: [{ id: "permission-id", name: "Workers R2 Storage Bucket Item Write", scopes: ["com.cloudflare.edge.r2.bucket"] }])),
+      response.new("200", JSON.generate(success: true, result: [{ id: "first-token" }], result_info: { total_count: 2 })),
+      response.new("200", JSON.generate(success: true, result: [{ id: "second-token" }], result_info: { total_count: 2 })),
+      response.new("200", JSON.generate(success: true, result: { id: "token-id", name: "sample-r2-production", status: "active", policies: [], value: "raw-token" }))
+    ]
+    http = Class.new do
+      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
+      attr_reader :requests
+
+      define_method(:initialize) do |scripted|
+        @scripted = scripted
+        @requests = []
+      end
+
+      define_method(:request) do |request|
+        @requests << request
+        @scripted.shift || raise("unexpected request")
+      end
+    end.new(responses)
+    client = Litestream::R2Configurator::CloudflareClient.new(
+      token: "initial-secret",
+      http_factory: ->(*) { http }
+    )
+
+    client.permission_groups("account-id", name: "Workers R2 Storage Bucket Item Write")
+    assert_equal %w[first-token second-token], client.tokens("account-id").map { |token| token.fetch("id") }
+    client.create_token("account-id", name: "sample-r2-production", policy: { "effect" => "allow" })
+
+    assert_equal 4, http.requests.length
+    assert_equal "/client/v4/accounts/account-id/tokens/permission_groups", http.requests.fetch(0).uri.path
+    assert_equal "initial-secret", http.requests.fetch(0)["Authorization"].delete_prefix("Bearer ")
+    assert_equal "/client/v4/accounts/account-id/tokens", http.requests.fetch(1).uri.path
+    assert_equal "page=1&per_page=50", http.requests.fetch(1).uri.query
+    assert_equal "page=2&per_page=50", http.requests.fetch(2).uri.query
+    body = JSON.parse(http.requests.fetch(3).body)
+    assert_equal "sample-r2-production", body.fetch("name")
+    assert_equal [{ "effect" => "allow" }], body.fetch("policies")
+
+    invalid_http = Class.new do
+      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
+
+      define_method(:request) do |_request|
+        Data.define(:code, :body).new("500", "not-json")
+      end
+    end.new
+    invalid_client = Litestream::R2Configurator::CloudflareClient.new(
+      token: "must-not-leak",
+      http_factory: ->(*) { invalid_http }
+    )
+    error = assert_raises(Litestream::R2Configurator::Error) do
+      invalid_client.tokens("account-id")
+    end
+    assert_includes error.message.dup.force_encoding(Encoding::UTF_8), "JSON応答が不正"
+    refute_includes error.message, "must-not-leak"
+
+    api_error_http = Class.new do
+      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
+
+      define_method(:request) do |_request|
+        Data.define(:code, :body).new(
+          "403",
+          JSON.generate(success: false, errors: [{ code: 10000, message: "Authentication error: api-error-secret" }])
+        )
+      end
+    end.new
+    api_error_client = Litestream::R2Configurator::CloudflareClient.new(
+      token: "api-error-secret",
+      http_factory: ->(*) { api_error_http }
+    )
+    error = assert_raises(Litestream::R2Configurator::Error) do
+      api_error_client.tokens("account-id")
+    end
+    assert_includes error.message, "HTTP 403"
+    assert_includes error.message, "Authentication error"
+    refute_includes error.message, "api-error-secret"
+    assert_includes error.message, "[REDACTED]"
+
+    network_error_http = Class.new do
+      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
+
+      def request(_request)
+        raise IOError, "network unavailable: network-error-secret"
+      end
+    end.new
+    network_error_client = Litestream::R2Configurator::CloudflareClient.new(
+      token: "network-error-secret",
+      http_factory: ->(*) { network_error_http }
+    )
+    error = assert_raises(Litestream::R2Configurator::Error) do
+      network_error_client.tokens("account-id")
+    end
+    assert_includes error.message, "IOError: network unavailable"
+    refute_includes error.message, "network-error-secret"
+    assert_includes error.message, "[REDACTED]"
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_reuses_only_matching_active_cloudflare_token_and_vault_secret
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    configurator = Litestream::R2Configurator.new(
+      prompt: Object.new,
+      environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial" }
+    )
+    policy = configurator.send(:cloudflare_token_policy, "account-id", "sample-db-production", "permission-id")
+    raw_token = "existing-raw-token"
+    item = {
+      "fields" => [
+        { "id" => "CLOUDFLARE_R2_API_TOKEN", "value" => raw_token },
+        { "id" => "R2_ACCESS_KEY", "value" => "token-id" },
+        { "id" => "R2_SECRET_KEY", "value" => Digest::SHA256.hexdigest(raw_token) }
+      ]
+    }
+    token = {
+      "id" => "token-id",
+      "name" => "sample-r2-production",
+      "status" => "active",
+      "policies" => [policy]
+    }
+    permission_group = { "id" => "permission-id" }
+    plan = configurator.send(
+      :plan_cloudflare_token,
+      "production",
+      account_id: "account-id",
+      bucket: "sample-db-production",
+      permission_group:,
+      cloudflare_tokens: [token],
+      item_plan: { "item" => item }
+    )
+    assert_equal "reuse", plan.fetch("action")
+    assert_equal raw_token, plan.fetch("credentials").fetch("CLOUDFLARE_R2_API_TOKEN")
+
+    cases = {
+      "同名のCloudflare API tokenが複数" => [[token, token], { "item" => item }],
+      "activeではありません" => [[token.merge("status" => "disabled")], { "item" => item }],
+      "権限またはbucketが期待値と一致しません" => [[token.merge("policies" => [])], { "item" => item }],
+      "対応する1Password itemがありません" => [[token], { "item" => nil }],
+      "R2_ACCESS_KEYが一致しません" => [[token], { "item" => item.merge("fields" => item.fetch("fields").map { |field| field["id"] == "R2_ACCESS_KEY" ? field.merge("value" => "other-id") : field }) }],
+      "R2_SECRET_KEYが一致しません" => [[token], { "item" => item.merge("fields" => item.fetch("fields").map { |field| field["id"] == "R2_SECRET_KEY" ? field.merge("value" => "wrong") : field }) }]
+    }
+    cases.each do |message, (tokens, item_plan)|
+      error = assert_raises(Litestream::R2Configurator::Error) do
+        configurator.send(
+          :plan_cloudflare_token,
+          "production",
+          account_id: "account-id",
+          bucket: "sample-db-production",
+          permission_group:,
+          cloudflare_tokens: tokens,
+          item_plan:
+        )
+      end
+      assert_includes error.message.dup.force_encoding(Encoding::UTF_8), message
+    end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_requires_one_bucket_scoped_r2_write_permission_group
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    valid = {
+      "id" => "permission-id",
+      "name" => "Workers R2 Storage Bucket Item Write",
+      "scopes" => ["com.cloudflare.edge.r2.bucket"]
+    }
+    cases = [
+      ["見つかりません", []],
+      ["見つかりません", [valid.merge("scopes" => ["com.cloudflare.api.account"])]],
+      ["複数あります", [valid, valid.merge("id" => "other-id")]]
+    ]
+    cases.each do |message, records|
+      client = Object.new
+      client.define_singleton_method(:permission_groups) do |_account_id, name:|
+        name
+        records
+      end
+      configurator = Litestream::R2Configurator.new(
+        prompt: Object.new,
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial" },
+        cloudflare_client: client
+      )
+
+      error = assert_raises(Litestream::R2Configurator::Error) do
+        configurator.send(:r2_permission_group, "account-id")
+      end
+      assert_includes error.message.dup.force_encoding(Encoding::UTF_8), message
     end
   ensure
     Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
@@ -581,7 +916,13 @@ class KamalRestoreTemplateTest < Minitest::Test
       end.new
       output = StringIO.new
 
-      Litestream::R2Configurator.new(root:, prompt:, runner:, output:, environment: {}).run!
+      Litestream::R2Configurator.new(
+        root:,
+        prompt:,
+        runner:,
+        output:,
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }
+      ).run!
 
       creation = runner.calls.find { |call| call.fetch(:command).first(2) == %w[op service-account] }
       assert_equal %w[op service-account create dev:sample --can-create-vaults --raw], creation.fetch(:command)
@@ -644,7 +985,13 @@ class KamalRestoreTemplateTest < Minitest::Test
       end.new
       output = StringIO.new
 
-      Litestream::R2Configurator.new(root:, prompt:, runner:, output:, environment: {}).run!
+      Litestream::R2Configurator.new(
+        root:,
+        prompt:,
+        runner:,
+        output:,
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }
+      ).run!
 
       refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op service-account] }
       assert_equal "[env]\nOP_SERVICE_ACCOUNT_TOKEN = \"existing\"\n", root.join("mise.local.toml").read
@@ -704,7 +1051,14 @@ class KamalRestoreTemplateTest < Minitest::Test
       output = StringIO.new
       terminal = StringIO.new
 
-      Litestream::R2Configurator.new(root:, prompt:, runner:, output:, terminal:, environment: {}).run!
+      Litestream::R2Configurator.new(
+        root:,
+        prompt:,
+        runner:,
+        output:,
+        terminal:,
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }
+      ).run!
 
       assert_equal "#{token}\n", terminal.string
       refute_includes output.string, token
@@ -835,7 +1189,10 @@ class KamalRestoreTemplateTest < Minitest::Test
         prompt:,
         runner:,
         output:,
-        environment: { "OP_SERVICE_ACCOUNT_TOKEN" => "service-token" }
+        environment: {
+          "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+          "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
+        }
       ).run!
 
       assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json --account=op-id] }
@@ -910,7 +1267,10 @@ class KamalRestoreTemplateTest < Minitest::Test
           prompt: prompt_class.new,
           runner: vault_runner,
           output: StringIO.new,
-          environment: { "OP_SERVICE_ACCOUNT_TOKEN" => "token" }
+          environment: {
+            "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+            "OP_SERVICE_ACCOUNT_TOKEN" => "token"
+          }
         ).run!
       end
       assert_includes vault_error.message.dup.force_encoding(Encoding::UTF_8), "同名の1Password vaultが複数"
@@ -934,7 +1294,10 @@ class KamalRestoreTemplateTest < Minitest::Test
           prompt: prompt_class.new,
           runner: item_runner,
           output: StringIO.new,
-          environment: { "OP_SERVICE_ACCOUNT_TOKEN" => "token" }
+          environment: {
+            "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+            "OP_SERVICE_ACCOUNT_TOKEN" => "token"
+          }
         ).run!
       end
       assert_includes item_error.message.dup.force_encoding(Encoding::UTF_8), "同名の1Password itemが複数"
@@ -975,6 +1338,7 @@ class KamalRestoreTemplateTest < Minitest::Test
       ]
 
       cases.each do |identity_response, environment, message|
+        environment = { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }.merge(environment)
         runner = Class.new do
           attr_reader :calls
 
@@ -1016,7 +1380,10 @@ class KamalRestoreTemplateTest < Minitest::Test
           prompt: Object.new,
           runner: connect_runner,
           output: StringIO.new,
-          environment: { "OP_CONNECT_HOST" => "https://connect.example" }
+          environment: {
+            "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+            "OP_CONNECT_HOST" => "https://connect.example"
+          }
         ).run!
       end
       assert_includes connect_error.message, "OP_CONNECT_HOST/OP_CONNECT_TOKEN"
@@ -1081,7 +1448,10 @@ class KamalRestoreTemplateTest < Minitest::Test
             prompt:,
             runner:,
             output: StringIO.new,
-            environment: { "OP_SERVICE_ACCOUNT_TOKEN" => "service-token" }
+            environment: {
+              "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+              "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
+            }
           ).run!
         end
 

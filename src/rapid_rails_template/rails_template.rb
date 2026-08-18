@@ -14692,14 +14692,17 @@ def configure_litestream_r2(app_id)
     # typed: strict
     # frozen_string_literal: true
 
+    require "digest"
     require "fileutils"
     require "json"
+    require "net/http"
     require "open3"
     require "pathname"
     require "shellwords"
     require "sorbet-runtime"
     require "stringio"
     require "tempfile"
+    require "uri"
 
     module Litestream
       class R2Configurator
@@ -14709,12 +14712,174 @@ def configure_litestream_r2(app_id)
   RUBY
   configurator << <<~'RUBY'
         DESTINATIONS = %w[production staging].freeze
-        SECRET_FIELDS = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY].freeze
+        DEPLOY_SECRET_FIELDS = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY].freeze
+        ITEM_SECRET_FIELDS = T.let(
+          ["CLOUDFLARE_R2_API_TOKEN", *DEPLOY_SECRET_FIELDS].freeze,
+          T::Array[String]
+        )
         BUCKET_PATTERN = /\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/
+        INITIAL_TOKEN_ENV = "CLOUDFLARE_INITIAL_API_TOKEN"
+        INITIAL_TOKEN_TEMPLATE_DOC_URL = "https://developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/"
+        R2_PERMISSION_GROUP_NAME = "Workers R2 Storage Bucket Item Write"
+        R2_BUCKET_SCOPE = "com.cloudflare.edge.r2.bucket"
+        TOKEN_NAME_MAX_BYTES = 120
         SERVICE_ACCOUNT_TYPE = "SERVICE_ACCOUNT"
         ACTIVE_STATE = "ACTIVE"
 
         Error = Class.new(StandardError)
+
+        class CloudflareClient
+          extend T::Sig
+
+          API_BASE_URL = "https://api.cloudflare.com/client/v4"
+
+          sig { params(token: String, http_factory: T.untyped).void }
+          def initialize(token:, http_factory: nil)
+            @token = token
+            @http_factory = T.let(
+              http_factory || ->(host, port) { Net::HTTP.new(host, port) },
+              T.untyped
+            )
+          end
+
+          sig { params(account_id: String, name: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+          def permission_groups(account_id, name:)
+            envelope = request(
+              :get,
+              "/accounts/#{account_id}/tokens/permission_groups",
+              query: { "name" => name }
+            )
+            result = envelope["result"]
+            raise Error, "Cloudflare permission group一覧応答が不正です" unless result.is_a?(Array)
+
+            typed_records(result, "Cloudflare permission group")
+          end
+
+          sig { params(account_id: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+          def tokens(account_id)
+            records = T.let([], T::Array[T::Hash[String, T.untyped]])
+            page = 1
+            loop do
+              envelope = request(
+                :get,
+                "/accounts/#{account_id}/tokens",
+                query: { "page" => page.to_s, "per_page" => "50" }
+              )
+              result = envelope["result"]
+              result_info = envelope["result_info"]
+              unless result.is_a?(Array) && result_info.is_a?(Hash)
+                raise Error, "Cloudflare token一覧応答が不正です"
+              end
+
+              records.concat(typed_records(result, "Cloudflare token"))
+              total_count = result_info["total_count"]
+              raise Error, "Cloudflare token一覧の件数応答が不正です" unless total_count.is_a?(Integer) && total_count >= 0
+              break if records.length >= total_count
+              raise Error, "Cloudflare token一覧のpagination応答が不正です" if result.empty?
+
+              page += 1
+            end
+            records
+          end
+
+          sig do
+            params(
+              account_id: String,
+              name: String,
+              policy: T::Hash[String, T.untyped]
+            ).returns(T::Hash[String, T.untyped])
+          end
+          def create_token(account_id, name:, policy:)
+            envelope = request(
+              :post,
+              "/accounts/#{account_id}/tokens",
+              body: { "name" => name, "policies" => [policy] }
+            )
+            result = envelope["result"]
+            raise Error, "Cloudflare token作成応答が不正です" unless result.is_a?(Hash)
+
+            result
+          end
+
+          private
+
+          sig do
+            params(
+              method: Symbol,
+              path: String,
+              query: T::Hash[String, String],
+              body: T.nilable(T::Hash[String, T.untyped])
+            ).returns(T::Hash[String, T.untyped])
+          end
+          def request(method, path, query: {}, body: nil)
+            uri = URI("#{API_BASE_URL}#{path}")
+            uri.query = URI.encode_www_form(query) unless query.empty?
+            request = case method
+            when :get
+              Net::HTTP::Get.new(uri)
+            when :post
+              Net::HTTP::Post.new(uri)
+            else
+              raise Error, "未対応のCloudflare API methodです: #{method}"
+            end
+            request["Authorization"] = "Bearer #{@token}"
+            request["Content-Type"] = "application/json"
+            request.body = JSON.generate(body) if body
+
+            http = @http_factory.call(T.must(uri.host), uri.port)
+            http.use_ssl = true
+            http.open_timeout = 10
+            http.read_timeout = 30
+            http.write_timeout = 30
+            response = http.request(request)
+            envelope = JSON.parse(response.body)
+            unless envelope.is_a?(Hash)
+              raise Error, "Cloudflare APIのJSON応答が不正です"
+            end
+            return envelope if response.code.to_i.between?(200, 299) && envelope["success"] == true
+
+            detail = redact_secret(error_detail(envelope))
+            raise Error, "Cloudflare API requestに失敗しました (HTTP #{response.code}): #{detail}"
+          rescue Error
+            raise
+          rescue JSON::ParserError
+            raise Error, "Cloudflare APIのJSON応答が不正です"
+          rescue StandardError => error
+            detail = redact_secret("#{error.class}: #{error.message}")
+            raise Error, "Cloudflare API requestに失敗しました: #{detail}"
+          end
+
+          sig { params(records: T::Array[T.untyped], label: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+          def typed_records(records, label)
+            records.map do |record|
+              raise Error, "#{label}応答が不正です" unless record.is_a?(Hash)
+
+              record
+            end
+          end
+
+          sig { params(envelope: T::Hash[String, T.untyped]).returns(String) }
+          def error_detail(envelope)
+            errors = envelope["errors"]
+            return "Cloudflareから詳細が返されませんでした" unless errors.is_a?(Array)
+
+            messages = errors.filter_map do |error|
+              next unless error.is_a?(Hash)
+
+              code = error["code"]
+              message = error["message"]
+              next unless message.is_a?(String) && !message.empty?
+
+              code.is_a?(Integer) ? "#{message} (code: #{code})" : message
+            end
+            messages.empty? ? "Cloudflareから詳細が返されませんでした" : messages.join("; ")
+          end
+
+          sig { params(value: String).returns(String) }
+          def redact_secret(value)
+            @token.empty? ? value : value.gsub(@token, "[REDACTED]")
+          end
+        end
 
         class Result < T::Struct
           const :stdout, String
@@ -14746,7 +14911,8 @@ def configure_litestream_r2(app_id)
             runner: T.untyped,
             output: T.any(IO, StringIO),
             environment: T::Hash[String, String],
-            terminal: T.nilable(T.any(IO, StringIO))
+            terminal: T.nilable(T.any(IO, StringIO)),
+            cloudflare_client: T.untyped
           ).void
         end
         def initialize(
@@ -14755,7 +14921,8 @@ def configure_litestream_r2(app_id)
           runner: CommandRunner.new,
           output: $stdout,
           environment: ENV.to_h,
-          terminal: nil
+          terminal: nil,
+          cloudflare_client: nil
         )
           @root = root
           @prompt = prompt
@@ -14763,12 +14930,18 @@ def configure_litestream_r2(app_id)
           @output = output
           @environment = environment
           @terminal = terminal
+          @cloudflare_api = cloudflare_client
           @wrangler = T.let(root.join("node_modules/.bin/wrangler").to_s, String)
           @mise_local = T.let(root.join("mise.local.toml"), Pathname)
         end
 
         sig { void }
         def run!
+          unless present_environment?(INITIAL_TOKEN_ENV)
+            print_initial_token_instructions
+            return
+          end
+
           validate_dependencies!
           service_account = ensure_service_account
           return unless service_account
@@ -14786,7 +14959,20 @@ def configure_litestream_r2(app_id)
           item_plans = destinations.to_h do |destination|
             vault_id = record_id(vaults.fetch(destination))
             items = json_command!(%W[op item list --format json --vault #{vault_id} --account #{service_account_id}])
-            [destination, plan_item(destination, items)]
+            [destination, plan_item(destination, items, service_account_id:, vault_id:)]
+          end
+          permission_group = r2_permission_group(account_id)
+          cloudflare_tokens = cloudflare_api.tokens(account_id)
+          token_plans = T.let({}, T::Hash[String, T::Hash[String, T.untyped]])
+          destinations.each do |destination|
+            token_plans[destination] = plan_cloudflare_token(
+              destination,
+              account_id:,
+              bucket: buckets.fetch(destination),
+              permission_group:,
+              cloudflare_tokens:,
+              item_plan: item_plans.fetch(destination)
+            )
           end
 
           print_plan(
@@ -14797,7 +14983,8 @@ def configure_litestream_r2(app_id)
             destinations,
             buckets,
             existing_buckets,
-            item_plans
+            item_plans,
+            token_plans
           )
           unless @prompt.confirm(
             "この内容でR2と1Passwordを構成しますか？",
@@ -14805,7 +14992,7 @@ def configure_litestream_r2(app_id)
             affirmative: "実行",
             negative: "中止"
           )
-            @output.puts "中止しました。R2 bucket、1Password item、Kamal secret参照は変更していません。"
+            @output.puts "中止しました。R2 bucket、Cloudflare API token、1Password item、Kamal secret参照は変更していません。"
             report_retained_vaults(created_vaults)
             return
           end
@@ -14813,7 +15000,11 @@ def configure_litestream_r2(app_id)
           destinations.each do |destination|
             bucket = buckets.fetch(destination)
             create_bucket(account_id, bucket) unless existing_buckets.include?(bucket)
-            credentials = prompt_credentials(destination, bucket, account_id)
+            credentials = cloudflare_credentials(
+              token_plans.fetch(destination),
+              account_id:,
+              bucket:
+            )
             item_id = upsert_item(
               item_plans.fetch(destination),
               service_account_id:,
@@ -15005,10 +15196,24 @@ def configure_litestream_r2(app_id)
           terminal.close if opened
         end
 
+        sig { void }
+        def print_initial_token_instructions
+          @output.puts "#{INITIAL_TOKEN_ENV}が設定されていません。"
+          @output.puts "Account API Tokens: Editだけを持つInitial Tokenを次のURLから作成してください:"
+          @output.puts self.class.initial_token_template_url(APP_ID)
+          @output.puts "作成後、#{INITIAL_TOKEN_ENV}を設定して再実行してください。"
+          @output.puts "参照: #{INITIAL_TOKEN_TEMPLATE_DOC_URL}"
+        end
+
+        sig { returns(T.untyped) }
+        def cloudflare_api
+          @cloudflare_api ||= CloudflareClient.new(token: String(@environment.fetch(INITIAL_TOKEN_ENV)))
+        end
+
         sig { params(name: String).returns(T::Boolean) }
         def present_environment?(name)
           value = @environment[name]
-          value.is_a?(String) && !value.empty?
+          value.is_a?(String) && !value.strip.empty?
         end
 
         sig { returns(T::Array[String]) }
@@ -15133,17 +15338,137 @@ def configure_litestream_r2(app_id)
         sig do
           params(
             destination: String,
-            items: T.untyped
+            items: T.untyped,
+            service_account_id: String,
+            vault_id: String
           ).returns(T::Hash[String, T.untyped])
         end
-        def plan_item(destination, items)
+        def plan_item(destination, items, service_account_id:, vault_id:)
           raise Error, "1Password item一覧応答が不正です" unless items.is_a?(Array)
 
           title = "#{APP_ID} Litestream R2 #{destination}"
           matches = items.select { |item| item.is_a?(Hash) && item["title"] == title }
           raise Error, "同名の1Password itemが複数あります: #{title}" if matches.length > 1
 
-          { "title" => title, "id" => matches.first&.fetch("id", nil) }
+          item_id = matches.first&.fetch("id", nil)
+          unless item_id.nil? || (item_id.is_a?(String) && !item_id.empty?)
+            raise Error, "1Password item IDが不正です: #{title}"
+          end
+          item = if item_id
+            json_command!(%W[op item get #{item_id} --format json --vault #{vault_id} --account #{service_account_id}])
+          end
+          raise Error, "1Password item応答が不正です: #{title}" if item_id && !item.is_a?(Hash)
+
+          { "title" => title, "id" => item_id, "item" => item }
+        end
+
+        sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
+        def r2_permission_group(account_id)
+          records = cloudflare_api.permission_groups(account_id, name: R2_PERMISSION_GROUP_NAME)
+          matches = records.select do |record|
+            record["name"] == R2_PERMISSION_GROUP_NAME &&
+              record["scopes"].is_a?(Array) &&
+              record.fetch("scopes").include?(R2_BUCKET_SCOPE)
+          end
+          if matches.empty?
+            raise Error, "Cloudflare permission groupが見つかりません: #{R2_PERMISSION_GROUP_NAME} (#{R2_BUCKET_SCOPE})"
+          end
+          if matches.length > 1
+            raise Error, "Cloudflare permission groupが複数あります: #{R2_PERMISSION_GROUP_NAME} (#{R2_BUCKET_SCOPE})"
+          end
+
+          permission_group = matches.fetch(0)
+          record_id(permission_group)
+          permission_group
+        end
+
+        sig do
+          params(
+            destination: String,
+            account_id: String,
+            bucket: String,
+            permission_group: T::Hash[String, T.untyped],
+            cloudflare_tokens: T::Array[T::Hash[String, T.untyped]],
+            item_plan: T::Hash[String, T.untyped]
+          ).returns(T::Hash[String, T.untyped])
+        end
+        def plan_cloudflare_token(destination, account_id:, bucket:, permission_group:, cloudflare_tokens:, item_plan:)
+          name = self.class.cloudflare_token_name(APP_ID, destination)
+          policy = cloudflare_token_policy(account_id, bucket, record_id(permission_group))
+          matches = cloudflare_tokens.select { |token| token["name"] == name }
+          raise Error, "同名のCloudflare API tokenが複数あります: #{name}" if matches.length > 1
+          return { "name" => name, "action" => "create", "policy" => policy } if matches.empty?
+
+          token = matches.fetch(0)
+          raise Error, "Cloudflare API tokenがactiveではありません: #{name}" unless token["status"] == "active"
+          unless cloudflare_token_policy_matches?(token["policies"], policy)
+            raise Error, "Cloudflare API tokenの権限またはbucketが期待値と一致しません: #{name}"
+          end
+
+          item = item_plan["item"]
+          unless item.is_a?(Hash)
+            raise Error, "Cloudflare API tokenは存在しますが、対応する1Password itemがありません: #{name}"
+          end
+          credentials = item_credentials(item, name)
+          token_id = token["id"]
+          unless token_id.is_a?(String) && !token_id.empty? && credentials.fetch("R2_ACCESS_KEY") == token_id
+            raise Error, "Cloudflare API token IDと1PasswordのR2_ACCESS_KEYが一致しません: #{name}"
+          end
+          unless Digest::SHA256.hexdigest(credentials.fetch("CLOUDFLARE_R2_API_TOKEN")) == credentials.fetch("R2_SECRET_KEY")
+            raise Error, "1PasswordのCloudflare API tokenとR2_SECRET_KEYが一致しません: #{name}"
+          end
+
+          { "name" => name, "action" => "reuse", "policy" => policy, "credentials" => credentials }
+        end
+
+        sig { params(account_id: String, bucket: String, permission_group_id: String).returns(T::Hash[String, T.untyped]) }
+        def cloudflare_token_policy(account_id, bucket, permission_group_id)
+          {
+            "effect" => "allow",
+            "resources" => {
+              "#{R2_BUCKET_SCOPE}.#{account_id}_default_#{bucket}" => "*"
+            },
+            "permission_groups" => [{ "id" => permission_group_id }]
+          }
+        end
+
+        sig { params(actual: T.untyped, expected: T::Hash[String, T.untyped]).returns(T::Boolean) }
+        def cloudflare_token_policy_matches?(actual, expected)
+          return false unless actual.is_a?(Array) && actual.length == 1
+
+          policy = actual.fetch(0)
+          return false unless policy.is_a?(Hash)
+          return false unless policy["effect"] == expected.fetch("effect")
+          return false unless policy["resources"] == expected.fetch("resources")
+
+          permission_groups = policy["permission_groups"]
+          expected_groups = expected.fetch("permission_groups")
+          return false unless permission_groups.is_a?(Array) && permission_groups.length == 1
+
+          permission_group = permission_groups.fetch(0)
+          expected_group = T.cast(expected_groups, T::Array[T::Hash[String, T.untyped]]).fetch(0)
+          permission_group.is_a?(Hash) && permission_group["id"] == expected_group.fetch("id")
+        end
+
+        sig { params(item: T::Hash[String, T.untyped], token_name: String).returns(T::Hash[String, String]) }
+        def item_credentials(item, token_name)
+          fields = item["fields"]
+          raise Error, "1Password item fields応答が不正です: #{token_name}" unless fields.is_a?(Array)
+
+          credentials = T.let({}, T::Hash[String, String])
+          %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY].each do |name|
+            matches = fields.select do |field|
+              field.is_a?(Hash) && (field["label"] == name || field["id"] == name)
+            end
+            raise Error, "1Password itemに#{name}が複数あります: #{token_name}" if matches.length > 1
+
+            value = matches.first&.fetch("value", nil)
+            unless value.is_a?(String) && !value.empty?
+              raise Error, "Cloudflare API tokenは存在しますが、1Password itemに#{name}がありません: #{token_name}"
+            end
+            credentials[name] = value
+          end
+          credentials
         end
 
         sig do
@@ -15155,10 +15480,11 @@ def configure_litestream_r2(app_id)
             destinations: T::Array[String],
             buckets: T::Hash[String, String],
             existing_buckets: T::Array[String],
-            item_plans: T::Hash[String, T::Hash[String, T.untyped]]
+            item_plans: T::Hash[String, T::Hash[String, T.untyped]],
+            token_plans: T::Hash[String, T::Hash[String, T.untyped]]
           ).void
         end
-        def print_plan(cloudflare, account, service_account, vaults, destinations, buckets, existing_buckets, item_plans)
+        def print_plan(cloudflare, account, service_account, vaults, destinations, buckets, existing_buckets, item_plans, token_plans)
           user = cloudflare["user"]
           email = user.is_a?(Hash) ? user["email"] : nil
           @output.puts "Cloudflare login: #{email || "unknown"} (#{cloudflare.fetch("authType", "unknown")})"
@@ -15170,8 +15496,11 @@ def configure_litestream_r2(app_id)
             bucket = buckets.fetch(destination)
             bucket_action = existing_buckets.include?(bucket) ? "既存を使用" : "新規作成"
             item_action = item_plans.fetch(destination).fetch("id") ? "更新" : "作成"
+            token_plan = token_plans.fetch(destination)
+            token_action = token_plan.fetch("action") == "reuse" ? "既存を使用" : "新規作成"
             @output.puts "  #{destination}: 1Password vault=#{record_name(vault)} (#{record_id(vault)})"
             @output.puts "  #{destination}: bucket=#{bucket} (#{bucket_action}), 1Password item=#{item_plans.fetch(destination).fetch("title")} (#{item_action})"
+            @output.puts "  #{destination}: Cloudflare API token=#{token_plan.fetch("name")} (#{token_action}, Workers R2 Storage Bucket Item Write)"
             @output.puts "    .kamal/secrets.#{destination}: 1Password ID参照を生成"
           end
         end
@@ -15182,28 +15511,44 @@ def configure_litestream_r2(app_id)
           @output.puts "R2 bucketを作成しました: #{bucket}"
         end
 
-        sig { params(destination: String, bucket: String, account_id: String).returns(T::Hash[String, String]) }
-        def prompt_credentials(destination, bucket, account_id)
-          @output.puts <<~MESSAGE
+        sig do
+          params(
+            plan: T::Hash[String, T.untyped],
+            account_id: String,
+            bucket: String
+          ).returns(T::Hash[String, String])
+        end
+        def cloudflare_credentials(plan, account_id:, bucket:)
+          return T.cast(plan.fetch("credentials"), T::Hash[String, String]) if plan.fetch("action") == "reuse"
 
-            Cloudflare Dashboardで #{bucket} のみに限定した Object Read & Write API tokenを作成してください。
-            Account ID: #{account_id}
-            Destination: #{destination}
-          MESSAGE
-          ready = @prompt.confirm(
-            "#{destination}用tokenのAccess Key IDとSecret Access Keyを取得しましたか？",
-            default: false,
-            affirmative: "取得済み",
-            negative: "中断"
+          created = cloudflare_api.create_token(
+            account_id,
+            name: String(plan.fetch("name")),
+            policy: T.cast(plan.fetch("policy"), T::Hash[String, T.untyped])
           )
-          raise Error, "token入力前に中断しました。作成済みbucketは保持されています。再実行してください。" unless ready
+          unless created["name"] == plan.fetch("name") && created["status"] == "active"
+            raise Error, "作成したCloudflare API tokenのnameまたはstatusが一致しません: #{plan.fetch("name")}"
+          end
+          unless cloudflare_token_policy_matches?(created["policies"], T.cast(plan.fetch("policy"), T::Hash[String, T.untyped]))
+            raise Error, "作成したCloudflare API tokenの権限またはbucketが一致しません: #{plan.fetch("name")}"
+          end
 
-          access_key = String(@prompt.input(header: "#{destination} R2 Access Key ID", password: true)).strip
-          secret_key = String(@prompt.input(header: "#{destination} R2 Secret Access Key", password: true)).strip
-          raise Error, "R2 Access Key IDは空にできません" if access_key.empty?
-          raise Error, "R2 Secret Access Keyは空にできません" if secret_key.empty?
+          token_id = created["id"]
+          token_value = created["value"]
+          unless token_id.is_a?(String) && !token_id.empty? && token_value.is_a?(String) && !token_value.empty?
+            raise Error, "作成したCloudflare API tokenのIDまたは値を取得できません: #{plan.fetch("name")}"
+          end
+          expected_resource = "#{R2_BUCKET_SCOPE}.#{account_id}_default_#{bucket}"
+          resources = T.cast(plan.fetch("policy"), T::Hash[String, T.untyped]).fetch("resources")
+          unless resources.is_a?(Hash) && resources.keys == [expected_resource]
+            raise Error, "Cloudflare API tokenのbucket resourceが一致しません: #{plan.fetch("name")}"
+          end
 
-          { "R2_ACCESS_KEY" => access_key, "R2_SECRET_KEY" => secret_key }
+          {
+            "CLOUDFLARE_R2_API_TOKEN" => token_value,
+            "R2_ACCESS_KEY" => token_id,
+            "R2_SECRET_KEY" => Digest::SHA256.hexdigest(token_value)
+          }
         end
 
         sig do
@@ -15217,7 +15562,7 @@ def configure_litestream_r2(app_id)
         def upsert_item(plan, service_account_id:, vault_id:, fields:)
           item_id = plan.fetch("id")
           item = if item_id
-            json_command!(%W[op item get #{item_id} --format json --vault #{vault_id} --account #{service_account_id}])
+            plan.fetch("item")
           else
             json_command!(%W[op item template get API\ Credential --account #{service_account_id}])
           end
@@ -15227,13 +15572,13 @@ def configure_litestream_r2(app_id)
           current_fields = item.fetch("fields", [])
           raise Error, "1Password item fields応答が不正です" unless current_fields.is_a?(Array)
           item["fields"] = current_fields.reject do |field|
-            field.is_a?(Hash) && SECRET_FIELDS.include?(field["label"] || field["id"])
+            field.is_a?(Hash) && ITEM_SECRET_FIELDS.include?(field["label"] || field["id"])
           end
-          SECRET_FIELDS.each do |name|
+          ITEM_SECRET_FIELDS.each do |name|
             item.fetch("fields") << {
               "id" => name,
               "label" => name,
-              "type" => %w[R2_ACCESS_KEY R2_SECRET_KEY].include?(name) ? "CONCEALED" : "STRING",
+              "type" => %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY].include?(name) ? "CONCEALED" : "STRING",
               "value" => fields.fetch(name)
             }
           end
@@ -15257,8 +15602,8 @@ def configure_litestream_r2(app_id)
           account = Shellwords.escape(account_id)
           source = Shellwords.escape("#{vault_id}/#{item_id}")
           content = <<~SECRETS
-            R2_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{source} #{SECRET_FIELDS.join(" ")})
-            #{SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $R2_SECRETS)" }.join("\n")}
+            R2_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{source} #{DEPLOY_SECRET_FIELDS.join(" ")})
+            #{DEPLOY_SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $R2_SECRETS)" }.join("\n")}
           SECRETS
           Tempfile.create(["secrets-#{destination}", ".tmp"], path.dirname.to_s) do |file|
             file.write(content)
@@ -15383,6 +15728,34 @@ def configure_litestream_r2(app_id)
             normalized = normalized.byteslice(0, 63 - suffix.bytesize).to_s.gsub(/-+\z/, "")
             "#{normalized}#{suffix}"
           end
+
+          sig { params(app_id: String, destination: String).returns(String) }
+          def cloudflare_token_name(app_id, destination)
+            bounded_token_name(app_id, "-r2-#{destination}")
+          end
+
+          sig { params(app_id: String).returns(String) }
+          def initial_token_template_url(app_id)
+            permissions = URI.encode_www_form_component(
+              JSON.generate([{ "key" => "account_api_tokens", "type" => "edit" }])
+            )
+            name = URI.encode_www_form_component(bounded_token_name(app_id, "-api-token-creator"))
+            "https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=#{permissions}&name=#{name}"
+          end
+
+          private
+
+          sig { params(app_id: String, suffix: String).returns(String) }
+          def bounded_token_name(app_id, suffix)
+            normalized = normalized_app_id(app_id)
+            candidate = "#{normalized}#{suffix}"
+            return candidate if candidate.bytesize <= TOKEN_NAME_MAX_BYTES
+
+            digest_suffix = "-#{Digest::SHA256.hexdigest(app_id).slice(0, 12)}#{suffix}"
+            prefix = normalized.byteslice(0, TOKEN_NAME_MAX_BYTES - digest_suffix.bytesize).to_s.gsub(/-+\z/, "")
+            prefix = "app" if prefix.empty?
+            "#{prefix}#{digest_suffix}"
+          end
         end
       end
     end
@@ -15452,12 +15825,59 @@ def configure_litestream_r2(app_id)
         end
       end
 
+      class FakeCloudflareClient
+        attr_reader :calls
+
+        def initialize
+          @calls = []
+        end
+
+        def permission_groups(account_id, name:)
+          @calls << { method: :permission_groups, account_id:, name: }
+          [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+        end
+
+        def tokens(account_id)
+          @calls << { method: :tokens, account_id: }
+          []
+        end
+
+        def create_token(*)
+          raise "confirmation rejection must not create a Cloudflare token"
+        end
+      end
+
       test "normalizes deterministic destination bucket names" do
         assert_equal "my-app", Litestream::R2Configurator.normalized_app_id("My App!")
         assert_equal "dev:my-app", Litestream::R2Configurator.service_account_name("My App!")
         assert_equal "my-app-production", Litestream::R2Configurator.destination_vault_name("My App!", "production")
         assert_equal "my-app-db-production", Litestream::R2Configurator.default_bucket_name("My App!", "production")
+        assert_equal "my-app-r2-production", Litestream::R2Configurator.cloudflare_token_name("My App!", "production")
         assert_operator Litestream::R2Configurator.default_bucket_name("a" * 100, "staging").bytesize, :<=, 63
+        assert_operator Litestream::R2Configurator.cloudflare_token_name("a" * 200, "staging").bytesize, :<=, 120
+      end
+
+
+      test "missing initial token prints a template URL without checking dependencies" do
+        Dir.mktmpdir do |directory|
+          output = StringIO.new
+          runner = Object.new
+          def runner.capture(*)
+            raise "runner must not be called"
+          end
+
+          Litestream::R2Configurator.new(
+            root: Pathname(directory),
+            prompt: Object.new,
+            runner:,
+            output:,
+            environment: {}
+          ).run!
+
+          assert_includes output.string, "CLOUDFLARE_INITIAL_API_TOKEN"
+          assert_includes output.string, "account_api_tokens"
+          assert_empty Dir.children(directory)
+        end
       end
 
       test "confirmation rejection has no external mutations" do
@@ -15481,6 +15901,7 @@ def configure_litestream_r2(app_id)
             FakeResult.new(stdout: "[]", stderr: "", success: true, exitstatus: 0)
           ]
           runner = FakeRunner.new(responses)
+          cloudflare_client = FakeCloudflareClient.new
           output = StringIO.new
 
           Litestream::R2Configurator.new(
@@ -15488,14 +15909,19 @@ def configure_litestream_r2(app_id)
             prompt: RejectingPrompt.new,
             runner:,
             output:,
-            environment: { "OP_SERVICE_ACCOUNT_TOKEN" => "service-token" }
+            environment: {
+              "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+              "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
+            },
+            cloudflare_client:
           ).run!
 
           assert_equal 11, runner.calls.length
           refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
           refute_path_exists root.join(".kamal/secrets.production")
           assert_includes output.string, "Cloudflare login: person@example.com (OAuth Token)"
-          assert_includes output.string, "R2 bucket、1Password item、Kamal secret参照は変更していません。"
+          assert_equal %i[permission_groups tokens], cloudflare_client.calls.map { |call| call.fetch(:method) }
+          assert_includes output.string, "R2 bucket、Cloudflare API token、1Password item、Kamal secret参照は変更していません。"
         end
       end
     end
@@ -15761,22 +16187,36 @@ def configure_kamal
     An invisible same-named vault is outside this check. Duplicate visible names and missing vault
     creation permission are errors; there is no fallback to a human-owned vault.
 
+    Set `CLOUDFLARE_INITIAL_API_TOKEN` to an account-owned token with only **Account API Tokens:
+    Edit**. The task never stores this initial token. If it is absent, the task prints a prefilled
+    account-owned Token Template URL and the Cloudflare documentation, then exits successfully
+    before running commands or changing Cloudflare, 1Password, buckets, or repository files.
+
     Both destinations are selected initially. The task shows the signed-in Cloudflare identity,
     lets you choose its account, checks existing buckets, and prints the service account ID,
-    destination vault IDs, buckets, items, and generated Kamal references without secret values.
-    Its final default-No confirmation controls buckets, items, and `.kamal/secrets.*`; service
-    accounts and vaults created before that confirmation are retained if configuration stops.
-    It creates only missing buckets.
+    destination vault IDs, buckets, token names and create/reuse actions, items, and generated Kamal
+    references without secret values. Its final default-No confirmation controls buckets,
+    Cloudflare tokens, items, and `.kamal/secrets.*`; service accounts and vaults created before
+    that confirmation are retained if configuration stops. It creates only missing buckets.
     Default bucket names are `<normalized-app-id>-db-production` and
     `<normalized-app-id>-db-staging`; you can change either name before confirmation.
-    Wrangler cannot issue R2 S3 credentials, so the task then directs you to create a bucket-scoped
-    **Object Read & Write** API token in the Cloudflare Dashboard and collects the Access Key ID and
-    Secret Access Key with masked input.
 
-    The credentials are stored only in the destination vault's 1Password item named
+    For each destination, the task resolves the current Cloudflare permission group ID and creates
+    an account-owned token named `<normalized-app-id>-r2-<destination>`. Its only allow policy is
+    **Workers R2 Storage Bucket Item Write** for that destination's bucket. Names longer than 120
+    bytes shorten the app ID and include its SHA-256 hash. The task lists every page of existing
+    account tokens before deciding whether to create one. It reuses one only when its name, active
+    state, policy, bucket, token ID, and 1Password-held token-derived secret all match. Duplicate,
+    inactive, mismatched, or orphaned tokens stop configuration without automatic creation,
+    rotation, or deletion.
+
+    The created token value is stored as the concealed `CLOUDFLARE_R2_API_TOKEN` field only in the
+    destination vault's 1Password item named
     `#{app_id} Litestream R2 production` and `#{app_id} Litestream R2 staging`. Generated
-    `.kamal/secrets.production` and `.kamal/secrets.staging` files contain the service account ID,
-    destination vault/item IDs, and Kamal's standard 1Password adapter commands, not credentials.
+    `R2_ACCESS_KEY` is the Cloudflare token ID; `R2_SECRET_KEY` is the SHA-256 digest of the token
+    value. Generated `.kamal/secrets.production` and `.kamal/secrets.staging` files fetch only
+    `CF_ACCOUNT_ID`, `LITESTREAM_R2_BUCKET`, `R2_ACCESS_KEY`, and `R2_SECRET_KEY` through Kamal's
+    standard 1Password adapter. They never deploy `CLOUDFLARE_R2_API_TOKEN`.
     `.kamal/secrets-common` provides only
     secrets shared by both destinations. If configuration stops after bucket creation, the bucket
     is intentionally retained; rerun the task to continue.

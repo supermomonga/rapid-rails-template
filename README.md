@@ -59,7 +59,7 @@ Passkeyによるパスワードレス認証は全構成で必須です。登録�
 
 画像は全環境でActive Storage DBの専用SQLite databaseへ保存し、libvipsでvariantを生成します。画像URLはActive Storage公式のproxy routeへ解決し、productionではThrusterのHTTP cacheがwarmなrequestをPuma、Rails、SQLiteへ転送せず返します。生成アプリの`docs/image_delivery.md`にnamed variant、公開signed URL、cache制約を記載します。
 
-デプロイは全構成でKamal V2に固定し、`production`・`staging` destinationを必須にします。Litestream 0.5.15は単一Linux host上のAccessoryとして、destination別SQLite volumeをCloudflare R2の別bucketへ複製します。生成される`litestream:configure:r2`はWranglerでbucketを構成し、bucket限定tokenを1Passwordへ保存してKamalのdestination別secret参照を生成します。空volumeの起動時復元は既存DBを上書きせず、既存DBを戻す操作はdestination必須の`bin/kamal-restore`でdry-run、TTY、完全一致確認、全DB整合性検査、deploy lock、復元前ファイル保存を必須にします。詳細は生成アプリの`docs/deployment.md`へ出力します。
+デプロイは全構成でKamal V2に固定し、`production`・`staging` destinationを必須にします。Litestream 0.5.15は単一Linux host上のAccessoryとして、destination別SQLite volumeをCloudflare R2の別bucketへ複製します。生成される`litestream:configure:r2`は1Password service account専用で、初回に必要ならservice account tokenをgit管理外の`mise.local.toml`へ保存して終了し、再実行時にdestination別vault、R2 bucket、bucket限定token item、Kamal secret参照を構成します。空volumeの起動時復元は既存DBを上書きせず、既存DBを戻す操作はdestination必須の`bin/kamal-restore`でdry-run、TTY、完全一致確認、全DB整合性検査、deploy lock、復元前ファイル保存を必須にします。詳細は生成アプリの`docs/deployment.md`へ出力します。
 
 `--default-locale`は`ja`または`en`を指定し、既定値は`ja`です。生成アプリには両言語のlocaleを用意しますが、requestごとの切替UIやUserへのlocale保存は生成しません。productionのcanonical originは`APPLICATION_ORIGIN`環境変数で明示し、development/testだけが固定のローカル既定値を持ちます。
 

@@ -416,7 +416,7 @@ module RapidRailsTemplate
         test/lib/litestream/r2_configurator_test.rb
         docs/deployment.md
       ])
-      result << "mise.local.toml" if configuration["web_push"] == "use"
+      result << "mise.local.toml"
       result.uniq
     end
 

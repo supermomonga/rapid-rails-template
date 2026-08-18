@@ -340,19 +340,19 @@ Litestream 0.5.15をKamal Accessoryとして起動し、Web・Workerと同じdes
 | access key | `R2_ACCESS_KEY` |
 | secret key | `R2_SECRET_KEY` |
 
-endpointは`${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`、regionは`auto`です。object prefixは`primary`、`storage`、条件付き`queue`・`cable`です。資格情報の正本はdestination別の1Password itemとし、`.kamal/secrets.production`・`.kamal/secrets.staging`にはKamal公式1Password adapterのID参照だけを生成します。共通secretは`.kamal/secrets-common`に置きます。ローカルWrangler v4とGumを使う`litestream:configure:r2`がbucket確認・作成と参照生成を担当します。
+endpointは`${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`、regionは`auto`です。object prefixは`primary`、`storage`、条件付き`queue`・`cable`です。資格情報の正本は1Password service accountから見えるdestination別vault内のitemとし、`.kamal/secrets.production`・`.kamal/secrets.staging`にはKamal公式1Password adapterが使うservice account ID、vault ID、item IDだけを生成します。共通secretは`.kamal/secrets-common`に置きます。ローカルWrangler v4とGumを使う`mise exec -- bin/rails litestream:configure:r2`がservice account認証、vault、bucket、item、参照生成を担当します。初回にservice accountを作成した場合はtokenをgit/Docker管理外かつ`0600`の`mise.local.toml`へ平文保存して終了し、再実行時に構成を続けます。
 
 各DBへ`restore-if-db-not-exists`を設定します。空volumeかつbackupがある場合だけ起動時に復元し、既存DBは上書きしません。初回でbackupが存在しない場合は新規DB作成へ進み、それ以外の復元・接続エラーではAccessoryを失敗させます。Litestreamは復元とDB openの後にcontrol socketを公開し、Web entrypointはsocketのstatus応答後に`db:prepare`、Workerはstatus応答後に`bin/jobs`を開始します。
 
-Accessoryは通常の`kamal deploy`では更新されないため、設定・image・secret変更時はdestinationを付けて`bin/kamal accessory reboot litestream -d DESTINATION`を実行します。
+Accessoryは通常の`kamal deploy`では更新されないため、設定・image・secret変更時はdestinationを付けて`mise exec -- bin/kamal accessory reboot litestream -d DESTINATION`を実行します。
 
 ### 確認付き手動復元
 
-`bin/kamal-restore`は`--destination=production|staging`を必須とし、最新時点、`--timestamp=RFC3339`によるpoint-in-time、`--plan`によるdry-runを提供します。書き込み操作はTTYと`RESTORE <app_id> <destination> <target>`の完全一致入力を必須にし、確認回避やforce optionは提供しません。
+`mise exec -- bin/kamal-restore`は`--destination=production|staging`を必須とし、最新時点、`--timestamp=RFC3339`によるpoint-in-time、`--plan`によるdry-runを提供します。書き込み操作はTTYと`RESTORE <app_id> <destination> <target>`の完全一致入力を必須にし、確認回避やforce optionは提供しません。
 
 確認後はmaintenance化、Web/Worker停止、全DBの`sync -wait`、Accessory停止、deploy lock取得、全DBの一時領域へのrestoreとfull integrity check、同一volume内renameの順で処理します。primary、storage、条件付きqueue/cableを常に一組で扱い、部分的な復元は許可しません。切替途中の失敗は補償renameで元へ戻します。
 
-復元前DBとWAL/SHM/journalは操作ID別に保持し、destination付きの`bin/kamal-restore --rollback=OPERATION_ID`で確認付きrollbackを行います。復元中はdestination別remote markerと`pre-deploy` hookで新規deployを拒否し、破壊的な切替中はdeploy lockを保持します。切替後の起動失敗では自動rollbackせず、サービスとmarkerを停止状態で残して調査可能にします。
+復元前DBとWAL/SHM/journalは操作ID別に保持し、destination付きの`mise exec -- bin/kamal-restore --rollback=OPERATION_ID`で確認付きrollbackを行います。復元中はdestination別remote markerと`pre-deploy` hookで新規deployを拒否し、破壊的な切替中はdeploy lockを保持します。切替後の起動失敗では自動rollbackせず、サービスとmarkerを停止状態で残して調査可能にします。
 
 ## Rails 8.1のSolid系既定値
 

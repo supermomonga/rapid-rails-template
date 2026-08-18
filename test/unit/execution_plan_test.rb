@@ -176,6 +176,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "lib/tasks/litestream.rake"
     assert_includes plan.artifacts, "test/lib/litestream/r2_configurator_test.rb"
     assert_includes plan.artifacts, "docs/deployment.md"
+    assert_includes plan.artifacts, "mise.local.toml"
     assert_includes plan.artifacts, "app/services/avatar_image_policy.rb"
     assert_includes plan.artifacts, "app/services/avatar_upload.rb"
     assert_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"

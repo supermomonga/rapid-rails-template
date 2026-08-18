@@ -1149,6 +1149,16 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes r2, 'password: true'
     assert_includes r2, 'stdin_data: JSON.generate(item)'
     assert_includes r2, 'default: false'
+    assert_includes r2, '%w[op user get --me --format=json]'
+    assert_includes r2, '%W[op account get --format=json --account=#{service_account_id}]'
+    assert_includes r2, '%W[op service-account create #{name} --can-create-vaults --raw]'
+    assert_includes r2, '%W[mise set --file #{@mise_local} --stdin OP_SERVICE_ACCOUNT_TOKEN]'
+    assert_includes r2, '%W[op vault create #{name} --format=json --account=#{service_account_id}]'
+    assert_includes r2, '"#{normalized_app_id(app_id)}-#{destination}"'
+    assert_includes r2, 'stdin_data: token.dup'
+    assert_includes kamal, 'append_to_file ".gitignore", "\n/mise.local.toml\n"'
+    assert_includes kamal, "mise exec -- bin/kamal setup -d production"
+    refute_includes r2, "1Password account/vault"
   end
 
   def test_generates_fixed_pages_faqs_footer_settings_and_admin_management

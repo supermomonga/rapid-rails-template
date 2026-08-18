@@ -5,8 +5,8 @@
     "siwe"
   ],
   "locale": "ja",
-  "source_fingerprint": "e29c87a17e64ea56e23c571e6db7b05b18966a66d6b49e14744a46b42f58ac71",
-  "base_commit": "f8e07337e4820107c9be033b2b076df0b26e671f",
+  "source_fingerprint": "01c4bbee4f91c3cf5e936c778163eca96158850213e536c88464c53d0e7190b7",
+  "base_commit": "3971559ea07a09a69547f52facbce9af24ef5f84",
   "viewports": {
     "desktop": {
       "width": 1400,
@@ -275,7 +275,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "desktop",
       "path": "api-credential-secret--desktop.png",
-      "sha256": "bdd1eddf3c599e32df0bf59561b06050cb2f4e197b3d6e1de0d9192efefd2910",
+      "sha256": "74a6c618a0b4cf35774e8eeb8c2d1a2d1e5e45ecb1f87631dfc65795af36b226",
       "pixel_width": 1400,
       "pixel_height": 906
     },
@@ -284,7 +284,7 @@
       "title": "APIキー詳細",
       "viewport": "desktop",
       "path": "api-credential-show--desktop.png",
-      "sha256": "22126217e9cd1a80259f24b5c440cffe6e61de4345edf32ded55589393ed547a",
+      "sha256": "c524c321b154023bdc0c6d1145d751ced16007898c209ab246e106a2d8bbe5b5",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -302,7 +302,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "desktop",
       "path": "api-credentials-populated--desktop.png",
-      "sha256": "8deef74283edd9e2db52217a47ac4ea450434a4589fdd883cc86e688bd831c67",
+      "sha256": "2ffd87a288af3f05b621c45db9ebe6690bfa99c368e80452e8742c7788a857d0",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -347,7 +347,7 @@
       "title": "運用タスク完了",
       "viewport": "desktop",
       "path": "admin-maintenance-task-completed--desktop.png",
-      "sha256": "910681b3cae8233911c2bd6aa4de0458cc93a88e71c4903d6b92832d9fa79151",
+      "sha256": "1c7accd74377c923c34c435e1346a0b4daad3ad40da4c462c77dc6404b76a150",
       "pixel_width": 1400,
       "pixel_height": 2071
     },
@@ -392,7 +392,7 @@
       "title": "ユーザー管理",
       "viewport": "desktop",
       "path": "admin-users--desktop.png",
-      "sha256": "a655848fc5bd9f8e401141c5110ebd73a3a2fc1d9a2a9baa62687eafd51bca06",
+      "sha256": "e726f30bfb1df7930f2ebd21df2b0268303d9f2af6e03538283c5aabe3d2d9d4",
       "pixel_width": 1400,
       "pixel_height": 1999
     },
@@ -572,7 +572,7 @@
       "title": "Passkey一覧",
       "viewport": "mobile",
       "path": "passkeys--mobile.png",
-      "sha256": "a0ce49b2d3864a962daf9fc5cec364883dfa855210465b470240f63cfd55253c",
+      "sha256": "dc0a884e54a1f7982e0da5c3a34ffe17833f81b41d6cbd6f2a00d38e5c712250",
       "pixel_width": 390,
       "pixel_height": 1266
     },
@@ -581,7 +581,7 @@
       "title": "Passkey追加",
       "viewport": "mobile",
       "path": "passkey-new--mobile.png",
-      "sha256": "2ab05cbf7d5cbfbcd5f8ae8700c0a975c207f9f60325f53de5ef631314262f6c",
+      "sha256": "f777f12e91f324ebf25b3a0771414f702f4174c4504a2f26e4fdb1a055df3472",
       "pixel_width": 390,
       "pixel_height": 1034
     },
@@ -617,7 +617,7 @@
       "title": "Passkey解除（再認証）",
       "viewport": "mobile",
       "path": "passkey-delete-reauth--mobile.png",
-      "sha256": "58f6950b64857233523e579083090190fbc68e4e4bd04b82fca0eaeb738c93c2",
+      "sha256": "ee230d2ed26f82451107e44de37533f306dec375ff1799de33aa951558b80923",
       "pixel_width": 390,
       "pixel_height": 1131
     },
@@ -653,7 +653,7 @@
       "title": "APIキー一覧（空）",
       "viewport": "mobile",
       "path": "api-credentials-empty--mobile.png",
-      "sha256": "0231e0dab94a4d727fac1e363c15e9d1387f1aaea9273a5699e655bc25eefeda",
+      "sha256": "d46c0ce86eaacc85cd681e8a357e9c0304a0dc91b97ced1a8a7aea868ae546d2",
       "pixel_width": 390,
       "pixel_height": 1206
     },
@@ -671,7 +671,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "mobile",
       "path": "api-credential-secret--mobile.png",
-      "sha256": "46368f54df1d4e713160790770845ba3512ebe10be90bb11e9326000b9e045d0",
+      "sha256": "b75d4059508c053cef54347f6ea399bc5f26624c4c93c07fb39fbfe4c03844d7",
       "pixel_width": 390,
       "pixel_height": 1406
     },
@@ -680,7 +680,7 @@
       "title": "APIキー詳細",
       "viewport": "mobile",
       "path": "api-credential-show--mobile.png",
-      "sha256": "a750f138c721a6311591f44d9ceac13054f0b5be53cacdf046cbc2a812400af7",
+      "sha256": "458636513d2ed1e0e4ce7b03b4385998ab04f68573d228adb1700cd44091ea69",
       "pixel_width": 390,
       "pixel_height": 1240
     },
@@ -698,7 +698,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "mobile",
       "path": "api-credentials-populated--mobile.png",
-      "sha256": "6121b20c8cc483740cc86441a305e64707997f4a092376cf91c5fc13566f31f3",
+      "sha256": "3587de46873cd76db9cc1afb543eb545c6ad685e76b159baf01da346ce119b91",
       "pixel_width": 390,
       "pixel_height": 1332
     },
@@ -725,7 +725,7 @@
       "title": "Failed jobs",
       "viewport": "mobile",
       "path": "admin-job-operations-failed--mobile.png",
-      "sha256": "f9ee7ac6b19c501442591c07bb93d712289537ca9172a96ef294048601a8e8ea",
+      "sha256": "886f346cf9e14af9c41852c9df6d59a9ee99b8908a0e3ecfbffb78531f50474a",
       "pixel_width": 390,
       "pixel_height": 1583
     },
@@ -752,7 +752,7 @@
       "title": "運用タスク完了",
       "viewport": "mobile",
       "path": "admin-maintenance-task-completed--mobile.png",
-      "sha256": "1798a9fdd155057f44f4c5d320769703da3ee8599a736d573a6cf1b4076a2419",
+      "sha256": "5668d4b974196a81eb5fa70cdea8e222eb4f234605f0c8252058595bbc8e5129",
       "pixel_width": 390,
       "pixel_height": 3340
     },
@@ -761,7 +761,7 @@
       "title": "運用タスクのモバイルメニュー",
       "viewport": "mobile",
       "path": "admin-maintenance-tasks-navigation-open--mobile.png",
-      "sha256": "3f83a9660dc60cc4a290d0e439741115258d2c00456a44fa1dbb8303ecd4f62a",
+      "sha256": "13258040f4a0426579385951c0d5dbd5881c7a782b6086d3e2468a3f1bda760d",
       "pixel_width": 390,
       "pixel_height": 2206
     },
@@ -806,7 +806,7 @@
       "title": "ユーザー管理",
       "viewport": "mobile",
       "path": "admin-users--mobile.png",
-      "sha256": "61954b8ecb4b2c5ab9d9f1e9a77b3d8e74ff3b134de1787c11d8037705cc2def",
+      "sha256": "96d53dbf120541e92e345ffc886ac958adecd44b7dd9553b9ed3620acf3fa50d",
       "pixel_width": 390,
       "pixel_height": 3091
     },
@@ -815,7 +815,7 @@
       "title": "一般Userのナビゲーション",
       "viewport": "mobile",
       "path": "navigation-regular-user--mobile.png",
-      "sha256": "1b3375bb3bcbfde98b56526c54c8ca8ed1acba05e646efc8fc1d0ccc2404531a",
+      "sha256": "d5c807677a6fdb5bc26b5211369f3bd7a80be598796ef48231f78810457cd574",
       "pixel_width": 390,
       "pixel_height": 1678
     },
@@ -923,7 +923,7 @@
       "title": "EVMウォレットログイン",
       "viewport": "mobile",
       "path": "siwe-identities-multiple--mobile.png",
-      "sha256": "a71867b1e5583270bd18e4d4c889717f4ad1d96589bdb0c2a0f991abe903db5e",
+      "sha256": "530ec8b05195bd60b9f56694ffc1409f952d2c9c792227695f160f0bc71d4021",
       "pixel_width": 390,
       "pixel_height": 1308
     },
@@ -932,7 +932,7 @@
       "title": "EVMウォレットログインを編集",
       "viewport": "mobile",
       "path": "siwe-identity-edit--mobile.png",
-      "sha256": "647250906408fecfc77aa196eb9a188c883b01aa6c6a5d60541bf2cfa56112fa",
+      "sha256": "f61eacbbd3dd365451a2b1b9636fc922f7afb230a0b016119603882ceb0269c1",
       "pixel_width": 390,
       "pixel_height": 1118
     },
@@ -941,7 +941,7 @@
       "title": "EVMウォレットログインを解除",
       "viewport": "mobile",
       "path": "siwe-identity-unlink--mobile.png",
-      "sha256": "fee39310fe4ddaf0db8fa8d3a098a347cc3074037416d70d8534cdd664d5464a",
+      "sha256": "f1d408161140746141e543662fb38bb8242ffb77ce4f6738a1eae583b18e24a3",
       "pixel_width": 390,
       "pixel_height": 1191
     },
@@ -950,9 +950,9 @@
       "title": "ウォレット名を更新しました。",
       "viewport": "mobile",
       "path": "siwe-identity-renamed--mobile.png",
-      "sha256": "d1f5b6c7204b3076225e65eda5a83e1663ab3c9416604ba9d0417254eb7d8086",
+      "sha256": "d3f6ebb017b39bdeff67a771a7dbe906e152f450990c5966ece91160208e7d10",
       "pixel_width": 390,
-      "pixel_height": 1308
+      "pixel_height": 1374
     },
     {
       "id": "siwe-login-existing-user",

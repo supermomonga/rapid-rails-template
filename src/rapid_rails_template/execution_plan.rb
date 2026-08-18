@@ -97,6 +97,7 @@ module RapidRailsTemplate
       result << "resolve_sorbet_todos"
       result << "verify_sorbet"
       result << "verify"
+      result << "commit_initial_repository"
       result
     end
 

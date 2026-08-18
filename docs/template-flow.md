@@ -29,8 +29,10 @@ flowchart TD
     N --> O["post_bundle: generatorを実行"]
     O --> P["認証・選択機能を生成し、設定API・構造化データ・Prismで編集"]
     P --> Q["db:prepareでprimary・storage・queue等の生成済みschemaとmigrationを適用"]
-    Q --> U["verify: 生成結果を検証"]
-    U --> R["一時ファイルを削除"]
+    Q --> U["verify・asset build・整形を完了"]
+    U --> V["git add -A"]
+    V --> W["git commit -m init"]
+    W --> R["一時ファイルを削除"]
     R --> S["実行結果を表示して終了"]
 ```
 
@@ -83,6 +85,10 @@ databaseとannotationを確定し、config DSLのreceiverをRuby本体の`T.bind
 generatorの成果物、必要な設定、コマンドの終了状態を検証します。生成アプリケーションの通常テストには`bin/annotaterb models --frozen`に加え、Gem RBIとtest環境のRails DSL RBIの鮮度、shim重複、`bundle exec srb tc`を検査するtestを含めます。`dsl --verify`はRails DSL生成物だけ、`check-shims`は生成RBIとの重複、`srb tc`はinline signatureとRuby本体を含む全体整合性を担当します。既存の`bin/rails test`、`bin/ci`、GitHub Actionsは同じtestを実行します。検証失敗を成功として扱うフォールバックは設けず、失敗した処理、理由、更新commandを表示します。
 
 通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。`rake evidence:update`はSIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mailを有効にしたKamal対応の日本語sampleを1回だけ生成します。同じアプリで全Rails test、Sorbet・RBI検証、RuboCop、Thruster cacheの`miss`から`hit`への遷移を検証し、Passkey登録・リスク警告・複数登録・削除時再認証、SIWE、avatarの全シナリオを撮影して整合性検証が成功した場合だけ`docs/evidence/`を置換します。
+
+### 初回Git commit
+
+Rails 8.1の標準`rails new`による`git init`を利用します。Application Templateによる生成、検証、asset build、RuboCopの自動整形がすべて成功した後、生成先で`git add -A`、`git commit -m "init"`の順に実行します。Gitの利用者情報、commit hook、署名設定などは利用者環境の設定をそのまま使用し、commandが失敗した場合は生成処理を成功として扱いません。Git初期化のやり直し、空commit、hookや署名の迂回、commit省略のfallbackは行いません。
 
 ### 後始末
 

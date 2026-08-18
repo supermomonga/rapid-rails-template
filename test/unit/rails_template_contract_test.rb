@@ -94,6 +94,17 @@ class RailsTemplateContractTest < Minitest::Test
     refute_match(/I18n\.t\([^)]*locale:\s*:ja/m, @source)
   end
 
+  def test_commits_the_verified_and_formatted_application_as_init
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+    add = 'run_checked "git add -A"'
+    commit = 'run_checked \'git commit -m "init"\''
+
+    assert_equal 1, after_bundle.scan(add).size
+    assert_equal 1, after_bundle.scan(commit).size
+    assert_operator after_bundle.index('run_checked "bin/rubocop -a"'), :<, after_bundle.index(add)
+    assert_operator after_bundle.index(add), :<, after_bundle.index(commit)
+  end
+
   def test_requires_the_shared_modal_helper_for_native_dialog_modals
     helper = generated_file_source("app/helpers/application_helper.rb")
     helper_test = generated_file_source("test/helpers/application_helper_test.rb")

@@ -15894,4 +15894,6 @@ after_bundle do
   run_checked "bin/rails tailwindcss:build"
   run_checked "bundle binstubs rubocop"
   run_checked "bin/rubocop -a"
+  run_checked "git add -A"
+  run_checked 'git commit -m "init"'
 end

@@ -77,6 +77,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_operator plan.steps.index("resolve_sorbet_todos"), :<, plan.steps.index("verify_sorbet")
     assert_operator plan.steps.index("generate_sorbet_dsl"), :<, plan.steps.index("verify_sorbet")
     assert_operator plan.steps.index("verify_sorbet"), :<, plan.steps.index("verify")
+    assert_equal "commit_initial_repository", plan.steps.last
+    assert_operator plan.steps.index("verify"), :<, plan.steps.index("commit_initial_repository")
     assert_includes plan.artifacts, "package.json"
     assert_includes plan.artifacts, "package-lock.json"
     assert_includes plan.artifacts, ".annotaterb.yml"

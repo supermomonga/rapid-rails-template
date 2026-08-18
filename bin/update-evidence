@@ -38,6 +38,17 @@ def run!(*command, env: {}, chdir: ROOT)
   raise "コマンドが失敗しました: #{command.join(" ")}" unless success
 end
 
+def verify_initial_commit!
+  subject, subject_status = Open3.capture2("git", "log", "-1", "--format=%s", chdir: SAMPLE)
+  raise "生成アプリの初回commit messageがinitではありません: #{subject.strip.inspect}" unless subject_status.success? && subject.strip == "init"
+
+  count, count_status = Open3.capture2("git", "rev-list", "--count", "HEAD", chdir: SAMPLE)
+  raise "生成アプリの初回commit数が1ではありません: #{count.strip.inspect}" unless count_status.success? && count.strip == "1"
+
+  status, status_status = Open3.capture2("git", "status", "--porcelain", chdir: SAMPLE)
+  raise "生成アプリの初回commit後に未commit変更があります:\n#{status}" unless status_status.success? && status.empty?
+end
+
 def verify_thruster_cache!
   listeners = 2.times.map { TCPServer.new("127.0.0.1", 0) }
   http_port, target_port = listeners.map { |listener| listener.addr.fetch(1) }
@@ -129,6 +140,7 @@ begin
   VARIANTS.each do |variant, metadata|
     FileUtils.rm_rf(SAMPLE)
     run!(RbConfig.ruby, File.join(ROOT, "bootstrap.rb"), *COMMON_OPTIONS, SAMPLE)
+    verify_initial_commit!
     run!(File.join(SAMPLE, "bin/rails"), "test", chdir: SAMPLE)
     verify_thruster_cache!
     run!(File.join(SAMPLE, "bin/rubocop"), chdir: SAMPLE)

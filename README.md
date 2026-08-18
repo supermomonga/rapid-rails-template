@@ -27,7 +27,7 @@ ruby /tmp/rapid-rails-bootstrap.rb --app-id=APP_ID --app-name="My App" APP_PATH
 
 `--app-id=APP_ID`はRails内部識別子を生成先`APP_PATH`とは独立して指定し、Rails標準の`--name`へ変換します。省略した場合は、`APP_PATH`のbasenameを初期値として`Gum.input`で質問します。`--app-name=NAME`はheader、title、PWA、OGP、メール、通知などの表示用アプリ名です。省略した場合は確定済みのRailsアプリIDを初期値として質問します。旧`--name`は受け付けません。
 
-`bootstrap.rb`は、gum 0.3.2と同梱されたGum実行可能ファイルを質問開始前に検証します。生成先を変更する前に`Gum.input`と`Gum.choose`による質問・回答検証、`Gum.confirm`による実行予定の確認を完了し、回答から`rails new`オプションを構築します。その後、内包するApplication Templateを一時ファイルへ展開して`rails new`を起動します。
+`bootstrap.rb`は、gum 0.3.2と同梱されたGum実行可能ファイルを質問開始前に検証します。生成先を変更する前に`Gum.input`と`Gum.choose`による質問・回答検証、`Gum.confirm`による実行予定の確認を完了し、回答から`rails new`オプションを構築します。その後、内包するApplication Templateを一時ファイルへ展開して`rails new`を起動します。Rails標準の`git init`で作成されたrepositoryへ、生成・検証・整形がすべて成功した最後に`git add -A`と`git commit -m "init"`を実行します。Gitの設定やhookを迂回せず、どちらかのcommandが失敗した場合は生成処理も失敗します。
 
 RailsアプリID、表示用アプリ名、各選択はCLI引数で個別に指定できます。指定済みの項目は再質問せず、未指定の適用可能な項目だけを質問します。すべての適用可能な項目を指定すると、質問と最終確認を行わず実行します。
 

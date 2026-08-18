@@ -14692,6 +14692,7 @@ def configure_litestream_r2(app_id)
     # typed: strict
     # frozen_string_literal: true
 
+    require "active_support/core_ext/enumerable"
     require "digest"
     require "fileutils"
     require "json"
@@ -15008,8 +15009,7 @@ def configure_litestream_r2(app_id)
           buckets = bucket_names(destinations)
           existing_buckets = existing_buckets(account_id, buckets.values)
           service_account_id = record_id(service_account)
-          vaults, created_vaults = destination_vaults(destinations, service_account_id)
-          return unless vaults
+          vaults = destination_vaults(destinations, service_account_id)
 
           item_plans = destinations.to_h do |destination|
             vault_id = record_id(vaults.fetch(destination))
@@ -15048,7 +15048,6 @@ def configure_litestream_r2(app_id)
             negative: "中止"
           )
             @output.puts "中止しました。R2 bucket、Cloudflare API token、1Password item、Kamal secret参照は変更していません。"
-            report_retained_vaults(created_vaults)
             return
           end
 
@@ -15129,6 +15128,7 @@ def configure_litestream_r2(app_id)
 
         sig { void }
         def create_service_account
+          created_vaults = T.let([], T::Array[T::Hash[String, T.untyped]])
           prepare_mise_local!
           if local_token_configured? && !@prompt.confirm(
             "mise.local.tomlのOP_SERVICE_ACCOUNT_TOKENを上書きしますか？",
@@ -15140,7 +15140,12 @@ def configure_litestream_r2(app_id)
             return
           end
 
+          vaults, created_vaults = bootstrap_destination_vaults
+          return unless vaults
+
           name = self.class.service_account_name(APP_ID)
+          @output.puts "注意: 現行の1Password CLIでは既存の同名service accountを検索できず、tokenも作成時に一度しか表示されません。"
+          @output.puts "作成したtokenはmise.local.tomlから失わないでください。"
           unless @prompt.confirm(
             "1Password service account #{name} を作成しますか？",
             default: true,
@@ -15148,18 +15153,86 @@ def configure_litestream_r2(app_id)
             negative: "中止"
           )
             @output.puts "中止しました。service accountとtokenは変更していません。"
+            report_retained_vaults(created_vaults)
             return
           end
 
+          command = %W[op service-account create #{name}]
+          DESTINATIONS.each do |destination|
+            vault = vaults.fetch(destination)
+            command.concat(["--vault", "#{record_name(vault)}:read_items,write_items"])
+          end
+          command << "--raw"
           token = command!(
-            %W[op service-account create #{name} --can-create-vaults --raw],
+            command,
             sensitive: true
           ).strip
           raise Error, "1Password service account tokenが返されませんでした" if token.empty?
 
-          persist_service_account_token(token, name)
+          saved = persist_service_account_token(token, name)
+          report_retained_vaults(created_vaults) unless saved
+        rescue Error
+          report_retained_vaults(T.must(created_vaults))
+          raise
         ensure
           token&.clear
+        end
+
+        sig do
+          returns([
+            T.nilable(T::Hash[String, T::Hash[String, T.untyped]]),
+            T::Array[T::Hash[String, T.untyped]]
+          ])
+        end
+        def bootstrap_destination_vaults
+          created = T.let([], T::Array[T::Hash[String, T.untyped]])
+          records = json_command!(%w[op vault list --format json])
+          raise Error, "1Password vault一覧応答が不正です" unless records.is_a?(Array)
+
+          expected = DESTINATIONS.index_with do |destination|
+            self.class.destination_vault_name(APP_ID, destination)
+          end
+          matches = expected.transform_values do |name|
+            records.select { |record| record.is_a?(Hash) && record["name"] == name }
+          end
+          duplicates = matches.select { |_destination, candidates| candidates.length > 1 }
+          unless duplicates.empty?
+            details = duplicates.flat_map do |destination, candidates|
+              duplicate_vault_details(expected.fetch(destination), candidates)
+            end
+            raise Error, "同名の1Password vaultが複数あります。手動で1件へ整理してください:\n#{details.join("\n")}"
+          end
+
+          vaults = T.let({}, T::Hash[String, T::Hash[String, T.untyped]])
+          DESTINATIONS.each do |destination|
+            name = expected.fetch(destination)
+            vault = matches.fetch(destination).first
+            unless vault
+              unless @prompt.confirm(
+                "1Password vault #{name} を作成しますか？",
+                default: true,
+                affirmative: "作成",
+                negative: "中止"
+              )
+                @output.puts "中止しました。1Password vaultの構成を終了します。"
+                report_retained_vaults(created)
+                return [nil, created]
+              end
+
+              vault = json_command!(%W[op vault create #{name} --format=json])
+              raise Error, "作成した1Password vault応答が不正です: #{name}" unless vault.is_a?(Hash)
+              raise Error, "作成した1Password vault名が一致しません: #{name}" unless vault["name"] == name
+
+              record_id(vault)
+              created << vault
+            end
+            vaults[destination] = vault
+          end
+
+          [vaults, created]
+        rescue Error
+          report_retained_vaults(T.must(created))
+          raise
         end
 
         sig { void }
@@ -15188,14 +15261,14 @@ def configure_litestream_r2(app_id)
           raise Error, "mise.local.tomlのOP_SERVICE_ACCOUNT_TOKEN確認に失敗しました: exit status #{result.exitstatus}"
         end
 
-        sig { params(token: String, service_account_name: String).void }
+        sig { params(token: String, service_account_name: String).returns(T::Boolean) }
         def persist_service_account_token(token, service_account_name)
           loop do
             begin
               save_service_account_token!(token)
               @output.puts "1Password service account #{service_account_name} のtokenをmise.local.tomlへ保存しました。"
               @output.puts "mise exec -- bin/rails litestream:configure:r2 を再実行してください。"
-              return
+              return true
             rescue Error => error
               @output.puts "service accountは作成済みですが、token保存に失敗しました: #{error.message}"
               next if @prompt.confirm(
@@ -15214,7 +15287,7 @@ def configure_litestream_r2(app_id)
                 reveal_token(token)
               end
               @output.puts "service accountは作成済みです。tokenを保存してから再実行してください。"
-              return
+              return false
             end
           end
         end
@@ -15410,49 +15483,45 @@ def configure_litestream_r2(app_id)
           params(
             destinations: T::Array[String],
             service_account_id: String
-          ).returns([
-            T.nilable(T::Hash[String, T::Hash[String, T.untyped]]),
-            T::Array[T::Hash[String, T.untyped]]
-          ])
+          ).returns(T::Hash[String, T::Hash[String, T.untyped]])
         end
         def destination_vaults(destinations, service_account_id)
           records = json_command!(%W[op vault list --format json --account #{service_account_id}])
           raise Error, "1Password vault一覧応答が不正です" unless records.is_a?(Array)
 
           vaults = T.let({}, T::Hash[String, T::Hash[String, T.untyped]])
-          created = T.let([], T::Array[T::Hash[String, T.untyped]])
           destinations.each do |destination|
             name = self.class.destination_vault_name(APP_ID, destination)
             matches = records.select { |record| record.is_a?(Hash) && record["name"] == name }
-            raise Error, "同名の1Password vaultが複数あります: #{name}" if matches.length > 1
-
+            if matches.length > 1
+              details = duplicate_vault_details(name, matches)
+              raise Error, "service accountから同名の1Password vaultが複数見えます。手動で1件へ整理してください:\n#{details.join("\n")}"
+            end
             vault = matches.first
             unless vault
-              unless @prompt.confirm(
-                "1Password vault #{name} を作成しますか？",
-                default: true,
-                affirmative: "作成",
-                negative: "中止"
-              )
-                @output.puts "中止しました。1Password vaultの構成を終了します。"
-                report_retained_vaults(created)
-                return [nil, created]
-              end
-
-              vault = json_command!(
-                %W[op vault create #{name} --format=json --account=#{service_account_id}]
-              )
-              raise Error, "作成した1Password vault応答が不正です: #{name}" unless vault.is_a?(Hash)
-              raise Error, "作成した1Password vault名が一致しません: #{name}" unless vault["name"] == name
-
-              record_id(vault)
-              created << vault
-              records << vault
+              raise Error,
+                "1Password service accountからvaultを参照できません: #{name}. " \
+                  "対象vaultへのread_items,write_items権限を付与してください"
             end
+
             vaults[destination] = vault
           end
 
-          [vaults, created]
+          vaults
+        end
+
+        sig do
+          params(
+            name: String,
+            records: T::Array[T::Hash[String, T.untyped]]
+          ).returns(T::Array[String])
+        end
+        def duplicate_vault_details(name, records)
+          records.map do |record|
+            items = record["items"]
+            item_count = items.is_a?(Integer) ? items.to_s : "unknown"
+            "  #{name} (#{record_id(record)}, items: #{item_count})"
+          end
         end
 
         sig { params(created_vaults: T::Array[T::Hash[String, T.untyped]]).void }
@@ -16372,22 +16441,26 @@ def configure_kamal
     The task accepts only an active 1Password service account through `OP_SERVICE_ACCOUNT_TOKEN`.
     `OP_CONNECT_HOST` and `OP_CONNECT_TOKEN` are rejected because they take authentication
     precedence over the required service account. When no service account token is configured,
-    first sign in to 1Password CLI as a human user who can create service accounts. After separate
-    confirmations, the task creates `dev:<normalized-app-id>` with vault-creation permission,
-    writes its token through standard input to `mise.local.toml`, changes that file to mode `0600`,
-    and exits without changing vaults or R2. Run the command above again to continue.
+    first sign in to 1Password CLI as a human user who can create service accounts and vaults. The
+    task checks both destination vault names across every vault visible to that user before making
+    changes. It reuses one exact-name match, creates a missing vault after confirmation, and stops
+    with vault IDs and item counts if a name is duplicated. It then creates
+    `dev:<normalized-app-id>` with `read_items,write_items` for both destination vaults, writes its
+    token through standard input to `mise.local.toml`, changes that file to mode `0600`, and exits
+    without changing R2. Run the command above again to continue.
 
     `mise.local.toml` is excluded from Git and Docker, but it stores the token as explicitly approved
     local plaintext rather than using 1Password's recommended non-plaintext storage. Replacing the
-    token does not revoke or delete the old service account. If saving fails, the in-memory token can
-    be retried; it is printed once to `/dev/tty` only after declining retry and accepting a second,
-    default-No confirmation.
+    token does not revoke or delete the old service account. Current 1Password CLI cannot list
+    same-named service accounts or recover an existing token, so the task warns about preserving the
+    one-time token before creation. If saving fails, the in-memory token can be retried; it is printed
+    once to `/dev/tty` only after declining retry and accepting a second, default-No confirmation.
 
     On the second run, production uses `<normalized-app-id>-production` and staging uses
-    `<normalized-app-id>-staging`. The task searches the vaults visible to the service account and,
-    after a separate default-Yes confirmation, creates each missing vault as that service account.
-    An invisible same-named vault is outside this check. Duplicate visible names and missing vault
-    creation permission are errors; there is no fallback to a human-owned vault.
+    `<normalized-app-id>-staging`. The task reuses the unique vaults visible to the service account.
+    A missing vault or duplicate visible name is an error with no vault creation or human-user
+    fallback. Vaults created before a cancellation or token-save failure are retained and reused by
+    the next human bootstrap.
 
     As a Super Administrator of the target account, set `CLOUDFLARE_INITIAL_API_TOKEN` to an
     account-owned token with only dashboard permission **Account API Tokens: Edit**, named

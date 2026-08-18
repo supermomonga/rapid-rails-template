@@ -486,8 +486,10 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: JSON.generate(id: "op-account"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
         result.new(stdout: JSON.generate(name: "sample-db-staging"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate([{ id: "vault-staging", name: "sample-staging" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "vault-production", name: "sample-production"), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate([
+          { id: "vault-production", name: "sample-production" },
+          { id: "vault-staging", name: "sample-staging" }
+        ]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate([{ id: "staging-item", title: "sample Litestream R2 staging" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "staging-item", title: "sample Litestream R2 staging", fields: []), stderr: "", success: true, exitstatus: 0),
@@ -594,10 +596,10 @@ class KamalRestoreTemplateTest < Minitest::Test
       ).run!
 
       create_calls = runner.calls.select { |call| call.fetch(:command).include?("create") }
-      assert_equal 3, create_calls.length
+      assert_equal 2, create_calls.length
       assert create_calls.any? { |call| call.fetch(:command).include?("sample-db-production") }
       refute create_calls.any? { |call| call.fetch(:command).include?("sample-db-staging") && call.fetch(:command).include?("bucket") }
-      assert create_calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json --account=op-account] }
+      refute create_calls.any? { |call| call.fetch(:command).first(3) == %w[op vault create] }
       raw_tokens = %w[sample-r2-production-raw-token sample-r2-staging-raw-token]
       assert runner.calls.grep_v(nil).all? do |call|
         (call.fetch(:command) & raw_tokens).empty?
@@ -1148,6 +1150,8 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: JSON.generate(id: "person-id", name: "Person", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(env: { VAPID_PUBLIC_KEY: "public-key" }), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "Key not found: env.OP_SERVICE_ACCOUNT_TOKEN", success: false, exitstatus: 1),
+        result.new(stdout: JSON.generate([{ id: "staging-vault", name: "sample-staging", items: 0 }]), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(id: "production-vault", name: "sample-production", items: 0), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0)
@@ -1188,8 +1192,15 @@ class KamalRestoreTemplateTest < Minitest::Test
       ).run!
 
       creation = runner.calls.find { |call| call.fetch(:command).first(2) == %w[op service-account] }
-      assert_equal %w[op service-account create dev:sample --can-create-vaults --raw], creation.fetch(:command)
+      assert_equal [
+        "op", "service-account", "create", "dev:sample",
+        "--vault", "sample-production:read_items,write_items",
+        "--vault", "sample-staging:read_items,write_items",
+        "--raw"
+      ], creation.fetch(:command)
       assert_nil creation.fetch(:stdin_data)
+      assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json] }
+      refute runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-staging --format=json] }
       save = runner.calls.find { |call| call.fetch(:command).first(2) == %w[mise set] }
       assert_equal token, save.fetch(:stdin_data)
       assert runner.calls.none? { |call| call.fetch(:command).include?(token) }
@@ -1197,8 +1208,181 @@ class KamalRestoreTemplateTest < Minitest::Test
       assert_equal 0o600, root.join("mise.local.toml").stat.mode & 0o777
       assert_includes root.join("mise.local.toml").read, 'VAPID_PUBLIC_KEY = "public-key"'
       assert_includes output.string, "mise exec -- bin/rails litestream:configure:r2"
-      refute runner.calls.any? { |call| call.fetch(:command).first(3) == %w[op vault list] }
+      assert_includes output.string, "既存の同名service accountを検索できず"
     end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_bootstraps_only_missing_destination_vaults
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    result = Litestream::R2Configurator::Result
+    scenarios = [
+      {
+        records: [
+          { id: "production-vault", name: "sample-production", items: 1 },
+          { id: "staging-vault", name: "sample-staging", items: 1 }
+        ],
+        creations: [],
+        expected_created: []
+      },
+      {
+        records: [{ id: "production-vault", name: "sample-production", items: 1 }],
+        creations: [{ id: "staging-vault", name: "sample-staging", items: 0 }],
+        expected_created: ["staging-vault"]
+      },
+      {
+        records: [],
+        creations: [
+          { id: "production-vault", name: "sample-production", items: 0 },
+          { id: "staging-vault", name: "sample-staging", items: 0 }
+        ],
+        expected_created: %w[production-vault staging-vault]
+      }
+    ]
+
+    scenarios.each do |scenario|
+      responses = [
+        result.new(stdout: JSON.generate(scenario.fetch(:records)), stderr: "", success: true, exitstatus: 0),
+        *scenario.fetch(:creations).map do |record|
+          result.new(stdout: JSON.generate(record), stderr: "", success: true, exitstatus: 0)
+        end
+      ]
+      runner = Class.new do
+        attr_reader :calls
+
+        define_method(:initialize) do |scripted|
+          @scripted = scripted
+          @calls = []
+        end
+
+        define_method(:capture) do |command, environment:, stdin_data:|
+          @calls << { command:, environment:, stdin_data: }
+          @scripted.fetch(@calls.length - 1)
+        end
+      end.new(responses)
+      prompt = Class.new do
+        def confirm(*) # rubocop:disable Naming/PredicateMethod
+          true
+        end
+      end.new
+      configurator = Litestream::R2Configurator.new(
+        root: Pathname(Dir.tmpdir),
+        prompt:,
+        runner:,
+        output: StringIO.new,
+        environment: {}
+      )
+
+      vaults, created = configurator.send(:bootstrap_destination_vaults)
+
+      assert_equal %w[production staging], vaults.keys
+      assert_equal scenario.fetch(:expected_created), created.map { |vault| vault.fetch("id") }
+      assert_equal %w[op vault list --format json], runner.calls.first.fetch(:command)
+      assert runner.calls.drop(1).all? { |call| call.fetch(:command).first(3) == %w[op vault create] }
+    end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_rejects_duplicate_human_vaults_before_mutation
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    result = Litestream::R2Configurator::Result
+    runner = Class.new do
+      attr_reader :calls
+
+      define_method(:initialize) do |response|
+        @response = response
+        @calls = []
+      end
+
+      define_method(:capture) do |command, environment:, stdin_data:|
+        @calls << { command:, environment:, stdin_data: }
+        @response
+      end
+    end.new(
+      result.new(
+        stdout: JSON.generate([
+          { id: "production-vault-1", name: "sample-production", items: 0 },
+          { id: "production-vault-2", name: "sample-production", items: 3 }
+        ]),
+        stderr: "",
+        success: true,
+        exitstatus: 0
+      )
+    )
+    configurator = Litestream::R2Configurator.new(
+      root: Pathname(Dir.tmpdir),
+      prompt: Object.new,
+      runner:,
+      output: StringIO.new,
+      environment: {}
+    )
+
+    error = assert_raises(Litestream::R2Configurator::Error) do
+      configurator.send(:bootstrap_destination_vaults)
+    end
+
+    assert_includes error.message, "production-vault-1, items: 0"
+    assert_includes error.message, "production-vault-2, items: 3"
+    assert_equal [%w[op vault list --format json]], runner.calls.map { |call| call.fetch(:command) }
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_service_account_never_creates_missing_destination_vault
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    result = Litestream::R2Configurator::Result
+    runner = Class.new do
+      attr_reader :calls
+
+      define_method(:initialize) do |response|
+        @response = response
+        @calls = []
+      end
+
+      define_method(:capture) do |command, environment:, stdin_data:|
+        @calls << { command:, environment:, stdin_data: }
+        @response
+      end
+    end.new(result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0))
+    configurator = Litestream::R2Configurator.new(
+      root: Pathname(Dir.tmpdir),
+      prompt: Object.new,
+      runner:,
+      output: StringIO.new,
+      environment: {}
+    )
+
+    error = assert_raises(Litestream::R2Configurator::Error) do
+      configurator.send(:destination_vaults, ["production"], "service-account-id")
+    end
+
+    assert_includes error.message.dup.force_encoding(Encoding::UTF_8), "read_items,write_items権限"
+    assert_equal [
+      %w[op vault list --format json --account service-account-id]
+    ], runner.calls.map { |call| call.fetch(:command) }
   ensure
     Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
   end
@@ -1289,6 +1473,10 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "person-id", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate([
+          { id: "staging-vault", name: "sample-staging", items: 0 }
+        ]), stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(id: "production-vault", name: "sample-production", items: 0), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "write failed", success: false, exitstatus: 1)
       ]
@@ -1307,7 +1495,7 @@ class KamalRestoreTemplateTest < Minitest::Test
       end.new(responses)
       prompt = Class.new do
         def initialize
-          @confirmations = [true, false, true]
+          @confirmations = [true, true, false, true]
         end
 
         def confirm(*) # rubocop:disable Naming/PredicateMethod
@@ -1330,9 +1518,10 @@ class KamalRestoreTemplateTest < Minitest::Test
       assert_equal "#{token}\n", terminal.string
       refute_includes output.string, token
       assert_includes output.string, "service accountは作成済み"
+      assert_includes output.string, "sample-production (production-vault)"
       assert_equal 1, runner.calls.count { |call| call.fetch(:command).first(2) == %w[mise set] }
       assert runner.calls.none? { |call| call.fetch(:command).include?(token) }
-      refute runner.calls.any? { |call| call.fetch(:command).first(3) == %w[op vault list] }
+      assert_equal 1, runner.calls.count { |call| call.fetch(:command).first(3) == %w[op vault create] }
     end
   ensure
     Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
@@ -1411,10 +1600,7 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "op-id", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "op-id"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
-        result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
+        result.new(stdout: JSON.generate(id: "person-id", name: "Person", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "production-vault", name: "sample-production"), stderr: "", success: true, exitstatus: 0)
       ]
@@ -1456,14 +1642,11 @@ class KamalRestoreTemplateTest < Minitest::Test
         prompt:,
         runner:,
         output:,
-        environment: {
-          "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
-          "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
-        },
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" },
         cloudflare_client: ValidInitialTokenClient.new
       ).run!
 
-      assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json --account=op-id] }
+      assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json] }
       refute runner.calls.any? { |call| call.fetch(:command).first(3) == %w[op item list] }
       refute runner.calls.any? { |call| call.fetch(:command).include?("bucket") && call.fetch(:command).include?("create") }
       assert_includes output.string, "sample-production (production-vault)"

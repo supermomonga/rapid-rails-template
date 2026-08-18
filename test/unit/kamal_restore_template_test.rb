@@ -19,6 +19,50 @@ class KamalRestoreTemplateTest < Minitest::Test
     end
   end
 
+  class ValidInitialTokenClient
+    attr_reader :calls
+
+    def initialize
+      @calls = []
+    end
+
+    def verify_token(account_id)
+      @calls << { method: :verify_token, account_id: }
+      { "id" => "initial-token-id", "status" => "active" }
+    end
+
+    def permission_groups(account_id, name:)
+      @calls << { method: :permission_groups, account_id:, name: }
+      if name == "Account API Tokens Write"
+        [{ "id" => "account-token-write", "name" => name, "scopes" => ["com.cloudflare.api.account"] }]
+      else
+        [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+      end
+    end
+
+    def token_details(account_id, token_id)
+      @calls << { method: :token_details, account_id:, token_id: }
+      {
+        "id" => token_id,
+        "status" => "active",
+        "policies" => [{
+          "effect" => "allow",
+          "resources" => { "com.cloudflare.api.account.#{account_id}" => "*" },
+          "permission_groups" => [{ "id" => "account-token-write" }]
+        }]
+      }
+    end
+
+    def tokens(account_id)
+      @calls << { method: :tokens, account_id: }
+      []
+    end
+
+    def create_token(*)
+      raise "unexpected Cloudflare token creation"
+    end
+  end
+
   class FakeRunner
     attr_reader :commands, :raw_commands
 
@@ -437,9 +481,9 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-other", name: "Other Cloudflare" }, { id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "op-account", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "op-account"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-other", name: "Other Cloudflare" }, { id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
         result.new(stdout: JSON.generate(name: "sample-db-staging"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate([{ id: "vault-staging", name: "sample-staging" }]), stderr: "", success: true, exitstatus: 0),
@@ -494,7 +538,29 @@ class KamalRestoreTemplateTest < Minitest::Test
 
         def permission_groups(account_id, name:)
           @calls << { method: :permission_groups, account_id:, name: }
-          [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+          if name == "Account API Tokens Write"
+            [{ "id" => "account-token-write", "name" => name, "scopes" => ["com.cloudflare.api.account"] }]
+          else
+            [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+          end
+        end
+
+        def verify_token(account_id)
+          @calls << { method: :verify_token, account_id: }
+          { "id" => "initial-token-id", "status" => "active" }
+        end
+
+        def token_details(account_id, token_id)
+          @calls << { method: :token_details, account_id:, token_id: }
+          {
+            "id" => token_id,
+            "status" => "active",
+            "policies" => [{
+              "effect" => "allow",
+              "resources" => { "com.cloudflare.api.account.#{account_id}" => "*" },
+              "permission_groups" => [{ "id" => "account-token-write" }]
+            }]
+          }
         end
 
         def tokens(account_id)
@@ -620,6 +686,8 @@ class KamalRestoreTemplateTest < Minitest::Test
       assert_equal "sample-api-token-creator", query.fetch("name")
       assert_includes output.string, "CLOUDFLARE_INITIAL_API_TOKEN"
       assert_includes output.string, "account-owned-token-template"
+      assert_includes output.string, "Super Administrator"
+      assert_includes output.string, "Account API Tokens Write"
       assert_empty Dir.children(root)
     end
   ensure
@@ -656,6 +724,8 @@ class KamalRestoreTemplateTest < Minitest::Test
 
     response = Data.define(:code, :body)
     responses = [
+      response.new("200", JSON.generate(success: true, result: { id: "initial-token-id", status: "active" })),
+      response.new("200", JSON.generate(success: true, result: { id: "initial-token-id", status: "active", policies: [] })),
       response.new("200", JSON.generate(success: true, result: [{ id: "permission-id", name: "Workers R2 Storage Bucket Item Write", scopes: ["com.cloudflare.edge.r2.bucket"] }])),
       response.new("200", JSON.generate(success: true, result: [{ id: "first-token" }], result_info: { total_count: 2 })),
       response.new("200", JSON.generate(success: true, result: [{ id: "second-token" }], result_info: { total_count: 2 })),
@@ -680,17 +750,21 @@ class KamalRestoreTemplateTest < Minitest::Test
       http_factory: ->(*) { http }
     )
 
+    assert_equal "initial-token-id", client.verify_token("account-id").fetch("id")
+    assert_equal [], client.token_details("account-id", "initial-token-id").fetch("policies")
     client.permission_groups("account-id", name: "Workers R2 Storage Bucket Item Write")
     assert_equal %w[first-token second-token], client.tokens("account-id").map { |token| token.fetch("id") }
     client.create_token("account-id", name: "sample-r2-production", policy: { "effect" => "allow" })
 
-    assert_equal 4, http.requests.length
-    assert_equal "/client/v4/accounts/account-id/tokens/permission_groups", http.requests.fetch(0).uri.path
+    assert_equal 6, http.requests.length
+    assert_equal "/client/v4/accounts/account-id/tokens/verify", http.requests.fetch(0).uri.path
     assert_equal "initial-secret", http.requests.fetch(0)["Authorization"].delete_prefix("Bearer ")
-    assert_equal "/client/v4/accounts/account-id/tokens", http.requests.fetch(1).uri.path
-    assert_equal "page=1&per_page=50", http.requests.fetch(1).uri.query
-    assert_equal "page=2&per_page=50", http.requests.fetch(2).uri.query
-    body = JSON.parse(http.requests.fetch(3).body)
+    assert_equal "/client/v4/accounts/account-id/tokens/initial-token-id", http.requests.fetch(1).uri.path
+    assert_equal "/client/v4/accounts/account-id/tokens/permission_groups", http.requests.fetch(2).uri.path
+    assert_equal "/client/v4/accounts/account-id/tokens", http.requests.fetch(3).uri.path
+    assert_equal "page=1&per_page=50", http.requests.fetch(3).uri.query
+    assert_equal "page=2&per_page=50", http.requests.fetch(4).uri.query
+    body = JSON.parse(http.requests.fetch(5).body)
     assert_equal "sample-r2-production", body.fetch("name")
     assert_equal [{ "effect" => "allow" }], body.fetch("policies")
 
@@ -728,6 +802,9 @@ class KamalRestoreTemplateTest < Minitest::Test
     error = assert_raises(Litestream::R2Configurator::Error) do
       api_error_client.tokens("account-id")
     end
+    assert_instance_of Litestream::R2Configurator::CloudflareClient::RequestError, error
+    assert_equal 403, error.status
+    assert_equal [10000], error.codes
     assert_includes error.message, "HTTP 403"
     assert_includes error.message, "Authentication error"
     refute_includes error.message, "api-error-secret"
@@ -750,6 +827,190 @@ class KamalRestoreTemplateTest < Minitest::Test
     assert_includes error.message, "IOError: network unavailable"
     refute_includes error.message, "network-error-secret"
     assert_includes error.message, "[REDACTED]"
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_reports_permission_403_before_1password_or_bucket_mutations
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    Dir.mktmpdir("r2-initial-token-403") do |directory|
+      root = Pathname(directory)
+      wrangler = root.join("node_modules/.bin/wrangler")
+      FileUtils.mkdir_p(wrangler.dirname)
+      wrangler.write("#!/bin/sh\n")
+      wrangler.chmod(0o755)
+      result = Litestream::R2Configurator::Result
+      responses = [
+        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-account", name: "Cloudflare Account" }]), stderr: "", success: true, exitstatus: 0)
+      ]
+      runner = Class.new do
+        attr_reader :calls
+
+        define_method(:initialize) do |scripted|
+          @scripted = scripted
+          @calls = []
+        end
+
+        define_method(:capture) do |command, environment:, stdin_data:|
+          @calls << { command:, environment:, stdin_data: }
+          @scripted.fetch(@calls.length - 1)
+        end
+      end.new(responses)
+      cloudflare_client = Class.new do
+        def verify_token(_account_id)
+          { "id" => "initial-token-id", "status" => "active" }
+        end
+
+        def permission_groups(_account_id, name:)
+          name
+          raise Litestream::R2Configurator::CloudflareClient::RequestError.new(
+            "Cloudflare API requestに失敗しました (HTTP 403): Unauthorized to access requested resource (code: 9109)",
+            status: 403,
+            codes: [9109]
+          )
+        end
+      end.new
+
+      error = assert_raises(Litestream::R2Configurator::Error) do
+        Litestream::R2Configurator.new(
+          root:,
+          prompt: Object.new,
+          runner:,
+          output: StringIO.new,
+          environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-secret" },
+          cloudflare_client:
+        ).run!
+      end
+
+      message = error.message.dup.force_encoding(Encoding::UTF_8)
+      assert_includes message, "Cloudflare Account (cf-account)"
+      assert_includes message, "HTTP 403, code: 9109"
+      assert_includes message, "Super Administrator"
+      assert_includes message, "Account API Tokens: Edit"
+      assert_includes message, "account_api_tokens"
+      refute_includes message, "initial-secret"
+      assert_equal 4, runner.calls.length
+      refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op user] }
+      refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
+      refute_path_exists root.join("mise.local.toml")
+      refute_path_exists root.join(".kamal")
+    end
+  ensure
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+  end
+
+  def test_r2_configurator_rejects_wrong_inactive_or_nonminimal_initial_tokens
+    files = build_kamal_files(
+      "active_job" => "skip",
+      "action_cable" => "async",
+      "web_push" => "skip"
+    )
+    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+
+    cases = {
+      wrong_account: "Cloudflare APIに拒否されました",
+      inactive: "tokenがactiveではない",
+      read_only: "Account API Tokens: Edit",
+      extra_permission: "Account API Tokens: Edit"
+    }
+    cases.each do |mode, expected_message|
+      Dir.mktmpdir("r2-initial-token-#{mode}") do |directory|
+        root = Pathname(directory)
+        wrangler = root.join("node_modules/.bin/wrangler")
+        FileUtils.mkdir_p(wrangler.dirname)
+        wrangler.write("#!/bin/sh\n")
+        wrangler.chmod(0o755)
+        result = Litestream::R2Configurator::Result
+        responses = [
+          result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
+          result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
+          result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+          result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0)
+        ]
+        runner = Class.new do
+          attr_reader :calls
+
+          define_method(:initialize) do |scripted|
+            @scripted = scripted
+            @calls = []
+          end
+
+          define_method(:capture) do |command, environment:, stdin_data:|
+            @calls << { command:, environment:, stdin_data: }
+            @scripted.fetch(@calls.length - 1)
+          end
+        end.new(responses)
+        cloudflare_client = Class.new do
+          define_method(:initialize) do |validation_mode|
+            @validation_mode = validation_mode
+          end
+
+          define_method(:verify_token) do |_account_id|
+            if @validation_mode == :wrong_account
+              raise Litestream::R2Configurator::CloudflareClient::RequestError.new(
+                "Cloudflare API requestに失敗しました (HTTP 403)",
+                status: 403,
+                codes: [9109]
+              )
+            end
+
+            status = @validation_mode == :inactive ? "disabled" : "active"
+            { "id" => "initial-token-id", "status" => status }
+          end
+
+          define_method(:permission_groups) do |_account_id, name:|
+            [{ "id" => "account-token-write", "name" => name, "scopes" => ["com.cloudflare.api.account"] }]
+          end
+
+          define_method(:token_details) do |account_id, token_id|
+            groups = if @validation_mode == :read_only
+              [{ "id" => "account-token-read" }]
+            elsif @validation_mode == :extra_permission
+              [{ "id" => "account-token-write" }, { "id" => "account-settings-read" }]
+            else
+              [{ "id" => "account-token-write" }]
+            end
+            {
+              "id" => token_id,
+              "status" => "active",
+              "policies" => [{
+                "effect" => "allow",
+                "resources" => { "com.cloudflare.api.account.#{account_id}" => "*" },
+                "permission_groups" => groups
+              }]
+            }
+          end
+        end.new(mode)
+
+        error = assert_raises(Litestream::R2Configurator::Error) do
+          Litestream::R2Configurator.new(
+            root:,
+            prompt: Object.new,
+            runner:,
+            output: StringIO.new,
+            environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-secret" },
+            cloudflare_client:
+          ).run!
+        end
+
+        assert_includes error.message.dup.force_encoding(Encoding::UTF_8), expected_message
+        assert_equal 4, runner.calls.length
+        refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op user] }
+        refute_path_exists root.join("mise.local.toml")
+        refute_path_exists root.join(".kamal")
+      end
+    end
   ensure
     Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
   end
@@ -883,6 +1144,7 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "person-id", name: "Person", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(env: { VAPID_PUBLIC_KEY: "public-key" }), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "Key not found: env.OP_SERVICE_ACCOUNT_TOKEN", success: false, exitstatus: 1),
@@ -921,7 +1183,8 @@ class KamalRestoreTemplateTest < Minitest::Test
         prompt:,
         runner:,
         output:,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" },
+        cloudflare_client: ValidInitialTokenClient.new
       ).run!
 
       creation = runner.calls.find { |call| call.fetch(:command).first(2) == %w[op service-account] }
@@ -961,6 +1224,7 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "person-id", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "validated\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "existing\n", stderr: "", success: true, exitstatus: 0)
@@ -990,7 +1254,8 @@ class KamalRestoreTemplateTest < Minitest::Test
         prompt:,
         runner:,
         output:,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" },
+        cloudflare_client: ValidInitialTokenClient.new
       ).run!
 
       refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op service-account] }
@@ -1022,6 +1287,7 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "person-id", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "write failed", success: false, exitstatus: 1)
@@ -1057,7 +1323,8 @@ class KamalRestoreTemplateTest < Minitest::Test
         runner:,
         output:,
         terminal:,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }
+        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" },
+        cloudflare_client: ValidInitialTokenClient.new
       ).run!
 
       assert_equal "#{token}\n", terminal.string
@@ -1143,9 +1410,9 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "op-id", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "op-id"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
         result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
         result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
@@ -1192,7 +1459,8 @@ class KamalRestoreTemplateTest < Minitest::Test
         environment: {
           "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
           "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
-        }
+        },
+        cloudflare_client: ValidInitialTokenClient.new
       ).run!
 
       assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json --account=op-id] }
@@ -1225,9 +1493,9 @@ class KamalRestoreTemplateTest < Minitest::Test
         result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "op-id", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(id: "op-id"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(name: "sample-db-production"), stderr: "", success: true, exitstatus: 0),
         result.new(stdout: JSON.generate(name: "sample-db-staging"), stderr: "", success: true, exitstatus: 0)
       ]
@@ -1270,7 +1538,8 @@ class KamalRestoreTemplateTest < Minitest::Test
           environment: {
             "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
             "OP_SERVICE_ACCOUNT_TOKEN" => "token"
-          }
+          },
+          cloudflare_client: ValidInitialTokenClient.new
         ).run!
       end
       assert_includes vault_error.message.dup.force_encoding(Encoding::UTF_8), "同名の1Password vaultが複数"
@@ -1297,7 +1566,8 @@ class KamalRestoreTemplateTest < Minitest::Test
           environment: {
             "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
             "OP_SERVICE_ACCOUNT_TOKEN" => "token"
-          }
+          },
+          cloudflare_client: ValidInitialTokenClient.new
         ).run!
       end
       assert_includes item_error.message.dup.force_encoding(Encoding::UTF_8), "同名の1Password itemが複数"
@@ -1326,7 +1596,8 @@ class KamalRestoreTemplateTest < Minitest::Test
       dependency_responses = [
         result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
         result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0)
+        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0)
       ]
       cases = [
         [result.new(stdout: "", stderr: "invalid token", success: false, exitstatus: 1), { "OP_SERVICE_ACCOUNT_TOKEN" => "invalid" }, "tokenの検証に失敗"],
@@ -1354,7 +1625,14 @@ class KamalRestoreTemplateTest < Minitest::Test
         end.new(dependency_responses + [identity_response])
 
         error = assert_raises(Litestream::R2Configurator::Error) do
-          Litestream::R2Configurator.new(root:, prompt: Object.new, runner:, output: StringIO.new, environment:).run!
+          Litestream::R2Configurator.new(
+            root:,
+            prompt: Object.new,
+            runner:,
+            output: StringIO.new,
+            environment:,
+            cloudflare_client: ValidInitialTokenClient.new
+          ).run!
         end
 
         assert_includes error.message.dup.force_encoding(Encoding::UTF_8), message
@@ -1413,9 +1691,9 @@ class KamalRestoreTemplateTest < Minitest::Test
           result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
           result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
           result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+          result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
           result.new(stdout: JSON.generate(id: "op-account", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
           result.new(stdout: JSON.generate(id: "op-account"), stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
           result.new(stdout: "", stderr: "#{failure} failure", success: false, exitstatus: 1)
         ]
         runner = Class.new do
@@ -1451,7 +1729,8 @@ class KamalRestoreTemplateTest < Minitest::Test
             environment: {
               "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
               "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
-            }
+            },
+            cloudflare_client: ValidInitialTokenClient.new
           ).run!
         end
 

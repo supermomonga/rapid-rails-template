@@ -14720,6 +14720,9 @@ def configure_litestream_r2(app_id)
         BUCKET_PATTERN = /\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/
         INITIAL_TOKEN_ENV = "CLOUDFLARE_INITIAL_API_TOKEN"
         INITIAL_TOKEN_TEMPLATE_DOC_URL = "https://developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/"
+        INITIAL_TOKEN_ACCOUNT_DOC_URL = "https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/"
+        INITIAL_TOKEN_PERMISSION_GROUP_NAME = "Account API Tokens Write"
+        ACCOUNT_SCOPE = "com.cloudflare.api.account"
         R2_PERMISSION_GROUP_NAME = "Workers R2 Storage Bucket Item Write"
         R2_BUCKET_SCOPE = "com.cloudflare.edge.r2.bucket"
         TOKEN_NAME_MAX_BYTES = 120
@@ -14733,6 +14736,23 @@ def configure_litestream_r2(app_id)
 
           API_BASE_URL = "https://api.cloudflare.com/client/v4"
 
+          class RequestError < Error
+            extend T::Sig
+
+            sig { returns(Integer) }
+            attr_reader :status
+
+            sig { returns(T::Array[Integer]) }
+            attr_reader :codes
+
+            sig { params(message: String, status: Integer, codes: T::Array[Integer]).void }
+            def initialize(message, status:, codes:)
+              super(message)
+              @status = status
+              @codes = codes
+            end
+          end
+
           sig { params(token: String, http_factory: T.untyped).void }
           def initialize(token:, http_factory: nil)
             @token = token
@@ -14740,6 +14760,24 @@ def configure_litestream_r2(app_id)
               http_factory || ->(host, port) { Net::HTTP.new(host, port) },
               T.untyped
             )
+          end
+
+          sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
+          def verify_token(account_id)
+            envelope = request(:get, "/accounts/#{account_id}/tokens/verify")
+            result = envelope["result"]
+            raise Error, "Cloudflare Initial Token検証応答が不正です" unless result.is_a?(Hash)
+
+            result
+          end
+
+          sig { params(account_id: String, token_id: String).returns(T::Hash[String, T.untyped]) }
+          def token_details(account_id, token_id)
+            envelope = request(:get, "/accounts/#{account_id}/tokens/#{token_id}")
+            result = envelope["result"]
+            raise Error, "Cloudflare Initial Token詳細応答が不正です" unless result.is_a?(Hash)
+
+            result
           end
 
           sig { params(account_id: String, name: String).returns(T::Array[T::Hash[String, T.untyped]]) }
@@ -14838,8 +14876,13 @@ def configure_litestream_r2(app_id)
             end
             return envelope if response.code.to_i.between?(200, 299) && envelope["success"] == true
 
+            status = response.code.to_i
             detail = redact_secret(error_detail(envelope))
-            raise Error, "Cloudflare API requestに失敗しました (HTTP #{response.code}): #{detail}"
+            raise RequestError.new(
+              "Cloudflare API requestに失敗しました (HTTP #{response.code}): #{detail}",
+              status:,
+              codes: error_codes(envelope)
+            )
           rescue Error
             raise
           rescue JSON::ParserError
@@ -14873,6 +14916,17 @@ def configure_litestream_r2(app_id)
               code.is_a?(Integer) ? "#{message} (code: #{code})" : message
             end
             messages.empty? ? "Cloudflareから詳細が返されませんでした" : messages.join("; ")
+          end
+
+          sig { params(envelope: T::Hash[String, T.untyped]).returns(T::Array[Integer]) }
+          def error_codes(envelope)
+            errors = envelope["errors"]
+            return [] unless errors.is_a?(Array)
+
+            errors.filter_map do |error|
+              code = error["code"] if error.is_a?(Hash)
+              code if code.is_a?(Integer)
+            end
           end
 
           sig { params(value: String).returns(String) }
@@ -14943,13 +14997,14 @@ def configure_litestream_r2(app_id)
           end
 
           validate_dependencies!
+          cloudflare = cloudflare_identity
+          account = choose_record(cloudflare.fetch("accounts"), "Cloudflare account")
+          account_id = String(account.fetch("id"))
+          validate_cloudflare_initial_token!(account)
           service_account = ensure_service_account
           return unless service_account
 
           destinations = choose_destinations
-          cloudflare = cloudflare_identity
-          account = choose_record(cloudflare.fetch("accounts"), "Cloudflare account")
-          account_id = String(account.fetch("id"))
           buckets = bucket_names(destinations)
           existing_buckets = existing_buckets(account_id, buckets.values)
           service_account_id = record_id(service_account)
@@ -15199,10 +15254,12 @@ def configure_litestream_r2(app_id)
         sig { void }
         def print_initial_token_instructions
           @output.puts "#{INITIAL_TOKEN_ENV}が設定されていません。"
-          @output.puts "Account API Tokens: Editだけを持つInitial Tokenを次のURLから作成してください:"
+          @output.puts "対象accountのSuper Administratorで、Account API Tokens: Edit (API: #{INITIAL_TOKEN_PERMISSION_GROUP_NAME})だけを持つaccount-owned Initial Tokenを次のURLから作成してください:"
           @output.puts self.class.initial_token_template_url(APP_ID)
+          @output.puts "作成確認画面で対象accountと権限が一致することを確認してください。"
           @output.puts "作成後、#{INITIAL_TOKEN_ENV}を設定して再実行してください。"
           @output.puts "参照: #{INITIAL_TOKEN_TEMPLATE_DOC_URL}"
+          @output.puts "参照: #{INITIAL_TOKEN_ACCOUNT_DOC_URL}"
         end
 
         sig { returns(T.untyped) }
@@ -15239,6 +15296,79 @@ def configure_litestream_r2(app_id)
           raise Error, "Wranglerのログイン先Cloudflare accountがありません" unless accounts.is_a?(Array) && accounts.any?
 
           identity
+        end
+
+        sig { params(account: T::Hash[String, T.untyped]).void }
+        def validate_cloudflare_initial_token!(account)
+          account_id = record_id(account)
+          verification = cloudflare_api.verify_token(account_id)
+          token_id = verification["id"]
+          unless token_id.is_a?(String) && !token_id.empty? && verification["status"] == "active"
+            raise_initial_token_error(account, "tokenがactiveではないか、token IDを取得できません")
+          end
+
+          permission_group = initial_token_permission_group(account_id)
+          token = cloudflare_api.token_details(account_id, token_id)
+          unless token["id"] == token_id && token["status"] == "active"
+            raise_initial_token_error(account, "検証結果とtoken詳細が一致しません")
+          end
+          unless initial_token_policy_matches?(token["policies"], account_id, record_id(permission_group))
+            raise_initial_token_error(
+              account,
+              "Account API Tokens: Edit (API: #{INITIAL_TOKEN_PERMISSION_GROUP_NAME})だけを対象accountへ許可してください"
+            )
+          end
+        rescue CloudflareClient::RequestError => error
+          raise unless [401, 403].include?(error.status)
+
+          code_detail = error.codes.empty? ? "HTTP #{error.status}" : "HTTP #{error.status}, code: #{error.codes.join(", ")}"
+          raise_initial_token_error(account, "Cloudflare APIに拒否されました (#{code_detail})")
+        end
+
+        sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
+        def initial_token_permission_group(account_id)
+          records = cloudflare_api.permission_groups(account_id, name: INITIAL_TOKEN_PERMISSION_GROUP_NAME)
+          matches = records.select do |record|
+            record["name"] == INITIAL_TOKEN_PERMISSION_GROUP_NAME &&
+              record["scopes"].is_a?(Array) &&
+              record.fetch("scopes").include?(ACCOUNT_SCOPE)
+          end
+          return matches.fetch(0) if matches.one?
+
+          reason = matches.empty? ? "permission groupが見つかりません" : "permission groupが複数あります"
+          raise Error, "Cloudflare #{INITIAL_TOKEN_PERMISSION_GROUP_NAME} #{reason} (#{ACCOUNT_SCOPE})"
+        end
+
+        sig do
+          params(
+            policies: T.untyped,
+            account_id: String,
+            permission_group_id: String
+          ).returns(T::Boolean)
+        end
+        def initial_token_policy_matches?(policies, account_id, permission_group_id)
+          return false unless policies.is_a?(Array) && policies.length == 1
+
+          policy = policies.fetch(0)
+          return false unless policy.is_a?(Hash) && policy["effect"] == "allow"
+          return false unless policy["resources"] == { "#{ACCOUNT_SCOPE}.#{account_id}" => "*" }
+
+          groups = policy["permission_groups"]
+          return false unless groups.is_a?(Array) && groups.length == 1
+
+          group = groups.fetch(0)
+          group.is_a?(Hash) && group["id"] == permission_group_id
+        end
+
+        sig { params(account: T::Hash[String, T.untyped], reason: String).returns(T.noreturn) }
+        def raise_initial_token_error(account, reason)
+          account_label = "#{record_name(account)} (#{record_id(account)})"
+          raise Error, <<~MESSAGE.strip
+            #{INITIAL_TOKEN_ENV}を対象Cloudflare accountで使用できません: #{account_label}
+            理由: #{reason}
+            対象accountのSuper Administratorで、Account API Tokens: Edit (API: #{INITIAL_TOKEN_PERMISSION_GROUP_NAME})だけを持つaccount-owned tokenを再発行してください:
+            #{self.class.initial_token_template_url(APP_ID)}
+          MESSAGE
         end
 
         sig { params(destinations: T::Array[String]).returns(T::Hash[String, String]) }
@@ -15834,7 +15964,29 @@ def configure_litestream_r2(app_id)
 
         def permission_groups(account_id, name:)
           @calls << { method: :permission_groups, account_id:, name: }
-          [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+          if name == "Account API Tokens Write"
+            [{ "id" => "account-token-write", "name" => name, "scopes" => ["com.cloudflare.api.account"] }]
+          else
+            [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+          end
+        end
+
+        def verify_token(account_id)
+          @calls << { method: :verify_token, account_id: }
+          { "id" => "initial-token-id", "status" => "active" }
+        end
+
+        def token_details(account_id, token_id)
+          @calls << { method: :token_details, account_id:, token_id: }
+          {
+            "id" => token_id,
+            "status" => "active",
+            "policies" => [{
+              "effect" => "allow",
+              "resources" => { "com.cloudflare.api.account.#{account_id}" => "*" },
+              "permission_groups" => [{ "id" => "account-token-write" }]
+            }]
+          }
         end
 
         def tokens(account_id)
@@ -15844,6 +15996,20 @@ def configure_litestream_r2(app_id)
 
         def create_token(*)
           raise "confirmation rejection must not create a Cloudflare token"
+        end
+      end
+
+      class RejectingInitialTokenClient
+        def verify_token(_account_id)
+          { "id" => "initial-token-id", "status" => "active" }
+        end
+
+        def permission_groups(_account_id, name:)
+          raise Litestream::R2Configurator::CloudflareClient::RequestError.new(
+            "Cloudflare API requestに失敗しました (HTTP 403): #{name} Unauthorized (code: 9109)",
+            status: 403,
+            codes: [9109]
+          )
         end
       end
 
@@ -15876,7 +16042,43 @@ def configure_litestream_r2(app_id)
 
           assert_includes output.string, "CLOUDFLARE_INITIAL_API_TOKEN"
           assert_includes output.string, "account_api_tokens"
+          assert_includes output.string, "Super Administrator"
+          assert_includes output.string, "Account API Tokens Write"
           assert_empty Dir.children(directory)
+        end
+      end
+
+      test "invalid initial token stops before 1Password and R2 mutations" do
+        Dir.mktmpdir do |directory|
+          root = Pathname(directory)
+          wrangler = root.join("node_modules/.bin/wrangler")
+          FileUtils.mkdir_p(wrangler.dirname)
+          wrangler.write("#!/bin/sh\n")
+          wrangler.chmod(0o755)
+          runner = FakeRunner.new([
+            FakeResult.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0)
+          ])
+
+          error = assert_raises(Litestream::R2Configurator::Error) do
+            Litestream::R2Configurator.new(
+              root:,
+              prompt: Object.new,
+              runner:,
+              output: StringIO.new,
+              environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-secret" },
+              cloudflare_client: RejectingInitialTokenClient.new
+            ).run!
+          end
+
+          assert_includes error.message, "HTTP 403, code: 9109"
+          assert_includes error.message, "Super Administrator"
+          refute_includes error.message, "initial-secret"
+          assert_equal 4, runner.calls.length
+          refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op user] }
+          refute_path_exists root.join(".kamal")
         end
       end
 
@@ -15891,9 +16093,9 @@ def configure_litestream_r2(app_id)
             FakeResult.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: JSON.generate(id: "op-id", name: "dev:example", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: JSON.generate(id: "op-id"), stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
             FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
             FakeResult.new(stdout: JSON.generate([{ id: "production-vault", name: "sample-production" }, { id: "staging-vault", name: "sample-staging" }]), stderr: "", success: true, exitstatus: 0),
@@ -15920,7 +16122,7 @@ def configure_litestream_r2(app_id)
           refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
           refute_path_exists root.join(".kamal/secrets.production")
           assert_includes output.string, "Cloudflare login: person@example.com (OAuth Token)"
-          assert_equal %i[permission_groups tokens], cloudflare_client.calls.map { |call| call.fetch(:method) }
+          assert_equal %i[verify_token permission_groups token_details permission_groups tokens], cloudflare_client.calls.map { |call| call.fetch(:method) }
           assert_includes output.string, "R2 bucket、Cloudflare API token、1Password item、Kamal secret参照は変更していません。"
         end
       end
@@ -16187,10 +16389,18 @@ def configure_kamal
     An invisible same-named vault is outside this check. Duplicate visible names and missing vault
     creation permission are errors; there is no fallback to a human-owned vault.
 
-    Set `CLOUDFLARE_INITIAL_API_TOKEN` to an account-owned token with only **Account API Tokens:
-    Edit**. The task never stores this initial token. If it is absent, the task prints a prefilled
-    account-owned Token Template URL and the Cloudflare documentation, then exits successfully
-    before running commands or changing Cloudflare, 1Password, buckets, or repository files.
+    As a Super Administrator of the target account, set `CLOUDFLARE_INITIAL_API_TOKEN` to an
+    account-owned token with only dashboard permission **Account API Tokens: Edit**, named
+    **Account API Tokens Write** by the API. Confirm the target account and permission on the
+    dashboard summary before creating it. The task never stores this initial token. If it is absent,
+    the task prints a prefilled account-owned Token Template URL and the Cloudflare documentation,
+    then exits successfully before running commands or changing Cloudflare, 1Password, buckets, or
+    repository files.
+
+    After selecting the Wrangler account, the task verifies that the Initial Token is active,
+    belongs to that account, and has exactly that one permission for that account. Authentication,
+    account, status, or policy mismatches stop with the selected account and a regeneration URL
+    before creating a 1Password service account or vault, an R2 bucket, or repository files.
 
     Both destinations are selected initially. The task shows the signed-in Cloudflare identity,
     lets you choose its account, checks existing buckets, and prints the service account ID,

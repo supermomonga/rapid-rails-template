@@ -242,7 +242,9 @@ class EntrypointTest < Minitest::Test
     error = StringIO.new
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.merge(
       "maintenance_tasks" => "enable",
-      "active_job" => "skip"
+      "active_job" => "skip",
+      "web_push" => "skip",
+      "job_operations" => "disable"
     ).map do |id, value|
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"
@@ -264,7 +266,8 @@ class EntrypointTest < Minitest::Test
     error = StringIO.new
     arguments = RapidRailsTemplate::Configuration::DEFAULTS.merge(
       "job_operations" => "enable",
-      "active_job" => "skip"
+      "active_job" => "skip",
+      "web_push" => "skip"
     ).map do |id, value|
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"
@@ -283,7 +286,7 @@ class EntrypointTest < Minitest::Test
   end
 
   def test_non_applicable_option_can_be_omitted_without_reading_input
-    answers = RapidRailsTemplate::Configuration::DEFAULTS.reject { |id, _| id == "web_push" }
+    answers = RapidRailsTemplate::Configuration::DEFAULTS.merge("pwa" => "skip").reject { |id, _| id == "web_push" }
     arguments = answers.map do |id, value|
       serialized = value.is_a?(Array) ? value.join(",") : value
       "--#{id.tr('_', '-')}=#{serialized}"

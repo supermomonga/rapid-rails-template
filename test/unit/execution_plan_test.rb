@@ -3,7 +3,7 @@
 require_relative "../test_helper"
 
 class ExecutionPlanTest < Minitest::Test
-  def test_default_plan_installs_only_selected_solid_component
+  def test_default_plan_installs_every_optional_feature_except_mail
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build({}),
       app_id: "sample", app_name: "Sample App"
@@ -20,9 +20,12 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.summary, "RailsアプリID: sample"
     assert_includes plan.summary, "表示用アプリ名: Sample App"
     assert_includes plan.gems, "solid_cache"
-    refute_includes plan.gems, "solid_queue"
-    refute_includes plan.gems, "mission_control-jobs"
-    refute_includes plan.gems, "solid_cable"
+    assert_includes plan.gems, "solid_queue"
+    assert_includes plan.gems, "mission_control-jobs"
+    assert_includes plan.gems, "maintenance_tasks"
+    assert_includes plan.gems, "solid_cable"
+    assert_includes plan.gems, "siwe-rb"
+    assert_includes plan.gems, "web-push"
     assert_includes plan.gems, "devise"
     assert_includes plan.gems, "haikunator"
     assert_includes plan.gems, "boring_avatars"
@@ -182,7 +185,10 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/services/avatar_image_policy.rb"
     assert_includes plan.artifacts, "app/services/avatar_upload.rb"
     assert_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
-    assert_empty plan.production_requirements
+    assert_equal [
+      "Solid Queue worker/dispatcher/scheduler",
+      "finished jobs retained for 1 day; failed jobs retained until retry/discard"
+    ], plan.production_requirements
     assert_equal plan.production_requirements, plan.to_h.fetch("production_requirements")
   end
 

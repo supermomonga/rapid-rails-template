@@ -116,7 +116,7 @@ RailsアプリIDは有限選択の設定値とは分離して扱います。キ�
 - CLI引数: `--pwa=use|skip`
 - 質問文: PWAを使用しますか？
 - 選択肢: `use`、`skip`
-- 既定値: `skip`
+- 既定値: `use`
 - 表示条件: 常に表示する
 - 影響する処理: PWA manifest、service worker、関連routeの有効化と無効時のstub取扱い
 
@@ -129,7 +129,7 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 - CLI引数: `--web-push=use|skip`
 - 質問文: PWAでWeb Pushを使用しますか？
 - 選択肢: `use`、`skip`
-- 既定値: `skip`
+- 既定値: `use`
 - 表示条件: `pwa == use`
 - 影響する処理: `use`の場合だけ`web-push ~> 3.1`、購読model、認証済みHTTP API、送信service/job、独立した通知設定ページを生成する
 
@@ -142,7 +142,7 @@ Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push�
 - CLI引数: `--active-job=solid_queue|skip`
 - 質問文: ジョブ管理を使用しますか？
 - 選択肢: `solid_queue`、`skip`
-- 既定値: `skip`
+- 既定値: `solid_queue`
 - 表示条件: `web_push != use`
 - 影響する処理: `solid_queue` gemとinstall generator、SQLite queue database、Active Job adapter、development用Puma plugin、production worker
 
@@ -180,7 +180,7 @@ Maintenance TasksはActive Jobを介して実行するため、実効値が`acti
 - CLI引数: `--additional-login-methods=siwe`または`--additional-login-methods=`
 - 質問文: 追加するログイン方法を選択してください。
 - 選択肢: `siwe`の複数選択
-- 既定値: 選択なし
+- 既定値: `siwe`
 - 表示条件: 常に表示する
 - 影響する処理: Deviseの`:siweable` module、`siwe-rb`、SIWE credential・challenge・route・管理画面
 
@@ -192,7 +192,7 @@ Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`によるPasskey登録・ログ�
 
 WebAuthnとSIWEのchallengeはdatabaseへtoken digest、purpose、User、browser session、5分の期限、消費時刻、必要に応じて削除対象を保存します。発行・検証はPOST＋CSRF、`Cache-Control: no-store`、IP＋sessionごとのrate limitで保護します。Passkey・walletの解除は削除対象自身を候補から除外した別資格情報、アカウント削除は任意の現存資格情報による操作単位の再認証を要求します。最後の資格情報、別Userの対象、期限切れ・再利用challengeは拒否します。
 
-CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正規化します。空値を選択なしとして受け入れ、未知値、重複値、空要素を生成開始前に拒否します。旧optionのaliasや互換処理は提供しません。
+対話UIでは`siwe`を選択済みとして表示します。CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正規化します。空値を選択なしとして受け入れ、未知値、重複値、空要素を生成開始前に拒否します。旧optionのaliasや互換処理は提供しません。
 
 ## `profile_features`
 
@@ -252,7 +252,7 @@ avatarの選択元画像は静止画JPEG、PNG、WebPだけを許可し、5 MiB�
 - CLI引数: `--action-cable=solid_cable|skip`
 - 質問文: Action Cableを使用しますか？
 - 選択肢: `solid_cable`、`skip`
-- 既定値: `skip`
+- 既定値: `solid_cable`
 - 表示条件: 常に表示する
 - 影響する処理: RailsのAction Cable生成option、`solid_cable` gemとinstall generator、production cable databaseと`cable.yml`
 

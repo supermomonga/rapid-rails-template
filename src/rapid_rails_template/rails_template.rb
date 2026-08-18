@@ -9514,13 +9514,12 @@ def configure_web_push
   require "web-push"
   environment "config.action_controller.cache_store = :memory_store", env: "test"
   key = WebPush.generate_key
-  create_file "mise.local.toml", <<~TOML, force: true
-    [env]
+  append_to_file "mise.local.toml", <<~TOML
+
     VAPID_PUBLIC_KEY = #{key.public_key.inspect}
     VAPID_PRIVATE_KEY = #{key.private_key.inspect}
     VAPID_SUBJECT = "https://localhost"
   TOML
-  append_to_file ".gitignore", "\n/mise.local.toml\n" unless File.read(".gitignore").lines.map(&:strip).include?("/mise.local.toml")
 
   generate "model", "PushSubscription", "user:references", "browser_id:string", "endpoint:text", "p256dh:string", "auth:string"
   migration = Dir.glob("db/migrate/*_create_push_subscriptions.rb")
@@ -11915,6 +11914,15 @@ def install_maintenance_tasks
       end
     end
   RUBY
+end
+
+def configure_mise_local
+  create_file "mise.local.toml", <<~TOML, force: true
+    [env]
+    # CLOUDFLARE_INITIAL_API_TOKEN = ""
+    # OP_SERVICE_ACCOUNT_TOKEN = ""
+  TOML
+  append_to_file ".gitignore", "\n/mise.local.toml\n" unless File.read(".gitignore").lines.map(&:strip).include?("/mise.local.toml")
 end
 
 def configure_common_files
@@ -16312,8 +16320,6 @@ def configure_kamal
   YAML
   create_file "config/deploy.production.yml", "--- {}\n", force: true
   create_file "config/deploy.staging.yml", "--- {}\n", force: true
-  append_to_file ".gitignore", "\n/mise.local.toml\n" unless File.read(".gitignore").lines.map(&:strip).include?("/mise.local.toml")
-
   create_file ".dockerignore", <<~IGNORE, force: true
     .git
     .kamal
@@ -16560,6 +16566,7 @@ def configure_kamal
 end
 
 after_bundle do
+  configure_mise_local
   install_action_text
   install_active_storage_db
   configure_lexxy

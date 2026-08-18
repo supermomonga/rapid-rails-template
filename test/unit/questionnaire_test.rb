@@ -74,7 +74,7 @@ class QuestionnaireTest < Minitest::Test
   end
 
   def test_skips_web_push_question_when_pwa_is_disabled
-    prompt = RecordingPrompt.new
+    prompt = RecordingPrompt.new(answers: ["skip"])
     output = StringIO.new
     answers = RapidRailsTemplate::Questionnaire.new(prompt:, output:).ask_all
 
@@ -93,8 +93,34 @@ class QuestionnaireTest < Minitest::Test
     assert_equal "skip", answers["web_push"]
     assert_equal [
       %w[use skip],
-      { header: "PWAを使用しますか？", selected: ["skip"] }
+      { header: "PWAを使用しますか？", selected: ["use"] }
     ], prompt.choose_calls.fetch(0)
+    assert_equal [
+      %w[solid_queue skip],
+      { header: "ジョブ管理を使用しますか？", selected: ["solid_queue"] }
+    ], prompt.choose_calls.fetch(2)
+  end
+
+  def test_preselects_every_optional_feature_except_mail
+    prompt = RecordingPrompt.new
+
+    answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
+    configuration = RapidRailsTemplate::Configuration.build(answers)
+
+    assert_equal "use", configuration["pwa"]
+    assert_equal "use", configuration["web_push"]
+    assert_equal "solid_queue", configuration["active_job"]
+    assert_equal "enable", configuration["job_operations"]
+    assert_equal "enable", configuration["maintenance_tasks"]
+    assert_equal "use", configuration["solid_cache"]
+    assert_equal %w[siwe], configuration["additional_login_methods"]
+    assert_equal %w[screen_name display_name avatar], configuration["profile_features"]
+    assert_equal "enable", configuration["api"]
+    assert_equal "solid_cable", configuration["action_cable"]
+    assert_equal "skip", configuration["mail"]
+
+    mail_call = prompt.choose_calls.find { |(_, options)| options.fetch(:header).include?("メール機能") }
+    assert_equal ["auto"], mail_call.fetch(1).fetch(:selected)
   end
 
   def test_skips_active_job_question_when_web_push_is_enabled
@@ -137,7 +163,7 @@ class QuestionnaireTest < Minitest::Test
   end
 
   def test_skips_job_operations_without_solid_queue
-    prompt = RecordingPrompt.new
+    prompt = RecordingPrompt.new(answers: %w[skip skip])
     answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
 
     refute answers.key?("job_operations")
@@ -158,7 +184,7 @@ class QuestionnaireTest < Minitest::Test
   end
 
   def test_skips_maintenance_tasks_without_solid_queue
-    prompt = RecordingPrompt.new
+    prompt = RecordingPrompt.new(answers: %w[skip skip])
     answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
 
     refute answers.key?("maintenance_tasks")
@@ -209,7 +235,7 @@ class QuestionnaireTest < Minitest::Test
       %w[siwe],
       {
         header: "追加するログイン方法を選択してください。",
-        selected: [],
+        selected: %w[siwe],
         no_limit: true
       }
     ], prompt.choose_calls.fetch(0)

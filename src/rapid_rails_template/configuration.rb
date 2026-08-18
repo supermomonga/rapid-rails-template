@@ -22,16 +22,16 @@ module RapidRailsTemplate
     }.freeze
 
     DEFAULTS = {
-      "pwa" => "skip",
-      "web_push" => "skip",
-      "active_job" => "skip",
-      "job_operations" => "disable",
-      "maintenance_tasks" => "disable",
+      "pwa" => "use",
+      "web_push" => "use",
+      "active_job" => "solid_queue",
+      "job_operations" => "enable",
+      "maintenance_tasks" => "enable",
       "solid_cache" => "use",
-      "additional_login_methods" => [].freeze,
+      "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
       "profile_features" => PROFILE_FEATURES,
       "api" => "enable",
-      "action_cable" => "skip",
+      "action_cable" => "solid_cable",
       "mail" => "auto",
       "default_locale" => "ja"
     }.freeze

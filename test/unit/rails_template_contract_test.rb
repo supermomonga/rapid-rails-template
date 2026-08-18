@@ -105,6 +105,26 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator after_bundle.index(add), :<, after_bundle.index(commit)
   end
 
+  def test_generates_one_shared_mise_local_file_before_feature_configuration
+    body = generated_file_source("mise.local.toml").lines.map { |line| line.delete_prefix("    ") }.join
+    web_push = source_between("def configure_web_push", "def install_solid_components")
+    kamal = source_between("def configure_kamal", "after_bundle do")
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+
+    assert_equal <<~TOML, body
+      [env]
+      # CLOUDFLARE_INITIAL_API_TOKEN = ""
+      # OP_SERVICE_ACCOUNT_TOKEN = ""
+    TOML
+    assert_equal 1, @source.scan('create_file "mise.local.toml"').size
+    assert_equal 1, @source.scan('append_to_file ".gitignore", "\\n/mise.local.toml\\n"').size
+    assert_includes web_push, 'append_to_file "mise.local.toml", <<~TOML'
+    assert_includes web_push, 'VAPID_PUBLIC_KEY = #{key.public_key.inspect}'
+    refute_includes web_push, 'create_file "mise.local.toml"'
+    refute_includes kamal, 'append_to_file ".gitignore", "\n/mise.local.toml\n"'
+    assert_operator after_bundle.index("configure_mise_local"), :<, after_bundle.index("configure_web_push")
+  end
+
   def test_requires_the_shared_modal_helper_for_native_dialog_modals
     helper = generated_file_source("app/helpers/application_helper.rb")
     helper_test = generated_file_source("test/helpers/application_helper_test.rb")
@@ -368,7 +388,7 @@ class RailsTemplateContractTest < Minitest::Test
 
     assert_equal 'gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"', @source.lines.grep(/gem "web-push"/).first.strip
     assert_includes web_push, 'VAPID_SUBJECT = "https://localhost"'
-    assert_includes web_push, 'append_to_file ".gitignore", "\\n/mise.local.toml\\n"'
+    assert_includes web_push, 'append_to_file "mise.local.toml", <<~TOML'
     assert_includes web_push, 'environment "config.action_controller.cache_store = :memory_store", env: "test"'
     assert_includes migration, 'foreign_key: { on_delete: :cascade }'
     assert_includes migration, 'add_index :push_subscriptions, :browser_id, unique: true'
@@ -1184,7 +1204,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes r2, '%W[op vault create #{name} --format=json --account=#{service_account_id}]'
     assert_includes r2, '"#{normalized_app_id(app_id)}-#{destination}"'
     assert_includes r2, 'stdin_data: token.dup'
-    assert_includes kamal, 'append_to_file ".gitignore", "\n/mise.local.toml\n"'
+    refute_includes kamal, 'append_to_file ".gitignore", "\n/mise.local.toml\n"'
     assert_includes kamal, "mise exec -- bin/kamal setup -d production"
     refute_includes r2, "1Password account/vault"
   end

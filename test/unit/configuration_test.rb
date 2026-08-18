@@ -6,18 +6,18 @@ class ConfigurationTest < Minitest::Test
   def test_defaults_match_confirmed_product_decisions
     configuration = RapidRailsTemplate::Configuration.build({})
 
-    assert_equal "skip", configuration["pwa"]
-    assert_equal "skip", configuration["web_push"]
-    assert_equal "skip", configuration["active_job"]
-    assert_equal "disable", configuration["job_operations"]
-    assert_equal "Solid Queueを使用しないため", configuration.reasons["job_operations"]
-    assert_equal "disable", configuration["maintenance_tasks"]
-    assert_equal "Solid Queueを使用しないため", configuration.reasons["maintenance_tasks"]
+    assert_equal "use", configuration["pwa"]
+    assert_equal "use", configuration["web_push"]
+    assert_equal "solid_queue", configuration["active_job"]
+    assert_equal "enable", configuration["job_operations"]
+    refute configuration.reasons.key?("job_operations")
+    assert_equal "enable", configuration["maintenance_tasks"]
+    refute configuration.reasons.key?("maintenance_tasks")
     assert_equal "use", configuration["solid_cache"]
-    assert_empty configuration["additional_login_methods"]
+    assert_equal %w[siwe], configuration["additional_login_methods"]
     assert_equal %w[screen_name display_name avatar], configuration["profile_features"]
     assert_equal "enable", configuration["api"]
-    assert_equal "skip", configuration["action_cable"]
+    assert_equal "solid_cable", configuration["action_cable"]
     assert_equal "skip", configuration["mail"]
     assert_equal "自動的にメールを必要とする機能がないため", configuration.reasons["mail"]
     assert_equal "ja", configuration["default_locale"]

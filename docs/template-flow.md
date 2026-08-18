@@ -50,7 +50,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 ### 質問と計画
 
-`--app-id`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でRailsアプリIDを質問します。続いて`--app-name`が未指定の場合は、確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、`profile_features`では全featureを選択済みとして表示し、`no_limit: true`の複数選択を使用します。選択なしと`--profile-features=`はProfile生成を無効にする明示回答です。RailsアプリID、表示用アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
+`--app-id`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でRailsアプリIDを質問します。続いて`--app-name`が未指定の場合は、確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、複数選択では利用可能な全featureを選択済みとして表示し、`no_limit: true`を使用します。選択なし、`--additional-login-methods=`、`--profile-features=`は対応する機能を無効にする明示回答です。RailsアプリID、表示用アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
 
 全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。Job OperationsとMaintenance TasksはWeb PushによってSolid Queueが必須になった場合、またはSolid Queueが選択済みの場合だけ質問し、それ以外では`disable`へ正規化します。明示`enable`とSolid Queueなしの矛盾はこの段階で拒否します。画像配信は質問を持たず、Active Storage DB、libvips、`rails_storage_proxy`へ固定します。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production process、production要件を一覧で提示します。
 

@@ -364,9 +364,9 @@ Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queu
 
 ## Devise、Passkey、追加SIWEログイン
 
-Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`は常設し、Userは標準の整数`id`、ランダムで一意かつ変更不可の`webauthn_id`、`remember_created_at`を持ちます。`:database_authenticatable`、`:registerable`、`login_id`、`encrypted_password`、password recoveryは生成しません。`:passkey_authenticatable`と`:rememberable`を使い、検証成功後はDeviseの公開`sign_in` APIでsessionを確立します。
+Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`、`browser ~> 6.2`は常設し、Userは標準の整数`id`、ランダムで一意かつ変更不可の`webauthn_id`、`remember_created_at`を持ちます。`:database_authenticatable`、`:registerable`、`login_id`、`encrypted_password`、password recoveryは生成しません。`:passkey_authenticatable`と`:rememberable`を使い、検証成功後はDeviseの公開`sign_in` APIでsessionを確立します。
 
-Passkeyはdiscoverable credentialとして複数登録でき、platformとcross-platform authenticatorの両方を許可します。credential IDは全Userで一意、BEは登録後不変、`BE=0/BS=1`は全境界で拒否し、BS・sign count・last usedは認証成功時だけ更新します。全資格情報が`BS=0`のPasskey 1件だけなら、登録・ログイン成功後に追加資格情報へのwarningを1回表示します。
+Passkeyはdiscoverable credentialとして複数登録でき、platformとcross-platform authenticatorの両方を許可します。登録時に名称入力は受け付けず、既知AAGUIDを固定snapshotの提供元名へ変換し、未知またはzero AAGUIDでは`browser`で登録User-AgentのOSを判定して初期名にします。OSも不明なら`Passkey`とし、同名を許可します。AAGUIDとUser-Agentは表示名専用であり、`attestation: none`を維持してセキュリティ判断には使いません。名称は登録後のeditでのみ変更できます。credential IDは全Userで一意、BEは登録後不変、`BE=0/BS=1`は全境界で拒否し、BS・sign count・last usedは認証成功時だけ更新します。全資格情報が`BS=0`のPasskey 1件だけなら、登録・ログイン成功後に追加資格情報へのwarningを1回表示します。
 
 `additional_login_methods`へ`siwe`を選択した場合だけ`siwe-rb` 0.2.xと`:siweable`を追加します。`:siweable`はDeviseの公開module登録契約に従ってmodel、controller、routeを登録し、Warden strategyは追加しません。mapper拡張をroutes評価前に読み込み、成功時は紐付いた既存Userの`active_for_authentication?`を確認してDeviseの`sign_in`を呼びます。
 

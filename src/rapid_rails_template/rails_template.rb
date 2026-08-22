@@ -49,6 +49,7 @@ end
 gem "devise", "~> 5.0.4"
 gem "devise-i18n"
 gem "webauthn", "~> 3.4"
+gem "browser", "~> 6.2"
 gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_methods").include?("siwe")
 gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
@@ -1253,7 +1254,7 @@ def install_devise
   create_file "test/fixtures/passkey_credentials.yml", <<~'YAML', force: true
     one:
       user: one
-      name: Passkey #1
+      name: Windows Passkey
       webauthn_id: dGVzdC1jcmVkZW50aWFsLW9uZQ
       public_key: dGVzdC1wdWJsaWMta2V5
       sign_count: 0
@@ -1263,7 +1264,7 @@ def install_devise
 
     two:
       user: two
-      name: Passkey #1
+      name: macOS Passkey
       webauthn_id: dGVzdC1jcmVkZW50aWFsLXR3bw
       public_key: dGVzdC1wdWJsaWMta2V5
       sign_count: 0
@@ -1370,6 +1371,91 @@ def configure_passkey_routes
 end
 
 def install_passkey_runtime
+  create_file "app/services/passkey_default_name.rb", <<~'RUBY', force: true
+    require "browser"
+
+    class PasskeyDefaultName
+      extend T::Sig
+
+      # UI display names from passkeydeveloper/passkey-authenticator-aaguids at
+      # commit 6eb68689ae67a5f261eebae490f34633063d9da0. These values are cosmetic
+      # and must not be used for authentication, authorization, or authenticator policy.
+      PROVIDER_NAMES = T.let({
+        "08987058-cadc-4b81-b6e1-30de50dcbe96" => "Windows Hello",
+        "0ea242b4-43c4-4a1b-8b17-dd6d0b6baec6" => "Keeper",
+        "17290f1e-c212-34d0-1423-365d729f09d9" => "Thales PIN iOS SDK",
+        "22248c4c-7a12-46e2-9a41-44291b373a4d" => "LogMeOnce",
+        "39a5647e-1853-446c-a1f6-a79bae9f5bc7" => "IDmelon",
+        "45e3057e-b2f9-48ed-912f-9b901e153b16" => "Uniqkey",
+        "477b05cd-7f78-4fe7-b629-27247f296138" => "WALLIX Vault",
+        "50726f74-6f6e-5061-7373-50726f746f6e" => "Proton Pass",
+        "531126d6-e717-415c-9320-3d9aa6981239" => "Dashlane",
+        "53414d53-554e-4700-0000-000000000000" => "Samsung Pass",
+        "53e7a7a5-e75f-4d3d-9483-12fc779cdf23" => "Password Depot",
+        "5ca471bb-a56d-46ad-a496-67e70e9ed9fb" => "Parcel",
+        "6028b017-b1d4-4c02-b4b3-afcdafc96bb2" => "Windows Hello",
+        "65c97700-f5ef-4d5c-8a42-f30e45ac94b7" => "Royal Vault",
+        "66a0ccb3-bd6a-191f-ee06-e375c50b9846" => "Thales Bio iOS SDK",
+        "6bb49926-160a-4306-a100-4eb39ba6ac45" => "AVG Password Manager",
+        "6d212b28-a2c1-4638-b375-5932070f62e9" => "initial",
+        "70617373-7761-6c6c-6669-646f32303236" => "Passwall",
+        "771b48fd-d3d4-4f74-9232-fc157ab0507a" => "Edge on Mac",
+        "87f5ec51-f721-4feb-9fe4-be18c4971894" => "PassCard",
+        "8836336a-f590-0921-301d-46427531eee6" => "Thales Bio Android SDK",
+        "891494da-2c90-4d31-a9cd-4eab0aed1309" => "Sésame",
+        "9addb28c-b46f-4402-808f-019651441ff3" => "KeePassPasskey",
+        "9ddd1817-af5a-4672-a2b9-3e3dd95000a9" => "Windows Hello",
+        "a10c6dd9-465e-4226-8198-c7c44b91c555" => "Kaspersky Password Manager",
+        "a11a5faa-9f32-4b8c-8c5d-2f7d13e8c942" => "AliasVault",
+        "a4a2d88e-9796-4356-9164-e2a5a8bd019c" => "Avast Password Manager",
+        "adce0002-35bc-c60a-648b-0b25f1f05503" => "Chrome on Mac",
+        "b35a26b2-8f6e-4697-ab1d-d44db4da28c6" => "Zoho Vault",
+        "b5397666-4885-aa6b-cebf-e52262a439a2" => "Chromium Browser",
+        "b78a0a55-6ef8-d246-a042-ba0f6d55050c" => "LastPass",
+        "b84e4048-15dc-4dd0-8640-f4f60813c8af" => "NordPass",
+        "bada5566-a7aa-401f-bd96-45619a55120d" => "1Password",
+        "bfc748bb-3429-4faa-b9f9-7cfa9f3b76d0" => "iPasswords",
+        "c9cadfc9-89a9-489e-a25a-c7e86a4d5f15" => "Burp Suite Navigation Recorder",
+        "cb6f6666-38ea-4873-9161-ff456a82d316" => "iPass Secure Auth",
+        "cc45f64e-52a2-451b-831a-4edd8022a202" => "ToothPic Passkey Provider",
+        "cd69adb5-3c7a-deb9-3177-6800ea6cb72a" => "Thales PIN Android SDK",
+        "d2717a32-9851-48a8-9961-b264c97a411a" => "Fenko Vault",
+        "d3452668-01fd-4c12-926c-83a4204853aa" => "Microsoft Password Manager",
+        "d350af52-0351-4ba2-acd3-dfeeadc3f764" => "pwSafe",
+        "d49b2120-b865-4191-8cea-be84a52b0485" => "Heimlane Vault",
+        "d548826e-79b4-db40-a3d8-11116f7e8349" => "Bitwarden",
+        "d9be9d39-e6a6-4c28-a581-32b044d986e4" => "Sticky Password Manager",
+        "da583154-ce16-4cdf-9fe6-1dba788c0998" => "Hey Be Safe",
+        "dd4ec289-e01d-41c9-bb89-70fa845d4bf2" => "iCloud Keychain (Managed)",
+        "de503f9c-21a4-4f76-b4b7-558eb55c6f89" => "Devolutions",
+        "e7db2bd3-f2fe-4d71-ad78-7e7aa166cfd1" => "Avira Password Manager",
+        "e8b7f4a2-c3d5-e6f7-890a-b1c2d3e4f567" => "Sherlocked",
+        "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4" => "Google Password Manager",
+        "eaecdef2-1c31-5634-8639-f1cbd9c00a08" => "KeePassDX",
+        "f3809540-7f14-49c1-a8b3-8f813b225541" => "Enpass",
+        "fa37f553-f9b6-4adb-ac53-8bbb57ebdf0d" => "Norton Password Manager",
+        "fbfc3007-154e-4ecc-8c0b-6e020557d7bd" => "Apple Passwords",
+        "fdb141b2-5d84-443e-8a35-4698c205a502" => "KeePassXC"
+      }.freeze, T::Hash[String, String])
+
+      sig { params(aaguid: T.nilable(String), user_agent: T.nilable(String)).returns(String) }
+      def self.resolve(aaguid:, user_agent:)
+        provider_name = PROVIDER_NAMES[aaguid.to_s.downcase]
+        return provider_name if provider_name
+
+        browser = Browser.new(user_agent.to_s)
+        return "iOS/iPadOS Passkey" if browser.platform.ios?
+        return "Android Passkey" if browser.platform.android?
+        return "ChromeOS Passkey" if browser.platform.chrome_os?
+        return "macOS Passkey" if browser.platform.mac?
+        return "Windows Passkey" if browser.platform.windows?
+        return "Linux Passkey" if browser.platform.linux?
+
+        "Passkey"
+      end
+    end
+  RUBY
+
   create_file "app/models/passkey_credential.rb", <<~'RUBY', force: true
     class PasskeyCredential < ApplicationRecord
       extend T::Sig
@@ -1674,7 +1760,7 @@ def install_passkey_controllers
           WebauthnChallenge.transaction do
             challenge.consume!
             user = User.create!(webauthn_id: challenge.webauthn_user_id)
-            T.must(user).passkey_credentials.create!(passkey_attributes(credential, name: "Passkey #1"))
+            T.must(user).passkey_credentials.create!(passkey_attributes(credential))
           end
           request.env["devise.skip_timeout"] = true
           sign_in(:user, T.must(user), event: :authentication)
@@ -1686,9 +1772,9 @@ def install_passkey_controllers
         end
 
         private
-          def passkey_attributes(credential, name:)
+          def passkey_attributes(credential)
             {
-              name:,
+              name: PasskeyDefaultName.resolve(aaguid: credential.response.aaguid, user_agent: request.user_agent),
               webauthn_id: credential.id,
               public_key: credential.public_key,
               sign_count: credential.sign_count,
@@ -1820,7 +1906,7 @@ def install_passkey_controllers
           WebauthnChallenge.transaction do
             challenge.consume!
             passkey = account_user.passkey_credentials.create!(
-              name: "Passkey ##{account_user.passkey_credentials.count + 1}",
+              name: PasskeyDefaultName.resolve(aaguid: credential.response.aaguid, user_agent: request.user_agent),
               webauthn_id: credential.id,
               public_key: credential.public_key,
               sign_count: credential.sign_count,
@@ -2151,6 +2237,53 @@ def install_passkey_views
 end
 
 def install_passkey_tests
+  create_file "test/services/passkey_default_name_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+
+    class PasskeyDefaultNameTest < ActiveSupport::TestCase
+      USER_AGENTS = {
+        "iOS/iPadOS Passkey" => "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1",
+        "Android Passkey" => "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36",
+        "ChromeOS Passkey" => "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 Chrome/101.0.4951.13 Safari/537.36",
+        "macOS Passkey" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.5 Safari/605.1.15",
+        "Windows Passkey" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
+        "Linux Passkey" => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36"
+      }.freeze
+
+      test "prefers a known normalized AAGUID over the user agent" do
+        assert_equal "1Password", PasskeyDefaultName.resolve(
+          aaguid: "BADA5566-A7AA-401F-BD96-45619A55120D",
+          user_agent: USER_AGENTS.fetch("Windows Passkey")
+        )
+      end
+
+      test "uses the registration operating system for zero and unknown AAGUIDs" do
+        USER_AGENTS.each do |expected, user_agent|
+          assert_equal expected, PasskeyDefaultName.resolve(
+            aaguid: "00000000-0000-0000-0000-000000000000",
+            user_agent:
+          )
+          assert_equal expected, PasskeyDefaultName.resolve(
+            aaguid: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+            user_agent:
+          )
+        end
+      end
+
+      test "uses a generic name when the operating system is unknown" do
+        assert_equal "Passkey", PasskeyDefaultName.resolve(aaguid: nil, user_agent: "Unknown Client")
+      end
+
+      test "keeps the provider registry valid for the model name contract" do
+        PasskeyDefaultName::PROVIDER_NAMES.each do |aaguid, name|
+          assert_match(/\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/, aaguid)
+          assert_predicate name, :present?
+          assert_operator name.length, :<=, 50
+        end
+      end
+    end
+  RUBY
+
   create_file "test/models/webauthn_challenge_test.rb", <<~'RUBY', force: true
     require "test_helper"
 
@@ -2203,6 +2336,8 @@ def install_passkey_tests
     class Users::PasskeyAuthenticationControllerTest < ActionDispatch::IntegrationTest
       include Devise::Test::IntegrationHelpers
 
+      WINDOWS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36"
+
       test "signs up and signs in with a discoverable synced passkey" do
         client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
 
@@ -2216,12 +2351,17 @@ def install_passkey_tests
         )
         assert_difference ["User.count", "PasskeyCredential.count"], 1 do
           post user_passkey_registration_url,
-            params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+            params: {
+              challenge_token: registration.fetch("challenge_token"),
+              credential: credential.merge("name" => "Client supplied name")
+            },
+            headers: { "User-Agent" => WINDOWS_USER_AGENT }, as: :json
         end
         assert_response :created
         user = T.must(User.order(:id).last)
         assert_equal registration.dig("public_key", "user", "id"), user.webauthn_id
         stored = user.passkey_credentials.sole
+        assert_equal "Windows Passkey", stored.name
         assert_predicate stored, :backup_eligible?
         assert_predicate stored, :backup_state?
 
@@ -2323,9 +2463,14 @@ def install_passkey_tests
           backup_state: true
         )
         post account_passkeys_url,
-          params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+          params: {
+            challenge_token: registration.fetch("challenge_token"),
+            credential: credential.merge("name" => "Client supplied name")
+          },
+          headers: { "User-Agent" => WINDOWS_USER_AGENT }, as: :json
         assert_response :created
         authenticator = T.must(user.passkey_credentials.order(:id).last)
+        assert_equal ["Windows Passkey", "Windows Passkey"], user.passkey_credentials.order(:id).pluck(:name)
 
         post account_passkey_credential_destruction_options_url,
           params: { destruction_action: "delete_passkey", target_id: target.id }, as: :json
@@ -2353,6 +2498,17 @@ def install_passkey_tests
         post account_passkey_credential_destruction_options_url,
           params: { destruction_action: "delete_passkey", target_id: authenticator.id }, as: :json
         assert_response :unprocessable_content
+      end
+
+      test "changes an automatically assigned name only through the edit action" do
+        user = users(:one)
+        passkey = passkey_credentials(:one)
+        sign_in user
+
+        patch account_passkey_url(passkey), params: { passkey_credential: { name: "  Travel passkey  " } }
+
+        assert_redirected_to account_passkeys_url
+        assert_equal "Travel passkey", passkey.reload.name
       end
 
       test "deletes the account only after a fresh passkey assertion" do
@@ -12539,19 +12695,22 @@ def configure_evidence_capture
         end
 
         def capture_passkey_pages(viewport)
+          secondary_webauthn_id = "evidence-secondary-#{@user.id}"
+          @user.passkey_credentials.where(webauthn_id: secondary_webauthn_id).delete_all
           capture_page("passkeys", "Passkey一覧", account_passkeys_path, translate("passkeys.title"), viewport)
           assert_account_settings_tabs_geometry
           capture_page("passkey-new", "Passkey追加", new_account_passkey_path, translate("passkeys.new_title"), viewport)
           assert_account_settings_tabs_geometry
 
-          second = @user.passkey_credentials.find_or_create_by!(webauthn_id: "evidence-secondary-#{@user.id}") do |passkey|
-            passkey.name = "Security Key"
-            passkey.public_key = "evidence-public-key"
-            passkey.sign_count = 0
-            passkey.transports = ["usb"]
-            passkey.backup_eligible = false
-            passkey.backup_state = false
-          end
+          second = @user.passkey_credentials.create!(
+            name: "1Password",
+            webauthn_id: secondary_webauthn_id,
+            public_key: "evidence-public-key",
+            sign_count: 0,
+            transports: ["usb"],
+            backup_eligible: false,
+            backup_state: false
+          )
           capture_page("passkeys-multiple", "Passkey一覧（複数登録）", account_passkeys_path, translate("passkeys.title"), viewport)
           assert_account_settings_tabs_geometry
           capture_page("passkey-edit", "Passkey名変更", edit_account_passkey_path(second), translate("passkeys.edit_title"), viewport)
@@ -12613,7 +12772,7 @@ def configure_evidence_capture
         def create_evidence_user(identifier)
           user = User.create!
           user.passkey_credentials.create!(
-            name: "Passkey",
+            name: "macOS Passkey",
             webauthn_id: "#{identifier}-#{user.id}",
             public_key: "evidence-public-key",
             sign_count: 0,
@@ -16607,7 +16766,7 @@ after_bundle do
     require "mail"
     require "webauthn/fake_client"
   RUBY
-  run_checked "bin/tapioca gem action_policy actionmailer mail webauthn"
+  run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"
   append_to_file "sorbet/config", <<~CONFIG
     --suppress-payload-superclass-redefinition-for=Net::IMAP::Literal
     --suppress-payload-superclass-redefinition-for=Net::IMAP::QuotedString

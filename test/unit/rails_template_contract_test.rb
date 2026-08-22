@@ -1357,8 +1357,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes after_bundle, 'require "action_mailer"'
     assert_includes after_bundle, 'require "mail"'
     assert_operator after_bundle.index('append_to_file "sorbet/tapioca/require.rb"'),
-      :<, after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer mail webauthn"')
-    assert_operator after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer mail webauthn"'),
+      :<, after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"')
+    assert_operator after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"')
     assert_includes after_bundle, 'require "webauthn/fake_client"'
     assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),
@@ -1959,10 +1959,18 @@ class RailsTemplateContractTest < Minitest::Test
     user = generated_file_source("app/models/user.rb")
     passkey = generated_file_source("app/models/passkey_credential.rb")
     challenge = generated_file_source("app/models/webauthn_challenge.rb")
+    default_name = generated_file_source("app/services/passkey_default_name.rb")
+    default_name_test = generated_file_source("test/services/passkey_default_name_test.rb")
+    signup_controller = generated_file_source("app/controllers/users/passkey_registrations_controller.rb")
+    account_controller = generated_file_source("app/controllers/account/passkeys_controller.rb")
+    signup_view = generated_file_source("app/views/users/passkey_registrations/new.html.erb")
+    account_new_view = generated_file_source("app/views/account/passkeys/new.html.erb")
+    account_edit_view = generated_file_source("app/views/account/passkeys/edit.html.erb")
     risk_flash = generated_file_source("app/views/shared/_flash.html.erb")
 
     assert_includes @source, 'gem "devise", "~> 5.0.4"'
     assert_includes @source, 'gem "webauthn", "~> 3.4"'
+    assert_includes @source, 'gem "browser", "~> 6.2"'
     assert_includes devise, "t.string :webauthn_id, null: false"
     assert_includes devise, "t.datetime :remember_created_at"
     assert_includes devise, "add_index :users, :webauthn_id, unique: true"
@@ -1977,6 +1985,22 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes user, "validate :webauthn_id_cannot_change, on: :update"
     assert_includes passkey, "raise VerificationError, \"backup eligibility changed\""
     assert_includes passkey, "asserted_backup_state && !asserted_backup_eligible"
+    assert_includes default_name, "6eb68689ae67a5f261eebae490f34633063d9da0"
+    assert_includes default_name, '"bada5566-a7aa-401f-bd96-45619a55120d" => "1Password"'
+    assert_includes default_name, '"fbfc3007-154e-4ecc-8c0b-6e020557d7bd" => "Apple Passwords"'
+    assert_includes default_name, '"ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4" => "Google Password Manager"'
+    assert_includes default_name, "PROVIDER_NAMES[aaguid.to_s.downcase]"
+    assert_includes default_name, "browser.platform.chrome_os?"
+    assert_includes default_name, '"Passkey"'
+    assert_includes default_name_test, "assert_operator name.length, :<=, 50"
+    assert_includes signup_controller,
+      "PasskeyDefaultName.resolve(aaguid: credential.response.aaguid, user_agent: request.user_agent)"
+    assert_includes account_controller,
+      "PasskeyDefaultName.resolve(aaguid: credential.response.aaguid, user_agent: request.user_agent)"
+    refute_includes signup_controller, "params.expect(passkey_credential: [:name])"
+    refute_includes signup_view, "form.text_field :name"
+    refute_includes account_new_view, "form.text_field :name"
+    assert_includes account_edit_view, "form.text_field :name"
     assert_includes challenge, "TTL = 5.minutes"
     assert_includes challenge, "session_digest"
     assert_includes challenge, "update_all(consumed_at: Time.current)"

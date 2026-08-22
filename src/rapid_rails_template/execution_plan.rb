@@ -53,7 +53,7 @@ module RapidRailsTemplate
 
     def build_gems
       result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism gum]
-      result.concat(%w[devise devise-i18n webauthn])
+      result.concat(%w[devise devise-i18n webauthn browser])
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
       result << "boring_avatars" if configuration["profile_features"].include?("avatar")
@@ -280,6 +280,7 @@ module RapidRailsTemplate
       result.concat(%w[
         app/models/passkey_credential.rb
         app/models/webauthn_challenge.rb
+        app/services/passkey_default_name.rb
         app/services/credential_destruction.rb
         app/controllers/concerns/webauthn_request.rb
         app/controllers/users/passkey_sessions_controller.rb
@@ -308,6 +309,7 @@ module RapidRailsTemplate
         db/migrate/*_create_webauthn_challenges.rb
         test/models/passkey_credential_test.rb
         test/models/webauthn_challenge_test.rb
+        test/services/passkey_default_name_test.rb
         test/controllers/users/passkey_authentication_controller_test.rb
       ])
       if configuration["additional_login_methods"].include?("siwe")

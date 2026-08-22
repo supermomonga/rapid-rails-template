@@ -1609,6 +1609,38 @@ def install_passkey_runtime
 end
 
 def install_credential_destruction
+  create_file "app/controllers/concerns/authentication_credential_session.rb", <<~'RUBY', force: true
+    module AuthenticationCredentialSession
+      extend ActiveSupport::Concern
+
+      included do
+        T.bind(self, T.class_of(ActionController::Base))
+        helper_method :current_authentication_credential?
+      end
+
+      private
+        def remember_authentication_credential(credential)
+          T.bind(self, ActionController::Base)
+          session[:authentication_credential_type] = credential.class.name
+          session[:authentication_credential_id] = credential.id
+        end
+
+        def forget_authentication_credential
+          T.bind(self, ActionController::Base)
+          session.delete(:authentication_credential_type)
+          session.delete(:authentication_credential_id)
+        end
+
+        def current_authentication_credential?(credential)
+          T.bind(self, ActionController::Base)
+          session[:authentication_credential_type] == credential.class.name &&
+            session[:authentication_credential_id] == credential.id
+        end
+    end
+  RUBY
+  inject_into_class "app/controllers/application_controller.rb", "ApplicationController",
+    "  include AuthenticationCredentialSession\n\n"
+
   create_file "app/services/credential_destruction.rb", <<~'RUBY', force: true
     class CredentialDestruction
       extend T::Sig
@@ -1646,11 +1678,15 @@ def install_credential_destruction
       end
 
       def self.ensure_alternative!(user:, action:, target:)
-        return if action == "delete_account"
-        return if passkeys_for(user:, action:, target:).exists?
-        return if siwe_identities_for(user:, action:, target:).exists?
+        return if alternative?(user:, action:, target:)
 
         raise Error, "last authentication credential"
+      end
+
+      def self.alternative?(user:, action:, target:)
+        action == "delete_account" ||
+          passkeys_for(user:, action:, target:).exists? ||
+          siwe_identities_for(user:, action:, target:).exists?
       end
 
       def self.execute!(user:, action:, target:, authenticator:)
@@ -1708,6 +1744,7 @@ def install_passkey_controllers
   create_file "app/controllers/users/passkey_registrations_controller.rb", <<~'RUBY', force: true
     module Users
       class PasskeyRegistrationsController < DeviseController
+        include AuthenticationCredentialSession
         include WebauthnRequest
 
         layout "authentication"
@@ -1757,13 +1794,15 @@ def install_passkey_controllers
           end
 
           user = T.let(nil, T.nilable(User))
+          passkey = T.let(nil, T.nilable(PasskeyCredential))
           WebauthnChallenge.transaction do
             challenge.consume!
             user = User.create!(webauthn_id: challenge.webauthn_user_id)
-            T.must(user).passkey_credentials.create!(passkey_attributes(credential))
+            passkey = T.must(user).passkey_credentials.create!(**passkey_attributes(credential))
           end
           request.env["devise.skip_timeout"] = true
           sign_in(:user, T.must(user), event: :authentication)
+          remember_authentication_credential(T.must(passkey))
           flash[:credential_risk] = true if T.must(user).credential_loss_risk?
           render json: { redirect_url: after_sign_in_path_for(T.must(user)) }, status: :created
         rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
@@ -1790,6 +1829,7 @@ def install_passkey_controllers
   create_file "app/controllers/users/passkey_sessions_controller.rb", <<~'RUBY', force: true
     module Users
       class PasskeySessionsController < DeviseController
+        include AuthenticationCredentialSession
         include WebauthnRequest
 
         layout "authentication"
@@ -1835,6 +1875,7 @@ def install_passkey_controllers
 
           request.env["devise.skip_timeout"] = true
           sign_in(:user, user, event: :authentication)
+          remember_authentication_credential(stored)
           remember_me(user) if ActiveModel::Type::Boolean.new.cast(params[:remember_me])
           flash[:credential_risk] = true if user.credential_loss_risk?
           render json: { redirect_url: after_sign_in_path_for(user) }
@@ -1844,6 +1885,7 @@ def install_passkey_controllers
         end
 
         def destroy
+          forget_authentication_credential
           sign_out(:user)
           redirect_to root_path, status: :see_other
         end
@@ -2004,6 +2046,9 @@ def install_passkey_controllers
               action:,
               target_id: Integer(params.require(:target_id), exception: true)
             )
+            if action == "delete_siwe" && current_authentication_credential?(target)
+              raise CredentialDestruction::Error, "current authentication credential"
+            end
             CredentialDestruction.ensure_alternative!(user: account_user, action:, target:)
             [action, target]
           end
@@ -2115,6 +2160,7 @@ def install_passkey_views
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
         <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("passkeys.delete_with_wallet") %></button>
         <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-passkey-provider-picker" %>
       </div>
     ERB
   else
@@ -2767,6 +2813,23 @@ def install_siwe
     end
   RUBY
 
+  create_file "app/services/siwe_identity_default_name.rb", <<~'RUBY', force: true
+    class SiweIdentityDefaultName
+      extend T::Sig
+
+      FALLBACK_NAME = "Wallet"
+      MAX_LENGTH = 50
+
+      sig { params(provider_name: T.untyped).returns(String) }
+      def self.resolve(provider_name:)
+        return FALLBACK_NAME unless provider_name.is_a?(String)
+
+        name = provider_name.strip
+        name.present? && name.length <= MAX_LENGTH ? name : FALLBACK_NAME
+      end
+    end
+  RUBY
+
   create_file "app/models/siwe_challenge.rb", <<~'RUBY', force: true
     require "digest"
     require "securerandom"
@@ -2963,6 +3026,7 @@ def install_siwe
   create_file "app/controllers/users/siwe_sessions_controller.rb", <<~'RUBY', force: true
     module Users
       class SiweSessionsController < DeviseController
+        include AuthenticationCredentialSession
         extend T::Sig
 
         after_action :prevent_challenge_caching
@@ -3002,11 +3066,13 @@ def install_siwe
             session_binding:
           )
           challenge.consume!
-          user = SiweIdentity.includes(:user).find_by(address: message.address.downcase)&.user
-          return head :unauthorized unless user&.active_for_authentication?
+          identity = SiweIdentity.includes(:user).find_by(address: message.address.downcase)
+          user = identity&.user
+          return head :unauthorized unless identity && user&.active_for_authentication?
 
           request.env["devise.skip_timeout"] = true
           sign_in(:user, user, event: :authentication)
+          remember_authentication_credential(identity)
           remember_me(user) if ActiveModel::Type::Boolean.new.cast(params[:remember_me])
           flash[:credential_risk] = true if user.credential_loss_risk?
           render json: { redirect_url: after_sign_in_path_for(user) }
@@ -3029,6 +3095,7 @@ def install_siwe
   create_file "app/controllers/users/siwe_registrations_controller.rb", <<~'RUBY', force: true
     module Users
       class SiweRegistrationsController < DeviseController
+        include AuthenticationCredentialSession
         extend T::Sig
 
         after_action :prevent_challenge_caching
@@ -3062,15 +3129,20 @@ def install_siwe
             session_binding:
           )
           user = T.let(nil, T.nilable(User))
+          identity = T.let(nil, T.nilable(SiweIdentity))
           SiweChallenge.transaction do
             raise ActiveRecord::RecordNotUnique if SiweIdentity.exists?(address: message.address.downcase)
 
             challenge.consume!
             user = User.create!
-            T.must(user).siwe_identities.create!(name: "Wallet #1", address: message.address)
+            identity = T.must(user).siwe_identities.create!(
+              name: SiweIdentityDefaultName.resolve(provider_name: params[:wallet_provider_name]),
+              address: message.address
+            )
           end
           request.env["devise.skip_timeout"] = true
           sign_in(:user, T.must(user), event: :authentication)
+          remember_authentication_credential(T.must(identity))
           render json: { redirect_url: after_sign_in_path_for(T.must(user)) }, status: :created
         rescue ActionController::ParameterMissing, ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid,
           ActiveRecord::RecordNotUnique, SiweChallenge::VerificationError
@@ -3182,10 +3254,20 @@ def install_siwe
         sig { void }
         def index
           @siwe_identities = account_user.siwe_identities.order(:created_at)
+          @removable_siwe_identity_ids = @siwe_identities.filter_map do |identity|
+            next if current_authentication_credential?(identity)
+
+            identity.id if CredentialDestruction.alternative?(user: account_user, action: "delete_siwe", target: identity)
+          end
         end
 
         sig { void }
         def show
+          if current_authentication_credential?(@siwe_identity)
+            redirect_to account_siwe_identities_path, alert: t("siwe.identities.current_credential")
+            return
+          end
+
           CredentialDestruction.ensure_alternative!(user: account_user, action: "delete_siwe", target: @siwe_identity)
         rescue CredentialDestruction::Error
           redirect_to account_siwe_identities_path, alert: t("siwe.identities.last_credential")
@@ -3224,7 +3306,7 @@ def install_siwe
             )
             challenge.consume!
             identity = account_user.siwe_identities.create!(
-              name: "Wallet ##{account_user.siwe_identities.count + 1}",
+              name: SiweIdentityDefaultName.resolve(provider_name: params[:wallet_provider_name]),
               address: message.address
             )
           end
@@ -3267,8 +3349,11 @@ def install_siwe
   create_file "app/javascript/controllers/siwe_sign_in_controller.js", <<~'JAVASCRIPT', force: true
     import { Controller } from "@hotwired/stimulus"
 
+    const FALLBACK_NAME = "Wallet"
+    const MAX_NAME_LENGTH = 50
+
     export default class extends Controller {
-      static targets = ["error", "rememberMe"]
+      static targets = ["error", "providerDialog", "providerList", "rememberMe"]
       static values = {
         mode: String,
         challengeUrl: String,
@@ -3280,34 +3365,109 @@ def install_siwe
         verificationError: String
       }
 
+      connect() {
+        this.providers = new Map()
+        this.handleProviderAnnouncement = this.handleProviderAnnouncement.bind(this)
+        window.addEventListener("eip6963:announceProvider", this.handleProviderAnnouncement)
+        this.requestProviders()
+      }
+
+      disconnect() {
+        window.removeEventListener("eip6963:announceProvider", this.handleProviderAnnouncement)
+      }
+
       async authenticate() {
         this.hideError()
 
         try {
-          if (!window.ethereum) throw new Error(this.walletMissingValue)
-          const [address] = await window.ethereum.request({ method: "eth_requestAccounts" })
-          const chainIdHex = await window.ethereum.request({ method: "eth_chainId" })
-          const context = {}
-          if (this.hasTargetIdValue) context.target_id = this.targetIdValue
-          if (this.hasDestructionActionValue) context.destruction_action = this.destructionActionValue
-          if (this.hasRememberMeTarget) context.remember_me = this.rememberMeTarget.checked
-          const challengePayload = { address, chain_id: Number.parseInt(chainIdHex, 16), ...context }
+          this.requestProviders()
+          const providers = Array.from(this.providers.values())
+          if (providers.length > 1) {
+            this.renderProviderChoices(providers)
+            this.providerDialogTarget.showModal()
+            return
+          }
 
-          const challengeResponse = await this.post(this.challengeUrlValue, challengePayload)
-          if (!challengeResponse.ok) throw new Error(this.challengeErrorValue)
-          const challenge = await challengeResponse.json()
-          const signature = await window.ethereum.request({
-            method: "personal_sign",
-            params: [challenge.message, address]
-          })
-          const verifyPayload = { challenge_token: challenge.challenge_token, signature, ...context }
-
-          const verificationResponse = await this.post(this.verifyUrlValue, verifyPayload)
-          if (!verificationResponse.ok) throw new Error(this.verificationErrorValue)
-          window.location.assign((await verificationResponse.json()).redirect_url)
+          const selected = providers[0] || this.legacyProvider()
+          if (!selected) throw new Error(this.walletMissingValue)
+          await this.authenticateWith(selected)
         } catch (error) {
           this.showError(error.message)
         }
+      }
+
+      async selectProvider(event) {
+        this.hideError()
+
+        try {
+          const selected = this.providers.get(event.params.providerUuid)
+          if (!selected) throw new Error(this.walletMissingValue)
+          this.providerDialogTarget.close()
+          await this.authenticateWith(selected)
+        } catch (error) {
+          this.showError(error.message)
+        }
+      }
+
+      handleProviderAnnouncement(event) {
+        const { info, provider } = event.detail || {}
+        if (typeof info?.uuid !== "string" || typeof provider?.request !== "function") return
+
+        this.providers.set(info.uuid, { info, provider })
+      }
+
+      requestProviders() {
+        window.dispatchEvent(new Event("eip6963:requestProvider"))
+      }
+
+      legacyProvider() {
+        return typeof window.ethereum?.request === "function" ? { info: null, provider: window.ethereum } : null
+      }
+
+      renderProviderChoices(providers) {
+        this.providerListTarget.replaceChildren(...providers.map(({ info }) => {
+          const item = document.createElement("li")
+          const button = document.createElement("button")
+          button.type = "button"
+          button.textContent = this.providerName(info)
+          button.dataset.action = "siwe-sign-in#selectProvider"
+          button.dataset.siweSignInProviderUuidParam = info.uuid
+          item.append(button)
+          return item
+        }))
+      }
+
+      providerName(info) {
+        if (typeof info?.name !== "string") return FALLBACK_NAME
+
+        const name = info.name.trim()
+        return name && Array.from(name).length <= MAX_NAME_LENGTH ? name : FALLBACK_NAME
+      }
+
+      async authenticateWith(selected) {
+        const [address] = await selected.provider.request({ method: "eth_requestAccounts" })
+        const chainIdHex = await selected.provider.request({ method: "eth_chainId" })
+        const context = {}
+        if (this.hasTargetIdValue) context.target_id = this.targetIdValue
+        if (this.hasDestructionActionValue) context.destruction_action = this.destructionActionValue
+        if (this.hasRememberMeTarget) context.remember_me = this.rememberMeTarget.checked
+        const challengePayload = { address, chain_id: Number.parseInt(chainIdHex, 16), ...context }
+
+        const challengeResponse = await this.post(this.challengeUrlValue, challengePayload)
+        if (!challengeResponse.ok) throw new Error(this.challengeErrorValue)
+        const challenge = await challengeResponse.json()
+        const signature = await selected.provider.request({
+          method: "personal_sign",
+          params: [challenge.message, address]
+        })
+        const verifyPayload = { challenge_token: challenge.challenge_token, signature, ...context }
+        if (["signup", "link"].includes(this.modeValue) && selected.info) {
+          verifyPayload.wallet_provider_name = this.providerName(selected.info)
+        }
+
+        const verificationResponse = await this.post(this.verifyUrlValue, verifyPayload)
+        if (!verificationResponse.ok) throw new Error(this.verificationErrorValue)
+        window.location.assign((await verificationResponse.json()).redirect_url)
       }
 
       post(url, body) {
@@ -3331,6 +3491,18 @@ def install_siwe
     }
   JAVASCRIPT
 
+  create_file "app/views/shared/_siwe_provider_picker.html.erb", <<~'ERB', force: true
+    <%= with_modal(
+      id: modal_id,
+      title: t("siwe.provider_picker.title"),
+      description: t("siwe.provider_picker.description"),
+      close_label: t("siwe.provider_picker.close"),
+      dialog_data: { siwe_sign_in_target: "providerDialog" }
+    ) do %>
+      <ul class="menu mt-4 w-full" data-siwe-sign-in-target="providerList"></ul>
+    <% end %>
+  ERB
+
   create_file "app/views/account/siwe_identities/index.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("siwe.identities.title") %>
     <% content_for :page_actions_primary do %>
@@ -3347,10 +3519,17 @@ def install_siwe
                 <div class="list-col-grow">
                   <p class="font-semibold"><%= identity.name %></p>
                   <p class="break-all font-mono text-sm text-base-content/70"><%= identity.address %></p>
+                  <% if current_authentication_credential?(identity) %>
+                    <span class="badge badge-primary badge-outline"><%= t("siwe.identities.current") %></span>
+                  <% elsif !@removable_siwe_identity_ids.include?(identity.id) %>
+                    <span class="badge badge-outline"><%= t("siwe.identities.last_credential_label") %></span>
+                  <% end %>
                 </div>
                 <div class="flex flex-wrap justify-end gap-2">
                   <%= link_to t("common.edit"), edit_account_siwe_identity_path(identity), class: "btn btn-rapid" %>
-                  <%= link_to t("siwe.identities.delete"), account_siwe_identity_path(identity), class: "btn btn-error btn-rapid" %>
+                  <% if @removable_siwe_identity_ids.include?(identity.id) %>
+                    <%= link_to t("siwe.identities.delete"), account_siwe_identity_path(identity), class: "btn btn-error btn-rapid" %>
+                  <% end %>
                 </div>
               </li>
             <% end %>
@@ -3378,6 +3557,7 @@ def install_siwe
         <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
         <button type="button" class="btn btn-primary btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.connect") %></button>
       </div>
+      <%= render "shared/siwe_provider_picker", modal_id: "siwe-link-provider-picker" %>
     </section>
   ERB
 
@@ -3436,6 +3616,7 @@ def install_siwe
                data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
             <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.delete_with_wallet") %></button>
             <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+            <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-identity-provider-picker" %>
           </div>
         <% end %>
       </div>
@@ -3448,7 +3629,8 @@ def install_siwe
       "siwe" => {
         "sign_in" => { "title" => "Ethereumでログイン", "description" => "登録済みのEOAウォレットで署名してログインします。", "connect" => "ウォレットでログイン" },
         "account_settings" => { "basic" => "基本設定" },
-        "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。ウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "ウォレット名", "connect" => "ウォレットを接続", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete" => "解除", "delete_with_passkey" => "Passkeyで解除", "delete_with_wallet" => "別のウォレットで解除", "last_credential" => "最後のログイン方法は解除できません。", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
+        "provider_picker" => { "title" => "ウォレットを選択", "description" => "接続に使用するウォレットを選択してください。", "close" => "閉じる" },
+        "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。ウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "ウォレット名", "connect" => "ウォレットを接続", "current" => "現在使用中", "last_credential_label" => "最後のログイン方法", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete" => "解除", "delete_with_passkey" => "Passkeyで解除", "delete_with_wallet" => "別のウォレットで解除", "current_credential" => "現在のログインに使用しているウォレットは解除できません。", "last_credential" => "最後のログイン方法は解除できません。", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
         "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。" }
       }
     },
@@ -3456,7 +3638,8 @@ def install_siwe
       "siwe" => {
         "sign_in" => { "title" => "Sign in with Ethereum", "description" => "Sign in with an EOA wallet already linked to your account.", "connect" => "Sign in with wallet" },
         "account_settings" => { "basic" => "Basic settings" },
-        "identities" => { "title" => "EVM wallet login", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add wallet", "new_title" => "Add EVM wallet", "new_description" => "Sign with the EOA wallet you want to connect. Its name will be assigned automatically after registration.", "edit_title" => "Edit EVM wallet login", "name" => "Wallet name", "connect" => "Connect wallet", "delete_title" => "Unlink EVM wallet login", "delete_description" => "Reauthenticate with a different sign-in method before unlinking this wallet.", "delete" => "Unlink", "delete_with_passkey" => "Unlink with passkey", "delete_with_wallet" => "Unlink with another wallet", "last_credential" => "You cannot remove your last sign-in method.", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
+        "provider_picker" => { "title" => "Choose a wallet", "description" => "Choose the wallet to use for this connection.", "close" => "Close" },
+        "identities" => { "title" => "EVM wallet login", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add wallet", "new_title" => "Add EVM wallet", "new_description" => "Sign with the EOA wallet you want to connect. Its name will be assigned automatically after registration.", "edit_title" => "Edit EVM wallet login", "name" => "Wallet name", "connect" => "Connect wallet", "current" => "Currently in use", "last_credential_label" => "Last sign-in method", "delete_title" => "Unlink EVM wallet login", "delete_description" => "Reauthenticate with a different sign-in method before unlinking this wallet.", "delete" => "Unlink", "delete_with_passkey" => "Unlink with passkey", "delete_with_wallet" => "Unlink with another wallet", "current_credential" => "You cannot unlink the wallet used for the current sign-in session.", "last_credential" => "You cannot remove your last sign-in method.", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
         "errors" => { "wallet_missing" => "No EOA wallet was found.", "challenge" => "Could not create an authentication request.", "verification" => "Could not verify the signature." }
       }
     }
@@ -3521,6 +3704,31 @@ def install_siwe
         )
 
         assert_not identity.update(address: "0x1111111111111111111111111111111111111111")
+      end
+    end
+  RUBY
+
+  create_file "test/services/siwe_identity_default_name_test.rb", <<~'RUBY', force: true
+    require "test_helper"
+
+    class SiweIdentityDefaultNameTest < ActiveSupport::TestCase
+      test "uses a trimmed EIP-6963 provider name" do
+        assert_equal "MetaMask", SiweIdentityDefaultName.resolve(provider_name: "  MetaMask  ")
+      end
+
+      test "uses Wallet for missing invalid or oversized provider names" do
+        [nil, "", "   ", { name: "MetaMask" }, "a" * 51].each do |provider_name|
+          assert_equal "Wallet", SiweIdentityDefaultName.resolve(provider_name:)
+        end
+      end
+
+      test "always returns a valid SiweIdentity name" do
+        ["MetaMask", nil, "a" * 51].each do |provider_name|
+          name = SiweIdentityDefaultName.resolve(provider_name:)
+
+          assert_predicate name, :present?
+          assert_operator name.length, :<=, 50
+        end
       end
     end
   RUBY
@@ -3699,7 +3907,7 @@ def install_siwe
     class Account::SiweIdentitiesControllerTest < ActionDispatch::IntegrationTest
       include Devise::Test::IntegrationHelpers
 
-      test "links wallets without a password or name and assigns count-based names" do
+      test "links wallets with automatic provider names and allows duplicates" do
         sign_in users(:one)
         keys = [Eth::Key.new, Eth::Key.new, Eth::Key.new]
 
@@ -3710,18 +3918,27 @@ def install_siwe
           challenge = response.parsed_body
 
           post account_siwe_identities_url,
-            params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
+            params: {
+              challenge_token: challenge.fetch("challenge_token"),
+              signature: key.personal_sign(challenge.fetch("message")),
+              wallet_provider_name: "  MetaMask  ",
+              name: "Injected name"
+            }, as: :json
           assert_response :created
         end
-        assert_equal ["Wallet #1", "Wallet #2"], users(:one).siwe_identities.order(:created_at).pluck(:name)
+        assert_equal ["MetaMask", "MetaMask"], users(:one).siwe_identities.order(:created_at).pluck(:name)
 
         key = keys.last
         post challenge_account_siwe_identities_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
         challenge = response.parsed_body
         post account_siwe_identities_url,
-          params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
+          params: {
+            challenge_token: challenge.fetch("challenge_token"),
+            signature: key.personal_sign(challenge.fetch("message")),
+            name: "Injected name"
+          }, as: :json
         assert_response :created
-        assert_equal ["Wallet #1", "Wallet #2", "Wallet #3"], users(:one).siwe_identities.order(:created_at).pluck(:name)
+        assert_equal ["MetaMask", "MetaMask", "Wallet"], users(:one).siwe_identities.order(:created_at).pluck(:name)
       end
 
       test "renders target-excluding reauthentication instead of a password field" do
@@ -3763,6 +3980,8 @@ def install_siwe
         get new_account_siwe_identity_url
         assert_response :success
         assert_select '[data-controller="siwe-sign-in"][data-siwe-sign-in-mode-value="link"]', count: 1
+        assert_select 'dialog[data-siwe-sign-in-target="providerDialog"]', count: 1
+        assert_select 'dialog ul.menu[data-siwe-sign-in-target="providerList"]', count: 1
         assert_select 'input[name="current_password"], input[name="name"]', count: 0
         assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
 
@@ -3877,6 +4096,11 @@ def install_siwe
         identity = user.siwe_identities.create!(name: "Only wallet", address: key.address.to_s)
         sign_in user
 
+        get account_siwe_identities_url
+        assert_response :success
+        assert_select ".badge", text: I18n.t("siwe.identities.last_credential_label"), count: 1
+        assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 0
+
         post account_siwe_credential_destruction_challenge_url,
           params: {
             address: key.address.to_s,
@@ -3924,16 +4148,25 @@ def install_siwe
           post user_siwe_registration_url,
             params: {
               challenge_token: challenge.fetch("challenge_token"),
-              signature: key.personal_sign(challenge.fetch("message"))
+              signature: key.personal_sign(challenge.fetch("message")),
+              wallet_provider_name: "MetaMask",
+              name: "Injected name"
             }, as: :json
         end
         assert_response :created
-        assert_equal key.address.to_s.downcase, T.must(User.order(:id).last).siwe_identities.sole.address
+        identity = T.must(User.order(:id).last).siwe_identities.sole
+        assert_equal key.address.to_s.downcase, identity.address
+        assert_equal "MetaMask", identity.name
+        get account_siwe_identities_url
+        assert_response :success
+        assert_select ".badge", text: I18n.t("siwe.identities.current"), count: 1
+        assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 0
       end
 
       test "signs in the existing user without creating another user" do
         key = Eth::Key.new
-        users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
+        identity = users(:one).siwe_identities.create!(name: "Main", address: key.address.to_s)
+        other = users(:one).siwe_identities.create!(name: "Other", address: Eth::Key.new.address.to_s)
 
         post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
         assert_response :success
@@ -3944,8 +4177,19 @@ def install_siwe
             params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
         end
         assert_response :success
-        get account_url
+        get account_siwe_identities_url
         assert_response :success
+        assert_select ".badge", text: I18n.t("siwe.identities.current"), count: 1
+        assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 0
+        assert_select "a[href=?]", account_siwe_identity_path(other), text: I18n.t("siwe.identities.delete"), count: 1
+
+        get account_siwe_identity_url(identity)
+        assert_redirected_to account_siwe_identities_url
+        assert_equal I18n.t("siwe.identities.current_credential"), flash[:alert]
+
+        post account_passkey_credential_destruction_options_url,
+          params: { destruction_action: "delete_siwe", target_id: identity.id }, as: :json
+        assert_response :unprocessable_content
       end
 
       test "does not create a user for an unlinked wallet" do
@@ -8009,6 +8253,7 @@ def configure_devise_views
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
         <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_in_with_wallet") %></button>
         <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <%= render "shared/siwe_provider_picker", modal_id: "siwe-login-provider-picker" %>
       </div>
     ERB
   else
@@ -8026,6 +8271,7 @@ def configure_devise_views
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
         <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_up_with_wallet") %></button>
         <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <%= render "shared/siwe_provider_picker", modal_id: "siwe-signup-provider-picker" %>
       </div>
     ERB
   else
@@ -9171,6 +9417,7 @@ def configure_default_views
              data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
           <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("accounts.delete.with_wallet") %></button>
           <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+          <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-account-provider-picker" %>
         </div>
       <% end %>
     ERB
@@ -12239,10 +12486,35 @@ def configure_evidence_capture
             assert_no_selector 'input[name="name"], input[name="current_password"]'
             assert_account_settings_tabs_geometry
 
+            page.execute_script(<<~JAVASCRIPT)
+              for (const [uuid, name, rdns] of [
+                ["evidence-metamask", "MetaMask", "io.metamask"],
+                ["evidence-rabby", "Rabby Wallet", "io.rabby"]
+              ]) {
+                window.dispatchEvent(new CustomEvent("eip6963:announceProvider", {
+                  detail: {
+                    info: { uuid, name, rdns, icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" },
+                    provider: { request: async () => { throw new Error("Evidence provider must not connect") } }
+                  }
+                }))
+              }
+            JAVASCRIPT
+            click_button translate("siwe.identities.connect")
+            assert_selector "dialog#siwe-link-provider-picker[open]"
+            assert_selector 'dialog#siwe-link-provider-picker [data-siwe-sign-in-target="providerList"] button',
+              text: "MetaMask", count: 1
+            assert_selector 'dialog#siwe-link-provider-picker [data-siwe-sign-in-target="providerList"] button',
+              text: "Rabby Wallet", count: 1
+            assert_no_selector "dialog#siwe-link-provider-picker img"
+            capture_current_page("siwe-provider-picker", "ウォレット選択", viewport_name)
+            page.execute_script('document.querySelector("dialog#siwe-link-provider-picker").close()')
+            assert_no_selector "dialog#siwe-link-provider-picker[open]"
+
             main_key = Eth::Key.new(priv: PRIVATE_KEY)
             regular_key = Eth::Key.new(priv: REGULAR_PRIVATE_KEY)
-            main_identity = @user.siwe_identities.create!(name: "Wallet #1", address: main_key.address.to_s)
-            @user.siwe_identities.create!(name: "Wallet #2", address: regular_key.address.to_s)
+            main_identity = @user.siwe_identities.create!(name: "MetaMask", address: main_key.address.to_s)
+            regular_identity = @user.siwe_identities.create!(name: "Rabby Wallet", address: regular_key.address.to_s)
+            authenticate_with_siwe(main_key, viewport)
             capture_page(
               "siwe-identities-multiple",
               translate("siwe.identities.title"),
@@ -12251,6 +12523,9 @@ def configure_evidence_capture
               viewport_name
             )
             assert_account_settings_tabs_geometry
+            assert_selector ".badge", text: translate("siwe.identities.current"), count: 1
+            assert_no_link translate("siwe.identities.delete"), href: account_siwe_identity_path(main_identity)
+            assert_link translate("siwe.identities.delete"), href: account_siwe_identity_path(regular_identity)
 
             capture_page(
               "siwe-identity-edit",
@@ -12264,7 +12539,7 @@ def configure_evidence_capture
             capture_page(
               "siwe-identity-unlink",
               translate("siwe.identities.delete_title"),
-              account_siwe_identity_path(main_identity),
+              account_siwe_identity_path(regular_identity),
               translate("siwe.identities.delete_title"),
               viewport_name
             )
@@ -12282,7 +12557,6 @@ def configure_evidence_capture
               viewport_name
             )
             assert_account_settings_tabs_geometry
-            authenticate_with_siwe(main_key, viewport)
             capture_page(
               "siwe-login-existing-user",
               translate("siwe.sign_in.title"),

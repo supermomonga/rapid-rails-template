@@ -184,11 +184,13 @@ Maintenance TasksはActive Jobを介して実行するため、実効値が`acti
 - 表示条件: 常に表示する
 - 影響する処理: Deviseの`:siweable` module、`siwe-rb`、SIWE credential・challenge・route・管理画面
 
+SIWEのsignup・loginでsessionを確立した場合は、検証済みの`SiweIdentity`を認証元としてsessionへ記録します。ウォレット一覧ではそのidentityを「現在使用中」と表示して解除導線を出さず、直接の解除要求も拒否します。最後のログイン方法にも解除導線を出しません。Passkeyで確立したsessionでは現在使用中のウォレットは存在しません。
+
 Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`、`browser ~> 6.2`によるPasskey登録・ログインはすべての構成で生成します。`User`は内部識別子`id`、ランダムで変更不可の`webauthn_id`、`remember_created_at`を持ち、`login_id`、`encrypted_password`、パスワード画面は生成しません。Passkeyはdiscoverable credential、`residentKey: required`、`userVerification: required`、`attestation: none`で登録し、ユーザーID入力なしでログインします。
 
 `PasskeyCredential`はUserごとに複数登録でき、credential IDを全Userで一意にします。登録画面に名称入力は設けず、serverが既知AAGUIDの提供元名、登録User-AgentのOS名、`Passkey`の順で初期名を決定します。同じ名前のcredentialを許可し、登録後のeditだけが名称を変更します。AAGUID一覧は`passkeydeveloper/passkey-authenticator-aaguids`のcommit `6eb68689ae67a5f261eebae490f34633063d9da0`から名前だけを固定し、実行時取得しません。AAGUIDとUser-Agentは化粧的な表示名にだけ使い、認証・認可・認証器制限には使いません。登録時のBackup Eligibilityは変更不可で、認証時にも不変性を検証します。Backup State、sign count、last usedは認証成功時だけ更新し、`BE=0/BS=1`はdatabase・model・認証境界で拒否します。全資格情報が`BS=0`のPasskey 1件だけならログイン後に紛失リスク警告を表示します。
 
-`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。SIWEは新規登録とログインを別purposeにし、ログインは既存identityだけを受け付けます。名前付きEOA walletをUserごとに複数登録でき、addressは全Userで一意かつ変更不可です。
+`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。SIWEは新規登録とログインを別purposeにし、ログインは既存identityだけを受け付けます。名前付きEOA walletをUserごとに複数登録でき、addressは全Userで一意かつ変更不可です。全SIWE操作でEIP-6963 Providerを収集し、1件なら直接、複数なら選択modalを経て同じProviderでaddress・chain ID取得と署名を行います。登録時はProviderの自己申告名を初期名にし、EIP-6963非対応の`window.ethereum`と不正なProvider名は`Wallet`にします。Provider名は表示専用であり、登録後の編集画面で変更できます。
 
 WebAuthnとSIWEのchallengeはdatabaseへtoken digest、purpose、User、browser session、5分の期限、消費時刻、必要に応じて削除対象を保存します。発行・検証はPOST＋CSRF、`Cache-Control: no-store`、IP＋sessionごとのrate limitで保護します。Passkey・walletの解除は削除対象自身を候補から除外した別資格情報、アカウント削除は任意の現存資格情報による操作単位の再認証を要求します。最後の資格情報、別Userの対象、期限切れ・再利用challengeは拒否します。
 

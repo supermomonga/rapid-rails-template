@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `f04383a889c3e10042d5c785151c66a03f1d3e8dbc64702f793719ab285857f7`
-- Base commit: `b50ef6474f5e3cc4b0b058b6a044227342a37469`
+- Source fingerprint: `57492d396cfa931437a608b342b2938a41aa1ef83f181dd7494a601425babf2e`
+- Base commit: `4abef9fd4cc55ed2b56f38305a19cf6b2708ed8a`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -301,6 +301,12 @@
 |Desktop|Mobile|
 |---|---|
 |![EVMウォレットを登録 (desktop)](siwe-identity-new--desktop.png)|![EVMウォレットを登録 (mobile)](siwe-identity-new--mobile.png)|
+
+## ウォレット選択
+
+|Desktop|Mobile|
+|---|---|
+|![ウォレット選択 (desktop)](siwe-provider-picker--desktop.png)|![ウォレット選択 (mobile)](siwe-provider-picker--mobile.png)|
 
 ## EVMウォレットログインを編集
 

@@ -282,6 +282,7 @@ module RapidRailsTemplate
         app/models/webauthn_challenge.rb
         app/services/passkey_default_name.rb
         app/services/credential_destruction.rb
+        app/controllers/concerns/authentication_credential_session.rb
         app/controllers/concerns/webauthn_request.rb
         app/controllers/users/passkey_sessions_controller.rb
         app/controllers/users/passkey_registrations_controller.rb
@@ -316,12 +317,14 @@ module RapidRailsTemplate
         result.concat(%w[
           app/models/siwe_identity.rb
           app/models/siwe_challenge.rb
+          app/services/siwe_identity_default_name.rb
           lib/devise/models/siweable.rb
           lib/devise/siweable.rb
           app/controllers/users/siwe_sessions_controller.rb
           app/controllers/users/siwe_registrations_controller.rb
           app/controllers/account/siwe_identities_controller.rb
           app/javascript/controllers/siwe_sign_in_controller.js
+          app/views/shared/_siwe_provider_picker.html.erb
           app/views/account/siwe_identities/index.html.erb
           app/views/account/siwe_identities/new.html.erb
           app/views/account/siwe_identities/show.html.erb
@@ -333,6 +336,7 @@ module RapidRailsTemplate
           db/migrate/*_create_siwe_challenges.rb
           test/models/siwe_identity_test.rb
           test/models/siwe_challenge_test.rb
+          test/services/siwe_identity_default_name_test.rb
           test/controllers/users/siwe_sessions_controller_test.rb
           test/controllers/account/siwe_identities_controller_test.rb
         ])

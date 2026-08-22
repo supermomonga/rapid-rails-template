@@ -217,7 +217,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/shared/_footer.html.erb" => %w[footer footer-vertical footer-title link link-hover],
       "app/views/home/index.html.erb" => %w[hero hero-content badge btn card-rapid card-body card-title],
       "app/views/accounts/show.html.erb" => %w[card-rapid card-body card-title btn],
-      "app/views/account/siwe_identities/index.html.erb" => %w[list list-row btn alert],
+      "app/views/account/siwe_identities/index.html.erb" => %w[list list-row badge btn alert],
       "app/views/account/siwe_identities/new.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/show.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/edit.html.erb" => %w[fieldset fieldset-legend input btn alert],
@@ -1573,6 +1573,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'SCENARIO_SET = "full"'
     assert_includes evidence, "capture_common_scenarios"
     assert_includes evidence, 'capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")'
+    assert_includes evidence, 'capture_current_page("siwe-provider-picker", "ウォレット選択", viewport_name)'
+    assert_includes evidence, 'text: "MetaMask", count: 1'
+    assert_includes evidence, 'text: "Rabby Wallet", count: 1'
     assert_includes evidence, "capture_avatar_scenarios if AVATAR"
     assert_includes evidence, "def capture_avatar_page"
     assert_includes evidence, "perform_enqueued_jobs(only: ActiveStorage::TransformJob)"
@@ -2060,12 +2063,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes registrations, "purpose: \"signup\""
     assert_includes registrations, "User.create!"
     assert_includes registrations, "siwe_identities.create!"
+    assert_includes registrations, "SiweIdentityDefaultName.resolve(provider_name: params[:wallet_provider_name])"
     assert_includes registrations, "SiweIdentity.exists?"
   end
   def test_siwe_credentials_and_challenges_are_target_bound_and_replay_safe
     identity = generated_file_source("app/models/siwe_identity.rb")
     challenge = generated_file_source("app/models/siwe_challenge.rb")
     controller = generated_file_source("app/controllers/account/siwe_identities_controller.rb")
+    default_name = generated_file_source("app/services/siwe_identity_default_name.rb")
     destruction = generated_file_source("app/controllers/account/credential_destructions_controller.rb")
     initializer = generated_file_source("config/initializers/devise_siweable.rb")
 
@@ -2080,7 +2085,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes challenge, "strict: true"
     assert_includes challenge, "update_all(consumed_at: Time.current)"
     assert_includes controller, "account_user.siwe_identities.find(params.expect(:id))"
-    assert_includes controller, 'name: "Wallet ##{account_user.siwe_identities.count + 1}"'
+    assert_includes controller, "SiweIdentityDefaultName.resolve(provider_name: params[:wallet_provider_name])"
+    refute_includes controller, "siwe_identities.count"
+    assert_includes default_name, 'FALLBACK_NAME = "Wallet"'
+    assert_includes default_name, "name.present? && name.length <= MAX_LENGTH"
     refute_includes controller, "valid_password?"
     assert_includes destruction, 'purpose: "destroy"'
     assert_includes destruction, "action:"
@@ -2088,6 +2096,62 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes initializer, "%i[challenge_token signature]"
     refute_includes challenge, "request.host"
     refute_match(/\bparams(?:\.|\[)/, challenge)
+  end
+
+  def test_authentication_session_marks_the_current_wallet_and_blocks_its_removal
+    session_concern = generated_file_source("app/controllers/concerns/authentication_credential_session.rb")
+    passkey_sessions = generated_file_source("app/controllers/users/passkey_sessions_controller.rb")
+    passkey_registrations = generated_file_source("app/controllers/users/passkey_registrations_controller.rb")
+    siwe_sessions = generated_file_source("app/controllers/users/siwe_sessions_controller.rb")
+    siwe_registrations = generated_file_source("app/controllers/users/siwe_registrations_controller.rb")
+    identities = generated_file_source("app/controllers/account/siwe_identities_controller.rb")
+    identity_index = generated_file_source("app/views/account/siwe_identities/index.html.erb")
+    destruction = generated_file_source("app/controllers/account/credential_destructions_controller.rb")
+
+    assert_includes @source, "include AuthenticationCredentialSession"
+    assert_includes session_concern, "helper_method :current_authentication_credential?"
+    assert_includes session_concern, "session[:authentication_credential_type] = credential.class.name"
+    assert_includes session_concern, "session[:authentication_credential_id] = credential.id"
+    assert_includes session_concern, "def forget_authentication_credential"
+    [passkey_sessions, passkey_registrations, siwe_sessions, siwe_registrations].each do |controller|
+      assert_includes controller, "remember_authentication_credential"
+    end
+    assert_includes passkey_sessions, "forget_authentication_credential"
+    assert_includes siwe_sessions, "identity = SiweIdentity.includes(:user).find_by"
+    assert_includes identities, "@removable_siwe_identity_ids"
+    assert_includes identities, "current_authentication_credential?(@siwe_identity)"
+    assert_includes identity_index, "current_authentication_credential?(identity)"
+    assert_includes identity_index, 't("siwe.identities.current")'
+    assert_includes identity_index, "@removable_siwe_identity_ids.include?(identity.id)"
+    assert_includes destruction, 'raise CredentialDestruction::Error, "current authentication credential"'
+  end
+
+  def test_siwe_uses_eip_6963_provider_selection_and_legacy_fallback
+    javascript = generated_file_source("app/javascript/controllers/siwe_sign_in_controller.js")
+    picker = generated_file_source("app/views/shared/_siwe_provider_picker.html.erb")
+
+    assert_includes javascript, 'window.addEventListener("eip6963:announceProvider"'
+    assert_includes javascript, 'window.dispatchEvent(new Event("eip6963:requestProvider"))'
+    assert_includes javascript, "if (providers.length > 1)"
+    assert_includes javascript, "this.providerDialogTarget.showModal()"
+    assert_includes javascript, "providers[0] || this.legacyProvider()"
+    assert_includes javascript, "selected.provider.request"
+    assert_includes javascript, "verifyPayload.wallet_provider_name = this.providerName(selected.info)"
+    assert_includes javascript, '["signup", "link"].includes(this.modeValue)'
+    refute_includes javascript, "window.ethereum.request({"
+    assert_includes picker, "with_modal("
+    assert_includes picker, 'class="menu mt-4 w-full"'
+    assert_includes picker, 'siwe_sign_in_target: "providerDialog"'
+    refute_includes javascript, "info.icon"
+    refute_includes javascript, "info.rdns"
+    %w[
+      siwe-login-provider-picker
+      siwe-signup-provider-picker
+      siwe-link-provider-picker
+      siwe-delete-passkey-provider-picker
+      siwe-delete-identity-provider-picker
+      siwe-delete-account-provider-picker
+    ].each { |modal_id| assert_includes @source, modal_id }
   end
   def test_common_features_do_not_depend_on_legacy_authentication_identifiers
     refute_includes @source, "account_authentication"

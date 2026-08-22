@@ -88,7 +88,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
 - Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。
 - ブラウザ側はWebAuthn Level 3の`parseCreationOptionsFromJSON`、`parseRequestOptionsFromJSON`、credentialの`toJSON`を使用する。未対応ブラウザは利用不可を明示し、独自変換のfallbackは追加しない。
-- SIWE選択時だけsignup・login画面へ明示的な署名buttonを追加する。「アカウント設定」の`tabs-lift`でPasskeys、EVMウォレット、アカウント削除を切り替え、解除・削除は操作ごとの別資格情報による再認証画面へ分離する。
+- SIWE選択時だけsignup・login画面へ明示的な署名buttonを追加する。全SIWE操作でEIP-6963 Providerを収集し、複数Providerの場合は共通`with_modal`による名前一覧から選択したProviderだけを接続・署名に使用する。EIP-6963非対応時だけ`window.ethereum`を使用する。「アカウント設定」の`tabs-lift`でPasskeys、EVMウォレット、アカウント削除を切り替え、解除・削除は操作ごとの別資格情報による再認証画面へ分離する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
 - ページ全体に作用する追加、単一controlの簡易絞り込み、一括操作はViewから`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ渡す。primaryは基本操作、secondaryは簡易絞り込みやapplication/server選択などの補助操作とする。複数fieldまたは複数行になる複雑な検索formはpage actionsへ入れず、content areaの`card-rapid`内へ配置する。個別model・table row・formに属する編集、削除、pause、run、保存、戻る操作は移動しない。共通rendererは未指定slotを出力せず、複数回設定されたfragmentを各列内で縦に並べる。640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列とする。
@@ -364,10 +364,10 @@ Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queu
 
 ## Devise、Passkey、追加SIWEログイン
 
-Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`、`browser ~> 6.2`は常設し、Userは標準の整数`id`、ランダムで一意かつ変更不可の`webauthn_id`、`remember_created_at`を持ちます。`:database_authenticatable`、`:registerable`、`login_id`、`encrypted_password`、password recoveryは生成しません。`:passkey_authenticatable`と`:rememberable`を使い、検証成功後はDeviseの公開`sign_in` APIでsessionを確立します。
+Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`、`browser ~> 6.2`は常設し、Userは標準の整数`id`、ランダムで一意かつ変更不可の`webauthn_id`、`remember_created_at`を持ちます。`:database_authenticatable`、`:registerable`、`login_id`、`encrypted_password`、password recoveryは生成しません。`:passkey_authenticatable`と`:rememberable`を使い、検証成功後はDeviseの公開`sign_in` APIでsessionを確立するとともに、検証済みcredentialの型とIDを認証元としてsessionへ記録します。
 
 Passkeyはdiscoverable credentialとして複数登録でき、platformとcross-platform authenticatorの両方を許可します。登録時に名称入力は受け付けず、既知AAGUIDを固定snapshotの提供元名へ変換し、未知またはzero AAGUIDでは`browser`で登録User-AgentのOSを判定して初期名にします。OSも不明なら`Passkey`とし、同名を許可します。AAGUIDとUser-Agentは表示名専用であり、`attestation: none`を維持してセキュリティ判断には使いません。名称は登録後のeditでのみ変更できます。credential IDは全Userで一意、BEは登録後不変、`BE=0/BS=1`は全境界で拒否し、BS・sign count・last usedは認証成功時だけ更新します。全資格情報が`BS=0`のPasskey 1件だけなら、登録・ログイン成功後に追加資格情報へのwarningを1回表示します。
 
 `additional_login_methods`へ`siwe`を選択した場合だけ`siwe-rb` 0.2.xと`:siweable`を追加します。`:siweable`はDeviseの公開module登録契約に従ってmodel、controller、routeを登録し、Warden strategyは追加しません。mapper拡張をroutes評価前に読み込み、成功時は紐付いた既存Userの`active_for_authentication?`を確認してDeviseの`sign_in`を呼びます。
 
-`SiweIdentity`はUserごとに複数の名前付きEOA addressを保持します。signupは署名検証後にUserと最初のidentityをtransactionで作成し、loginは既存identityだけを受け付けます。名称変更はedit、解除は別資格情報による対象外再認証を行うshowへ分離します。WebAuthn／SIWE challengeはpurpose、User、browser session、5分の期限、消費時刻、破壊操作では削除対象へbindingし、transaction内で一度だけ消費します。最後の資格情報、対象自身による再認証、別User、期限切れ、replayを拒否します。RPC、ERC-1271、WalletConnect、外部SaaSは導入しません。
+`SiweIdentity`はUserごとに複数の名前付きEOA addressを保持します。signupは署名検証後にUserと最初のidentityをtransactionで作成し、loginは既存identityだけを受け付けます。signupと追加登録ではEIP-6963 `ProviderInfo.name`をtrimし、1〜50文字なら初期名として保存します。欠落・不正・長すぎる名前と従来型`window.ethereum`は`Wallet`にし、同名を許可します。Provider情報は自己申告の表示情報としてのみ扱い、address・署名・認証器の信頼判定には使いません。名称変更はedit、解除は別資格情報による対象外再認証を行うshowへ分離します。SIWEで確立したsessionの認証元identityは一覧で「現在使用中」と表示し、解除導線を出さず、解除endpointでも拒否します。最後の資格情報にも解除導線を出しません。WebAuthn／SIWE challengeはpurpose、User、browser session、5分の期限、消費時刻、破壊操作では削除対象へbindingし、transaction内で一度だけ消費します。最後の資格情報、現在のsessionの認証元identity、対象自身による再認証、別User、期限切れ、replayを拒否します。RPC、ERC-1271、WalletConnect、外部SaaSは導入しません。

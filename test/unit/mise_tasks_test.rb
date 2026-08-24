@@ -19,7 +19,6 @@ class MiseTasksTest < Minitest::Test
       --maintenance-tasks=enable
       --solid-cache=use
       --additional-login-methods=siwe
-      --profile-features=screen_name,display_name,avatar
       --api=enable
       --action-cable=solid_cable
       --mail=use

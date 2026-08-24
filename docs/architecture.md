@@ -152,7 +152,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 
 ### アプリ内通知
 
-`rails_template`はProfile設定後・既定View生成前に`configure_in_app_notifications`を常に登録します。この機能はConfigurationとQuestionnaireへ選択肢を追加しません。`Notification`がAction Textのリッチテキスト本文、公開条件、通知先を、`NotificationDelivery`がUserごとの既読状態を、同期serviceが保存transaction内の差分同期を担当します。管理フォームは固定ページ編集と同じLexxy editorを使用し、公開HTTP controllerは現在Userの公開済み配信だけを扱い、管理CRUDと受信者検索は`NotificationPolicy`でadminへ限定します。Web Pushは`WebPushSettingsController`と`/web-push`へ分離し、アプリ内通知のmodel、配信行、routeを利用しません。
+`rails_template`は常設Profileの設定後・既定View生成前に`configure_in_app_notifications`を常に登録します。この機能はConfigurationとQuestionnaireへ選択肢を追加しません。`Notification`がAction Textのリッチテキスト本文、公開条件、通知先を、`NotificationDelivery`がUserごとの既読状態を、同期serviceが保存transaction内の差分同期を担当します。管理フォームは固定ページ編集と同じLexxy editorを使用し、個別受信者はProfileの`display_name`だけで検索・表示します。公開HTTP controllerは現在Userの公開済み配信だけを扱い、管理CRUDと受信者検索は`NotificationPolicy`でadminへ限定します。Web Pushは`WebPushSettingsController`と`/web-push`へ分離し、アプリ内通知のmodel、配信行、routeを利用しません。
 
 ### `editors`
 
@@ -171,7 +171,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 
 ## 依存方向
 
-`entrypoint`は`configuration`、`questionnaire`、`generator_options`、`execution_plan`、`runner`を組み立てます。`configuration`が複数選択可能な`profile_features`の値集合を定義し、`questionnaire`がGumの複数選択として収集します。`runner`は確定済みのgenerator optionとApplication Template payloadだけを子プロセスへ渡します。`rails_template`は確定済み設定から`steps`を登録し、`steps`は必要に応じて対象別の`editors`を利用します。下位コンポーネントから対話処理や`entrypoint`へ依存させません。
+`entrypoint`は`configuration`、`questionnaire`、`generator_options`、`execution_plan`、`runner`を組み立てます。Profileは設定や質問へ含めず、`execution_plan`と`rails_template`が全構成へ`screen_name`、`display_name`、`avatar`を登録します。`runner`は確定済みのgenerator optionとApplication Template payloadだけを子プロセスへ渡します。`rails_template`は確定済み設定から`steps`を登録し、`steps`は必要に応じて対象別の`editors`を利用します。下位コンポーネントから対話処理や`entrypoint`へ依存させません。
 
 固定技術スタック、条件付き機能、デプロイ要件は[採用技術とセットアップ要件](stack.md)を正本とします。対話項目と依存関係は[対話オプションの定義方針](options.md)を正本とします。
 

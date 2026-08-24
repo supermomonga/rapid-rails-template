@@ -8,7 +8,7 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods profile_features api action_cable mail default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods api action_cable mail default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
@@ -51,8 +51,8 @@ gem "devise-i18n"
 gem "webauthn", "~> 3.4"
 gem "browser", "~> 6.2"
 gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_methods").include?("siwe")
-gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?
-gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")
+gem "haikunator"
+gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails"
 gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
 gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"
 gem "mission_control-jobs", "1.1.0" if VALUES.fetch("job_operations") == "enable"
@@ -4250,18 +4250,9 @@ def install_siwe
   RUBY
 end
 def configure_roles
-  profile_name_attribute = if VALUES.fetch("profile_features").include?("screen_name")
-    "screen_name"
-  elsif VALUES.fetch("profile_features").include?("display_name")
-    "display_name"
-  end
-  user_scope = profile_name_attribute ? "User.includes(:user_roles, :profile)" : "User.includes(:user_roles)"
-  profile_header = profile_name_attribute ? '<th scope="col"><%= t("admin.users.profile_name") %></th>' : ""
-  profile_cell = if profile_name_attribute
-    "<td><%= user.profile&.#{profile_name_attribute}.presence || t(\"common.not_set\") %></td>"
-  else
-    ""
-  end
+  user_scope = "User.includes(:user_roles, :profile)"
+  profile_header = '<th scope="col"><%= t("admin.users.profile_name") %></th>'
+  profile_cell = "<td><%= T.must(user.profile).display_name %></td>"
 
   generate "action_policy:install"
   inject_into_class "app/policies/application_policy.rb", "ApplicationPolicy", <<~RUBY
@@ -6440,8 +6431,8 @@ def install_image_cropper
 end
 
 def configure_profile
-  features = VALUES.fetch("profile_features")
-  avatar_enabled = features.include?("avatar")
+  features = %w[screen_name display_name avatar]
+  avatar_enabled = true
   attributes = ["user:references"]
   attributes << "screen_name:string" if features.include?("screen_name")
   attributes << "display_name:string" if features.include?("display_name")
@@ -8352,17 +8343,6 @@ def configure_devise_views
 end
 
 def configure_in_app_notifications
-  profile_features = VALUES.fetch("profile_features")
-  searchable_profile_columns = %w[screen_name display_name] & profile_features
-  recipient_user_scope = searchable_profile_columns.empty? ? "User" : "User.includes(:profile)"
-  recipient_label_ruby = if profile_features.include?("screen_name")
-    'user.profile&.screen_name.presence&.then { |name| "@#{name}" } || "User ##{user.id}"'
-  elsif profile_features.include?("display_name")
-    'user.profile&.display_name.presence || "User ##{user.id}"'
-  else
-    '"User ##{user.id}"'
-  end
-
   generate "model", "Notification", "published_at:datetime", "draft:boolean", "audience:string"
   notification_migration = Dir.glob("db/migrate/*_create_notifications.rb")
   raise "CreateNotifications migrationが一意ではありません" unless notification_migration.one?
@@ -8741,12 +8721,6 @@ def configure_in_app_notifications
     end
   RUBY
 
-  recipient_relation = if searchable_profile_columns.empty?
-    "User.where(id: integer_query).order(:id)"
-  else
-    profile_predicates = searchable_profile_columns.map { |column| "profiles.#{column} LIKE :query" }
-    "User.left_joins(:profile).where(\"users.id = :id OR #{profile_predicates.join(' OR ')}\", id: integer_query, query: like_query).distinct.order(:id)"
-  end
   create_file "app/controllers/admin/notification_recipients_controller.rb", <<~RUBY, force: true
     module Admin
       class NotificationRecipientsController < BaseController
@@ -8757,9 +8731,15 @@ def configure_in_app_notifications
           authorize! Notification, to: :search_recipients?
           query = params[:q].to_s.strip
           @selected_ids = Array(params[:selected_ids]).compact_blank.map { |value| Integer(value, 10) }
-          integer_query = Integer(query, 10, exception: false)
           like_query = "%\#{ActiveRecord::Base.sanitize_sql_like(query)}%"
-          @users = query.present? ? #{recipient_relation}.limit(20) : User.none
+          @users = if query.present?
+            User.joins(:profile)
+              .where("profiles.display_name LIKE :query", query: like_query)
+              .order("profiles.display_name ASC", "users.id ASC")
+              .limit(20)
+          else
+            User.none
+          end
         end
       end
     end
@@ -8814,7 +8794,7 @@ def configure_in_app_notifications
 
     export default class extends Controller {
       static targets = ["frame", "hidden", "search"]
-      static values = { selected: Object, url: String }
+      static values = { removeLabel: String, selected: Object, url: String }
 
       connect() {
         this.renderHiddenInputs()
@@ -8827,14 +8807,23 @@ def configure_in_app_notifications
 
       select(event) {
         const { userId, userLabel } = event.currentTarget.dataset
-        if (this.selectedValue[userId]) {
-          delete this.selectedValue[userId]
+        const selected = { ...this.selectedValue }
+        if (selected[userId]) {
+          delete selected[userId]
         } else {
-          this.selectedValue[userId] = userLabel
+          selected[userId] = userLabel
         }
-        this.selectedValue = { ...this.selectedValue }
+        this.selectedValue = selected
         this.renderHiddenInputs()
         this.loadResults()
+      }
+
+      remove(event) {
+        const selected = { ...this.selectedValue }
+        delete selected[event.currentTarget.dataset.userId]
+        this.selectedValue = selected
+        this.renderHiddenInputs()
+        if (this.searchTarget.value) this.loadResults()
       }
 
       loadResults() {
@@ -8853,7 +8842,13 @@ def configure_in_app_notifications
           input.type = "hidden"
           input.name = "notification[recipient_ids][]"
           input.value = id
-          wrapper.append(input)
+          const button = document.createElement("button")
+          button.type = "button"
+          button.className = "btn btn-ghost btn-xs"
+          button.textContent = this.removeLabelValue
+          button.dataset.userId = id
+          button.dataset.action = "notification-recipients#remove"
+          wrapper.append(input, button)
           return wrapper
         }))
       }
@@ -9003,10 +8998,11 @@ def configure_in_app_notifications
   ERB
 
   create_file "app/views/admin/notifications/_form.html.erb", <<~ERB, force: true
-    <% selected_users = #{recipient_user_scope}.where(id: @recipient_ids).index_with { |user| #{recipient_label_ruby} } %>
+    <% selected_users = User.includes(:profile).where(id: @recipient_ids).index_with { |user| T.must(user.profile).display_name } %>
     <%= form_with model: [:admin, notification], class: "space-y-6",
       data: { controller: "notification-recipients", notification_recipients_url_value: admin_notification_recipients_path,
-        notification_recipients_selected_value: selected_users.to_json } do |form| %>
+        notification_recipients_selected_value: selected_users.to_json,
+        notification_recipients_remove_label_value: t("notifications.admin.remove_recipient") } do |form| %>
       <% if notification.errors.any? %>
         <div class="alert alert-error" role="alert"><%= notification.errors.full_messages.to_sentence %></div>
       <% end %>
@@ -9033,9 +9029,10 @@ def configure_in_app_notifications
         <legend class="fieldset-legend"><%= t("notifications.admin.recipients") %></legend>
         <input type="search" class="input input-rapid w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
           data-notification-recipients-target="search" data-action="input->notification-recipients#search">
+        <p class="label"><%= t("notifications.admin.recipient_search_hint") %></p>
+        <p class="text-sm font-medium"><%= t("notifications.admin.selected_recipients") %></p>
         <div class="flex flex-wrap gap-2" data-notification-recipients-target="hidden"></div>
         <%= turbo_frame_tag "notification_recipient_results", data: { notification_recipients_target: "frame" } do %>
-          <p class="text-sm text-neutral"><%= t("notifications.admin.recipient_search_hint") %></p>
         <% end %>
       </fieldset>
       <div class="flex flex-wrap justify-end gap-2">
@@ -9081,9 +9078,9 @@ def configure_in_app_notifications
       <% else %>
         <ul class="list">
           <% @users.each do |user| %>
-            <% label = #{recipient_label_ruby} %>
+            <% label = T.must(user.profile).display_name %>
             <li class="list-row items-center">
-              <span class="list-col-grow"><%= label %> <span class="text-xs text-neutral">ID: <%= user.id %></span></span>
+              <span class="list-col-grow"><%= label %></span>
               <button type="button" class="btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>"
                 data-user-id="<%= user.id %>" data-user-label="<%= label %>" data-action="notification-recipients#select">
                 <%= @selected_ids.include?(user.id) ? t("notifications.admin.remove_recipient") : t("notifications.admin.add_recipient") %>
@@ -9106,7 +9103,7 @@ def configure_in_app_notifications
           "title" => "通知管理", "new" => "通知を作成", "edit" => "通知を編集", "show" => "通知詳細", "message" => "メッセージ",
           "message_hint" => "装飾を除いた本文を140文字以内で入力してください。",
           "state" => "状態", "audience" => "通知先", "published_at" => "公開日時", "deliveries" => "配信件数", "draft" => "下書き",
-          "recipients" => "個別受信者", "recipient_search" => "User IDまたはプロフィール名で検索", "recipient_search_hint" => "検索すると最大20件を表示します。",
+          "recipients" => "個別受信者", "recipient_search" => "表示名で検索", "recipient_search_hint" => "プロフィールの表示名を入力すると最大20件を表示します。", "selected_recipients" => "選択済み",
           "no_recipients" => "該当するユーザーはいません。", "add_recipient" => "追加", "remove_recipient" => "解除", "created" => "通知を作成しました。",
           "updated" => "通知を更新しました。", "destroyed" => "通知を削除しました。", "destroy_confirm" => "通知を削除しますか？", "pagination" => "通知管理のページ",
           "states" => { "draft" => "下書き", "scheduled" => "公開待ち", "published" => "公開済み" }
@@ -9123,7 +9120,7 @@ def configure_in_app_notifications
           "title" => "Notifications", "new" => "New notification", "edit" => "Edit notification", "show" => "Notification details", "message" => "Message",
           "message_hint" => "Enter up to 140 plain-text characters, excluding formatting.",
           "state" => "State", "audience" => "Audience", "published_at" => "Publish at", "deliveries" => "Deliveries", "draft" => "Draft",
-          "recipients" => "Selected recipients", "recipient_search" => "Search by User ID or profile name", "recipient_search_hint" => "Search results are limited to 20 users.",
+          "recipients" => "Selected recipients", "recipient_search" => "Search by display name", "recipient_search_hint" => "Enter a profile display name to show up to 20 users.", "selected_recipients" => "Selected",
           "no_recipients" => "No users matched.", "add_recipient" => "Add", "remove_recipient" => "Remove", "created" => "Notification created.",
           "updated" => "Notification updated.", "destroyed" => "Notification deleted.", "destroy_confirm" => "Delete this notification?", "pagination" => "Notification administration pages",
           "states" => { "draft" => "Draft", "scheduled" => "Scheduled", "published" => "Published" }
@@ -9423,15 +9420,22 @@ def configure_in_app_notifications
         sign_in @admin
       end
 
-      test "searches user id while preserving selected state" do
+      test "searches profile display name while preserving selected state" do
+        display_name = T.must(users(:two).profile).display_name
         get admin_notification_recipients_url,
-          params: { q: users(:two).id.to_s, selected_ids: [users(:two).id] },
+          params: { q: display_name, selected_ids: [users(:two).id] },
           headers: { "Turbo-Frame" => "notification_recipient_results" }
         assert_response :success
         assert_select "turbo-frame#notification_recipient_results" do
-          assert_select "li", count: 1
+          assert_select "li", text: /\#{Regexp.escape(display_name)}/, count: 1
+          assert_select "li", text: /ID:/, count: 0
           assert_select "button.btn-active[data-user-id=?]", users(:two).id.to_s, count: 1
         end
+
+        get admin_notification_recipients_url,
+          params: { q: users(:two).id.to_s },
+          headers: { "Turbo-Frame" => "notification_recipient_results" }
+        assert_select "turbo-frame#notification_recipient_results li", count: 0
       end
     end
   RUBY
@@ -9475,8 +9479,18 @@ def configure_in_app_notifications
         @user.grant_role!(:admin)
         visit new_admin_notification_path
         assert_selector "lexxy-editor"
-        fill_in I18n.t("notifications.admin.recipient_search"), with: @user.id.to_s
+        display_name = T.must(@user.profile).display_name
+        fill_in I18n.t("notifications.admin.recipient_search"), with: display_name
+        assert_text display_name
         assert_selector "turbo-frame#notification_recipient_results button[data-user-id='\#{@user.id}']"
+        within("turbo-frame#notification_recipient_results") do
+          click_button I18n.t("notifications.admin.add_recipient")
+        end
+        within('[data-notification-recipients-target="hidden"]') do
+          assert_text display_name
+          click_button I18n.t("notifications.admin.remove_recipient")
+        end
+        assert_no_selector "input[name='notification[recipient_ids][]'][value='\#{@user.id}']"
       end
 
       private
@@ -9495,11 +9509,10 @@ def configure_default_views
   solid_queue_enabled = VALUES.fetch("active_job") == "solid_queue"
   maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
-  profile_features = VALUES.fetch("profile_features")
-  profile_enabled = profile_features.any?
-  avatar_enabled = profile_features.include?("avatar")
-  screen_name_enabled = profile_features.include?("screen_name")
-  display_name_enabled = profile_features.include?("display_name")
+  profile_enabled = true
+  avatar_enabled = true
+  screen_name_enabled = true
+  display_name_enabled = true
   account_navigation_count = 3 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) +
     (web_push_enabled ? 1 : 0)
   account_page_description = if profile_enabled
@@ -10738,7 +10751,7 @@ def configure_default_views
     <<~RUBY
       get profile_url
       assert_response :success
-      assert_select '[data-layout="with-menu"] .list > .list-row', count: #{profile_features.length}
+      assert_select '[data-layout="with-menu"] .list > .list-row', count: 3
       assert_select 'a[href=?]', edit_profile_path, text: I18n.t("profiles.edit"), count: 1
       #{avatar_enabled ? "assert_select '.list .avatar svg[width=\"64\"][height=\"64\"]', count: 1\n      assert_select '.avatar-placeholder', count: 0" : ""}
 
@@ -13540,7 +13553,7 @@ end
 
 def configure_evidence_capture
   additional_login_methods = VALUES.fetch("additional_login_methods")
-  avatar = VALUES.fetch("profile_features").include?("avatar")
+  avatar = true
   api = VALUES.fetch("api") == "enable"
   web_push = VALUES.fetch("web_push") == "use"
   job_operations = VALUES.fetch("job_operations") == "enable"
@@ -14148,8 +14161,14 @@ def configure_evidence_capture
           visit new_admin_notification_path
           assert_selector "h1", text: translate("notifications.admin.new"), count: 1
           assert_selector "lexxy-editor"
-          fill_in translate("notifications.admin.recipient_search"), with: @regular_user.id.to_s
+          display_name = T.must(@regular_user.profile).display_name
+          fill_in translate("notifications.admin.recipient_search"), with: display_name
+          assert_text display_name
           assert_selector "turbo-frame#notification_recipient_results button[data-user-id='#{@regular_user.id}']"
+          within("turbo-frame#notification_recipient_results") do
+            click_button translate("notifications.admin.add_recipient")
+          end
+          assert_selector '[data-notification-recipients-target="hidden"] .badge', text: display_name
           capture_current_page("admin-notification-recipients", "通知の個別受信者選択", viewport)
         end
 
@@ -15684,8 +15703,7 @@ def configure_config_typechecking
 end
 
 def configure_sorbet_shims
-  avatar_bindings = if VALUES.fetch("profile_features").include?("avatar")
-    <<~RBI
+  avatar_bindings = <<~RBI
       module AvatarHelper
         include ActionView::Helpers
 
@@ -15709,9 +15727,6 @@ def configure_sorbet_shims
         def self.arrayjoin(images, across:); end
       end
     RBI
-  else
-    ""
-  end
   maintenance_bindings = if VALUES.fetch("maintenance_tasks") == "enable"
     <<~RBI
       module Admin::MaintenanceTasksHelper
@@ -15856,19 +15871,17 @@ def configure_sorbet_shims
     end
   RBI
 
-  if VALUES.fetch("profile_features").include?("avatar")
-    create_file "sorbet/rbi/shims/boring_avatars.rbi", <<~'RBI', force: true
-      # typed: true
+  create_file "sorbet/rbi/shims/boring_avatars.rbi", <<~'RBI', force: true
+    # typed: true
 
-      # boring_avatars defines these aliases on BoringAvatars, while its Rails
-      # binding signatures resolve the unqualified names in ViewHelper.
-      module BoringAvatars::Bindings::Rails::ViewHelper
-        RailsAttributeValue = T.type_alias { BoringAvatars::RailsAttributeValue }
-        Size = T.type_alias { BoringAvatars::Size }
-        Variant = T.type_alias { BoringAvatars::Variant }
-      end
-    RBI
-  end
+    # boring_avatars defines these aliases on BoringAvatars, while its Rails
+    # binding signatures resolve the unqualified names in ViewHelper.
+    module BoringAvatars::Bindings::Rails::ViewHelper
+      RailsAttributeValue = T.type_alias { BoringAvatars::RailsAttributeValue }
+      Size = T.type_alias { BoringAvatars::Size }
+      Variant = T.type_alias { BoringAvatars::Variant }
+    end
+  RBI
 
   create_file "sorbet/rbi/shims/bundler_connection_pool.rbi", <<~'RBI', force: true
     # typed: true
@@ -18320,8 +18333,8 @@ after_bundle do
   install_siwe if VALUES.fetch("additional_login_methods").include?("siwe")
   configure_roles
   configure_content_management
-  install_image_cropper if VALUES.fetch("profile_features").include?("avatar")
-  configure_profile if VALUES.fetch("profile_features").any?
+  install_image_cropper
+  configure_profile
   configure_in_app_notifications
   configure_api if VALUES.fetch("api") == "enable"
   configure_pwa if VALUES.fetch("pwa") == "use"

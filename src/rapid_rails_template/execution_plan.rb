@@ -53,10 +53,8 @@ module RapidRailsTemplate
 
     def build_gems
       result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism gum]
-      result.concat(%w[devise devise-i18n webauthn browser])
+      result.concat(%w[devise devise-i18n webauthn browser haikunator boring_avatars])
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
-      result << "haikunator" if (configuration["profile_features"] & %w[screen_name display_name]).any?
-      result << "boring_avatars" if configuration["profile_features"].include?("avatar")
       result << "thruster"
       result << "web-push" if configuration["web_push"] == "use"
       result << "solid_queue" if configuration["active_job"] == "solid_queue"
@@ -74,8 +72,8 @@ module RapidRailsTemplate
       result << "install_siwe" if configuration["additional_login_methods"].include?("siwe")
       result << "configure_roles"
       result << "configure_content_management"
-      result << "install_image_cropper" if configuration["profile_features"].include?("avatar")
-      result << "configure_profile" if configuration["profile_features"].any?
+      result << "install_image_cropper"
+      result << "configure_profile"
       result << "configure_in_app_notifications"
       result << "configure_api" if configuration["api"] == "enable"
       result << "configure_pwa" if configuration["pwa"] == "use"
@@ -223,7 +221,7 @@ module RapidRailsTemplate
         test/support/image_test_fixture.rb
       ]
       result << "bin/thrust"
-      result << "sorbet/rbi/shims/boring_avatars.rbi" if configuration["profile_features"].include?("avatar")
+      result << "sorbet/rbi/shims/boring_avatars.rbi"
       if configuration["api"] == "enable"
         result.concat(%w[
           app/models/api_credential.rb
@@ -242,18 +240,16 @@ module RapidRailsTemplate
           test/controllers/api_credentials_controller_test.rb
         ])
       end
-      if configuration["profile_features"].any?
-        result.concat(%w[
-          app/models/profile.rb
-          app/controllers/profiles_controller.rb
-          app/views/profiles/show.html.erb
-          app/views/profiles/edit.html.erb
-          app/views/profiles/_form.html.erb
-          config/locales/profiles.ja.yml
-          config/locales/profiles.en.yml
-          test/models/profile_test.rb
-        ])
-      end
+      result.concat(%w[
+        app/models/profile.rb
+        app/controllers/profiles_controller.rb
+        app/views/profiles/show.html.erb
+        app/views/profiles/edit.html.erb
+        app/views/profiles/_form.html.erb
+        config/locales/profiles.ja.yml
+        config/locales/profiles.en.yml
+        test/models/profile_test.rb
+      ])
       result.concat(%w[
         app/models/notification.rb
         app/models/notification_delivery.rb
@@ -292,30 +288,28 @@ module RapidRailsTemplate
         test/fixtures/notifications.yml
         test/fixtures/notification_deliveries.yml
       ])
-      if configuration["profile_features"].include?("avatar")
-        result.concat(%w[
-          app/javascript/controllers/image_crop_controller.js
-          app/services/avatar_image_policy.rb
-          app/services/avatar_upload.rb
-          app/validators/avatar_upload_validator.rb
-          app/helpers/avatar_helper.rb
-          test/services/avatar_image_policy_test.rb
-          test/helpers/avatar_helper_test.rb
-          test/system/profile_avatar_crop_test.rb
-          vendor/javascript/cropperjs.js
-          vendor/javascript/@cropper--element.js
-          vendor/javascript/@cropper--element-canvas.js
-          vendor/javascript/@cropper--element-crosshair.js
-          vendor/javascript/@cropper--element-grid.js
-          vendor/javascript/@cropper--element-handle.js
-          vendor/javascript/@cropper--element-image.js
-          vendor/javascript/@cropper--element-selection.js
-          vendor/javascript/@cropper--element-shade.js
-          vendor/javascript/@cropper--element-viewer.js
-          vendor/javascript/@cropper--elements.js
-          vendor/javascript/@cropper--utils.js
-        ])
-      end
+      result.concat(%w[
+        app/javascript/controllers/image_crop_controller.js
+        app/services/avatar_image_policy.rb
+        app/services/avatar_upload.rb
+        app/validators/avatar_upload_validator.rb
+        app/helpers/avatar_helper.rb
+        test/services/avatar_image_policy_test.rb
+        test/helpers/avatar_helper_test.rb
+        test/system/profile_avatar_crop_test.rb
+        vendor/javascript/cropperjs.js
+        vendor/javascript/@cropper--element.js
+        vendor/javascript/@cropper--element-canvas.js
+        vendor/javascript/@cropper--element-crosshair.js
+        vendor/javascript/@cropper--element-grid.js
+        vendor/javascript/@cropper--element-handle.js
+        vendor/javascript/@cropper--element-image.js
+        vendor/javascript/@cropper--element-selection.js
+        vendor/javascript/@cropper--element-shade.js
+        vendor/javascript/@cropper--element-viewer.js
+        vendor/javascript/@cropper--elements.js
+        vendor/javascript/@cropper--utils.js
+      ])
       result.concat(%w[
         app/models/passkey_credential.rb
         app/models/webauthn_challenge.rb

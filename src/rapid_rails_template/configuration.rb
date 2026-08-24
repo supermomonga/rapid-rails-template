@@ -3,8 +3,7 @@
 module RapidRailsTemplate
   class Configuration
     ADDITIONAL_LOGIN_METHODS = %w[siwe].freeze
-    PROFILE_FEATURES = %w[screen_name display_name avatar].freeze
-    MULTIPLE_VALUE_OPTIONS = %w[additional_login_methods profile_features].freeze
+    MULTIPLE_VALUE_OPTIONS = %w[additional_login_methods].freeze
 
     VALID_VALUES = {
       "pwa" => %w[use skip],
@@ -14,7 +13,6 @@ module RapidRailsTemplate
       "maintenance_tasks" => %w[enable disable],
       "solid_cache" => %w[use skip],
       "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
-      "profile_features" => PROFILE_FEATURES,
       "api" => %w[enable disable],
       "action_cable" => %w[solid_cable skip],
       "mail" => %w[auto use skip],
@@ -29,7 +27,6 @@ module RapidRailsTemplate
       "maintenance_tasks" => "enable",
       "solid_cache" => "use",
       "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
-      "profile_features" => PROFILE_FEATURES,
       "api" => "enable",
       "action_cable" => "solid_cable",
       "mail" => "auto",

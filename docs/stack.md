@@ -34,8 +34,8 @@ I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`
 | Rich text・画像storage | Action Text、Active Storage、`active_storage_db`、`image_processing ~> 1.2`、`lexxy ~> 0.9.21` | 添付本体とvariantを専用SQLite databaseへ保存し、画像variantはlibvipsで処理する |
 | 画像配信 | Active Storage proxy route、Thruster | 公開signed URLをHTTP cacheし、warm hitではPuma、Rails、SQLiteを迂回する |
 | エラー監視 | `sentry-ruby`、`sentry-rails` | productionのエラー通知と追跡に使用する |
-| Profile名生成 | `haikunator` | `screen_name`または`display_name`を選択した場合だけUser作成時の既定値生成に使用する |
-| 既定アバター生成 | `boring_avatars ~> 0.1.0` | `avatar`を選択した場合だけUser IDから決定的なSVGを生成する |
+| Profile名生成 | `haikunator` | 全構成でUser作成時の`screen_name`と`display_name`の既定値生成に使用する |
+| 既定アバター生成 | `boring_avatars ~> 0.1.0` | 全構成でUser IDから決定的なSVGを生成する |
 
 Rails 8.1では、SQLite、Puma、Propshaft、Importmap、Turbo、Stimulus、Minitestが標準構成に含まれます。これらをGemfileへ重複追加せず、対象の`rails new`オプションと生成結果を検証します。Tailwind CSSは`--css=tailwind`を指定し、Railsが提供する`tailwindcss:install`処理を利用します。
 
@@ -74,7 +74,7 @@ Rails 8.1.3の公式templateを基準に、`generate scaffold`用controllerと6 
 
 全生成Viewの主見出しは`content_for :page_title`へ文字列を1回だけ設定し、Viewまたは`with_menu` layoutの`h1`とdocument titleから再利用します。document titleと`og:title`は通常ページで「page title | application name」、`page_title`を持たない公開homeだけapplication nameとします。主見出し直前のeyebrowは置かず、カードや機能紹介など主見出しではないsection headingは維持します。
 
-account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、Profile生成時のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`、Web Push使用時の通知には`bell`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。管理者には`UserPolicy#overview?`を満たす場合だけ、`/admin`のOverviewへ移動する「管理画面」を単一のbridge linkとして追加し、account sidebarと通常画面のheader dropdownへ同じpartialから表示します。accountとadminの`with_menu` navigationは960px以下でカテゴリ名を横スクロール領域の上へ固定表示し、リンク一覧をdaisyUIの`menu-horizontal`で1段表示します。はみ出したリンクだけをnavigation内で横スクロールさせ、page全体には横overflowを発生させません。961px以上ではカテゴリ名を`menu-title`として含む`menu-vertical`へ戻し、従来の2column sidebarを維持します。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目と管理者限定bridge linkだけを表示します。ユーザー情報はlinkやbuttonではなく直接の`menu-title`として表示し、hoverやactiveの対象にしません。ログアウトの前は空の`li`によるdaisyUI `menu`標準のseparatorで区切り、ログアウトにはHeroiconsの`arrow-right-start-on-rectangle`を表示します。`avatar`選択時はdaisyUI `avatar`をtriggerにし、それ以外はHeroicons `bars-3`と`MENU` textを使用します。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
+account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、常設のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`、Web Push使用時の通知には`bell`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。管理者には`UserPolicy#overview?`を満たす場合だけ、`/admin`のOverviewへ移動する「管理画面」を単一のbridge linkとして追加し、account sidebarと通常画面のheader dropdownへ同じpartialから表示します。accountとadminの`with_menu` navigationは960px以下でカテゴリ名を横スクロール領域の上へ固定表示し、リンク一覧をdaisyUIの`menu-horizontal`で1段表示します。はみ出したリンクだけをnavigation内で横スクロールさせ、page全体には横overflowを発生させません。961px以上ではカテゴリ名を`menu-title`として含む`menu-vertical`へ戻し、従来の2column sidebarを維持します。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目と管理者限定bridge linkだけを表示します。ユーザー情報はlinkやbuttonではなく直接の`menu-title`として表示し、hoverやactiveの対象にしません。ログアウトの前は空の`li`によるdaisyUI `menu`標準のseparatorで区切り、ログアウトにはHeroiconsの`arrow-right-start-on-rectangle`を表示します。認証後headerでは常にdaisyUI `avatar`をtriggerにします。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
 
 component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
 
@@ -82,9 +82,9 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 
 - `/`は追加ログイン方法にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
-- `profile_features`が1つ以上の場合だけUserと1対1のProfile、表示／編集／更新画面を生成する。Active StorageはAction Textとともに常設し、`avatar`選択時だけBoring AvatarsとProfileの添付画像機能を追加する。
+- Userと1対1のProfile、`screen_name`、`display_name`、`avatar`、表示／編集／更新画面を全構成へ生成する。Active StorageはAction Textとともに常設し、Boring AvatarsとProfileの添付画像機能も常設する。
 - 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、themeのbase-100、primary、base-200、secondary、base-300に対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
-- `screen_name`または`display_name`選択時だけ`haikunator`を導入し、User作成と同時に必須かつ一意な既定値を設定する。両方の選択時はHaikunatorで生成した`screen_name`をCamelCase化して`display_name`とする。
+- `haikunator`を常設し、User作成と同時に必須かつ一意な`screen_name`を生成し、そのCamelCaseを`display_name`の初期値とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
 - Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。
 - ブラウザ側はWebAuthn Level 3の`parseCreationOptionsFromJSON`、`parseRequestOptionsFromJSON`、credentialの`toJSON`を使用する。未対応ブラウザは利用不可を明示し、独自変換のfallbackは追加しない。
@@ -97,7 +97,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - 複数Viewで共通する階層メニューは個別Viewへ複製せず、その画面群の機能単位nested layoutで1回だけ定義する。`with_menu`が主見出しを描画してからnested layoutを本文blockとして受け取るため、表示順は主見出し、subnavigation、本文となる。
 - tabpanelを伴うタブは`ApplicationHelper#with_tab`だけで生成する。helperは各tabのoptionalな`is_active` lambdaを優先し、未指定時は`request.path.start_with?(path)`で候補を判定する。複数候補では最長pathを選び、同長競合または候補なしは明示的に失敗させる。必要な場合だけoptionalな`size:`でdaisyUI公式の`tabs-xs`から`tabs-xl`を選ぶ。Railsの`capture`で取得した本文はactiveな`tab`の直後へ1件だけ`tab-content sticky [contain:inline-size] bg-base-100 border-base-300 p-3`として置く。stickyなtabpanelの上borderが共有境界へ重なってもactive tabの下へ線が出ないよう、active tabへ`z-10`を付ける。inline-size containmentによりtabpanel本文のmax-content幅をtablistの必要幅から除外する。`tabs tabs-lift min-w-max`を`overflow-x-auto`で囲み、狭幅でも折り返さず横スクロールできるようにする。inactive用の空tabpanelや個別Viewの幅補正は生成しない。各画面の最外周へ同じbase borderを持つcardは重ねない。tabpanelを伴わないtab形式selectorは対象外とする。
 - native dialogを使うdaisyUI modalは`ApplicationHelper#with_modal`だけで生成する。helperは一意な`id`、title、optionalなdescription、block本文、optionalなactions、dialog用data属性を受け取り、`modal`、`modal-box`、`modal-action`、`modal-backdrop`、ARIA参照を一括生成する。backdrop用`form[method=dialog]`を通常formへ入れ子にしないため、modal helperの出力は通常formの外へ置く。各Viewで同じmodal shellを組み立てず、helperはtriggerや個別Stimulus controllerの動作を担当しない。
-- `avatar`選択時はCropper.js 2.1.1をImportmapの公式`pin` commandでtransitive dependencyごと`vendor/javascript`へ固定し、実行時CDNとJavaScript bundlerを使用しない。汎用`image_crop` Stimulus controllerはoptionalなアスペクト比と出力幅・高さ、初期coverage、許可MIME type、容量・寸法上限、lossy品質をvaluesで受け取り、画像移動、zoom、reset、canvas出力、File置換、Object URLとCropper lifecycleを担当する。アスペクト比未指定時は自由cropとし、プロフィールViewだけが1:1と512×512を設定する。変換前のraw画像はformへ残さず、設定不正や変換失敗時にraw uploadへfallbackしない。
+- Cropper.js 2.1.1は全構成でImportmapの公式`pin` commandによりtransitive dependencyごと`vendor/javascript`へ固定し、実行時CDNとJavaScript bundlerを使用しない。汎用`image_crop` Stimulus controllerはoptionalなアスペクト比と出力幅・高さ、初期coverage、許可MIME type、容量・寸法上限、lossy品質をvaluesで受け取り、画像移動、zoom、reset、canvas出力、File置換、Object URLとCropper lifecycleを担当する。アスペクト比未指定時は自由cropとし、プロフィールViewだけが1:1と512×512を設定する。変換前のraw画像はformへ残さず、設定不正や変換失敗時にraw uploadへfallbackしない。
 - `640px`以下をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱う。desktopとmobileの両方で1columnへ縮退できることを必須とする。44pxのtouch targetを満たすためにcomponent itemへ一律の`min-h-*`を追加せず、必要な場合はdaisyUIの公式size modifierまたはtheme tokenでcomponent全体として調整する。
 
 ### 管理画面Overview
@@ -153,15 +153,15 @@ lexxy
 
 SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジトリへ埋め込みません。設定方法は実装フェーズで別途定義します。
 
-`haikunator`は`screen_name`または`display_name`が選択された場合だけapplication Gemとして追加します。`screen_name`は`Haikunator.haikunate(9999, "_")`の候補から既存値と衝突しない値を採用します。`display_name`だけを選択した場合は`Haikunator.haikunate`の候補から既存値と衝突しない値を採用し、両方を選択した場合は一意な`screen_name`候補のCamelCaseも未使用であることを確認して同時に設定します。model validationに加えてdatabaseの`NOT NULL`制約とunique indexで不変条件を保証します。
+`haikunator`はapplication Gemとして常設します。`screen_name`は`Haikunator.haikunate(9999, "_")`の候補から既存値と衝突しない値を採用し、そのCamelCaseも`display_name`として未使用であることを確認して同時に設定します。model validationに加えてdatabaseの`NOT NULL`制約とunique indexで不変条件を保証します。
 
-`boring_avatars`は`avatar`選択時だけRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。theme色はserver-side generatorが要求する16進色の定数として一元化し、CSS themeとの一致を契約テストで保証します。
+`boring_avatars`は全構成でRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。theme色はserver-side generatorが要求する16進色の定数として一元化し、CSS themeとの一致を契約テストで保証します。
 
 ### アプリ内通知
 
 全構成へ`Notification`と`NotificationDelivery`を生成します。通知本文は`has_rich_text :message`でAction Textへ保存し、固定ページ編集と同じ`form.rich_text_area`をLexxy editorとして表示します。装飾を除いたプレーンテキストをtrimした長さは1〜140文字に限定します。通知は必須の公開日時、下書き状態、全ユーザーまたは個別ユーザーの通知先を持ち、公開範囲を`draft = false AND published_at <= Time.current`に限定します。配信は通知とUserの組をdatabaseの一意制約で保護し、削除時はcascadeします。個別通知は下書き中から対象差分を同期して継続対象の既読日時を保持し、全体通知は公開時だけ現在Userとの差分をbulk insertします。通知保存と同期は同じtransactionで行います。
 
-認証済み画面のheaderにはHeroiconsのbellと、未読がある場合だけdaisyUIの`indicator`と`status`を表示します。native Popover APIとdaisyUI `dropdown`内のTurbo Frameは閉じている間に通信せず、初回表示で最新10件を読み込みます。公開通知の履歴は`/notifications`で公開日時・ID降順に25件ずつ表示し、個別既読と一括既読は現在Userが所有する公開済み配信だけを更新します。管理CRUDと最大20件の受信者検索はAction Policyでadminに限定します。
+認証済み画面のheaderにはHeroiconsのbellと、未読がある場合だけdaisyUIの`indicator`と`status`を表示します。native Popover APIとdaisyUI `dropdown`内のTurbo Frameは閉じている間に通信せず、初回表示で最新10件を読み込みます。公開通知の履歴は`/notifications`で公開日時・ID降順に25件ずつ表示し、個別既読と一括既読は現在Userが所有する公開済み配信だけを更新します。管理CRUDとProfile表示名による最大20件の受信者検索はAction Policyでadminに限定し、User IDは画面へ表示しません。
 
 ### PWAとWeb Push
 
@@ -204,7 +204,7 @@ PushNotifier.deliver_later(
 
 `User`は`has_role?`、`grant_role!`、`revoke_role!`を公開し、role付与を冪等にします。一般の登録・アカウント更新parameterへroleを含めず、role変更はAction Policyで保護された管理画面に限定します。複数roleの権限は許可を加算し、role階層と明示denyは持ちません。
 
-管理画面は`/admin/users`に数値IDと、Profile有効時だけProfileの表示名をページング表示し、`admin`の付与と解除を提供します。`login_id`やwallet addressは表示しません。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。最初のadminは`users.id`を引数に取る`roles:grant_admin[user_id]` taskで既存Userへ付与し、local seedは`ADMIN_USER_ID`を使用します。
+管理画面は`/admin/users`に数値IDと常設Profileの表示名をページング表示し、`admin`の付与と解除を提供します。`login_id`やwallet addressは表示しません。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。最初のadminは`users.id`を引数に取る`roles:grant_admin[user_id]` taskで既存Userへ付与し、local seedは`ADMIN_USER_ID`を使用します。
 
 ## テスト用Gem
 

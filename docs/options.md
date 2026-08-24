@@ -198,22 +198,13 @@ WebAuthnとSIWEのchallengeはdatabaseへtoken digest、purpose、User、browser
 
 対話UIでは`siwe`を選択済みとして表示します。CLIの配列optionはschema共通処理でカンマ区切りを宣言順へ正規化します。空値を選択なしとして受け入れ、未知値、重複値、空要素を生成開始前に拒否します。旧optionのaliasや互換処理は提供しません。
 
-## `profile_features`
+## プロフィール（常設）
 
-- CLI引数: `--profile-features=screen_name,display_name,avatar`
-- 質問文: プロフィール機能を選択してください。
-- 選択肢: `screen_name`、`display_name`、`avatar`の複数選択
-- 既定値: 3機能すべて
-- 表示条件: 常に表示する
-- 影響する処理: Profile model・1対1 User association・プロフィール表示／編集画面・headerの認証後メニュー
+Profileは質問・CLI引数を持たず、全構成でUserとの1対1 association、表示／編集／更新画面、`screen_name`、`display_name`、`avatar`を生成します。ProfileはUser作成時に同時作成し、User削除時に従属削除します。
 
-対話UIは`Gum.choose(..., no_limit: true)`を使用し、3項目を選択済みとして表示します。何も選択しない回答は有効です。CLIではカンマ区切りで指定し、`--profile-features=`を何も選択しない回答として扱います。未知の値、重複値、空要素を含む値は生成開始前に拒否します。
+`screen_name`はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`は自動生成した`screen_name`をCamelCaseへ変換した値を初期値とし、必須かつ一意な公開表示名として扱います。databaseには両columnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
 
-1つ以上を選択した場合だけ、Userと1対1のProfile model、表示画面、編集画面、更新処理、account navigationの「プロフィール」を生成します。ProfileはUser作成時に同時作成し、User削除時に従属削除します。
-
-`screen_name`を選択した場合はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`を選択した場合もUser作成時にHaikunator由来の値を自動生成し、必須かつ一意な公開表示名として扱います。両方を選択した場合は、先に一意な`screen_name`を生成し、その値をCamelCaseへ変換した同一由来の値を`display_name`に設定します。databaseには各選択済みcolumnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
-
-`avatar`を選択した場合だけ`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、汎用`image_crop` Stimulus controller、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
+全構成で`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、汎用`image_crop` Stimulus controller、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
 添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。両variantは`preprocessed: true`でattachment commit後にActive Storage標準の`TransformJob`へenqueueし、profile更新response内では画像変換を待ちません。Solid Queue選択時は既存workerが処理し、未選択時は既存Active Job adapterを使用します。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
 
@@ -225,9 +216,7 @@ avatarの選択元画像は静止画JPEG、PNG、WebPだけを許可し、5 MiB�
 
 サーバー側はcrop済みuploadについても静止画JPEG、PNG、WebP、5 MiB以下、幅・高さ4096px以下、かつ正方形であることを検証します。空ファイル、申告MIMEと実形式の不一致、decode不能画像、GIF、APNG、animated WebP、長方形画像を拒否し、検証成功後だけActive Storageへ添付します。formの`accept`と説明文、I18n errorはこのpolicyと一致させます。Action Text添付にはavatar policyを適用しません。
 
-認証後のheader menu triggerは、設定済み画像またはBoring Avatarとし、クリックとhoverの両方で展開します。プロフィール詳細も同じ共通helperを使用します。`avatar`を選択しない場合はHeroiconsの`bars-3`と`MENU` textをtriggerにします。展開内容は、選択済みなら`display_name`と`screen_name`、account navigationと同じ項目群、ログアウトの順です。
-
-何も選択しなかった場合はProfile model、migration、controller、route、View、test fixtureを生成しません。header menuは`bars-3` + `MENU`を使い、account navigationからプロフィール項目を除外します。
+認証後のheader menu triggerは、設定済み画像またはBoring Avatarとし、クリックとhoverの両方で展開します。プロフィール詳細も同じ共通helperを使用します。展開内容は`display_name`と`screen_name`、account navigationと同じ項目群、ログアウトの順です。
 
 ## `api`
 
@@ -297,13 +286,13 @@ Cloudflare APIからpermission group IDを解決して対象bucketだけのallow
 
 - 各選択肢と既定値が正規化後の設定へ正しく反映されること。
 - CLI引数で指定した項目を再質問せず、未指定の適用可能な項目だけを質問すること。
-- `additional_login_methods`と`profile_features`をGumの複数選択で収集し、選択なしを有効な回答として扱うこと。
+- `additional_login_methods`をGumの複数選択で収集し、選択なしを有効な回答として扱うこと。
 - schema上の全配列optionのカンマ区切り値を宣言順へ正規化し、未知値、重複値、空要素を拒否すること。
-- `--profile-features`の空値でProfile関連生成物をすべて省略し、`--additional-login-methods`の空値でSIWE固有生成物をすべて省略すること。
+- Profile関連生成物は全構成に含み、`--additional-login-methods`の空値ではSIWE固有生成物だけを省略すること。
 - Active Storageと`active_storage_db`はAction Textとともに常設し、全環境でファイル本体を専用storage SQLite databaseへ保存すること。
 - `--image-delivery`を不明なoptionとして拒否し、全Active Storage URLを`rails_storage_proxy`へ解決すること。
 - 実画像variantがlibvipsで一度だけ生成され、proxy responseが`public`かつ`immutable`であること。
-- `avatar`選択時だけBoring Avatars、Profile添付、User ID由来の既定アバター、header trigger、画像削除routeを生成すること。
+- Boring Avatars、Profile添付、User ID由来の既定アバター、header trigger、画像削除routeを全構成へ生成すること。
 - 設定済み画像がBoring Avatarより優先され、削除後は同じUser ID由来のBoring Avatarへ戻ること。
 - すべての適用可能な項目をCLI引数で指定した場合、標準入力を読まずに実行すること。
 - 表示条件が満たされない質問を行わないこと。

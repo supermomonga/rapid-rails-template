@@ -50,7 +50,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 ### 質問と計画
 
-`--app-id`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でRailsアプリIDを質問します。続いて`--app-name`が未指定の場合は、確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、複数選択では利用可能な全featureを選択済みとして表示し、`no_limit: true`を使用します。選択なし、`--additional-login-methods=`、`--profile-features=`は対応する機能を無効にする明示回答です。RailsアプリID、表示用アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
+`--app-id`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でRailsアプリIDを質問します。続いて`--app-name`が未指定の場合は、確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、複数選択では利用可能な全featureを選択済みとして表示し、`no_limit: true`を使用します。選択なしと`--additional-login-methods=`は追加ログイン方法を無効にする明示回答です。Profileは質問を持たず常設します。RailsアプリID、表示用アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
 
 全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。Job OperationsとMaintenance TasksはWeb PushによってSolid Queueが必須になった場合、またはSolid Queueが選択済みの場合だけ質問し、それ以外では`disable`へ正規化します。明示`enable`とSolid Queueなしの矛盾はこの段階で拒否します。画像配信は質問を持たず、Active Storage DB、libvips、`rails_storage_proxy`へ固定します。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production process、production要件を一覧で提示します。
 
@@ -66,13 +66,13 @@ RailsアプリID、表示用アプリ名、固定構成、回答からgenerator 
 
 Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。Action Textのeditorとして`lexxy ~> 0.9.21`を固定で宣言します。Sorbetは全構成で常設し、`sorbet-runtime`をapplication Gem、`sorbet`をdevelopment Gem、`tapioca`をdevelopment/test Gemとして宣言します。
 
-`screen_name`または`display_name`が選択されている場合は`haikunator`を宣言し、Profile modelのUser作成時の既定値生成に使用します。どちらも選択されていない場合はGemfileへ追加しません。`avatar`が選択されている場合だけ`boring_avatars ~> 0.1.0`をRails binding付きで宣言し、画像未設定時のSVG生成に使用します。Rails標準Gemfileの`image_processing`とThrusterを全構成で利用し、外部画像処理serviceや開発用sidecarは追加しません。
+`haikunator`を常設し、Profile modelのUser作成時に`screen_name`と`display_name`の既定値を生成します。`boring_avatars ~> 0.1.0`もRails binding付きで常設し、画像未設定時のSVG生成に使用します。Rails標準Gemfileの`image_processing`とThrusterを全構成で利用し、外部画像処理serviceや開発用sidecarは追加しません。
 
 ### `post_bundle`
 
 development依存にはGumとローカルWrangler v4を固定します。Kamal/Litestream生成ではCloudflare R2固定設定、production/staging overlay、人間ユーザーのaccount全体で冪等に確定したdestination別1Password vaultと明示権限のservice account、`CLOUDFLARE_INITIAL_API_TOKEN`のactive状態・所有account・最小権限を外部変更前に検証してからdestination別・bucket限定のaccount-owned tokenを冪等に作成または再利用する型付きR2設定service、薄いRake task、destination必須の復元CLIを配置します。
 
-最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。直後に`active_storage_db`の公式migration taskを実行し、生成されたファイル本体用migrationを`db/storage_migrate`へ移します。続けてLexxyとActive StorageをImportmapへ登録します。`avatar`選択時だけImportmapの公式`pin` commandでCropper.js 2.1.1とtransitive dependencyを`vendor/javascript`へ固定し、任意または自由なアスペクト比とoptionalな出力寸法をvaluesで設定できる`image_crop` Stimulus controllerを生成します。プロフィールViewはこのcontrollerへ1:1と512×512を指定します。Deviseの公式generatorは全構成で実行し、migrationとUser modelをPasskey専用契約へ構造的に置き換えます。WebAuthn credential・database challenge・route・管理画面に加え、AAGUIDと登録User-Agentから初期表示名を決定するserviceを常設し、SIWE選択時だけ`:siweable`、SIWE identity・challenge・route・管理画面、EIP-6963 Provider名から初期表示名を決定するserviceを追加します。
+最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。直後に`active_storage_db`の公式migration taskを実行し、生成されたファイル本体用migrationを`db/storage_migrate`へ移します。続けてLexxyとActive StorageをImportmapへ登録します。全構成でImportmapの公式`pin` commandによりCropper.js 2.1.1とtransitive dependencyを`vendor/javascript`へ固定し、任意または自由なアスペクト比とoptionalな出力寸法をvaluesで設定できる`image_crop` Stimulus controllerを生成します。プロフィールViewはこのcontrollerへ1:1と512×512を指定します。Deviseの公式generatorは全構成で実行し、migrationとUser modelをPasskey専用契約へ構造的に置き換えます。WebAuthn credential・database challenge・route・管理画面に加え、AAGUIDと登録User-Agentから初期表示名を決定するserviceを常設し、SIWE選択時だけ`:siweable`、SIWE identity・challenge・route・管理画面、EIP-6963 Provider名から初期表示名を決定するserviceを追加します。
 
 認証生成より前にApplication Identity、ja/en locale、request locale境界、canonical originを設定します。認証Userを生成した直後にAction Policy、`UserRole`、policy、`/admin`のOverviewと基本統計、管理画面、`users.id`を受け取るadmin付与taskを生成し、全機能をDeviseの`current_user`へ接続します。Overviewは`UserPolicy#overview?`で認可し、全ユーザー、管理者、直近30日の新規ユーザー、公開FAQ、管理対象ページをrequestごとに集計します。Profile設定後、既定View生成前に選択肢を持たない`configure_in_app_notifications`を必ず実行し、既に設定済みのAction TextとLexxyを通知本文にも使用します。固定ページ、FAQ、footer設定、Profile、アプリ内通知、API、PWA、Web Push、Solid系機能は追加ログイン方法を参照しません。Maintenance Tasks metadataには`triggered_by_user_id`を保存します。
 

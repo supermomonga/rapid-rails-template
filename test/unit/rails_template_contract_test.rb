@@ -728,10 +728,12 @@ class RailsTemplateContractTest < Minitest::Test
     history = generated_file_source("app/views/notifications/index.html.erb")
     admin_index = generated_file_source("app/views/admin/notifications/index.html.erb")
     admin_form = generated_file_source("app/views/admin/notifications/_form.html.erb")
+    recipient_controller = generated_file_source("app/javascript/controllers/notification_recipients_controller.js")
     notification_item = generated_file_source("app/views/notifications/_notification.html.erb")
     controller = generated_file_source("app/controllers/notifications_controller.rb")
     service = generated_file_source("app/services/notification_delivery_synchronization.rb")
     recipients = generated_file_source("app/controllers/admin/notification_recipients_controller.rb")
+    recipient_results = generated_file_source("app/views/admin/notification_recipients/index.html.erb")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
 
     assert_includes notifications, 'add_check_constraint :notifications'
@@ -749,6 +751,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes controller, 'deliveries_scope.where(opened_at: nil).update_all'
     assert_includes notifications, 'patch "open-all", action: :open_all'
     assert_includes recipients, '.limit(20)'
+    assert_includes recipients, 'profiles.display_name LIKE :query'
+    refute_includes recipients, "integer_query"
+    refute_includes recipients, "users.id = :id"
+    assert_includes recipient_results, "T.must(user.profile).display_name"
+    refute_includes recipient_results, "ID:"
     assert_includes header, 'popovertarget="notifications-popover"'
     assert_includes header, 'class="dropdown dropdown-end'
     assert_includes header, 'notification-popover#load'
@@ -761,9 +768,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_index, 'table table-sm table-pin-rows min-w-max'
     assert_includes admin_index, "notification.message_plain_text"
     assert_includes admin_form, "form.rich_text_area :message"
+    assert_includes admin_form, "T.must(user.profile).display_name"
+    assert_includes admin_form, "notification_recipients_remove_label_value"
     refute_includes admin_form, "form.text_area :message"
+    assert_includes recipient_controller, "remove(event)"
+    assert_includes recipient_controller, 'button.dataset.action = "notification-recipients#remove"'
     assert_operator after_bundle.index("configure_lexxy"), :<, after_bundle.index("configure_in_app_notifications")
-    assert_match(/configure_profile if .*\n  configure_in_app_notifications\n  configure_api/m, after_bundle)
+    assert_match(/configure_profile\n  configure_in_app_notifications\n  configure_api/m, after_bundle)
   end
 
   def test_generates_fixed_multi_role_storage_and_action_policy_authorization
@@ -995,7 +1006,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 't("accounts.destroy.last_admin")'
   end
 
-  def test_profile_generation_is_conditional_and_uses_selected_features
+  def test_profile_generation_is_always_on_with_all_features
     controller = generated_file_source("app/controllers/profiles_controller.rb")
     crop_controller = generated_file_source("app/javascript/controllers/image_crop_controller.js")
     crop_system_test = generated_file_source("test/system/profile_avatar_crop_test.rb")
@@ -1003,16 +1014,17 @@ class RailsTemplateContractTest < Minitest::Test
     avatar_helper_test = generated_file_source("test/helpers/avatar_helper_test.rb")
     profile_configuration = source_between("def configure_profile", "def configure_api")
 
-    assert_includes @source, 'configure_profile if VALUES.fetch("profile_features").any?'
-    assert_includes @source, 'install_image_cropper if VALUES.fetch("profile_features").include?("avatar")'
+    assert_includes @source, "  configure_profile\n"
+    assert_includes @source, "  install_image_cropper\n"
     assert_includes @source, 'run_checked "bin/importmap pin cropperjs@2.1.1"'
     assert_includes @source, %q(path = "vendor/javascript/#{package.sub('/', '--')}.js")
     refute_includes @source, 'rails_command "active_storage:install"'
     assert_includes @source, 't.references :user, null: false, foreign_key: true, index: { unique: true }'
     assert_includes @source, 'has_one :profile, dependent: :destroy'
     assert_includes @source, 'after_create :create_profile!'
-    assert_includes @source, 'gem "haikunator" if (VALUES.fetch("profile_features") & %w[screen_name display_name]).any?'
-    assert_includes @source, 'gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails" if VALUES.fetch("profile_features").include?("avatar")'
+    assert_includes @source, 'gem "haikunator"'
+    assert_includes @source, 'gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails"'
+    refute_includes @source, "profile_features"
     assert_includes profile_configuration, 't.string :screen_name, null: false'
     assert_includes profile_configuration, 't.string :display_name, null: false'
     assert_includes profile_configuration, 't.index :screen_name, unique: true'

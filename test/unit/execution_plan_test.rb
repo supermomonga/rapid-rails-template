@@ -321,56 +321,20 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "db/migrate/*_maintenance_tasks.rb"
   end
 
-  def test_empty_profile_features_omit_profile_steps_and_artifacts
+  def test_profile_and_all_of_its_features_are_always_generated
     plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("profile_features" => []),
+      RapidRailsTemplate::Configuration.build({}),
       app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.steps, "install_action_text"
-    refute_includes plan.steps, "configure_profile"
-    refute_includes plan.steps, "install_image_cropper"
-    refute_includes plan.gems, "haikunator"
-    refute_includes plan.gems, "boring_avatars"
-    refute_includes plan.artifacts, "app/models/profile.rb"
-    refute_includes plan.artifacts, "app/controllers/profiles_controller.rb"
-    refute_includes plan.artifacts, "app/views/profiles/edit.html.erb"
-    refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
-    refute_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
-    refute_includes plan.artifacts, "app/services/avatar_image_policy.rb"
-    refute_includes plan.artifacts, "app/services/avatar_upload.rb"
-    refute_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
-    refute_includes plan.artifacts, "app/javascript/controllers/image_crop_controller.js"
-    refute_includes plan.artifacts, "test/system/profile_avatar_crop_test.rb"
-    refute_includes plan.artifacts, "vendor/javascript/cropperjs.js"
-  end
-
-  def test_profile_without_avatar_uses_the_shared_action_text_active_storage_install
-    plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name display_name]),
-      app_id: "sample", app_name: "Sample App"
-    )
-
-    assert_includes plan.steps, "configure_profile"
-    assert_includes plan.steps, "install_action_text"
-    refute_includes plan.steps, "install_image_cropper"
-    refute_includes plan.gems, "boring_avatars"
-    refute_includes plan.artifacts, "app/helpers/avatar_helper.rb"
-    refute_includes plan.artifacts, "app/javascript/controllers/image_crop_controller.js"
-    refute_includes plan.artifacts, "test/system/profile_avatar_crop_test.rb"
-    refute_includes plan.artifacts, "vendor/javascript/cropperjs.js"
-  end
-
-  def test_avatar_only_profile_does_not_install_haikunator
-    plan = RapidRailsTemplate::ExecutionPlan.build(
-      RapidRailsTemplate::Configuration.build("profile_features" => %w[avatar]),
-      app_id: "sample", app_name: "Sample App"
-    )
-
     assert_includes plan.steps, "configure_profile"
     assert_includes plan.steps, "install_image_cropper"
+    assert_includes plan.gems, "haikunator"
     assert_includes plan.gems, "boring_avatars"
-    refute_includes plan.gems, "haikunator"
+    assert_includes plan.artifacts, "app/models/profile.rb"
+    assert_includes plan.artifacts, "app/controllers/profiles_controller.rb"
+    assert_includes plan.artifacts, "app/views/profiles/edit.html.erb"
     assert_includes plan.artifacts, "app/helpers/avatar_helper.rb"
     assert_includes plan.artifacts, "test/helpers/avatar_helper_test.rb"
     assert_includes plan.artifacts, "app/javascript/controllers/image_crop_controller.js"
@@ -461,14 +425,13 @@ class ExecutionPlanTest < Minitest::Test
       RapidRailsTemplate::Configuration.build(
         "web_push" => "skip",
         "action_cable" => "skip",
-        "active_job" => "skip",
-        "profile_features" => []
+        "active_job" => "skip"
       ),
       app_id: "sample", app_name: "Sample App"
     )
 
     assert_includes plan.steps, "configure_in_app_notifications"
-    refute_includes plan.steps, "configure_profile"
+    assert_includes plan.steps, "configure_profile"
     refute_includes plan.steps, "configure_web_push"
     assert_operator plan.steps.index("configure_content_management"), :<, plan.steps.index("configure_in_app_notifications")
     assert_operator plan.steps.index("configure_in_app_notifications"), :<, plan.steps.index("configure_default_views")

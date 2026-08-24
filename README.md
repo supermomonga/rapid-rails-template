@@ -42,7 +42,6 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --maintenance-tasks=disable \
   --solid-cache=use \
   --additional-login-methods=siwe \
-  --profile-features=screen_name,display_name,avatar \
   --api=enable \
   --action-cable=skip \
   --mail=auto \
@@ -53,9 +52,9 @@ mise run evidence-update
 mise run evidence-verify
 ```
 
-`--profile-features`は`screen_name`、`display_name`、`avatar`をカンマ区切りで指定します。既定では3機能すべてを選択し、`--profile-features=`と空値を指定するとProfile modelとプロフィール管理画面を生成しません。対話時はGumの複数選択を使用します。`screen_name`と`display_name`は選択時に必須かつ一意となり、User作成時にHaikunatorで自動生成されます。両方を選択した場合、`display_name`には自動生成した`screen_name`のCamelCaseを設定します。`avatar`を選択した場合、Cropper.js 2.1.1と汎用`image_crop` Stimulus controllerを生成し、プロフィールViewから1:1と512×512を設定してupload前にcropします。controllerはアスペクト比未指定の自由crop、任意比率、任意の出力幅・高さにも再利用でき、avatarのサーバー側policyは正方形を必須にします。画像未設定時はUser IDから決定的に生成したBoring Avatarを表示し、設定済み画像はプロフィール編集画面から削除してBoring Avatarへ戻せます。生成seedを保存する追加columnは作りません。
+Profileは選択肢を持たない常設機能です。全構成で`screen_name`、`display_name`、`avatar`を生成し、前2項目は必須かつ一意としてUser作成時にHaikunatorで自動生成します。`display_name`には自動生成した`screen_name`のCamelCaseを設定します。Cropper.js 2.1.1と汎用`image_crop` Stimulus controllerを生成し、プロフィールViewから1:1と512×512を設定してupload前にcropします。controllerはアスペクト比未指定の自由crop、任意比率、任意の出力幅・高さにも再利用でき、avatarのサーバー側policyは正方形を必須にします。画像未設定時はUser IDから決定的に生成したBoring Avatarを表示し、設定済み画像はプロフィール編集画面から削除してBoring Avatarへ戻せます。生成seedを保存する追加columnは作りません。
 
-アプリ内通知は選択肢を持たない常設機能です。全構成へ通知・配信model、Action TextとLexxyによるリッチテキスト編集、管理CRUD、ヘッダーの遅延読込popover、25件単位の通知履歴、個別・一括既読操作を生成します。Web Pushを有効にした場合の購読設定はアプリ内通知と分離し、`/web-push`の「Web Push設定」画面に生成します。
+アプリ内通知は選択肢を持たない常設機能です。全構成へ通知・配信model、Action TextとLexxyによるリッチテキスト編集、管理CRUD、ヘッダーの遅延読込popover、25件単位の通知履歴、個別・一括既読操作を生成します。個別受信者はProfileの表示名で検索・表示し、内部IDを画面上の識別子として使いません。Web Pushを有効にした場合の購読設定はアプリ内通知と分離し、`/web-push`の「Web Push設定」画面に生成します。
 
 Passkeyによるパスワードレス認証は全構成で必須です。登録・ログインはいずれもユーザーIDを入力しないdiscoverable credential方式で、複数のPasskeyを登録できます。登録時の名前入力は設けず、既知AAGUIDなら提供元名、判別できなければ登録ブラウザのOS名、どちらも不明なら`Passkey`を初期名にします。同じ初期名の重複を許可し、任意名への変更は登録後の編集画面で行います。AAGUIDとUser-Agentは表示名だけに使い、認証器の信頼判定には使いません。`--additional-login-methods`は追加方式をカンマ区切りで指定し、現在は`siwe`だけを選択できます。SIWE選択時は新規登録と既存Userへのログインを別ceremonyとして提供し、複数のEOA walletを登録できます。登録時はEIP-6963 Providerの自己申告名を初期名にし、複数Providerが見つかった場合だけ選択modalを表示します。EIP-6963非対応の`window.ethereum`では`Wallet`を使用し、任意名への変更は登録後の編集画面で行います。Provider名は表示専用で、認証・認可には使用しません。未知のwalletによるログインからUserを暗黙作成しません。Passkey・wallet・アカウントの削除は操作ごとのchallengeと別資格情報による再認証を要求し、最後のログイン手段は削除できません。SIWEで確立したsessionでは使用したwalletを「現在使用中」と表示して解除導線を出さず、直接の解除要求も拒否します。全認証資格情報が未バックアップのPasskey 1件だけなら、ログイン後にPasskey一覧へ進む「ログイン方法を追加」リンク付きのwarningを表示します。アプリ内の関連・認可・監査には`users.id`を使用し、credential IDやwallet addressを内部識別子にしません。
 

@@ -15,7 +15,6 @@ class ConfigurationTest < Minitest::Test
     refute configuration.reasons.key?("maintenance_tasks")
     assert_equal "use", configuration["solid_cache"]
     assert_equal %w[siwe], configuration["additional_login_methods"]
-    assert_equal %w[screen_name display_name avatar], configuration["profile_features"]
     assert_equal "enable", configuration["api"]
     assert_equal "solid_cable", configuration["action_cable"]
     assert_equal "skip", configuration["mail"]
@@ -119,18 +118,11 @@ class ConfigurationTest < Minitest::Test
     assert_equal "en", RapidRailsTemplate::Configuration.build("default_locale" => "en")["default_locale"]
   end
 
-  def test_accepts_an_empty_profile_feature_selection
-    configuration = RapidRailsTemplate::Configuration.build("profile_features" => [])
-
-    assert_empty configuration["profile_features"]
-  end
-
-  def test_rejects_unknown_or_duplicate_profile_features
-    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
-      RapidRailsTemplate::Configuration.build("profile_features" => %w[screen_name unknown])
+  def test_rejects_removed_profile_features_configuration
+    error = assert_raises(RapidRailsTemplate::InvalidConfiguration) do
+      RapidRailsTemplate::Configuration.build("profile_features" => [])
     end
-    assert_raises(RapidRailsTemplate::InvalidConfiguration) do
-      RapidRailsTemplate::Configuration.build("profile_features" => %w[avatar avatar])
-    end
+
+    assert_equal "不明な設定です: profile_features", error.message
   end
 end

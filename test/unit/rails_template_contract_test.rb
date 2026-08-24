@@ -949,6 +949,9 @@ class RailsTemplateContractTest < Minitest::Test
   end
 
   def test_siwe_sign_in_uses_an_explicit_stimulus_action
+    javascript = generated_file_source("app/javascript/controllers/siwe_sign_in_controller.js")
+    devise_views = source_between("def configure_devise_views", "def configure_in_app_notifications")
+
     assert_includes @source, 'app/javascript/controllers/siwe_sign_in_controller.js'
     assert_includes @source, 'import { Controller } from "@hotwired/stimulus"'
     assert_includes @source, 'data-controller="siwe-sign-in"'
@@ -956,6 +959,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, "async authenticate()"
     refute_includes @source, "async connect()"
     assert_includes @source, 'data-siwe-sign-in-target="error"'
+    assert_includes devise_views, 'data-siwe-sign-in-wallet-not-registered-value="<%= t(\'siwe.errors.wallet_not_registered\') %>"'
+    assert_includes javascript, 'this.modeValue === "login"'
+    assert_includes javascript, 'payload.error === "wallet_not_registered"'
+    assert_includes javascript, "this.walletNotRegisteredValue"
     refute_includes @source, 'app/javascript/siwe_sign_in.js'
     refute_includes @source, 'import \\"siwe_sign_in\\"'
   end
@@ -1569,6 +1576,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"passkeys-multiple"'
     assert_includes evidence, '"passkey-delete-reauth"'
     assert_includes evidence, '"account-delete-reauth"'
+    assert_includes evidence, '"siwe-login-unregistered-wallet"'
+    assert_includes evidence, 'translate("siwe.errors.wallet_not_registered")'
     assert_includes evidence, 'defaultBackupEligibility: backup_eligible'
     assert_includes evidence, 'defaultBackupState: backup_state'
     refute_includes evidence, 'User.human_attribute_name(:login_id)'
@@ -2132,7 +2141,9 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes module_source, "route:"
     assert_includes siwe, 'require Rails.root.join("lib/devise/siweable")'
     assert_includes sessions, "SiweIdentity.includes(:user).find_by"
-    assert_includes sessions, "user&.active_for_authentication?"
+    assert_includes sessions, 'render json: { error: "wallet_not_registered" }, status: :unauthorized'
+    assert_includes sessions, "user = T.must(identity.user)"
+    assert_includes sessions, "user.active_for_authentication?"
     assert_includes sessions, "sign_in(:user, user, event: :authentication)"
     refute_includes sessions, "find_or_create_by!"
     assert_includes registrations, "purpose: \"signup\""

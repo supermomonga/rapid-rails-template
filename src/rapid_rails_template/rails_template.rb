@@ -3067,8 +3067,10 @@ def install_siwe
           )
           challenge.consume!
           identity = SiweIdentity.includes(:user).find_by(address: message.address.downcase)
-          user = identity&.user
-          return head :unauthorized unless identity && user&.active_for_authentication?
+          return render json: { error: "wallet_not_registered" }, status: :unauthorized unless identity
+
+          user = T.must(identity.user)
+          return head :unauthorized unless user.active_for_authentication?
 
           request.env["devise.skip_timeout"] = true
           sign_in(:user, user, event: :authentication)
@@ -3362,7 +3364,8 @@ def install_siwe
         destructionAction: String,
         walletMissing: String,
         challengeError: String,
-        verificationError: String
+        verificationError: String,
+        walletNotRegistered: String
       }
 
       connect() {
@@ -3466,8 +3469,20 @@ def install_siwe
         }
 
         const verificationResponse = await this.post(this.verifyUrlValue, verifyPayload)
-        if (!verificationResponse.ok) throw new Error(this.verificationErrorValue)
+        if (!verificationResponse.ok) throw new Error(await this.verificationErrorMessage(verificationResponse))
         window.location.assign((await verificationResponse.json()).redirect_url)
+      }
+
+      async verificationErrorMessage(response) {
+        const contentType = response.headers.get("Content-Type")
+        if (this.modeValue === "login" && response.status === 401 && contentType?.includes("application/json")) {
+          const payload = await response.json()
+          if (payload.error === "wallet_not_registered" && this.hasWalletNotRegisteredValue) {
+            return this.walletNotRegisteredValue
+          }
+        }
+
+        return this.verificationErrorValue
       }
 
       post(url, body) {
@@ -3631,7 +3646,7 @@ def install_siwe
         "account_settings" => { "basic" => "基本設定" },
         "provider_picker" => { "title" => "ウォレットを選択", "description" => "接続に使用するウォレットを選択してください。", "close" => "閉じる" },
         "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。ウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "ウォレット名", "connect" => "ウォレットを接続", "current" => "現在使用中", "last_credential_label" => "最後のログイン方法", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete" => "解除", "delete_with_passkey" => "Passkeyで解除", "delete_with_wallet" => "別のウォレットで解除", "current_credential" => "現在のログインに使用しているウォレットは解除できません。", "last_credential" => "最後のログイン方法は解除できません。", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
-        "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。" }
+        "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。", "wallet_not_registered" => "このウォレットはログイン方法として登録されていません。登録済みのウォレットを使用するか、アカウントを作成してください。" }
       }
     },
     en: {
@@ -3640,7 +3655,7 @@ def install_siwe
         "account_settings" => { "basic" => "Basic settings" },
         "provider_picker" => { "title" => "Choose a wallet", "description" => "Choose the wallet to use for this connection.", "close" => "Close" },
         "identities" => { "title" => "EVM wallet login", "description" => "Manage the EOA wallets that can sign in to your account.", "empty" => "No wallets are linked.", "add" => "Add wallet", "new_title" => "Add EVM wallet", "new_description" => "Sign with the EOA wallet you want to connect. Its name will be assigned automatically after registration.", "edit_title" => "Edit EVM wallet login", "name" => "Wallet name", "connect" => "Connect wallet", "current" => "Currently in use", "last_credential_label" => "Last sign-in method", "delete_title" => "Unlink EVM wallet login", "delete_description" => "Reauthenticate with a different sign-in method before unlinking this wallet.", "delete" => "Unlink", "delete_with_passkey" => "Unlink with passkey", "delete_with_wallet" => "Unlink with another wallet", "current_credential" => "You cannot unlink the wallet used for the current sign-in session.", "last_credential" => "You cannot remove your last sign-in method.", "updated" => "Wallet name updated.", "deleted" => "Wallet unlinked." },
-        "errors" => { "wallet_missing" => "No EOA wallet was found.", "challenge" => "Could not create an authentication request.", "verification" => "Could not verify the signature." }
+        "errors" => { "wallet_missing" => "No EOA wallet was found.", "challenge" => "Could not create an authentication request.", "verification" => "Could not verify the signature.", "wallet_not_registered" => "This wallet is not registered as a sign-in method. Use a registered wallet or create an account." }
       }
     }
   )
@@ -4197,11 +4212,30 @@ def install_siwe
         post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
         challenge = response.parsed_body
 
-        assert_no_difference "User.count" do
+        assert_no_difference ["User.count", "SiweIdentity.count"] do
           post user_siwe_url,
             params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) }, as: :json
         end
         assert_response :unauthorized
+        assert_equal({ "error" => "wallet_not_registered" }, response.parsed_body)
+
+        get account_url
+        assert_redirected_to new_user_session_url
+      end
+
+      test "keeps signature failures generic" do
+        key = Eth::Key.new
+        post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
+        challenge = response.parsed_body
+
+        post user_siwe_url,
+          params: {
+            challenge_token: challenge.fetch("challenge_token"),
+            signature: Eth::Key.new.personal_sign(challenge.fetch("message"))
+          }, as: :json
+
+        assert_response :unauthorized
+        assert_empty response.body
       end
 
       test "binds a challenge to its browser session and ignores the Host header" do
@@ -8241,7 +8275,8 @@ def configure_devise_views
            data-siwe-sign-in-verify-url-value="<%= user_siwe_path %>"
            data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
-           data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
+           data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>"
+           data-siwe-sign-in-wallet-not-registered-value="<%= t('siwe.errors.wallet_not_registered') %>">
         <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_in_with_wallet") %></button>
         <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-login-provider-picker" %>
@@ -13588,6 +13623,7 @@ def configure_evidence_capture
       }.freeze
       PRIVATE_KEY = "1".rjust(64, "0")
       REGULAR_PRIVATE_KEY = "2".rjust(64, "0")
+      UNLINKED_PRIVATE_KEY = "3".rjust(64, "0")
 
       class EvidenceFailedJob < ApplicationJob
         self.queue_adapter = :solid_queue if JOB_OPERATIONS
@@ -13655,6 +13691,7 @@ def configure_evidence_capture
               viewport_name
             )
             assert_selector '[data-controller="siwe-sign-in"][data-siwe-sign-in-mode-value="login"]'
+            capture_unlinked_siwe_login(viewport_name)
 
             authenticate
             capture_page(
@@ -13836,6 +13873,66 @@ def configure_evidence_capture
             }
           )
           assert_equal 200, verify_response.fetch("status")
+        end
+
+        def capture_unlinked_siwe_login(viewport)
+          key = Eth::Key.new(priv: UNLINKED_PRIVATE_KEY)
+          assert_nil SiweIdentity.find_by(address: key.address.to_s.downcase)
+          challenge_response = browser_post_json(
+            "/users/sign_in/siwe/challenge",
+            { address: key.address.to_s, chain_id: 1 }
+          )
+          assert_equal 200, challenge_response.fetch("status")
+          challenge = challenge_response.fetch("body")
+          signature = key.personal_sign(challenge.fetch("message"))
+          install_unlinked_siwe_provider(key.address.to_s, signature, challenge)
+
+          click_button translate("authentication.sign_in_with_wallet")
+          assert_selector ".alert-error", text: translate("siwe.errors.wallet_not_registered")
+          assert_link translate("authentication.create_account"), href: new_user_registration_path, count: 1
+          assert_current_path new_user_session_path
+          geometry = page.evaluate_script(<<~JAVASCRIPT)
+            ({ documentWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth })
+          JAVASCRIPT
+          assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")
+          capture_current_page("siwe-login-unregistered-wallet", "未登録ウォレットのログインエラー", viewport)
+        end
+
+        def install_unlinked_siwe_provider(address, signature, challenge)
+          page.execute_script(<<~JAVASCRIPT, address, signature, challenge)
+            const [address, signature, challenge] = arguments
+            const originalFetch = window.fetch.bind(window)
+            window.fetch = (input, options) => {
+              const url = typeof input === "string" ? input : input.url
+              if (url.endsWith("/users/sign_in/siwe/challenge")) {
+                return Promise.resolve(new Response(JSON.stringify(challenge), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" }
+                }))
+              }
+              return originalFetch(input, options)
+            }
+
+            const provider = {
+              request: async ({ method }) => {
+                if (method === "eth_requestAccounts") return [address]
+                if (method === "eth_chainId") return "0x1"
+                if (method === "personal_sign") return signature
+                throw new Error(`Unsupported evidence provider method: ${method}`)
+              }
+            }
+            window.dispatchEvent(new CustomEvent("eip6963:announceProvider", {
+              detail: {
+                info: {
+                  uuid: "evidence-unlinked",
+                  name: "Unlinked Wallet",
+                  rdns: "example.unlinked",
+                  icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>"
+                },
+                provider
+              }
+            }))
+          JAVASCRIPT
         end
 
         def browser_post_json(path, payload)
@@ -15359,6 +15456,8 @@ def configure_evidence_capture
     disabled_methods.concat(%i[
       capture_siwe_scenarios
       authenticate_with_siwe
+      capture_unlinked_siwe_login
+      install_unlinked_siwe_provider
       browser_post_json
     ])
   end

@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `cf13d69e8232ebd45f19974a7638ae3db4bb80e424d85f1713d2d0ceafd2455c`
-- Base commit: `fbd54b07592c974004c9adfac0557dfb0068e18a`
+- Source fingerprint: `4f031282dbb07929d901490ca1ac8621a9f4471502e18d23cc84b61a8515a49f`
+- Base commit: `2aa18317384dbb4dd5100829bdb6ba747d7b5079`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -324,6 +324,12 @@
 |---|---|
 |![Ethereumでログイン (desktop)](siwe-login-option--desktop.png)|![Ethereumでログイン (mobile)](siwe-login-option--mobile.png)|
 |![Ethereumでログイン (desktop)](siwe-login-existing-user--desktop.png)|![Ethereumでログイン (mobile)](siwe-login-existing-user--mobile.png)|
+
+## 未登録ウォレットのログインエラー
+
+|Desktop|Mobile|
+|---|---|
+|![未登録ウォレットのログインエラー (desktop)](siwe-login-unregistered-wallet--desktop.png)|![未登録ウォレットのログインエラー (mobile)](siwe-login-unregistered-wallet--mobile.png)|
 
 ## EVMウォレットログイン
 

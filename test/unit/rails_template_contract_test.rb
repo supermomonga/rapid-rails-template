@@ -227,7 +227,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/notifications/index.html.erb" => %w[card-rapid card-body list],
       "app/views/notifications/_popover.html.erb" => %w[list btn],
       "app/views/admin/notifications/index.html.erb" => %w[card-rapid card-body table badge btn],
-      "app/views/admin/notifications/_form.html.erb" => %w[alert fieldset fieldset-legend textarea select input checkbox btn],
+      "app/views/admin/notifications/_form.html.erb" => %w[alert fieldset fieldset-legend label select input checkbox btn],
       "app/views/admin/overview/show.html.erb" => %w[card-rapid card-body stats stat stat-title stat-value],
       "app/views/admin/users/index.html.erb" => %w[card-rapid card-body table badge btn],
       "app/views/pages/_page.html.erb" => %w[card-rapid card-body],
@@ -721,17 +721,24 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_generates_always_on_in_app_notifications_with_transactional_delivery_sync
     notifications = source_between("def configure_in_app_notifications", "def configure_default_views")
+    model = generated_file_source("app/models/notification.rb")
     header = generated_file_source("app/views/shared/_header.html.erb")
     unread_status = generated_file_source("app/views/notifications/_unread_status.html.erb")
     popover = generated_file_source("app/views/notifications/_popover.html.erb")
     history = generated_file_source("app/views/notifications/index.html.erb")
     admin_index = generated_file_source("app/views/admin/notifications/index.html.erb")
+    admin_form = generated_file_source("app/views/admin/notifications/_form.html.erb")
+    notification_item = generated_file_source("app/views/notifications/_notification.html.erb")
     controller = generated_file_source("app/controllers/notifications_controller.rb")
     service = generated_file_source("app/services/notification_delivery_synchronization.rb")
     recipients = generated_file_source("app/controllers/admin/notification_recipients_controller.rb")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
 
     assert_includes notifications, 'add_check_constraint :notifications'
+    refute_includes notifications, "t.string :message"
+    assert_includes model, "has_rich_text :message, store_if_blank: false"
+    assert_includes model, "message.to_plain_text.strip"
+    assert_includes model, "errors.add(:message, :too_long, count: 140)"
     assert_includes notifications, 'add_index :notification_deliveries, [:notification_id, :user_id], unique: true'
     assert_includes notifications, 'foreign_key: { on_delete: :cascade }'
     assert_includes notifications, 'scope :published, -> { where(draft: false).where(published_at: ..Time.current) }'
@@ -749,8 +756,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes header, 'class="skeleton h-4'
     assert_includes unread_status, 'class="status status-primary status-sm"'
     assert_includes popover, 'open_all_notifications_path'
+    assert_includes notification_item, "delivery.notification.message"
     assert_includes history, 'turbo_action: "advance"'
     assert_includes admin_index, 'table table-sm table-pin-rows min-w-max'
+    assert_includes admin_index, "notification.message_plain_text"
+    assert_includes admin_form, "form.rich_text_area :message"
+    refute_includes admin_form, "form.text_area :message"
+    assert_operator after_bundle.index("configure_lexxy"), :<, after_bundle.index("configure_in_app_notifications")
     assert_match(/configure_profile if .*\n  configure_in_app_notifications\n  configure_api/m, after_bundle)
   end
 

@@ -537,6 +537,13 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
     test "creates ten users with fifty articles each without duplication" do
       2.times { load Rails.root.join("db/seeds.rb").to_s }
 
+      seed_notifications = Notification.published.all_users.where(
+        published_at: [
+          Time.zone.parse("2026-01-01 09:00:00"),
+          Time.zone.parse("2026-01-02 09:00:00"),
+          Time.zone.parse("2026-01-03 09:00:00")
+        ]
+      )
       seed_notification_messages = [
         "新しいお知らせがあります。",
         "サービスの使い方を確認できます。",
@@ -550,7 +557,7 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
       sample_users.each do |user|
         assert_equal 1, user.passkey_credentials.count
         seeded_deliveries = user.notification_deliveries.published.unopened.where(
-          notification: { message: seed_notification_messages }
+          notification: seed_notifications
         )
         assert_equal 3, seeded_deliveries.count
         articles = T.must(user.profile).articles
@@ -558,7 +565,7 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
         assert_equal 10, articles.where(draft: true).count
         assert_equal 40, articles.where(draft: false).count
       end
-      assert_equal 3, Notification.published.all_users.where(message: seed_notification_messages).count
+      assert_equal seed_notification_messages.sort, seed_notifications.map(&:message_plain_text).sort
       assert_equal 500, Article.where(profile: sample_profiles).count
     end
   end

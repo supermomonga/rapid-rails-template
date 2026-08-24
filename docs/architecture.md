@@ -152,7 +152,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 
 ### アプリ内通知
 
-`rails_template`はProfile設定後・既定View生成前に`configure_in_app_notifications`を常に登録します。この機能はConfigurationとQuestionnaireへ選択肢を追加しません。`Notification`が公開条件と通知先を、`NotificationDelivery`がUserごとの既読状態を、同期serviceが保存transaction内の差分同期を担当します。公開HTTP controllerは現在Userの公開済み配信だけを扱い、管理CRUDと受信者検索は`NotificationPolicy`でadminへ限定します。Web Pushは`WebPushSettingsController`と`/web-push`へ分離し、アプリ内通知のmodel、配信行、routeを利用しません。
+`rails_template`はProfile設定後・既定View生成前に`configure_in_app_notifications`を常に登録します。この機能はConfigurationとQuestionnaireへ選択肢を追加しません。`Notification`がAction Textのリッチテキスト本文、公開条件、通知先を、`NotificationDelivery`がUserごとの既読状態を、同期serviceが保存transaction内の差分同期を担当します。管理フォームは固定ページ編集と同じLexxy editorを使用し、公開HTTP controllerは現在Userの公開済み配信だけを扱い、管理CRUDと受信者検索は`NotificationPolicy`でadminへ限定します。Web Pushは`WebPushSettingsController`と`/web-push`へ分離し、アプリ内通知のmodel、配信行、routeを利用しません。
 
 ### `editors`
 

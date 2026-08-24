@@ -8363,7 +8363,7 @@ def configure_in_app_notifications
     '"User ##{user.id}"'
   end
 
-  generate "model", "Notification", "message:string", "published_at:datetime", "draft:boolean", "audience:string"
+  generate "model", "Notification", "published_at:datetime", "draft:boolean", "audience:string"
   notification_migration = Dir.glob("db/migrate/*_create_notifications.rb")
   raise "CreateNotifications migrationが一意ではありません" unless notification_migration.one?
 
@@ -8371,7 +8371,6 @@ def configure_in_app_notifications
     class CreateNotifications < ActiveRecord::Migration[8.1]
       def change
         create_table :notifications do |t|
-          t.string :message, null: false
           t.datetime :published_at, null: false
           t.boolean :draft, null: false, default: true
           t.string :audience, null: false, default: "all_users"
@@ -8414,19 +8413,23 @@ def configure_in_app_notifications
 
       has_many :notification_deliveries, dependent: :destroy
       has_many :recipients, through: :notification_deliveries, source: :user
+      has_rich_text :message, store_if_blank: false
 
       enum :audience, AUDIENCES, validate: true
 
-      before_validation :trim_message
-
-      validates :message, length: { in: 1..140 }
       validates :published_at, presence: true
+      validate :message_plain_text_length
 
       scope :published, -> { where(draft: false).where(published_at: ..Time.current) }
 
       sig { returns(T::Boolean) }
       def published?
         !draft? && published_at.present? && published_at <= Time.current
+      end
+
+      sig { returns(String) }
+      def message_plain_text
+        message.to_plain_text.strip
       end
 
       sig { params(recipient_ids: T::Array[Integer]).returns(Notification) }
@@ -8449,8 +8452,13 @@ def configure_in_app_notifications
         end
 
         sig { void }
-        def trim_message
-          self.message = T.unsafe(message)&.strip
+        def message_plain_text_length
+          length = message_plain_text.length
+          if length.zero?
+            errors.add(:message, :blank)
+          elsif length > 140
+            errors.add(:message, :too_long, count: 140)
+          end
         end
     end
   RUBY
@@ -8645,7 +8653,9 @@ def configure_in_app_notifications
       private
         sig { returns(ActiveRecord::Relation) }
         def deliveries_scope
-          T.must(current_user).notification_deliveries.published.ordered.includes(:notification)
+          T.must(current_user).notification_deliveries.published.ordered.includes(
+            notification: { rich_text_message: { embeds_attachments: :blob } }
+          )
         end
     end
   RUBY
@@ -8660,7 +8670,10 @@ def configure_in_app_notifications
         sig { void }
         def index
           authorize! Notification, to: :index?
-          @pagy, @notifications = pagy(:offset, authorized_scope(Notification.all).order(published_at: :desc, id: :desc), limit: 25)
+          notifications = authorized_scope(Notification.all)
+            .with_rich_text_message_and_embeds
+            .order(published_at: :desc, id: :desc)
+          @pagy, @notifications = pagy(:offset, notifications, limit: 25)
         end
 
         sig { void }
@@ -8860,7 +8873,7 @@ def configure_in_app_notifications
     <%= turbo_frame_tag frame_id do %>
       <li class="list-row items-start">
         <div class="list-col-grow min-w-0">
-          <p class="break-words <%= 'font-semibold' unless delivery.opened? %>"><%= delivery.notification.message %></p>
+          <div class="break-words <%= 'font-semibold' unless delivery.opened? %>"><%= delivery.notification.message %></div>
           <p class="mt-1 text-xs text-neutral"><%= time_tag delivery.notification.published_at, l(delivery.notification.published_at, format: :short) %></p>
         </div>
         <% unless delivery.opened? %>
@@ -8964,7 +8977,9 @@ def configure_in_app_notifications
             <tbody>
               <% @notifications.each do |notification| %>
                 <tr>
-                  <td class="max-w-md break-words"><%= notification.message %></td>
+                  <td class="max-w-md break-words">
+                    <%= truncate(notification.message_plain_text, length: 80) %>
+                  </td>
                   <td><span class="badge"><%= t("notifications.admin.states.\#{notification.published? ? 'published' : notification.draft? ? 'draft' : 'scheduled'}") %></span></td>
                   <td><%= t("notifications.audiences.\#{notification.audience}") %></td>
                   <td><%= l(notification.published_at, format: :short) %></td>
@@ -8997,7 +9012,8 @@ def configure_in_app_notifications
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :message, t("notifications.admin.message") %></legend>
-        <%= form.text_area :message, maxlength: 140, required: true, class: "textarea w-full", rows: 4 %>
+        <%= form.rich_text_area :message %>
+        <p class="label"><%= t("notifications.admin.message_hint") %></p>
       </fieldset>
       <div class="grid gap-4 sm:grid-cols-2">
         <fieldset class="fieldset">
@@ -9043,7 +9059,7 @@ def configure_in_app_notifications
     <% content_for :page_title, t("notifications.admin.show") %>
     <section class="card-rapid">
       <div class="card-body p-3">
-        <p class="break-words"><%= @notification.message %></p>
+        <div class="break-words"><%= @notification.message %></div>
         <dl class="grid gap-3 sm:grid-cols-2">
           <div><dt class="text-sm text-neutral"><%= t("notifications.admin.state") %></dt><dd><%= @notification.draft? ? t("notifications.admin.states.draft") : t("notifications.admin.states.published") %></dd></div>
           <div><dt class="text-sm text-neutral"><%= t("notifications.admin.audience") %></dt><dd><%= t("notifications.audiences.\#{@notification.audience}") %></dd></div>
@@ -9088,6 +9104,7 @@ def configure_in_app_notifications
         "audiences" => { "all_users" => "全ユーザー", "selected_users" => "個別ユーザー" },
         "admin" => {
           "title" => "通知管理", "new" => "通知を作成", "edit" => "通知を編集", "show" => "通知詳細", "message" => "メッセージ",
+          "message_hint" => "装飾を除いた本文を140文字以内で入力してください。",
           "state" => "状態", "audience" => "通知先", "published_at" => "公開日時", "deliveries" => "配信件数", "draft" => "下書き",
           "recipients" => "個別受信者", "recipient_search" => "User IDまたはプロフィール名で検索", "recipient_search_hint" => "検索すると最大20件を表示します。",
           "no_recipients" => "該当するユーザーはいません。", "add_recipient" => "追加", "remove_recipient" => "解除", "created" => "通知を作成しました。",
@@ -9104,6 +9121,7 @@ def configure_in_app_notifications
         "audiences" => { "all_users" => "All users", "selected_users" => "Selected users" },
         "admin" => {
           "title" => "Notifications", "new" => "New notification", "edit" => "Edit notification", "show" => "Notification details", "message" => "Message",
+          "message_hint" => "Enter up to 140 plain-text characters, excluding formatting.",
           "state" => "State", "audience" => "Audience", "published_at" => "Publish at", "deliveries" => "Deliveries", "draft" => "Draft",
           "recipients" => "Selected recipients", "recipient_search" => "Search by User ID or profile name", "recipient_search_hint" => "Search results are limited to 20 users.",
           "no_recipients" => "No users matched.", "add_recipient" => "Add", "remove_recipient" => "Remove", "created" => "Notification created.",
@@ -9121,30 +9139,45 @@ def configure_in_app_notifications
       ["サービスの使い方を確認できます。", Time.zone.parse("2026-01-02 09:00:00")],
       ["最新情報をお届けします。", Time.zone.parse("2026-01-03 09:00:00")]
     ].each do |message, published_at|
-      notification = Notification.find_or_initialize_by(message:)
-      notification.assign_attributes(audience: :all_users, draft: false, published_at:)
+      notification = Notification.find_or_initialize_by(published_at:)
+      notification.assign_attributes(message:, audience: :all_users, draft: false)
       notification.save_with_delivery_synchronization!
     end
   RUBY
 
   create_file "test/fixtures/notifications.yml", <<~YAML, force: true
     published_all:
-      message: Published for everyone
       published_at: <%= 1.day.ago %>
       draft: false
       audience: all_users
 
     selected_draft:
-      message: Selected draft
       published_at: <%= Time.current %>
       draft: true
       audience: selected_users
 
     future:
-      message: Future notification
       published_at: <%= 1.day.from_now %>
       draft: false
       audience: all_users
+  YAML
+
+  append_to_file "test/fixtures/action_text/rich_texts.yml", <<~YAML
+
+    notification_published_all_message:
+      record: published_all (Notification)
+      name: message
+      body: <p>Published for <strong>everyone</strong></p>
+
+    notification_selected_draft_message:
+      record: selected_draft (Notification)
+      name: message
+      body: <p>Selected draft</p>
+
+    notification_future_message:
+      record: future (Notification)
+      name: message
+      body: <p>Future notification</p>
   YAML
 
   create_file "test/fixtures/notification_deliveries.yml", <<~YAML, force: true
@@ -9163,16 +9196,21 @@ def configure_in_app_notifications
     require "test_helper"
 
     class NotificationTest < ActiveSupport::TestCase
-      test "trims message and validates its published contract" do
-        notification = Notification.new(message: "  hello  ", published_at: Time.current, audience: :all_users)
+      test "validates the trimmed plain-text length of its rich message" do
+        notification = Notification.new(
+          message: "  <strong>hello</strong>  ",
+          published_at: Time.current,
+          audience: :all_users
+        )
         assert notification.valid?
-        assert_equal "hello", notification.message
+        assert_equal "hello", notification.message_plain_text
+        assert_includes notification.message.body.to_s, "<strong>hello</strong>"
 
         notification.message = " "
         assert_not notification.valid?
-        notification.message = "x" * 141
+        notification.message = "<p>\#{'x' * 141}</p>"
         assert_not notification.valid?
-        notification.message = "valid"
+        notification.message = "<p>valid</p>"
         notification.published_at = T.unsafe(nil)
         assert_not notification.valid?
       end
@@ -9276,8 +9314,10 @@ def configure_in_app_notifications
         get notifications_url
         assert_response :success
         assert_select "turbo-frame#notifications_history" do
-          assert_select "li", text: /\#{Regexp.escape(notifications(:published_all).message)}/, count: 1
-          assert_select "li", text: /\#{Regexp.escape(notifications(:future).message)}/, count: 0
+          published_message = Regexp.escape(notifications(:published_all).message_plain_text)
+          future_message = Regexp.escape(notifications(:future).message_plain_text)
+          assert_select "li", text: /\#{published_message}/, count: 1
+          assert_select "li", text: /\#{future_message}/, count: 0
         end
       end
 
@@ -9348,17 +9388,25 @@ def configure_in_app_notifications
         sign_in admin
         assert_difference("Notification.count", 1) do
           post admin_notifications_url, params: {
-            notification: { message: " Selected ", audience: "selected_users", published_at: Time.current,
-              draft: "1", recipient_ids: [users(:two).id] }
+            notification: {
+              message: "<p><strong>Selected</strong></p>",
+              audience: "selected_users",
+              published_at: Time.current,
+              draft: "1",
+              recipient_ids: [users(:two).id]
+            }
           }
         end
         notification = T.must(Notification.order(:id).last)
+        assert_equal "Selected", notification.message_plain_text
         assert_equal [users(:two).id], notification.notification_deliveries.pluck(:user_id)
+        rich_text = ActionText::RichText.find_by!(record: notification, name: "message")
 
         assert_difference("NotificationDelivery.count", -1) do
           delete admin_notification_url(notification)
         end
         assert_not Notification.exists?(notification.id)
+        assert_not ActionText::RichText.exists?(rich_text.id)
       end
     end
   RUBY
@@ -9404,7 +9452,7 @@ def configure_in_app_notifications
 
         find('button[popovertarget="notifications-popover"]').click
         assert_selector "#notifications-popover:popover-open"
-        assert_text notifications(:published_all).message
+        assert_text notifications(:published_all).message_plain_text
         assert_match(%r{/notifications/popover}, resource_names.join("\n"))
 
         within("#notifications-popover") { click_on I18n.t("notifications.open"), match: :first }
@@ -9426,6 +9474,7 @@ def configure_in_app_notifications
 
         @user.grant_role!(:admin)
         visit new_admin_notification_path
+        assert_selector "lexxy-editor"
         fill_in I18n.t("notifications.admin.recipient_search"), with: @user.id.to_s
         assert_selector "turbo-frame#notification_recipient_results button[data-user-id='\#{@user.id}']"
       end
@@ -13912,7 +13961,13 @@ def configure_evidence_capture
 
         def prepare_notification_data
           3.times do |index|
-            notification = Notification.find_or_initialize_by(message: "Evidence notification #{index + 1}")
+            message = "Evidence notification #{index + 1}"
+            rich_text = ActionText::RichText.find_by(
+              record_type: "Notification",
+              name: "message",
+              body: message
+            )
+            notification = rich_text ? Notification.find(rich_text.record_id) : Notification.new(message:)
             notification.assign_attributes(
               published_at: (index + 1).minutes.ago,
               draft: false,
@@ -14092,6 +14147,7 @@ def configure_evidence_capture
 
           visit new_admin_notification_path
           assert_selector "h1", text: translate("notifications.admin.new"), count: 1
+          assert_selector "lexxy-editor"
           fill_in translate("notifications.admin.recipient_search"), with: @regular_user.id.to_s
           assert_selector "turbo-frame#notification_recipient_results button[data-user-id='#{@regular_user.id}']"
           capture_current_page("admin-notification-recipients", "通知の個別受信者選択", viewport)

@@ -67,6 +67,8 @@ class SampleAppTemplateTest < Minitest::Test
     refute_includes @source, "password123"
     refute_includes @source, "user.login_id"
     assert_includes @source, '2.times { load Rails.root.join("db/seeds.rb").to_s }'
+    assert_includes @source, "seed_notifications.map(&:message_plain_text)"
+    refute_includes @source, "notification: { message: seed_notification_messages }"
     assert_includes @source, "created = T.must(Article.order(:id).last)"
   end
 

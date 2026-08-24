@@ -159,7 +159,7 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 ### アプリ内通知
 
-全構成へ`Notification`と`NotificationDelivery`を生成します。通知は1〜140文字へtrimしたmessage、必須の公開日時、下書き状態、全ユーザーまたは個別ユーザーの通知先を持ち、公開範囲を`draft = false AND published_at <= Time.current`に限定します。配信は通知とUserの組をdatabaseの一意制約で保護し、削除時はcascadeします。個別通知は下書き中から対象差分を同期して継続対象の既読日時を保持し、全体通知は公開時だけ現在Userとの差分をbulk insertします。通知保存と同期は同じtransactionで行います。
+全構成へ`Notification`と`NotificationDelivery`を生成します。通知本文は`has_rich_text :message`でAction Textへ保存し、固定ページ編集と同じ`form.rich_text_area`をLexxy editorとして表示します。装飾を除いたプレーンテキストをtrimした長さは1〜140文字に限定します。通知は必須の公開日時、下書き状態、全ユーザーまたは個別ユーザーの通知先を持ち、公開範囲を`draft = false AND published_at <= Time.current`に限定します。配信は通知とUserの組をdatabaseの一意制約で保護し、削除時はcascadeします。個別通知は下書き中から対象差分を同期して継続対象の既読日時を保持し、全体通知は公開時だけ現在Userとの差分をbulk insertします。通知保存と同期は同じtransactionで行います。
 
 認証済み画面のheaderにはHeroiconsのbellと、未読がある場合だけdaisyUIの`indicator`と`status`を表示します。native Popover APIとdaisyUI `dropdown`内のTurbo Frameは閉じている間に通信せず、初回表示で最新10件を読み込みます。公開通知の履歴は`/notifications`で公開日時・ID降順に25件ずつ表示し、個別既読と一括既読は現在Userが所有する公開済み配信だけを更新します。管理CRUDと最大20件の受信者検索はAction Policyでadminに限定します。
 

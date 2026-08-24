@@ -37,6 +37,11 @@ class RailsTemplateContractTest < Minitest::Test
       "expected one class attribute containing #{tokens.inspect}"
   end
 
+  def assert_source_order(template, *snippets)
+    indexes = snippets.map { |snippet| template.index(snippet) || flunk("source snippet not found: #{snippet}") }
+    assert_equal indexes.sort, indexes, "expected source order: #{snippets.join(' -> ')}"
+  end
+
   def test_generates_one_application_identity_and_i18n_boundary
     identity = generated_file_source("lib/application_identity.rb")
     initializer = generated_file_source("config/initializers/application_identity.rb")
@@ -70,10 +75,43 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "params(pagy: Pagy::Offset, aria_label: String)"
     assert_includes helper, "pagy.data_hash(data_keys: [:series])"
     assert_includes helper, "pagy.page_url(item)"
-    assert_includes helper, 'class: "join-item btn btn-active"'
-    assert_includes helper, 'class: "join-item btn btn-disabled"'
-    assert_includes helper, 'class: "join"'
-    assert_includes helper, 'class: "overflow-x-auto"'
+    assert_includes helper, "ACTION_BUTTON_CLASSES = {"
+    assert_includes helper, 'primary: "btn btn-primary btn-rapid"'
+    assert_includes helper, 'secondary: "btn btn-rapid"'
+    assert_includes helper, 'quiet: "btn btn-ghost btn-rapid"'
+    assert_includes helper, 'warning: "btn btn-outline btn-warning btn-rapid"'
+    assert_includes helper, 'destructive: "btn btn-outline btn-error btn-rapid"'
+    assert_includes helper, 'destructive_confirm: "btn btn-error btn-rapid"'
+    assert_includes helper, "private_constant :ACTION_BUTTON_CLASSES"
+    assert_includes helper, "sig { params(role: Symbol).returns(String) }"
+    assert_includes helper, "def action_button_classes(role)"
+    assert_includes helper, 'Kernel.raise ArgumentError, "unsupported action button role: #{role.inspect}"'
+    assert_includes helper, "def pagination_item_classes(active: false, disabled: false, square: false)"
+    assert_includes helper, '"btn btn-rapid join-item"'
+    assert_includes helper, '"btn-active": active'
+    assert_includes helper, '"btn-disabled": disabled'
+    assert_includes helper, '"btn-square": square'
+    assert_includes helper, "def with_pagination(aria_label:, summary: nil, &block)"
+    assert_includes helper, 'Kernel.raise ArgumentError, "pagination aria label must not be empty"'
+    assert_includes helper, 'class: "flex w-max min-w-full items-center justify-end gap-3"'
+    assert_includes helper, 'tag.nav(inner, class: "overflow-x-auto", aria: { label: aria_label })'
+    assert_includes helper, "with_pagination(aria_label:) { safe_join(items) }"
+    {
+      primary: "btn btn-primary btn-rapid",
+      secondary: "btn btn-rapid",
+      quiet: "btn btn-ghost btn-rapid",
+      warning: "btn btn-outline btn-warning btn-rapid",
+      destructive: "btn btn-outline btn-error btn-rapid",
+      destructive_confirm: "btn btn-error btn-rapid"
+    }.each do |role, classes|
+      assert_includes helper_test, %(#{role}: "#{classes}")
+    end
+    assert_includes helper_test, "assert_equal classes, action_button_classes(role)"
+    assert_includes helper_test, "assert_raises(ArgumentError) { action_button_classes(:unknown) }"
+    assert_includes helper_test, 'with_pagination(aria_label: "Records pagination", summary: "2 / 8")'
+    assert_includes helper_test, "pagination_item_classes(active: true)"
+    assert_includes helper_test, "pagination_item_classes(disabled: true, square: true)"
+    assert_includes helper_test, 'assert_includes inner.at_css(".join > .btn-disabled")["class"].split, "btn-square"'
     assert_includes helper, 'aria: { hidden: true }'
     assert_equal 1, helper.scan("def application_routes").size
     assert_includes helper, "def with_modal(id:, title:, close_label:, description: nil, actions: nil, dialog_data: {}, &block)"
@@ -209,6 +247,40 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, "font-family: SFMono-Regular, Consolas, Menlo, monospace;"
   end
 
+  def test_semantic_alerts_use_the_soft_style
+    semantic_alerts = class_attributes(@source).select do |classes|
+      classes.include?("alert") && (classes & %w[alert-info alert-success alert-warning alert-error]).any?
+    end
+    notification_popover = generated_file_source("app/javascript/controllers/notification_popover_controller.js")
+    web_push = generated_file_source("app/javascript/controllers/push_subscription_controller.js")
+    web_push_view = generated_file_source("app/views/web_push_settings/show.html.erb")
+    mission_control_flash = generated_file_source("app/views/layouts/mission_control/jobs/_flash.html.erb")
+    agents = File.binread(File.expand_path("../../AGENTS.md", __dir__)).force_encoding(Encoding::UTF_8)
+    stack = File.binread(File.expand_path("../../docs/stack.md", __dir__)).force_encoding(Encoding::UTF_8)
+
+    refute_empty semantic_alerts
+    semantic_alerts.each do |classes|
+      assert_includes classes, "alert-soft", "expected #{classes.inspect} to use alert-soft"
+      refute_includes classes, "alert-outline", "expected #{classes.inspect} not to use alert-outline"
+    end
+    assert_includes mission_control_flash,
+      'class="alert alert-soft <%= name.to_sym == :notice ? "alert-success" : "alert-error" %>"'
+    assert_includes notification_popover, 'classList.add("alert-error", "alert-soft")'
+    assert_includes web_push,
+      'classList.remove("hidden", "alert-info", "alert-success", "alert-warning", "alert-error")'
+    assert_includes web_push, 'state === "success" || state === "on" ? "alert-success"'
+    assert_includes web_push, 'state === "denied" || state === "unsupported" ? "alert-warning"'
+    assert_includes web_push, 'state === "error" ? "alert-error" : "alert-info"'
+    assert_includes web_push, "classList.add(alertClass)"
+    refute_includes web_push, '"alert-soft"'
+    assert_class_tokens web_push_view, "alert", "alert-info", "alert-soft", "hidden"
+    [mission_control_flash, notification_popover, web_push, web_push_view].each do |source|
+      refute_includes source, "alert-outline"
+    end
+    assert_includes agents, "`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合は、常に`alert-soft`"
+    assert_includes stack, "`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合に`alert-soft`を必須"
+  end
+
   def test_default_views_use_daisyui_components_and_semantic_colors
     component_expectations = {
       "app/views/layouts/authentication.html.erb" => %w[hero hero-content card-rapid card-body],
@@ -254,7 +326,10 @@ class RailsTemplateContractTest < Minitest::Test
     view_sources = component_expectations.to_h { |path, _components| [path, generated_file_source(path)] }
     component_expectations.each do |path, components|
       components.each do |component|
-        assert class_attributes(view_sources.fetch(path)).any? { |classes| classes.include?(component) },
+        source = view_sources.fetch(path)
+        uses_component = class_attributes(source).any? { |classes| classes.include?(component) }
+        uses_component ||= component == "btn" && source.include?("action_button_classes(")
+        assert uses_component,
           "#{path}: #{component}"
       end
     end
@@ -267,14 +342,17 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_settings_layout, "tab-content"
     profile_configuration = source_between("def configure_profile", "def configure_api")
     %w[alert fieldset fieldset-legend input file-input card card-body list list-row avatar btn].each do |component|
-      assert class_attributes(profile_configuration).any? { |classes| classes.include?(component) }, "profile: #{component}"
+      uses_component = class_attributes(profile_configuration).any? { |classes| classes.include?(component) }
+      uses_component ||= component == "btn" && profile_configuration.include?("action_button_classes(")
+      assert uses_component, "profile: #{component}"
     end
     avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
     views += profile_configuration.sub(avatar_helper, "")
     %w[navbar menu dropdown avatar hero card fieldset input file-input checkbox btn alert footer badge divider list table collapse].each do |component|
       assert class_attributes(views).any? { |classes| classes.include?(component) }, component
     end
-    %w[bg-base-100 bg-base-200 border-base-300 text-base-content btn-primary].each { |utility| assert_includes views, utility }
+    %w[bg-base-100 bg-base-200 border-base-300 text-base-content].each { |utility| assert_includes views, utility }
+    assert_includes views, "action_button_classes(:primary)"
     refute_match(/(?:bg|text|border)-(?:blue|gray|slate|red|green|yellow)-\d+/, views)
     refute_includes views, "dark:"
     refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, views)
@@ -296,6 +374,8 @@ class RailsTemplateContractTest < Minitest::Test
     form = templates.fetch("lib/templates/erb/scaffold/_form.html.erb.tt")
     index = templates.fetch("lib/templates/erb/scaffold/index.html.erb.tt")
     show = templates.fetch("lib/templates/erb/scaffold/show.html.erb.tt")
+    new_view = templates.fetch("lib/templates/erb/scaffold/new.html.erb.tt")
+    edit = templates.fetch("lib/templates/erb/scaffold/edit.html.erb.tt")
     partial = templates.fetch("lib/templates/erb/scaffold/partial.html.erb.tt")
     scaffold_controller = templates.fetch("lib/templates/rails/scaffold_controller/controller.rb.tt")
     controller_view = templates.fetch("lib/templates/erb/controller/view.html.erb.tt")
@@ -315,13 +395,21 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes form, 'when :file_field then "file-input w-full"'
     assert_includes form, 'else "input input-rapid w-full"'
     assert_includes form, 'class: "checkbox"'
-    assert_class_tokens(form, "alert", "alert-error")
+    assert_class_tokens(form, "alert", "alert-error", "alert-soft")
     assert_class_tokens(form, "fieldset")
     assert_class_tokens(form, "fieldset-legend")
-    assert_class_tokens(form, "btn", "btn-primary", "btn-rapid")
+    assert_includes form, '<%%= form.submit class: action_button_classes(:primary) %>'
+    assert_includes form, '<div class="card-actions flex-wrap justify-end">'
 
-    assert_class_tokens(index, "table", "table-sm", "table-pin-rows")
+    assert_class_tokens(index, "table", "table-sm", "table-pin-rows", "min-w-max")
     assert_class_tokens(index, "overflow-x-auto")
+    assert_includes index, '<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">'
+    assert_includes index, 'class: action_button_classes(:primary)'
+    assert_includes index, 'class: action_button_classes(:secondary)'
+    assert_includes index, '<div class="flex flex-wrap justify-end gap-2">'
+    index_header = index[/<header .*?<\/header>/m] || flunk("scaffold index header not found")
+    assert_includes index_header, '<%%= content_for(:page_title) %>'
+    assert_includes index_header, 'class: action_button_classes(:primary)'
     assert_includes index, "<%%= dom_id <%= singular_table_name %> %>"
     assert_includes index, "attribute.attachment?"
     assert_includes index, "attribute.attachments?"
@@ -330,7 +418,29 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes index, "notice"
 
     assert_class_tokens(show, "card-rapid")
-    assert_includes show, 'method: :delete, class: "btn btn-outline btn-error btn-rapid"'
+    assert_includes show, '<div class="card-actions flex-wrap justify-end">'
+    assert_includes show, 'method: :delete, class: action_button_classes(:destructive)'
+    assert_operator show.index('Back to <%= human_name.pluralize.downcase %>'), :<,
+      show.index('Edit this <%= human_name.downcase %>')
+    assert_operator show.index('Edit this <%= human_name.downcase %>'), :<,
+      show.index('Destroy this <%= human_name.downcase %>')
+    assert_includes new_view, '<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">'
+    assert_includes new_view, 'class: action_button_classes(:quiet)'
+    new_header = new_view[/<header .*?<\/header>/m] || flunk("scaffold new header not found")
+    assert_includes new_header, '<%%= content_for(:page_title) %>'
+    assert_includes new_header, 'class: action_button_classes(:quiet)'
+    assert_includes edit, '<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">'
+    assert_includes edit, '<div class="flex flex-col gap-3 sm:flex-row">'
+    edit_header = edit[/<header .*?<\/header>/m] || flunk("scaffold edit header not found")
+    assert_includes edit_header, '<%%= content_for(:page_title) %>'
+    assert_includes edit_header, '<div class="flex flex-col gap-3 sm:flex-row">'
+    assert_includes edit_header, 'class: action_button_classes(:quiet)'
+    assert_includes edit_header, 'class: action_button_classes(:secondary)'
+    assert_operator edit.index('Back to <%= human_name.pluralize.downcase %>'), :<,
+      edit.index('Show this <%= human_name.downcase %>')
+    assert_includes edit, 'class: action_button_classes(:quiet)'
+    assert_includes edit, 'class: action_button_classes(:secondary)'
+    [index, new_view, edit].each { |view| refute_includes view, "content_for :page_actions" }
     assert_class_tokens(partial, "list")
     assert_class_tokens(partial, "list-row")
     assert_includes partial, "<%%= dom_id <%= singular_name %> %>"
@@ -343,6 +453,93 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes combined, "dark:"
     refute_match(/#[0-9a-f]{3,8}(?![0-9a-z])/i, combined)
     refute_match(/\bmin-h-\d+/, combined)
+  end
+
+  def test_content_actions_use_semantic_roles_wrapping_action_groups_and_stable_dom_order
+    passkey_new = generated_file_source("app/views/account/passkeys/new.html.erb")
+    admin_users = generated_file_source("app/views/admin/users/index.html.erb")
+    admin_pages_index = generated_file_source("app/views/admin/pages/index.html.erb")
+    admin_page_edit = generated_file_source("app/views/admin/pages/edit.html.erb")
+    admin_faqs = generated_file_source("app/views/admin/faqs/index.html.erb")
+    admin_faq_form = generated_file_source("app/views/admin/faqs/_form.html.erb")
+    footer_setting = generated_file_source("app/views/admin/footer_settings/edit.html.erb")
+    profile_form = generated_file_source("app/views/profiles/_form.html.erb")
+    api_index = generated_file_source("app/views/api_credentials/index.html.erb")
+    api_form = generated_file_source("app/views/api_credentials/_form.html.erb")
+    api_show = generated_file_source("app/views/api_credentials/show.html.erb")
+    notifications = generated_file_source("app/views/admin/notifications/index.html.erb")
+    notification_form = generated_file_source("app/views/admin/notifications/_form.html.erb")
+    notification_show = generated_file_source("app/views/admin/notifications/show.html.erb")
+    notification_item = generated_file_source("app/views/notifications/_notification.html.erb")
+    notification_popover = generated_file_source("app/views/notifications/_popover.html.erb")
+    notification_history = generated_file_source("app/views/notifications/index.html.erb")
+    notification_open = generated_file_source("app/views/notifications/open.turbo_stream.erb")
+    account_delete = generated_file_source("app/views/accounts/delete.html.erb")
+
+    assert_includes admin_users, '<div class="flex flex-wrap justify-end gap-2">'
+    assert_includes admin_users, 'class_names(action_button_classes(:secondary), "btn-disabled")'
+    assert_includes admin_users, "class: action_button_classes(:destructive)"
+    assert_includes admin_users, "class: action_button_classes(:secondary)"
+
+    [admin_users, admin_pages_index, admin_faqs, api_index, notifications].each do |view|
+      assert_class_tokens(view, "table", "min-w-max")
+      assert_includes view, '<div class="flex flex-wrap justify-end gap-2">'
+    end
+    assert_includes admin_pages_index, "class: action_button_classes(:secondary)"
+    assert_includes admin_faqs, "class: action_button_classes(:primary)"
+    assert_includes admin_faqs, "class: action_button_classes(:secondary)"
+    assert_includes admin_faqs, "class: action_button_classes(:destructive)"
+    assert_includes footer_setting, "class: action_button_classes(:primary)"
+    assert_includes api_index, "class: action_button_classes(:primary)"
+    assert_includes api_index, "class: action_button_classes(:secondary)"
+    assert_includes notifications, "class: action_button_classes(:primary)"
+    assert_includes notifications, "class: action_button_classes(:secondary)"
+    assert_includes notifications, "class: action_button_classes(:destructive)"
+    refute_includes notifications, "btn-sm"
+    refute_includes notifications, "text-error"
+    assert_includes notification_item, "local_assigns.fetch(:compact)"
+    refute_includes notification_item, "local_assigns.fetch(:compact, false)"
+    assert_includes notification_item,
+      'class: (compact ? "btn btn-ghost btn-sm" : action_button_classes(:quiet))'
+    assert_includes notification_popover, 'frame_prefix: "popover_notification", compact: true'
+    assert_includes notification_history, 'frame_prefix: "history_notification", compact: false'
+    assert_includes notification_open, "locals: { delivery: @delivery, frame_prefix:, compact: }"
+
+    [passkey_new, admin_page_edit, admin_faq_form, footer_setting, profile_form, api_form,
+     notification_form, notification_show, account_delete].each do |view|
+      assert_includes view, '<div class="card-actions flex-wrap justify-end">'
+    end
+    assert_includes api_show, '<div class="card-actions mt-4 flex-wrap justify-end">'
+
+    assert_source_order(admin_page_edit,
+      'class: action_button_classes(:quiet)',
+      'class: action_button_classes(:primary)')
+    assert_source_order(admin_faq_form,
+      'class: action_button_classes(:quiet)',
+      'class: action_button_classes(:primary)')
+    assert_source_order(profile_form,
+      'class: action_button_classes(:quiet)',
+      'class: action_button_classes(:primary)')
+    assert_source_order(api_form,
+      'class: action_button_classes(:quiet)',
+      'class: action_button_classes(:primary)')
+    assert_source_order(api_show,
+      'class: action_button_classes(:quiet)',
+      'class: action_button_classes(:secondary)',
+      'class: action_button_classes(:warning)',
+      'class: action_button_classes(:destructive)')
+    assert_source_order(notification_form,
+      'class: action_button_classes(:quiet)',
+      'class: action_button_classes(:primary)')
+    assert_source_order(notification_show,
+      'class: action_button_classes(:quiet)',
+      'class: action_button_classes(:secondary)')
+    assert_source_order(passkey_new,
+      'class: action_button_classes(:quiet)',
+      'class="<%= action_button_classes(:primary) %>"')
+    assert_source_order(account_delete,
+      'class: action_button_classes(:quiet)',
+      'action_button_classes(:destructive_confirm)')
   end
 
   def test_authentication_fixtures_use_unique_webauthn_identifiers_without_passwords
@@ -460,6 +657,10 @@ class RailsTemplateContractTest < Minitest::Test
     jobs_index = generated_file_source("app/views/mission_control/jobs/jobs/index.html.erb")
     job_show = generated_file_source("app/views/mission_control/jobs/jobs/show.html.erb")
     queues_index = generated_file_source("app/views/mission_control/jobs/queues/index.html.erb")
+    queue_show = generated_file_source("app/views/mission_control/jobs/queues/show.html.erb")
+    recurring_tasks_index = generated_file_source("app/views/mission_control/jobs/recurring_tasks/index.html.erb")
+    recurring_task_show = generated_file_source("app/views/mission_control/jobs/recurring_tasks/show.html.erb")
+    workers_index = generated_file_source("app/views/mission_control/jobs/workers/index.html.erb")
     pagination = generated_file_source("app/views/mission_control/jobs/shared/_pagination_toolbar.html.erb")
     job_operation_views = %w[
       app/views/layouts/mission_control/jobs/application.html.erb
@@ -538,21 +739,51 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes jobs_index, '<section class="card-rapid" aria-label="Job filters">'
     assert_includes jobs_index, '<div class="card-body">'
     refute_includes jobs_index, "content_for :page_actions_secondary"
-    assert_includes jobs_index, 'class: "btn btn-error btn-rapid"'
-    assert_includes jobs_index, 'class: "btn btn-warning btn-rapid"'
+    assert_includes jobs_index, '<div class="card-actions flex-wrap justify-end md:col-span-2">'
+    assert_includes jobs_index, "class: action_button_classes(:secondary)"
+    assert_includes jobs_index, "class: action_button_classes(:warning)"
+    assert_includes jobs_index, "class: action_button_classes(:destructive)"
+    assert_match(/button_to "Retry .*?action_button_classes\(:warning\).*?button_to "Discard .*?action_button_classes\(:destructive\)/m,
+      jobs_index)
+    assert_match(/button_to "Run now".*?action_button_classes\(:warning\).*?button_to "Discard".*?action_button_classes\(:destructive\)/m,
+      jobs_index)
     refute_includes jobs_index, "btn-sm"
     refute_includes jobs_index, '<section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">'
     assert_includes job_show, 'class="mockup-code overflow-x-auto"'
     assert_includes job_show, '<% content_for :page_title, job_title(@job) %>'
     assert_includes job_show, 'class="collapse collapse-arrow card-rapid"'
     assert_includes job_show, 'class="tabs tabs-box justify-end"'
+    assert_includes job_show, '<div class="flex flex-wrap justify-end gap-2">'
+    assert_includes job_show, "class: action_button_classes(:warning)"
+    assert_includes job_show, "class: action_button_classes(:destructive)"
+    assert_match(/button_to "Retry".*?action_button_classes\(:warning\).*?button_to "Discard".*?action_button_classes\(:destructive\)/m,
+      job_show)
+    assert_match(/button_to "Run now".*?action_button_classes\(:warning\).*?button_to "Discard".*?action_button_classes\(:destructive\)/m,
+      job_show)
     refute_includes job_show, "tabs-sm"
-    assert_includes queues_index, 'class: "btn btn-warning btn-rapid"'
+    assert_includes queues_index, '<div class="flex flex-wrap justify-end gap-2">'
+    assert_includes queues_index, "class: action_button_classes(:warning)"
+    assert_includes queues_index, "class: action_button_classes(:secondary)"
     refute_includes queues_index, "btn-sm"
     assert_includes queues_index, '<% content_for :page_title, "Queues" %>'
-    assert_includes pagination, 'class="join"'
-    assert_includes pagination, 'class: "btn btn-rapid join-item"'
+    [queue_show, recurring_tasks_index, recurring_task_show].each do |view|
+      assert_includes view, '<div class="flex flex-wrap justify-end gap-2">'
+    end
+    assert_includes queue_show, "class: action_button_classes(:warning)"
+    assert_includes queue_show, "class: action_button_classes(:secondary)"
+    assert_includes recurring_tasks_index, "class: action_button_classes(:warning)"
+    assert_includes recurring_task_show, "class: action_button_classes(:warning)"
+    assert_includes pagination,
+      '<%= with_pagination(aria_label:, summary: "#{page.index} / #{page.pages_count || "..."}") do %>'
+    assert_equal 2, pagination.scan("pagination_item_classes(disabled: true)").size
+    assert_equal 2, pagination.scan("class: pagination_item_classes %>").size
+    refute_includes pagination, 'class="join"'
+    refute_includes pagination, 'class: "btn btn-rapid join-item"'
     refute_includes pagination, "btn-sm"
+    assert_includes queue_show, 'aria_label: "Queue jobs pagination"'
+    assert_includes jobs_index, 'aria_label: "#{jobs_status.titleize} jobs pagination"'
+    assert_includes recurring_task_show, 'aria_label: "Recurring task jobs pagination"'
+    assert_includes workers_index, 'aria_label: "Workers pagination"'
     assert_includes helper, '"failed" => "badge-error"'
     assert_includes helper, '"finished" => "badge-success"'
     refute_includes layout, "bulma.min.css"
@@ -649,15 +880,38 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens task, "link", "link-hover"
     assert_class_tokens task_show, "fieldset"
     assert_class_tokens task_show, "file-input"
-    assert_class_tokens task_show, "btn", "btn-primary"
+    assert_includes task_show, '<div class="card-actions flex-wrap justify-end">'
+    assert_includes task_show, 'form.submit "Run", class: action_button_classes(:primary)'
     assert_class_tokens task_show, "collapse", "collapse-arrow"
     assert_class_tokens task_show, "mockup-code"
-    assert_class_tokens run, "btn", "btn-warning"
-    assert_class_tokens run, "btn", "btn-error"
+    assert_includes task_show, '<%= with_pagination(aria_label: "Previous runs pagination") do %>'
+    assert_includes task_show, 'class: pagination_item_classes %>'
+    refute_includes task_show, 'class="join justify-end"'
+    refute_includes task_show, 'class: "btn btn-rapid join-item"'
+    assert_includes run, '<div class="card-actions flex-wrap justify-end">'
+    assert_includes run, "class: action_button_classes(:secondary)"
+    assert_includes run, "class: action_button_classes(:warning)"
+    assert_includes run, "class: action_button_classes(:destructive)"
+    paused_actions = run[/<% if run\.paused\? %>(.*?)<% elsif run\.errored\? %>/m, 1]
+    pausing_actions = run[/<% elsif run\.pausing\? %>(.*?)<% elsif run\.active\? %>/m, 1]
+    active_actions = run[/<% elsif run\.active\? %>(.*?)<% end %>/m, 1]
+    refute_nil paused_actions
+    refute_nil pausing_actions
+    refute_nil active_actions
+    assert_source_order(paused_actions,
+      'class: action_button_classes(:secondary)',
+      'class: action_button_classes(:destructive)')
+    assert_source_order(pausing_actions,
+      'class: action_button_classes(:warning)',
+      'class: action_button_classes(:destructive)')
+    assert_source_order(active_actions,
+      'class: action_button_classes(:warning)',
+      'class: action_button_classes(:destructive)')
+    refute_includes [task_show, run].join, "btn-sm"
     assert_includes task, "admin_maintenance_tasks.task_path(task)"
     assert_includes task_show, "admin_maintenance_tasks.task_runs_path(@task)"
     assert_includes run, "admin_maintenance_tasks.resume_task_run_path(@task, run)"
-    assert_class_tokens error, "alert", "alert-error"
+    assert_class_tokens error, "alert", "alert-error", "alert-soft"
     refute_includes maintenance, 'create_file "app/assets/stylesheets/maintenance_tasks.css"'
     refute_includes maintenance, "bulma@"
     assert_includes refresh, 'this.element.querySelector("[data-refresh]")'
@@ -841,12 +1095,13 @@ class RailsTemplateContractTest < Minitest::Test
 
     assert_class_tokens view, "card-rapid"
     assert_class_tokens view, "overflow-x-auto"
-    assert_class_tokens view, "table", "table-sm", "table-pin-rows"
+    assert_class_tokens view, "table", "table-sm", "table-pin-rows", "min-w-max"
     assert_class_tokens view, "badge"
-    assert_class_tokens view, "btn", "btn-outline", "btn-error"
+    assert_includes helper, 'destructive: "btn btn-outline btn-error btn-rapid"'
+    assert_includes view, "class: action_button_classes(:destructive)"
     assert_includes view, 'pagination(@pagy, aria_label: t("admin.users.pagination"))'
     assert_class_tokens helper, "join"
-    assert_class_tokens helper, "join-item", "btn"
+    assert_includes helper, '"btn btn-rapid join-item"'
     assert_includes view, 'admin_user_roles_path(user)'
     assert_includes view, 'admin_user_role_path(user, "admin")'
     refute_includes view, '@pagy.page_url(:previous)'
@@ -934,18 +1189,31 @@ class RailsTemplateContractTest < Minitest::Test
 
     helper_button_classes = @source.scan(/class: "([^"]*\bbtn\b[^"]*)"/).flatten
     html_button_classes = @source.scan(/class="([^"]*\bbtn\b[^"]*)"/).flatten
-    assert_operator helper_button_classes.length + html_button_classes.length, :>, 0
-    button_classes = helper_button_classes + html_button_classes
+    javascript_button_classes = @source.scan(/className = "([^"]*\bbtn\b[^"]*)"/).flatten
+    button_classes = helper_button_classes + html_button_classes + javascript_button_classes
     button_classes.each { |button_class| refute_includes button_class, "min-h-11" }
-    button_classes.select { |classes| classes.split.include?("btn-primary") }.each do |button_class|
-      assert_includes button_class, "btn-rapid"
-    end
+    assert_equal({
+      "btn" => 1,
+      "btn btn-circle btn-ghost" => 1,
+      "btn btn-ghost" => 2,
+      "btn btn-ghost btn-circle" => 1,
+      "btn btn-ghost btn-rapid" => 1,
+      "btn btn-ghost btn-sm" => 2,
+      "btn btn-ghost btn-xs" => 1,
+      "btn btn-primary btn-outline btn-rapid" => 1,
+      "btn btn-rapid" => 1,
+      "btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>" => 1,
+      "btn join-item" => 3,
+      "btn mt-3 w-full" => 1
+    }, button_classes.tally)
+    refute_match(/\bclass(?:=|:\s*)'[^']*\bbtn\b/, @source)
 
     button_utility = @source[/@utility btn-rapid \{.*?^    \}/m]
     refute_nil button_utility
     assert_includes button_utility, "font-size: 1rem"
     assert_includes button_utility, "font-weight: 700"
-    assert_operator @source.scan("btn btn-primary btn-outline btn-rapid").length, :>=, 2
+    assert_includes @source, 'primary: "btn btn-primary btn-rapid"'
+    assert_operator @source.scan("action_button_classes(:primary)").length, :>=, 2
   end
 
   def test_siwe_sign_in_uses_an_explicit_stimulus_action
@@ -1584,14 +1852,28 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes evidence, 'User::LOGIN_ID_BYTES'
     refute_includes evidence, 'User.human_attribute_name(:password)'
     assert_includes evidence, '"api-credential-secret"'
+    assert_includes evidence, 'assert_selector ".alert.alert-warning.alert-soft", count: 1'
     assert_includes evidence, "def with_deterministic_secure_random"
     assert_includes evidence, "T.must(singleton_class).define_method(:urlsafe_base64, T.must(original_method))"
     assert_includes evidence, '"navigation-authenticated-open"'
     assert_includes evidence, '"about"'
     assert_includes evidence, '"faq"'
     assert_includes evidence, '"admin-page-edit"'
+    assert_includes evidence, '"admin-faqs"'
     assert_includes evidence, '"admin-faq-edit"'
     assert_includes evidence, '"admin-footer-setting"'
+    assert_includes evidence, '"admin-maintenance-task-paused"'
+    assert_includes evidence, '"admin-maintenance-task-errored"'
+    assert_includes evidence, 'assert_selector ".alert.alert-error.alert-soft", text: "Evidence task failure", count: 1'
+    assert_includes evidence, 'assert_button "Pause"'
+    assert_includes evidence, 'assert_button "Resume"'
+    assert_includes evidence, 'assert_button "Cancel"'
+    assert_includes evidence, '"admin-notifications"'
+    assert_includes evidence, '"admin-notification-show"'
+    assert_source_order(evidence,
+      '"notifications-history"',
+      'within("#notifications-popover") { click_button translate("notifications.open_all") }',
+      '"notifications-popover-opened"')
     assert_includes evidence, '"admin-overview"'
     assert_includes evidence, "def assert_admin_overview_geometry"
     assert_includes evidence, 'document.querySelector("[data-admin-overview-stats]")'
@@ -1600,6 +1882,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'assert_no_selector %(header a[href="#{host_routes.admin_root_path}"]), visible: :all'
     assert_includes evidence, '"web-push-enabled"'
     assert_includes evidence, 'set_evidence_web_push_mode("granted")'
+    assert_includes evidence,
+      'assert_selector ".alert.alert-info.alert-soft", text: translate("api_credentials.empty"), count: 1'
+    assert_includes evidence,
+      'assert_selector ".alert.alert-success.alert-soft", text: translate("passkeys.updated"), count: 1'
+    assert_includes evidence,
+      'assert_selector ".alert.alert-success.alert-soft", text: translate("siwe.identities.updated"), count: 1'
+    assert_includes evidence, '[data-push-subscription-target="status"].alert-success.alert-soft'
+    assert_includes evidence, '[data-push-subscription-target="status"].alert-info.alert-soft'
     assert_includes evidence, "def reconnect_web_push_controller"
     assert_includes evidence, "playwright_page.evaluate(script)"
     assert_includes evidence, '[data-push-subscription-target="toggle"]:not([disabled])'
@@ -1622,7 +1912,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '@pagination_users = 48.times.map { User.create! } if @pagination_users.nil?'
     assert_includes evidence, 'const nav = document.querySelector(\'nav[aria-label="#{translate("admin.users.pagination")}"]\')'
     assert_includes evidence, 'assert_equal 5, geometry.fetch("directItemCount")'
+    assert_includes evidence, 'assert_equal geometry.fetch("directItemCount"), geometry.fetch("rapidItemCount")'
     assert_includes evidence, 'assert_equal 1, geometry.fetch("rowCount")'
+    assert_includes evidence, 'assert_equal ["16px"], geometry.fetch("fontSizes")'
+    assert_includes evidence, 'assert_equal 2, geometry.fetch("iconCount")'
+    assert_includes evidence, 'assert_equal "auto", geometry.fetch("navOverflowX")'
+    assert_includes evidence, 'assert_in_delta geometry.fetch("navRight"), geometry.fetch("toolbarRight"), 1'
     assert_includes evidence, "prepare_job_operations_data if JOB_OPERATIONS"
     assert_includes evidence, "class EvidenceFailedJob < ApplicationJob"
     assert_includes evidence, 'data-page-actions-container="card"'
@@ -1855,8 +2150,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens home, "hero"
     assert_class_tokens home, "hero-content"
     assert_class_tokens login, "checkbox"
-    assert_class_tokens login, "btn", "btn-block", "btn-rapid"
-    assert_class_tokens registration, "btn", "btn-block", "btn-rapid"
+    [login, registration].each do |view|
+      assert_includes view, 'class_names(action_button_classes(:primary), "btn-block")'
+      assert_includes view, 'class_names(action_button_classes(:secondary), "btn-block")'
+    end
     assert_includes login, 'data-controller="passkey"'
     assert_includes registration, 'data-controller="passkey"'
   end
@@ -1921,7 +2218,8 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes job_show, "content_for :page_actions_primary"
     assert_includes job_show, '<header class="flex flex-wrap items-start justify-between gap-4">'
     refute_includes api_form, "content_for :page_actions_primary"
-    assert_includes api_form, '<%= form.submit class: "btn btn-primary btn-rapid" %>'
+    assert_includes api_form, '<div class="card-actions flex-wrap justify-end">'
+    assert_includes api_form, '<%= form.submit class: action_button_classes(:primary) %>'
   end
 
   def test_with_menu_standard_surfaces_use_p_3_without_changing_nested_or_variant_cards

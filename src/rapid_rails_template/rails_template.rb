@@ -844,7 +844,7 @@ def configure_generator_templates
   create_file "lib/templates/erb/scaffold/_form.html.erb.tt", <<~ERB, force: true
     <%%= form_with(model: <%= model_resource_name %>, class: "space-y-5") do |form| %>
       <%% if <%= singular_table_name %>.errors.any? %>
-        <div class="alert alert-error" role="alert">
+        <div class="alert alert-error alert-soft" role="alert">
           <div>
             <h2 class="font-semibold leading-[1.5]"><%%= pluralize(<%= singular_table_name %>.errors.count, "error") %> prohibited this <%= singular_table_name %> from being saved:</h2>
             <ul class="mt-2 list-disc pl-5">
@@ -892,8 +892,8 @@ def configure_generator_templates
 
     <% end -%>
     <% end -%>
-      <div class="flex justify-end">
-        <%%= form.submit class: "btn btn-primary btn-rapid" %>
+      <div class="card-actions flex-wrap justify-end">
+        <%%= form.submit class: action_button_classes(:primary) %>
       </div>
     <%% end %>
   ERB
@@ -904,13 +904,13 @@ def configure_generator_templates
     <div class="mx-auto w-full max-w-6xl space-y-6 px-5 py-10 md:py-14">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
-        <%%= link_to "New <%= human_name.downcase %>", <%= new_helper(type: :path) %>, class: "btn btn-primary btn-rapid" %>
+        <%%= link_to "New <%= human_name.downcase %>", <%= new_helper(type: :path) %>, class: action_button_classes(:primary) %>
       </header>
 
       <section class="card-rapid">
         <div class="card-body">
           <div class="overflow-x-auto">
-            <table class="table table-sm table-pin-rows">
+            <table class="table table-sm table-pin-rows min-w-max">
               <thead>
                 <tr>
     <% attributes.reject(&:password_digest?).each do |attribute| -%>
@@ -935,8 +935,10 @@ def configure_generator_templates
     <% end -%>
                     </td>
     <% end -%>
-                    <td class="text-right">
-                      <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(singular_table_name) %>, class: "btn btn-rapid" %>
+                    <td>
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(singular_table_name) %>, class: action_button_classes(:secondary) %>
+                      </div>
                     </td>
                   </tr>
                 <%% end %>
@@ -982,10 +984,10 @@ def configure_generator_templates
       <section class="card-rapid">
         <div class="card-body">
           <%%= render @<%= singular_table_name %> %>
-          <div class="card-actions justify-end">
-            <%%= link_to "Edit this <%= human_name.downcase %>", <%= edit_helper(type: :path) %>, class: "btn btn-rapid" %>
-            <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
-            <%%= button_to "Destroy this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, method: :delete, class: "btn btn-outline btn-error btn-rapid" %>
+          <div class="card-actions flex-wrap justify-end">
+            <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: action_button_classes(:quiet) %>
+            <%%= link_to "Edit this <%= human_name.downcase %>", <%= edit_helper(type: :path) %>, class: action_button_classes(:secondary) %>
+            <%%= button_to "Destroy this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, method: :delete, class: action_button_classes(:destructive) %>
           </div>
         </div>
       </section>
@@ -998,7 +1000,7 @@ def configure_generator_templates
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
-        <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
+        <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: action_button_classes(:quiet) %>
       </header>
 
       <section class="card-rapid">
@@ -1016,8 +1018,8 @@ def configure_generator_templates
       <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
         <div class="flex flex-col gap-3 sm:flex-row">
-          <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, class: "btn btn-rapid" %>
-          <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: "btn btn-rapid" %>
+          <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: action_button_classes(:quiet) %>
+          <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, class: action_button_classes(:secondary) %>
         </div>
       </header>
 
@@ -2158,8 +2160,8 @@ def install_passkey_views
            data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-        <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("passkeys.delete_with_wallet") %></button>
-        <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="siwe-sign-in#authenticate"><%= t("passkeys.delete_with_wallet") %></button>
+        <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-passkey-provider-picker" %>
       </div>
     ERB
@@ -2170,7 +2172,7 @@ def install_passkey_views
   create_file "app/views/account/passkeys/index.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("passkeys.title") %>
     <% content_for :page_actions_primary do %>
-      <%= link_to t("passkeys.add"), new_account_passkey_path, class: "btn btn-primary btn-rapid" %>
+      <%= link_to t("passkeys.add"), new_account_passkey_path, class: action_button_classes(:primary) %>
     <% end %>
 
     <section class="space-y-5">
@@ -2184,8 +2186,8 @@ def install_passkey_views
               <span class="badge badge-outline"><%= t(passkey.backup_state? ? "passkeys.backed_up" : "passkeys.not_backed_up") %></span>
             </div>
             <div class="flex flex-wrap justify-end gap-2">
-              <%= link_to t("common.edit"), edit_account_passkey_path(passkey), class: "btn btn-rapid" %>
-              <%= link_to t("passkeys.delete"), account_passkey_path(passkey), class: "btn btn-error btn-rapid" %>
+              <%= link_to t("common.edit"), edit_account_passkey_path(passkey), class: action_button_classes(:secondary) %>
+              <%= link_to t("passkeys.delete"), account_passkey_path(passkey), class: action_button_classes(:destructive) %>
             </div>
           </li>
         <% end %>
@@ -2204,10 +2206,10 @@ def install_passkey_views
              data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
              data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
       <p class="text-base-content/70"><%= t("passkeys.new_description") %></p>
-      <div class="alert alert-error hidden" role="alert" data-passkey-target="error"></div>
-      <div class="flex justify-end gap-2">
-        <%= link_to t("common.back"), account_passkeys_path, class: "btn btn-rapid" %>
-        <button type="button" class="btn btn-primary btn-rapid" data-action="passkey#authenticate"><%= t("passkeys.register") %></button>
+      <div class="alert alert-error alert-soft hidden" role="alert" data-passkey-target="error"></div>
+      <div class="card-actions flex-wrap justify-end">
+        <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
+        <button type="button" class="<%= action_button_classes(:primary) %>" data-action="passkey#authenticate"><%= t("passkeys.register") %></button>
       </div>
     </section>
   ERB
@@ -2217,15 +2219,15 @@ def install_passkey_views
 
     <%= form_with model: @passkey, url: account_passkey_path(@passkey), class: "space-y-5" do |form| %>
       <% if @passkey.errors.any? %>
-        <div class="alert alert-error" role="alert"><span><%= @passkey.errors.full_messages.to_sentence %></span></div>
+        <div class="alert alert-error alert-soft" role="alert"><span><%= @passkey.errors.full_messages.to_sentence %></span></div>
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :name, t("passkeys.name") %></legend>
         <%= form.text_field :name, required: true, maxlength: 50, class: "input input-rapid w-full" %>
       </fieldset>
-      <div class="flex justify-end gap-2">
-        <%= link_to t("common.back"), account_passkeys_path, class: "btn btn-rapid" %>
-        <%= form.submit t("common.update"), class: "btn btn-primary btn-rapid" %>
+      <div class="card-actions flex-wrap justify-end">
+        <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
+        <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -2237,7 +2239,7 @@ def install_passkey_views
       <p class="font-semibold"><%= @passkey.name %></p>
       <p class="text-base-content/70"><%= t("passkeys.delete_description") %></p>
       <div class="flex flex-wrap justify-end gap-2">
-        <%= link_to t("common.back"), account_passkeys_path, class: "btn btn-rapid" %>
+        <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
         <% if CredentialDestruction.passkeys_for(user: current_user, action: "delete_passkey", target: @passkey).exists? %>
           <div data-controller="passkey"
                data-passkey-ceremony-value="get"
@@ -2247,8 +2249,8 @@ def install_passkey_views
                data-passkey-destruction-action-value="delete_passkey"
                data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
                data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-            <button type="button" class="btn btn-error btn-rapid" data-action="passkey#authenticate"><%= t("passkeys.delete_with_passkey") %></button>
-            <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+            <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="passkey#authenticate"><%= t("passkeys.delete_with_passkey") %></button>
+            <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
           </div>
         <% end %>
     #{siwe_destruction.lines.map { |line| "    #{line}" }.join}  </div>
@@ -2614,16 +2616,16 @@ def install_passkey_tests
         click_button I18n.t("authentication.sign_up_with_passkey")
 
         assert_current_path root_path
-        assert_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+        assert_selector ".alert-warning.alert-soft", text: I18n.t("credential_risk.warning")
         assert_link I18n.t("credential_risk.add_login_method"), href: account_passkeys_path
-        assert_no_selector ".alert-warning .btn"
+        assert_no_selector ".alert-warning.alert-soft .btn"
         assert_equal [false, false], PasskeyCredential.order(:id).last.then { |passkey| [passkey.backup_eligible?, passkey.backup_state?] }
 
         open_account_menu_and_sign_out
         visit new_user_session_path
         click_button I18n.t("authentication.sign_in_with_passkey")
         assert_current_path root_path
-        assert_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+        assert_selector ".alert-warning.alert-soft", text: I18n.t("credential_risk.warning")
       end
 
       test "updates backup state after authentication and stops warning for a synced passkey" do
@@ -2631,7 +2633,7 @@ def install_passkey_tests
         visit new_user_registration_path
         configure_webauthn_for_current_page
         click_button I18n.t("authentication.sign_up_with_passkey")
-        assert_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+        assert_selector ".alert-warning.alert-soft", text: I18n.t("credential_risk.warning")
 
         credential_id = cdp.send_message("WebAuthn.getCredentials", params: { authenticatorId: @authenticator_id })
           .fetch("credentials").sole.fetch("credentialId")
@@ -3521,7 +3523,7 @@ def install_siwe
   create_file "app/views/account/siwe_identities/index.html.erb", <<~'ERB', force: true
     <% content_for :page_title, t("siwe.identities.title") %>
     <% content_for :page_actions_primary do %>
-      <%= link_to t("siwe.identities.add"), new_account_siwe_identity_path, class: "btn btn-primary btn-rapid" %>
+      <%= link_to t("siwe.identities.add"), new_account_siwe_identity_path, class: action_button_classes(:primary) %>
     <% end %>
 
     <section class="space-y-5">
@@ -3541,9 +3543,9 @@ def install_siwe
                   <% end %>
                 </div>
                 <div class="flex flex-wrap justify-end gap-2">
-                  <%= link_to t("common.edit"), edit_account_siwe_identity_path(identity), class: "btn btn-rapid" %>
+                  <%= link_to t("common.edit"), edit_account_siwe_identity_path(identity), class: action_button_classes(:secondary) %>
                   <% if @removable_siwe_identity_ids.include?(identity.id) %>
-                    <%= link_to t("siwe.identities.delete"), account_siwe_identity_path(identity), class: "btn btn-error btn-rapid" %>
+                    <%= link_to t("siwe.identities.delete"), account_siwe_identity_path(identity), class: action_button_classes(:destructive) %>
                   <% end %>
                 </div>
               </li>
@@ -3567,10 +3569,10 @@ def install_siwe
              data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
              data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
       <p class="text-base-content/70"><%= t("siwe.identities.new_description") %></p>
-      <div class="alert alert-error hidden" role="alert" data-siwe-sign-in-target="error"></div>
-      <div class="flex justify-end gap-2">
-        <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
-        <button type="button" class="btn btn-primary btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.connect") %></button>
+      <div class="alert alert-error alert-soft hidden" role="alert" data-siwe-sign-in-target="error"></div>
+      <div class="card-actions flex-wrap justify-end">
+        <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
+        <button type="button" class="<%= action_button_classes(:primary) %>" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.connect") %></button>
       </div>
       <%= render "shared/siwe_provider_picker", modal_id: "siwe-link-provider-picker" %>
     </section>
@@ -3583,15 +3585,15 @@ def install_siwe
       <p class="break-all font-mono text-sm text-base-content/70"><%= @siwe_identity.address %></p>
       <%= form_with model: [:account, @siwe_identity], class: "space-y-5" do |form| %>
         <% if @siwe_identity.errors.any? %>
-          <div class="alert alert-error" role="alert"><span><%= @siwe_identity.errors.full_messages.to_sentence %></span></div>
+          <div class="alert alert-error alert-soft" role="alert"><span><%= @siwe_identity.errors.full_messages.to_sentence %></span></div>
         <% end %>
         <fieldset class="fieldset">
           <legend class="fieldset-legend"><%= form.label :name, t("siwe.identities.name") %></legend>
           <%= form.text_field :name, required: true, maxlength: 50, class: "input input-rapid w-full" %>
         </fieldset>
-        <div class="flex justify-end gap-2">
-          <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
-          <%= form.submit t("common.update"), class: "btn btn-primary btn-rapid" %>
+        <div class="card-actions flex-wrap justify-end">
+          <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
+          <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
         </div>
       <% end %>
     </section>
@@ -3605,7 +3607,7 @@ def install_siwe
       <p class="break-all font-mono text-sm text-base-content/70"><%= @siwe_identity.address %></p>
       <p class="text-base-content/70"><%= t("siwe.identities.delete_description") %></p>
       <div class="flex flex-wrap justify-end gap-2">
-        <%= link_to t("common.back"), account_siwe_identities_path, class: "btn btn-rapid" %>
+        <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
         <% if current_user.passkey_credentials.exists? %>
           <div data-controller="passkey"
                data-passkey-ceremony-value="get"
@@ -3615,8 +3617,8 @@ def install_siwe
                data-passkey-destruction-action-value="delete_siwe"
                data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
                data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-            <button type="button" class="btn btn-error btn-rapid" data-action="passkey#authenticate"><%= t("siwe.identities.delete_with_passkey") %></button>
-            <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+            <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="passkey#authenticate"><%= t("siwe.identities.delete_with_passkey") %></button>
+            <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
           </div>
         <% end %>
         <% if current_user.siwe_identities.where.not(id: @siwe_identity.id).exists? %>
@@ -3629,8 +3631,8 @@ def install_siwe
                data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
                data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
                data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-            <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.delete_with_wallet") %></button>
-            <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+            <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.delete_with_wallet") %></button>
+            <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
             <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-identity-provider-picker" %>
           </div>
         <% end %>
@@ -4566,7 +4568,7 @@ def configure_roles
       <section class="card-rapid">
         <div class="card-body p-3">
           <div class="overflow-x-auto">
-            <table class="table table-sm table-pin-rows">
+            <table class="table table-sm table-pin-rows min-w-max">
               <thead>
                 <tr>
                   <th scope="col">ID</th>
@@ -4587,16 +4589,18 @@ def configure_roles
                         <span class="text-sm text-neutral"><%= t("common.none") %></span>
                       <% end %>
                     </td>
-                    <td class="text-right">
-                      <% if user.has_role?(:admin) %>
-                        <% if user == authorization_user %>
-                          <button type="button" class="btn btn-disabled btn-rapid" disabled><%= t("admin.users.self_forbidden") %></button>
+                    <td>
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <% if user.has_role?(:admin) %>
+                          <% if user == authorization_user %>
+                            <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-disabled") %>" disabled><%= t("admin.users.self_forbidden") %></button>
+                          <% else %>
+                            <%= button_to t("admin.users.revoke"), admin_user_role_path(user, "admin"), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("admin.users.revoke_confirm") } %>
+                          <% end %>
                         <% else %>
-                          <%= button_to t("admin.users.revoke"), admin_user_role_path(user, "admin"), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("admin.users.revoke_confirm") } %>
+                          <%= button_to t("admin.users.grant"), admin_user_roles_path(user), params: { role: "admin" }, class: action_button_classes(:secondary) %>
                         <% end %>
-                      <% else %>
-                        <%= button_to t("admin.users.grant"), admin_user_roles_path(user), params: { role: "admin" }, class: "btn btn-rapid" %>
-                      <% end %>
+                      </div>
                     </td>
                   </tr>
                 <% end %>
@@ -5578,14 +5582,14 @@ def configure_content_management
       <section class="card-rapid">
         <div class="card-body p-3">
           <div class="overflow-x-auto">
-            <table class="table">
+            <table class="table min-w-max">
               <thead><tr><th scope="col"><%= t("content_management.admin.pages.page") %></th><th scope="col"><%= t("content_management.admin.pages.url") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
               <tbody>
                 <% @pages.each do |page| %>
                   <tr>
                     <td><%= page.title %></td>
                     <td><code>/<%= page.slug %></code></td>
-                    <td class="text-right"><%= link_to t("common.edit"), edit_admin_page_path(page), class: "btn btn-rapid" %></td>
+                    <td><div class="flex flex-wrap justify-end gap-2"><%= link_to t("common.edit"), edit_admin_page_path(page), class: action_button_classes(:secondary) %></div></td>
                   </tr>
                 <% end %>
               </tbody>
@@ -5609,9 +5613,9 @@ def configure_content_management
               <legend class="fieldset-legend"><%= form.label :content, t("content_management.admin.pages.body") %></legend>
               <%= form.rich_text_area :content %>
             </fieldset>
-            <div class="card-actions justify-end">
-              <%= link_to t("common.back"), admin_pages_path, class: "btn btn-ghost btn-rapid" %>
-              <%= form.submit t("common.update"), class: "btn btn-rapid" %>
+            <div class="card-actions flex-wrap justify-end">
+              <%= link_to t("common.back"), admin_pages_path, class: action_button_classes(:quiet) %>
+              <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
             </div>
           <% end %>
         </div>
@@ -5622,7 +5626,7 @@ def configure_content_management
   create_file "app/views/admin/faqs/_form.html.erb", <<~ERB, force: true
     <%= form_with model: [:admin, faq], class: "space-y-5" do |form| %>
       <% if faq.errors.any? %>
-        <div class="alert alert-error" role="alert">
+        <div class="alert alert-error alert-soft" role="alert">
           <ul><% faq.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
         </div>
       <% end %>
@@ -5645,9 +5649,9 @@ def configure_content_management
           <span><%= t("content_management.admin.faqs.publish") %></span>
         </label>
       </fieldset>
-      <div class="card-actions justify-end">
-        <%= link_to t("common.back"), admin_faqs_path, class: "btn btn-ghost btn-rapid" %>
-        <%= form.submit(faq.persisted? ? t("common.update") : t("common.create"), class: "btn btn-rapid") %>
+      <div class="card-actions flex-wrap justify-end">
+        <%= link_to t("common.back"), admin_faqs_path, class: action_button_classes(:quiet) %>
+        <%= form.submit(faq.persisted? ? t("common.update") : t("common.create"), class: action_button_classes(:primary)) %>
       </div>
     <% end %>
   ERB
@@ -5655,14 +5659,14 @@ def configure_content_management
   create_file "app/views/admin/faqs/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.title") %>
     <% content_for :page_actions_primary do %>
-      <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: "btn btn-rapid" %>
+      <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: action_button_classes(:primary) %>
     <% end %>
     <div class="space-y-6">
       <section class="card-rapid">
         <div class="card-body p-3">
           <% if @faqs.any? %>
             <div class="overflow-x-auto">
-              <table class="table">
+              <table class="table min-w-max">
                 <thead><tr><th scope="col"><%= t("content_management.admin.faqs.position") %></th><th scope="col"><%= t("content_management.admin.faqs.question") %></th><th scope="col"><%= t("content_management.admin.faqs.status") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
                 <tbody>
                   <% @faqs.each do |faq| %>
@@ -5671,9 +5675,9 @@ def configure_content_management
                       <td><%= faq.question %></td>
                       <td><span class="badge"><%= faq.published? ? t("content_management.admin.faqs.published") : t("content_management.admin.faqs.unpublished") %></span></td>
                       <td>
-                        <div class="flex justify-end gap-2">
-                          <%= link_to t("common.edit"), edit_admin_faq_path(faq), class: "btn btn-rapid" %>
-                          <%= button_to t("common.delete"), admin_faq_path(faq), method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("content_management.admin.faqs.confirm") } %>
+                        <div class="flex flex-wrap justify-end gap-2">
+                          <%= link_to t("common.edit"), edit_admin_faq_path(faq), class: action_button_classes(:secondary) %>
+                          <%= button_to t("common.delete"), admin_faq_path(faq), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("content_management.admin.faqs.confirm") } %>
                         </div>
                       </td>
                     </tr>
@@ -5713,7 +5717,7 @@ def configure_content_management
         <div class="card-body p-3">
           <%= form_with model: [:admin, @footer_setting], url: admin_footer_setting_path, class: "space-y-5" do |form| %>
             <% if @footer_setting.errors.any? %>
-              <div class="alert alert-error" role="alert">
+              <div class="alert alert-error alert-soft" role="alert">
                 <ul><% @footer_setting.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
               </div>
             <% end %>
@@ -5725,7 +5729,7 @@ def configure_content_management
               <legend class="fieldset-legend"><%= form.label :github_url, "GitHub" %></legend>
               <%= form.url_field :github_url, class: "input input-rapid w-full", placeholder: "https://example.com/github-account" %>
             </fieldset>
-            <div class="card-actions justify-end"><%= form.submit t("common.update"), class: "btn btn-rapid" %></div>
+            <div class="card-actions flex-wrap justify-end"><%= form.submit t("common.update"), class: action_button_classes(:primary) %></div>
           <% end %>
         </div>
       </section>
@@ -6123,7 +6127,7 @@ def configure_content_management
         }
 
         assert_response :unprocessable_content
-        assert_select ".alert.alert-error", count: 1
+        assert_select ".alert.alert-error.alert-soft", count: 1
         assert_nil footer_settings(:default).reload.github_url
       end
 
@@ -7570,7 +7574,7 @@ def configure_profile
         </div>
         <%= form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp", data: { image_crop_target: "input", action: "change->image-crop#select" } %>
         <p class="label"><span class="min-w-0 whitespace-normal"><%= t("profiles.avatar_hint") %></span></p>
-        <p class="alert alert-error" role="alert" data-image-crop-target="error" hidden></p>
+        <p class="alert alert-error alert-soft" role="alert" data-image-crop-target="error" hidden></p>
       </fieldset>
     ERB
   end
@@ -7600,8 +7604,8 @@ def configure_profile
     <<~ERB
 
         <% avatar_crop_actions = capture do %>
-          <button type="button" class="btn btn-ghost btn-rapid" data-action="image-crop#cancel"><%= t("profiles.avatar_crop.cancel") %></button>
-          <button type="button" class="btn btn-primary btn-rapid" data-image-crop-target="apply" data-action="image-crop#apply"><%= t("profiles.avatar_crop.apply") %></button>
+          <button type="button" class="<%= action_button_classes(:quiet) %>" data-action="image-crop#cancel"><%= t("profiles.avatar_crop.cancel") %></button>
+          <button type="button" class="<%= action_button_classes(:primary) %>" data-image-crop-target="apply" data-action="image-crop#apply"><%= t("profiles.avatar_crop.apply") %></button>
         <% end %>
         <%= with_modal(
           id: "avatar-crop-modal",
@@ -7611,12 +7615,12 @@ def configure_profile
           actions: avatar_crop_actions,
           dialog_data: { image_crop_target: "dialog", action: "close->image-crop#close" }
         ) do %>
-          <div class="alert alert-error mt-4" role="alert" data-image-crop-target="error" hidden></div>
+          <div class="alert alert-error alert-soft mt-4" role="alert" data-image-crop-target="error" hidden></div>
           <div class="mt-4 aspect-square w-full overflow-hidden rounded-box bg-base-200" data-image-crop-target="cropper"></div>
           <div class="mt-4 flex flex-wrap gap-2">
-            <button type="button" class="btn btn-rapid" data-action="image-crop#zoomOut"><%= t("profiles.avatar_crop.zoom_out") %></button>
-            <button type="button" class="btn btn-rapid" data-action="image-crop#zoomIn"><%= t("profiles.avatar_crop.zoom_in") %></button>
-            <button type="button" class="btn btn-rapid" data-action="image-crop#reset"><%= t("profiles.avatar_crop.reset") %></button>
+            <button type="button" class="<%= action_button_classes(:secondary) %>" data-action="image-crop#zoomOut"><%= t("profiles.avatar_crop.zoom_out") %></button>
+            <button type="button" class="<%= action_button_classes(:secondary) %>" data-action="image-crop#zoomIn"><%= t("profiles.avatar_crop.zoom_in") %></button>
+            <button type="button" class="<%= action_button_classes(:secondary) %>" data-action="image-crop#reset"><%= t("profiles.avatar_crop.reset") %></button>
           </div>
         <% end %>
     ERB
@@ -7626,7 +7630,7 @@ def configure_profile
   create_file "app/views/profiles/_form.html.erb", <<~ERB, force: true
     #{form_wrapper_open}  <%= form_with model: profile, url: profile_path, class: "space-y-5" do |form| %>
         <% if profile.errors.any? %>
-          <div class="alert alert-error" role="alert">
+          <div class="alert alert-error alert-soft" role="alert">
             <ul class="list-disc pl-5">
               <% profile.errors.full_messages.each do |message| %>
                 <li><%= message %></li>
@@ -7635,9 +7639,9 @@ def configure_profile
           </div>
         <% end %>
 
-    #{form_fields.lines.map { |line| "  #{line}" }.join}    <div class="card-actions justify-end">
-          <%= link_to t("common.cancel"), profile_path, class: "btn btn-ghost btn-rapid" %>
-          <%= form.submit t("common.save"), class: "btn btn-primary btn-rapid" %>
+    #{form_fields.lines.map { |line| "  #{line}" }.join}    <div class="card-actions flex-wrap justify-end">
+          <%= link_to t("common.cancel"), profile_path, class: action_button_classes(:quiet) %>
+          <%= form.submit t("common.save"), class: action_button_classes(:primary) %>
         </div>
       <% end %>
     #{avatar_crop_modal}#{form_wrapper_close}
@@ -7681,8 +7685,8 @@ def configure_profile
           <div class="card-body">
             <h2 class="card-title text-base leading-[1.5]"><%= t("profiles.avatar_delete_title") %></h2>
             <p class="text-sm text-neutral"><%= t("profiles.avatar_delete_description") %></p>
-            <div class="card-actions justify-start">
-              <%= button_to t("profiles.avatar_delete"), profile_avatar_path, method: :delete, class: "btn btn-outline btn-error btn-rapid", data: { turbo_confirm: t("profiles.avatar_delete_confirm") } %>
+            <div class="card-actions flex-wrap justify-end">
+              <%= button_to t("profiles.avatar_delete"), profile_avatar_path, method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("profiles.avatar_delete_confirm") } %>
             </div>
           </div>
         </section>
@@ -7698,8 +7702,8 @@ def configure_profile
         <div class="card-body p-3">
           <ul class="list">
     #{profile_rows}      </ul>
-          <div class="card-actions justify-end">
-            <%= link_to t("profiles.edit"), edit_profile_path, class: "btn btn-primary btn-outline btn-rapid" %>
+          <div class="card-actions flex-wrap justify-end">
+            <%= link_to t("profiles.edit"), edit_profile_path, class: action_button_classes(:secondary) %>
           </div>
         </div>
       </section>
@@ -8014,7 +8018,7 @@ def configure_api
   create_file "app/views/api_credentials/_form.html.erb", <<~ERB, force: true
     <%= form_with model: api_credential, class: "space-y-5" do |form| %>
       <% if api_credential.errors.any? %>
-        <div class="alert alert-error" role="alert">
+        <div class="alert alert-error alert-soft" role="alert">
           <ul class="list-disc pl-5">
             <% api_credential.errors.full_messages.each do |message| %>
               <li><%= message %></li>
@@ -8027,9 +8031,9 @@ def configure_api
         <%= form.text_field :name, required: true, autocomplete: "off", class: "input input-rapid w-full" %>
         <p class="label"><%= t("api_credentials.name_hint") %></p>
       </fieldset>
-      <div class="flex flex-col gap-3 sm:flex-row">
-        <%= form.submit class: "btn btn-primary btn-rapid" %>
-        <%= link_to t("common.cancel"), api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: "btn btn-outline btn-rapid" %>
+      <div class="card-actions flex-wrap justify-end">
+        <%= link_to t("common.cancel"), api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: action_button_classes(:quiet) %>
+        <%= form.submit class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -8037,7 +8041,7 @@ def configure_api
   create_file "app/views/api_credentials/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.title") %>
     <% content_for :page_actions_primary do %>
-      <%= link_to t("api_credentials.new"), new_api_credential_path, class: "btn btn-primary btn-rapid" %>
+      <%= link_to t("api_credentials.new"), new_api_credential_path, class: action_button_classes(:primary) %>
     <% end %>
     <div class="space-y-6">
       <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
@@ -8046,7 +8050,7 @@ def configure_api
         <div class="card-body p-3">
           <% if @api_credentials.any? %>
             <div class="overflow-x-auto">
-              <table class="table">
+              <table class="table min-w-max">
                 <thead><tr><th><%= ApiCredential.human_attribute_name(:name) %></th><th><%= t("api_credentials.api_key") %></th><th><%= t("api_credentials.last_used") %></th><th></th></tr></thead>
                 <tbody>
                   <% @api_credentials.each do |credential| %>
@@ -8059,7 +8063,7 @@ def configure_api
                         </div>
                       </td>
                       <td><%= credential.last_used_at ? l(credential.last_used_at, format: :short) : t("common.unused") %></td>
-                      <td><%= link_to t("api_credentials.show"), api_credential_path(credential), class: "btn btn-outline btn-sm" %></td>
+                      <td><div class="flex flex-wrap justify-end gap-2"><%= link_to t("api_credentials.show"), api_credential_path(credential), class: action_button_classes(:secondary) %></div></td>
                     </tr>
                   <% end %>
                 </tbody>
@@ -8077,7 +8081,7 @@ def configure_api
     <% content_for :page_title, @api_credential.name %>
     <div class="space-y-6">
       <% if @api_secret.present? %>
-        <div class="alert alert-warning alert-vertical grid-cols-1 justify-items-stretch" role="status">
+        <div class="alert alert-warning alert-soft alert-vertical grid-cols-1 justify-items-stretch" role="status">
           <p class="font-bold"><%= t("api_credentials.secret_once") %></p>
           <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
             <legend class="fieldset-legend">API Secret</legend>
@@ -8104,14 +8108,14 @@ def configure_api
             <div><dt class="text-sm text-neutral"><%= t("api_credentials.last_used") %></dt><dd><%= @api_credential.last_used_at ? l(@api_credential.last_used_at, format: :short) : t("common.unused") %></dd></div>
             </dl>
           </div>
-          <div class="card-actions mt-4 justify-start">
-            <%= link_to t("common.edit"), edit_api_credential_path(@api_credential), class: "btn btn-outline btn-rapid" %>
-            <%= button_to t("api_credentials.revoke"), revoke_api_credential_path(@api_credential), method: :patch, class: "btn btn-warning btn-outline btn-rapid", data: { turbo_confirm: t("api_credentials.revoke_confirm") } %>
-            <%= button_to t("common.delete"), api_credential_path(@api_credential), method: :delete, class: "btn btn-error btn-outline btn-rapid", data: { turbo_confirm: t("api_credentials.delete_confirm") } %>
+          <div class="card-actions mt-4 flex-wrap justify-end">
+            <%= link_to t("api_credentials.back"), api_credentials_path, class: action_button_classes(:quiet) %>
+            <%= link_to t("common.edit"), edit_api_credential_path(@api_credential), class: action_button_classes(:secondary) %>
+            <%= button_to t("api_credentials.revoke"), revoke_api_credential_path(@api_credential), method: :patch, class: action_button_classes(:warning), data: { turbo_confirm: t("api_credentials.revoke_confirm") } %>
+            <%= button_to t("common.delete"), api_credential_path(@api_credential), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("api_credentials.delete_confirm") } %>
           </div>
         </div>
       </section>
-      <%= link_to t("api_credentials.back"), api_credentials_path, class: "btn btn-outline btn-rapid" %>
     </div>
   ERB
 
@@ -8232,7 +8236,7 @@ def configure_api
         end
         assert_response :created
         credential = @user.api_credentials.find_by!(name: "CLI")
-        assert_select '.alert.alert-warning input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
+        assert_select '.alert.alert-warning.alert-soft input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
         assert_select 'input[aria-label="API key"][readonly][value=?]', credential.api_key, count: 1
         assert_select 'button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 2
         assert_select ".alert.alert-warning", text: /Bearer token/, count: 0
@@ -8243,7 +8247,7 @@ def configure_api
 
         patch revoke_api_credential_url(credential)
         assert_response :success
-        assert_select '.alert.alert-warning input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
+        assert_select '.alert.alert-warning.alert-soft input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
         refute_equal original_digest, credential.reload.api_secret_digest
 
         get api_credential_url(credential)
@@ -8277,8 +8281,8 @@ def configure_devise_views
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>"
            data-siwe-sign-in-wallet-not-registered-value="<%= t('siwe.errors.wallet_not_registered') %>">
-        <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_in_with_wallet") %></button>
-        <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_in_with_wallet") %></button>
+        <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-login-provider-picker" %>
       </div>
     ERB
@@ -8295,8 +8299,8 @@ def configure_devise_views
            data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-        <button type="button" class="btn btn-block btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_up_with_wallet") %></button>
-        <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_up_with_wallet") %></button>
+        <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-signup-provider-picker" %>
       </div>
     ERB
@@ -8321,13 +8325,13 @@ def configure_devise_views
         <input type="checkbox" class="checkbox checkbox-sm" data-passkey-target="rememberMe">
         <span><%= t("authentication.remember_me") %></span>
       </label>
-      <button type="button" class="btn btn-primary btn-block btn-rapid" data-action="passkey#authenticate"><%= t("authentication.sign_in_with_passkey") %></button>
-      <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate"><%= t("authentication.sign_in_with_passkey") %></button>
+      <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
     </div>
 
     #{siwe_login}
     <div class="divider"></div>
-    <%= link_to t("authentication.create_account"), new_user_registration_path, class: "btn btn-block btn-rapid" %>
+    <%= link_to t("authentication.create_account"), new_user_registration_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
   ERB
 
   create_file "app/views/users/passkey_registrations/new.html.erb", <<~ERB, force: true
@@ -8343,13 +8347,13 @@ def configure_devise_views
          data-passkey-verify-url-value="<%= user_passkey_registration_path %>"
          data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
          data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-      <button type="button" class="btn btn-primary btn-block btn-rapid" data-action="passkey#authenticate"><%= t("authentication.sign_up_with_passkey") %></button>
-      <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate"><%= t("authentication.sign_up_with_passkey") %></button>
+      <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
     </div>
 
     #{siwe_signup}
     <div class="divider"></div>
-    <%= link_to t("authentication.back_to_sign_in"), new_user_session_path, class: "btn btn-block btn-rapid" %>
+    <%= link_to t("authentication.back_to_sign_in"), new_user_session_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
   ERB
 
   create_locale_pair(
@@ -8818,7 +8822,7 @@ def configure_in_app_notifications
       error(event) {
         event.preventDefault()
         const content = this.errorTarget.content.cloneNode(true)
-        content.querySelector("[data-notification-load-error]").classList.add("alert-error")
+        content.querySelector("[data-notification-load-error]").classList.add("alert-error", "alert-soft")
         this.frameTarget.replaceChildren(content)
       }
     }
@@ -8899,6 +8903,7 @@ def configure_in_app_notifications
   ERB
 
   create_file "app/views/notifications/_notification.html.erb", <<~ERB, force: true
+    <% compact = local_assigns.fetch(:compact) %>
     <% frame_id = [frame_prefix, delivery.notification_id].join("_") %>
     <%= turbo_frame_tag frame_id do %>
       <li class="list-row items-start">
@@ -8908,7 +8913,8 @@ def configure_in_app_notifications
         </div>
         <% unless delivery.opened? %>
           <%= button_to t("notifications.open"), open_notification_path(delivery.notification), method: :patch,
-            params: { origin_frame: frame_id }, class: "btn btn-ghost btn-sm", form: { data: { turbo_stream: true } } %>
+            params: { origin_frame: frame_id }, class: (compact ? "btn btn-ghost btn-sm" : action_button_classes(:quiet)),
+            form: { data: { turbo_stream: true } } %>
         <% end %>
       </li>
     <% end %>
@@ -8930,7 +8936,7 @@ def configure_in_app_notifications
       <% else %>
         <ul class="list max-h-96 overflow-y-auto">
           <% deliveries.each do |delivery| %>
-            <%= render "notifications/notification", delivery:, frame_prefix: "popover_notification" %>
+            <%= render "notifications/notification", delivery:, frame_prefix: "popover_notification", compact: true %>
           <% end %>
         </ul>
       <% end %>
@@ -8959,7 +8965,7 @@ def configure_in_app_notifications
             <% else %>
               <ul class="list">
                 <% @deliveries.each do |delivery| %>
-                  <%= render "notifications/notification", delivery:, frame_prefix: "history_notification" %>
+                  <%= render "notifications/notification", delivery:, frame_prefix: "history_notification", compact: false %>
                 <% end %>
               </ul>
               <%= pagination(@pagy, aria_label: t("notifications.pagination")) %>
@@ -8973,9 +8979,10 @@ def configure_in_app_notifications
   create_file "app/views/notifications/open.turbo_stream.erb", <<~ERB, force: true
     <%= turbo_stream.replace "notification_unread_status", partial: "notifications/unread_status" %>
     <% frame_prefix = @origin_frame.delete_suffix("_\#{@delivery.notification_id}") %>
+    <% compact = frame_prefix == "popover_notification" %>
     <%= turbo_stream.replace @origin_frame,
       partial: "notifications/notification",
-      locals: { delivery: @delivery, frame_prefix: } %>
+      locals: { delivery: @delivery, frame_prefix:, compact: } %>
   ERB
 
   create_file "app/views/notifications/open_all.turbo_stream.erb", <<~ERB, force: true
@@ -8988,7 +8995,7 @@ def configure_in_app_notifications
   create_file "app/views/admin/notifications/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("notifications.admin.title") %>
     <% content_for :page_actions_primary do %>
-      <%= link_to t("notifications.admin.new"), new_admin_notification_path, class: "btn btn-primary btn-rapid" %>
+      <%= link_to t("notifications.admin.new"), new_admin_notification_path, class: action_button_classes(:primary) %>
     <% end %>
     <section class="card-rapid">
       <div class="card-body p-3">
@@ -9015,11 +9022,11 @@ def configure_in_app_notifications
                   <td><%= l(notification.published_at, format: :short) %></td>
                   <td><%= notification.notification_deliveries.size %></td>
                   <td>
-                    <div class="flex justify-end gap-1">
-                      <%= link_to t("common.show"), admin_notification_path(notification), class: "btn btn-ghost btn-sm" %>
-                      <%= link_to t("common.edit"), edit_admin_notification_path(notification), class: "btn btn-ghost btn-sm" %>
+                    <div class="flex flex-wrap justify-end gap-2">
+                      <%= link_to t("common.show"), admin_notification_path(notification), class: action_button_classes(:secondary) %>
+                      <%= link_to t("common.edit"), edit_admin_notification_path(notification), class: action_button_classes(:secondary) %>
                       <%= button_to t("common.destroy"), admin_notification_path(notification), method: :delete,
-                        class: "btn btn-ghost btn-sm text-error", data: { turbo_confirm: t("notifications.admin.destroy_confirm") } %>
+                        class: action_button_classes(:destructive), data: { turbo_confirm: t("notifications.admin.destroy_confirm") } %>
                     </div>
                   </td>
                 </tr>
@@ -9039,7 +9046,7 @@ def configure_in_app_notifications
         notification_recipients_selected_value: selected_users.to_json,
         notification_recipients_remove_label_value: t("notifications.admin.remove_recipient") } do |form| %>
       <% if notification.errors.any? %>
-        <div class="alert alert-error" role="alert"><%= notification.errors.full_messages.to_sentence %></div>
+        <div class="alert alert-error alert-soft" role="alert"><%= notification.errors.full_messages.to_sentence %></div>
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :message, t("notifications.admin.message") %></legend>
@@ -9070,9 +9077,9 @@ def configure_in_app_notifications
         <%= turbo_frame_tag "notification_recipient_results", data: { notification_recipients_target: "frame" } do %>
         <% end %>
       </fieldset>
-      <div class="flex flex-wrap justify-end gap-2">
-        <%= link_to t("common.back"), admin_notifications_path, class: "btn btn-ghost" %>
-        <%= form.submit class: "btn btn-primary btn-rapid" %>
+      <div class="card-actions flex-wrap justify-end">
+        <%= link_to t("common.back"), admin_notifications_path, class: action_button_classes(:quiet) %>
+        <%= form.submit class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -9098,9 +9105,9 @@ def configure_in_app_notifications
           <div><dt class="text-sm text-neutral"><%= t("notifications.admin.published_at") %></dt><dd><%= l(@notification.published_at, format: :short) %></dd></div>
           <div><dt class="text-sm text-neutral"><%= t("notifications.admin.deliveries") %></dt><dd><%= @notification.notification_deliveries.count %></dd></div>
         </dl>
-        <div class="card-actions justify-end">
-          <%= link_to t("common.edit"), edit_admin_notification_path(@notification), class: "btn" %>
-          <%= link_to t("common.back"), admin_notifications_path, class: "btn btn-ghost" %>
+        <div class="card-actions flex-wrap justify-end">
+          <%= link_to t("common.back"), admin_notifications_path, class: action_button_classes(:quiet) %>
+          <%= link_to t("common.edit"), edit_admin_notification_path(@notification), class: action_button_classes(:secondary) %>
         </div>
       </div>
     </section>
@@ -9560,7 +9567,7 @@ def configure_default_views
   else
     '<%= t("accounts.show.action") %>'
   end
-  home_action = '<%= link_to t("home.start_devise"), new_user_registration_path, class: "btn btn-primary btn-rapid px-6 hover:border-secondary hover:bg-secondary" %>'
+  home_action = '<%= link_to t("home.start_devise"), new_user_registration_path, class: action_button_classes(:primary) %>'
   account_navigation_items = <<~ERB
     <li>
       <%= link_to application_routes.account_path, class: ("menu-active" if current_page?(application_routes.account_path)), aria: { current: ("page" if current_page?(application_routes.account_path)) } do %>
@@ -9872,6 +9879,16 @@ def configure_default_views
       module ApplicationRoutes
       end
 
+      ACTION_BUTTON_CLASSES = {
+        primary: "btn btn-primary btn-rapid",
+        secondary: "btn btn-rapid",
+        quiet: "btn btn-ghost btn-rapid",
+        warning: "btn btn-outline btn-warning btn-rapid",
+        destructive: "btn btn-outline btn-error btn-rapid",
+        destructive_confirm: "btn btn-error btn-rapid"
+      }.freeze
+      private_constant :ACTION_BUTTON_CLASSES
+
       Rails.application.routes.url_helpers.extend(ApplicationRoutes)
 
       sig { returns(ApplicationRoutes) }
@@ -9903,6 +9920,46 @@ def configure_default_views
         Kernel.raise TypeError, "application translation must be a string: #{key}"
       end
 
+      sig { params(role: Symbol).returns(String) }
+      def action_button_classes(role)
+        ACTION_BUTTON_CLASSES.fetch(role) do
+          Kernel.raise ArgumentError, "unsupported action button role: #{role.inspect}"
+        end
+      end
+
+      sig do
+        params(
+          active: T::Boolean,
+          disabled: T::Boolean,
+          square: T::Boolean
+        ).returns(String)
+      end
+      def pagination_item_classes(active: false, disabled: false, square: false)
+        class_names(
+          "btn btn-rapid join-item",
+          "btn-active": active,
+          "btn-disabled": disabled,
+          "btn-square": square
+        )
+      end
+
+      sig do
+        params(
+          aria_label: String,
+          summary: T.nilable(String),
+          block: T.proc.returns(String)
+        ).returns(ActiveSupport::SafeBuffer)
+      end
+      def with_pagination(aria_label:, summary: nil, &block)
+        Kernel.raise ArgumentError, "pagination aria label must not be empty" if aria_label.strip.empty?
+
+        content = []
+        content << tag.span(summary, class: "text-sm text-base-content/70") if summary.present?
+        content << tag.div(capture(&block), class: "join")
+        inner = tag.div(safe_join(content), class: "flex w-max min-w-full items-center justify-end gap-3")
+        tag.nav(inner, class: "overflow-x-auto", aria: { label: aria_label })
+      end
+
       sig { params(pagy: Pagy::Offset, aria_label: String).returns(T.nilable(ActiveSupport::SafeBuffer)) }
       def pagination(pagy, aria_label:)
         return if pagy.last <= 1
@@ -9915,19 +9972,19 @@ def configure_default_views
         items.concat(series.map do |item|
           case item
           when Integer
-            link_to item.to_s, pagy.page_url(item), class: "join-item btn"
+            link_to item.to_s, pagy.page_url(item), class: pagination_item_classes
           when String
-            tag.span(item, class: "join-item btn btn-active", role: "link",
+            tag.span(item, class: pagination_item_classes(active: true), role: "link",
               aria: { current: "page", disabled: true })
           when :gap
-            tag.span("…", class: "join-item btn btn-disabled", role: "separator", aria: { disabled: true })
+            tag.span("…", class: pagination_item_classes(disabled: true), role: "separator", aria: { disabled: true })
           else
             Kernel.raise TypeError, "unsupported pagination item: #{item.inspect}"
           end
         end)
         items << pagination_arrow(pagy, :next)
 
-        tag.nav(tag.div(safe_join(items), class: "join"), class: "overflow-x-auto", aria: { label: aria_label })
+        with_pagination(aria_label:) { safe_join(items) }
       end
 
       sig { params(pagy: Pagy::Offset, direction: Symbol).returns(ActiveSupport::SafeBuffer) }
@@ -9949,11 +10006,11 @@ def configure_default_views
           aria: { hidden: true },
           data: { slot: "icon" }
         )
-        classes = "join-item btn btn-square"
+        classes = pagination_item_classes(square: true)
         url = pagy.page_url(direction)
         return link_to(icon, url, class: classes, aria: { label: label }) if url
 
-        tag.span(icon, class: "#{classes} btn-disabled", tabindex: "-1", role: "link",
+        tag.span(icon, class: pagination_item_classes(disabled: true, square: true), tabindex: "-1", role: "link",
           aria: { label: label, disabled: true })
       end
 
@@ -10084,6 +10141,49 @@ def configure_default_views
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
 
+      test "maps semantic action button roles without a fallback" do
+        expected = {
+          primary: "btn btn-primary btn-rapid",
+          secondary: "btn btn-rapid",
+          quiet: "btn btn-ghost btn-rapid",
+          warning: "btn btn-outline btn-warning btn-rapid",
+          destructive: "btn btn-outline btn-error btn-rapid",
+          destructive_confirm: "btn btn-error btn-rapid"
+        }
+
+        expected.each do |role, classes|
+          assert_equal classes, action_button_classes(role)
+        end
+        assert_raises(ArgumentError) { action_button_classes(:unknown) }
+      end
+
+      test "renders the shared pagination wrapper and item modifiers" do
+        html = with_pagination(aria_label: "Records pagination", summary: "2 / 8") do
+          safe_join([
+            tag.a("2", href: "/records?page=2", class: pagination_item_classes(active: true)),
+            tag.span("3", class: pagination_item_classes(disabled: true, square: true))
+          ])
+        end
+        fragment = Nokogiri::HTML5.fragment(html)
+        nav = T.must(fragment.at_css('nav.overflow-x-auto[aria-label="Records pagination"]'))
+        inner = T.must(nav.element_children.first)
+
+        assert_includes inner["class"].split, "flex"
+        assert_includes inner["class"].split, "w-max"
+        assert_includes inner["class"].split, "min-w-full"
+        assert_includes inner["class"].split, "justify-end"
+        assert_equal ["SPAN", "DIV"], inner.element_children.map(&:name).map(&:upcase)
+        assert_equal "2 / 8", inner.element_children.first.text
+        assert_equal "2", inner.at_css(".join > .btn-active").text
+        assert_includes inner.at_css(".join > .btn-disabled")["class"].split, "btn-square"
+        assert_equal 2, inner.css(".join > .join-item.btn.btn-rapid").size
+        assert_equal "btn btn-rapid join-item btn-active",
+          inner.at_css(".join > .btn-active")["class"]
+        assert_equal "btn btn-rapid join-item btn-disabled btn-square",
+          inner.at_css(".join > .btn-disabled")["class"]
+        assert_raises(ArgumentError) { with_pagination(aria_label: " ") { "items" } }
+      end
+
       test "renders accessible daisyUI pagination from the Pagy series" do
         pagy = pagination_pagy(count: 400, page: 8)
 
@@ -10093,6 +10193,7 @@ def configure_default_views
         items = nav.css(".join > .join-item.btn")
 
         assert_equal 9, items.size
+        assert items.all? { |item| item["class"].split.include?("btn-rapid") }
         assert_equal %w[1 … 7 8 9 … 16], items.drop(1).take(7).map(&:text)
         assert_equal "8", nav.at_css(".join-item.btn-active[aria-current=page]").text
         assert_equal 2, nav.css('.join-item.btn-disabled[role="separator"]').size
@@ -10526,12 +10627,12 @@ def configure_default_views
     <% end %>
     <% if notice.present? %>
       <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
-        <div class="alert alert-success" role="status"><span><%= notice %></span></div>
+        <div class="alert alert-success alert-soft" role="status"><span><%= notice %></span></div>
       </div>
     <% end %>
     <% if alert.present? %>
       <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
-        <div class="alert alert-error" role="alert"><span><%= alert %></span></div>
+        <div class="alert alert-error alert-soft" role="alert"><span><%= alert %></span></div>
       </div>
     <% end %>
   ERB
@@ -10582,7 +10683,7 @@ def configure_default_views
           </div>
           <div class="flex flex-col gap-3 sm:flex-row">
             #{home_action}
-            <%= link_to t("home.features_link"), "#features", class: "btn btn-primary btn-outline btn-rapid px-6" %>
+            <%= link_to t("home.features_link"), "#features", class: action_button_classes(:secondary) %>
           </div>
         </div>
       </section>
@@ -10618,8 +10719,8 @@ def configure_default_views
         <div class="card-body p-3">
           <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.show.next_step") %></h2>
           <p class="text-sm text-neutral">#{account_page_action}</p>
-          <div class="card-actions mt-2 justify-end">
-            <%= link_to t("accounts.show.back_home"), root_path, class: "btn btn-primary btn-outline btn-rapid" %>
+          <div class="card-actions mt-2 flex-wrap justify-end">
+            <%= link_to t("accounts.show.back_home"), root_path, class: action_button_classes(:quiet) %>
           </div>
         </div>
       </section>
@@ -10638,8 +10739,8 @@ def configure_default_views
              data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
              data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
              data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-          <button type="button" class="btn btn-error btn-rapid" data-action="siwe-sign-in#authenticate"><%= t("accounts.delete.with_wallet") %></button>
-          <div class="alert alert-error mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+          <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="siwe-sign-in#authenticate"><%= t("accounts.delete.with_wallet") %></button>
+          <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
           <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-account-provider-picker" %>
         </div>
       <% end %>
@@ -10654,7 +10755,7 @@ def configure_default_views
       <div class="card-body">
         <p class="text-base-content/70"><%= t("accounts.delete.description") %></p>
         <div class="card-actions flex-wrap justify-end">
-          <%= link_to t("common.back"), account_path, class: "btn btn-rapid" %>
+          <%= link_to t("common.back"), account_path, class: action_button_classes(:quiet) %>
           <% if current_user.passkey_credentials.exists? %>
             <div data-controller="passkey"
                  data-passkey-ceremony-value="get"
@@ -10664,8 +10765,8 @@ def configure_default_views
                  data-passkey-destruction-action-value="delete_account"
                  data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
                  data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-              <button type="button" class="btn btn-error btn-rapid" data-action="passkey#authenticate"><%= t("accounts.delete.with_passkey") %></button>
-              <div class="alert alert-error mt-4 hidden" role="alert" data-passkey-target="error"></div>
+              <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="passkey#authenticate"><%= t("accounts.delete.with_passkey") %></button>
+              <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
             </div>
           <% end %>
     #{account_delete_siwe.lines.map { |line| "      #{line}" }.join}    </div>
@@ -10812,20 +10913,20 @@ def configure_default_views
             patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.corrupt_png_upload } }
             assert_response :unprocessable_content
             error_text = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.undecodable")
-            assert_select '.alert.alert-error[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
+            assert_select '.alert.alert-error.alert-soft[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
             assert_equal original_blob, profile.reload.avatar.blob
 
             patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.upload(width: 96, height: 72) } }
             assert_response :unprocessable_content
             square_error = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.not_square")
-            assert_select '.alert.alert-error[role="alert"]', text: /\#{Regexp.escape(square_error)}/, count: 1
+            assert_select '.alert.alert-error.alert-soft[role="alert"]', text: /\#{Regexp.escape(square_error)}/, count: 1
             assert_equal original_blob, profile.reload.avatar.blob
 
             delete profile_avatar_url
             assert_redirected_to profile_url
             assert_not profile.reload.avatar.attached?
             follow_redirect!
-            assert_select '.alert.alert-success', text: I18n.t("profiles.avatar.destroy.notice"), count: 1
+            assert_select '.alert.alert-success.alert-soft', text: I18n.t("profiles.avatar.destroy.notice"), count: 1
             assert_select '.list .avatar svg[width="64"][height="64"]', count: 1
           RUBY
         else
@@ -11704,10 +11805,10 @@ def configure_web_push
               <input type="checkbox" class="toggle" data-push-subscription-target="toggle" data-action="change->push-subscription#toggle" aria-label="<%= t("web_push.page.toggle_label") %>">
             </label>
           </div>
-          <div class="card-actions">
-            <button type="button" class="btn" data-push-subscription-target="testButton" data-action="click->push-subscription#sendTest" disabled><%= t("web_push.page.send_test") %></button>
+          <div class="card-actions flex-wrap justify-end">
+            <button type="button" class="<%= action_button_classes(:secondary) %>" data-push-subscription-target="testButton" data-action="click->push-subscription#sendTest" disabled><%= t("web_push.page.send_test") %></button>
           </div>
-          <div class="alert alert-info hidden" role="status" aria-live="polite" data-push-subscription-target="status"></div>
+          <div class="alert alert-info alert-soft hidden" role="status" aria-live="polite" data-push-subscription-target="status"></div>
         </div>
       </section>
     </div>
@@ -12201,7 +12302,7 @@ def install_job_operations
 
   create_file "app/views/layouts/mission_control/jobs/_flash.html.erb", <<~'ERB', force: true
     <% flash.each do |name, message| %>
-      <div class="alert <%= name.to_sym == :notice ? "alert-success" : "alert-error" %>" role="alert">
+      <div class="alert alert-soft <%= name.to_sym == :notice ? "alert-success" : "alert-error" %>" role="alert">
         <span><%= message %></span>
       </div>
     <% end %>
@@ -12219,21 +12320,18 @@ def install_job_operations
   ERB
 
   create_file "app/views/mission_control/jobs/shared/_pagination_toolbar.html.erb", <<~'ERB', force: true
-    <nav class="flex flex-wrap items-center justify-end gap-3" aria-label="pagination">
-      <span class="text-sm text-base-content/70"><%= page.index %> / <%= page.pages_count || "..." %></span>
-      <div class="join">
-        <% if page.first? %>
-          <span class="btn btn-rapid join-item btn-disabled" aria-disabled="true">Previous page</span>
-        <% else %>
-          <%= link_to "Previous page", url_for(page: page.previous_index, **filter_param), class: "btn btn-rapid join-item" %>
-        <% end %>
-        <% if page.last? %>
-          <span class="btn btn-rapid join-item btn-disabled" aria-disabled="true">Next page</span>
-        <% else %>
-          <%= link_to "Next page", url_for(page: page.next_index, **filter_param), class: "btn btn-rapid join-item" %>
-        <% end %>
-      </div>
-    </nav>
+    <%= with_pagination(aria_label:, summary: "#{page.index} / #{page.pages_count || "..."}") do %>
+      <% if page.first? %>
+        <span class="<%= pagination_item_classes(disabled: true) %>" role="link" aria-disabled="true">Previous page</span>
+      <% else %>
+        <%= link_to "Previous page", url_for(page: page.previous_index, **filter_param), class: pagination_item_classes %>
+      <% end %>
+      <% if page.last? %>
+        <span class="<%= pagination_item_classes(disabled: true) %>" role="link" aria-disabled="true">Next page</span>
+      <% else %>
+        <%= link_to "Next page", url_for(page: page.next_index, **filter_param), class: pagination_item_classes %>
+      <% end %>
+    <% end %>
   ERB
 
   create_file "app/views/mission_control/jobs/queues/index.html.erb", <<~'ERB', force: true
@@ -12260,11 +12358,11 @@ def install_job_operations
                     <td><%= queue.size %></td>
                     <td>
                       <% if queue_pausing_supported? %>
-                        <div class="flex justify-end">
+                        <div class="flex flex-wrap justify-end gap-2">
                           <% if queue.active? %>
-                            <%= button_to "Pause", application_queue_pause_path(@application, queue.name), method: :post, class: "btn btn-warning btn-rapid" %>
+                            <%= button_to "Pause", application_queue_pause_path(@application, queue.name), method: :post, class: action_button_classes(:warning) %>
                           <% else %>
-                            <%= button_to "Resume", application_queue_pause_path(@application, queue.name), method: :delete, class: "btn btn-rapid" %>
+                            <%= button_to "Resume", application_queue_pause_path(@application, queue.name), method: :delete, class: action_button_classes(:secondary) %>
                           <% end %>
                         </div>
                       <% end %>
@@ -12288,13 +12386,15 @@ def install_job_operations
         <% if @queue.paused? %><span class="badge badge-warning">Paused</span><% end %>
         <p class="text-sm text-base-content/70"><%= pluralize @queue.size, "pending job" %></p>
       </div>
-      <% if queue_pausing_supported? %>
-        <% if @queue.active? %>
-          <%= button_to "Pause", application_queue_pause_path(@application, @queue.name), method: :post, class: "btn btn-warning btn-rapid" %>
-        <% else %>
-          <%= button_to "Resume", application_queue_pause_path(@application, @queue.name), method: :delete, class: "btn btn-rapid" %>
+      <div class="flex flex-wrap justify-end gap-2">
+        <% if queue_pausing_supported? %>
+          <% if @queue.active? %>
+            <%= button_to "Pause", application_queue_pause_path(@application, @queue.name), method: :post, class: action_button_classes(:warning) %>
+          <% else %>
+            <%= button_to "Resume", application_queue_pause_path(@application, @queue.name), method: :delete, class: action_button_classes(:secondary) %>
+          <% end %>
         <% end %>
-      <% end %>
+      </div>
     </header>
 
     <% if @jobs_page.empty? %>
@@ -12320,7 +12420,7 @@ def install_job_operations
           </div>
         </div>
       </section>
-      <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: {} %>
+      <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: {}, aria_label: "Queue jobs pagination" %>
     <% end %>
   ERB
 
@@ -12357,8 +12457,8 @@ def install_job_operations
             <%= hidden_field_tag :server_id, MissionControl::Jobs::Current.server.id %>
             <datalist id="job-classes"><% @job_class_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
             <datalist id="queue-names"><% @queue_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
-            <div class="card-actions items-end md:col-span-2">
-              <%= link_to "Clear filters", application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: "btn btn-rapid" %>
+            <div class="card-actions flex-wrap justify-end md:col-span-2">
+              <%= link_to "Clear filters", application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: action_button_classes(:secondary) %>
             </div>
           <% end %>
         </div>
@@ -12370,11 +12470,11 @@ def install_job_operations
         <% target = active_filters? ? "selection" : "all" %>
         <div class="flex flex-wrap items-center justify-end gap-3">
           <% if active_filters? %><span class="text-sm text-base-content/70"><%= @jobs_count %> jobs found</span><% end %>
-          <%= button_to "Discard #{target}", application_bulk_discards_path(@application, **jobs_filter_param), method: :post,
-            disabled: @jobs_count == 0, class: "btn btn-error btn-rapid",
-            form: { data: { turbo_confirm: "This will delete #{@jobs_count} jobs and can't be undone. Are you sure?" } } %>
           <%= button_to "Retry #{target}", application_bulk_retries_path(@application, **jobs_filter_param), method: :post,
-            disabled: @jobs_count == 0, class: "btn btn-warning btn-rapid" %>
+            disabled: @jobs_count == 0, class: action_button_classes(:warning) %>
+          <%= button_to "Discard #{target}", application_bulk_discards_path(@application, **jobs_filter_param), method: :post,
+            disabled: @jobs_count == 0, class: action_button_classes(:destructive),
+            form: { data: { turbo_confirm: "This will delete #{@jobs_count} jobs and can't be undone. Are you sure?" } } %>
         </div>
       <% end %>
     <% end %>
@@ -12400,15 +12500,15 @@ def install_job_operations
                     <% case jobs_status.to_s %>
                     <% when "failed" %>
                       <td><%= link_to failed_job_error(job), application_job_path(@application, job.job_id, anchor: "error"), class: "link link-hover" %><div class="text-sm text-base-content/70"><%= time_distance_in_words_with_title(job.failed_at) %> ago</div></td>
-                      <td><div class="flex justify-end gap-2"><%= button_to "Discard", application_job_discard_path(@application, job.job_id, params: jobs_filter_param), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %><%= button_to "Retry", application_job_retry_path(@application, job.job_id, params: jobs_filter_param), class: "btn btn-warning btn-rapid" %></div></td>
+                      <td><div class="flex flex-wrap justify-end gap-2"><%= button_to "Retry", application_job_retry_path(@application, job.job_id, params: jobs_filter_param), class: action_button_classes(:warning) %><%= button_to "Discard", application_job_discard_path(@application, job.job_id, params: jobs_filter_param), class: action_button_classes(:destructive), form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %></div></td>
                     <% when "blocked" %>
                       <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
                       <td><div class="font-mono text-sm"><%= job.blocked_by %></div><div class="text-sm text-base-content/70"><%= job.blocked_until ? "Expires #{bidirectional_time_distance_in_words_with_title(job.blocked_until)}" : "" %></div></td>
-                      <td><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: "btn btn-warning btn-rapid" %></td>
+                      <td><div class="flex flex-wrap justify-end gap-2"><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: action_button_classes(:warning) %></div></td>
                     <% when "scheduled" %>
                       <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
                       <td><%= bidirectional_time_distance_in_words_with_title(job.scheduled_at) %> <% if job_delayed?(job) %><span class="badge badge-error">delayed</span><% end %></td>
-                      <td><div class="flex justify-end gap-2"><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: "btn btn-warning btn-rapid" %><%= button_to "Discard", application_job_discard_path(@application, job.job_id), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %></div></td>
+                      <td><div class="flex flex-wrap justify-end gap-2"><%= button_to "Run now", application_job_dispatch_path(@application, job.job_id), class: action_button_classes(:warning) %><%= button_to "Discard", application_job_discard_path(@application, job.job_id), class: action_button_classes(:destructive), form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %></div></td>
                     <% when "in_progress" %>
                       <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
                       <td><% if job.worker_id %><%= link_to "worker #{job.worker_id}", application_worker_path(@application, job.worker_id), class: "link link-hover" %><% else %>—<% end %></td>
@@ -12424,7 +12524,7 @@ def install_job_operations
           </div>
         </div>
       </section>
-      <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param %>
+      <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param, aria_label: "#{jobs_status.titleize} jobs pagination" %>
     <% end %>
   ERB
 
@@ -12436,13 +12536,13 @@ def install_job_operations
       <span class="badge <%= job_operation_status_class(@job.status) %>"><%= @job.status %></span>
       <div class="flex flex-wrap justify-end gap-2">
         <% if @job.failed? %>
-          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id, params: jobs_filter_param), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
-          <%= button_to "Retry", application_job_retry_path(@application, @job.job_id, params: jobs_filter_param), class: "btn btn-warning btn-rapid" %>
+          <%= button_to "Retry", application_job_retry_path(@application, @job.job_id, params: jobs_filter_param), class: action_button_classes(:warning) %>
+          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id, params: jobs_filter_param), class: action_button_classes(:destructive), form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
         <% elsif @job.blocked? %>
-          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: "btn btn-warning btn-rapid" %>
+          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: action_button_classes(:warning) %>
         <% elsif @job.scheduled? %>
-          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: "btn btn-warning btn-rapid" %>
-          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id), class: "btn btn-error btn-rapid", form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
+          <%= button_to "Run now", application_job_dispatch_path(@application, @job.job_id), class: action_button_classes(:warning) %>
+          <%= button_to "Discard", application_job_discard_path(@application, @job.job_id), class: action_button_classes(:destructive), form: { data: { turbo_confirm: "This will delete the job and can't be undone. Are you sure?" } } %>
         <% end %>
       </div>
     </header>
@@ -12470,7 +12570,7 @@ def install_job_operations
     <% if @job.failed? %>
       <section id="error" class="space-y-4" aria-labelledby="error-title">
         <h2 id="error-title" class="text-xl font-bold leading-[1.5]">Error information</h2>
-        <div class="alert alert-error alert-vertical" role="alert">
+        <div class="alert alert-error alert-soft alert-vertical" role="alert">
           <div class="font-semibold"><%= @job.last_execution_error.error_class %></div>
           <p><%= @job.last_execution_error.try(:message) || @job.last_execution_error.inspect %></p>
         </div>
@@ -12510,7 +12610,7 @@ def install_job_operations
                     <td><%= task.schedule %></td>
                     <td class="text-base-content/70"><%= task.last_enqueued_at ? bidirectional_time_distance_in_words_with_title(task.last_enqueued_at) : "Never" %></td>
                     <td class="text-base-content/70"><%= bidirectional_time_distance_in_words_with_title(task.next_time) %></td>
-                    <td><% if task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, task.id), class: "btn btn-warning btn-rapid", method: :put %><% end %></td>
+                    <td><div class="flex flex-wrap justify-end gap-2"><% if task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, task.id), class: action_button_classes(:warning), method: :put %><% end %></div></td>
                   </tr>
                 <% end %>
               </tbody>
@@ -12525,8 +12625,8 @@ def install_job_operations
     <% navigation(title: @recurring_task.id, section: :recurring_tasks) %>
     <% content_for :page_title, @recurring_task.id %>
 
-    <div class="flex justify-end">
-      <% if @recurring_task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, @recurring_task.id), class: "btn btn-warning btn-rapid", method: :put %><% end %>
+    <div class="flex flex-wrap justify-end gap-2">
+      <% if @recurring_task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, @recurring_task.id), class: action_button_classes(:warning), method: :put %><% end %>
     </div>
 
     <section class="card-rapid">
@@ -12545,7 +12645,7 @@ def install_job_operations
         <div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
           <% @jobs_page.records.each do |job| %><tr><td><%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "link link-hover font-semibold" %><div class="text-sm text-base-content/70">Enqueued <%= time_distance_in_words_with_title(job.enqueued_at.to_datetime) %> ago</div></td><td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td><td><span class="badge <%= job_operation_status_class(job.status) %>"><%= job.status %></span></td></tr><% end %>
         </tbody></table></div></div></div>
-        <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param %>
+        <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param, aria_label: "Recurring task jobs pagination" %>
       </section>
     <% end %>
   ERB
@@ -12560,7 +12660,7 @@ def install_job_operations
       <div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Worker</th><th>Hostname</th><th>Jobs</th><th>Last heartbeat</th></tr></thead><tbody>
         <% @workers_page.records.each do |worker| %><tr><td><%= link_to "worker #{worker.id}", application_worker_path(@application, worker.id), class: "link link-hover font-semibold" %><br><%= worker.name %></td><td><%= worker.hostname %></td><td><% worker.jobs.each do |job| %><div><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover" %><% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %></div><% end %></td><td class="text-base-content/70"><%= time_distance_in_words_with_title(worker.last_heartbeat_at) %> ago</td></tr><% end %>
       </tbody></table></div></div></div>
-      <%= render "mission_control/jobs/shared/pagination_toolbar", page: @workers_page, filter_param: {} %>
+      <%= render "mission_control/jobs/shared/pagination_toolbar", page: @workers_page, filter_param: {}, aria_label: "Workers pagination" %>
     <% end %>
   ERB
 
@@ -12778,12 +12878,19 @@ def install_job_operations
         assert_response :success
         assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"]', count: 0
         assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"]', count: 1 do
-          assert_select "form button.btn.btn-rapid", text: /Discard all/, count: 1
-          assert_select "form button.btn.btn-rapid", text: /Retry all/, count: 1
+          assert_select "form button.btn.btn-outline.btn-warning.btn-rapid", text: /Retry all/, count: 1
+          assert_select "form button.btn.btn-outline.btn-error.btn-rapid", text: /Discard all/, count: 1
         end
         assert_select '.tab-content > [data-mission-control-jobs-root] > section.card-rapid[aria-label="Job filters"] > .card-body > form.grid', count: 1
+        assert_select '[aria-label="Job filters"] .card-actions.flex-wrap.justify-end a.btn.btn-rapid', text: "Clear filters", count: 1
         assert_select '[data-mission-control-jobs-root] > .card-rapid > .card-body > .overflow-x-auto > table.table.min-w-max', count: 1
-        assert_select '[data-mission-control-jobs-root] table form button.btn.btn-rapid', minimum: 2
+        assert_select '[data-mission-control-jobs-root] table .flex.flex-wrap.justify-end.gap-2', count: 1 do
+          assert_select 'form button.btn.btn-outline.btn-warning.btn-rapid', text: "Retry", count: 1
+          assert_select 'form button.btn.btn-outline.btn-error.btn-rapid', text: "Discard", count: 1
+        end
+        assert_select 'nav[aria-label="Failed jobs pagination"].overflow-x-auto > .flex.min-w-full.justify-end > .join', count: 1 do
+          assert_select '.join-item.btn.btn-rapid', count: 2
+        end
         assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
         assert_select '[data-page-actions-container="card"]', count: 0
 
@@ -13094,8 +13201,8 @@ def install_maintenance_tasks
           <% end %>
 
           <%= render "maintenance_tasks/tasks/custom", form: form %>
-          <div class="card-actions justify-end">
-            <%= form.submit "Run", class: "btn btn-primary btn-rapid", disabled: @task.deleted? %>
+          <div class="card-actions flex-wrap justify-end">
+            <%= form.submit "Run", class: action_button_classes(:primary), disabled: @task.deleted? %>
           </div>
         <% end %>
       </div>
@@ -13123,7 +13230,9 @@ def install_maintenance_tasks
           <h2 class="text-xl font-bold leading-[1.5]">Previous Runs</h2>
           <%= render partial: "maintenance_tasks/runs/run", collection: @task.runs_page.records %>
           <% unless @task.runs_page.last? %>
-            <div class="join"><%= link_to "Next page", admin_maintenance_tasks.task_path(@task, cursor: @task.runs_page.next_cursor), class: "btn join-item" %></div>
+            <%= with_pagination(aria_label: "Previous runs pagination") do %>
+              <%= link_to "Next page", admin_maintenance_tasks.task_path(@task, cursor: @task.runs_page.next_cursor), class: pagination_item_classes %>
+            <% end %>
           <% end %>
         </section>
       <% end %>
@@ -13152,19 +13261,19 @@ def install_maintenance_tasks
 
         <div class="card-actions flex-wrap justify-end">
           <% if run.paused? %>
-            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: "btn", disabled: @task.deleted? %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error" %>
+            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
+            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
           <% elsif run.errored? %>
-            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: "btn", disabled: @task.deleted? %>
+            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
           <% elsif run.cancelling? %>
-            <% if run.stuck? %><%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error", disabled: @task.deleted? %><% end %>
+            <% if run.stuck? %><%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
           <% elsif run.pausing? %>
-            <%= button_to "Pausing", admin_maintenance_tasks.pause_task_run_path(@task, run), class: "btn btn-warning", disabled: true %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error" %>
-            <% if run.stuck? %><%= button_to "Force pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: "btn btn-error", disabled: @task.deleted? %><% end %>
+            <%= button_to "Pausing", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: true %>
+            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
+            <% if run.stuck? %><%= button_to "Force pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
           <% elsif run.active? %>
-            <%= button_to "Pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: "btn btn-warning", disabled: @task.deleted? %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: "btn btn-error" %>
+            <%= button_to "Pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: @task.deleted? %>
+            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
           <% end %>
         </div>
       </div>
@@ -13220,7 +13329,7 @@ def install_maintenance_tasks
   create_file "app/views/maintenance_tasks/runs/info/_errored.html.erb", <<~ERB, force: true
     <div class="space-y-4">
       <p>Ran for <%= time_running_in_words run %> until an error happened <%= time_ago run.ended_at %>.</p>
-      <div class="alert alert-error alert-vertical" role="alert">
+      <div class="alert alert-error alert-soft alert-vertical" role="alert">
         <div class="font-semibold"><%= run.error_class %></div>
         <p><%= run.error_message %></p>
         <% if run.backtrace.present? %><pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words text-sm"><code><%= format_backtrace(run.backtrace) %></code></pre><% end %>
@@ -13449,7 +13558,7 @@ def install_maintenance_tasks
         assert_select "input.input[type=time][name=?]", "task[starts_at]", count: 1
         assert_select "select.select[name=?]", "task[mode]", count: 1
         assert_select "input.checkbox[name=?]", "task[notify]", count: 1
-        assert_select "input.btn.btn-primary[type=submit]", value: "Run", count: 1
+        assert_select "input.btn.btn-primary.btn-rapid[type=submit]", value: "Run", count: 1
         assert_select "form[action=?]", MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 1
         assert_select "details.collapse.collapse-arrow", minimum: 1
         assert_select ".mockup-code", count: 1
@@ -13501,16 +13610,48 @@ def install_maintenance_tasks
           error_message: "Something went wrong",
           backtrace: ["app/tasks/maintenance/safe_test_task.rb:10"]
         )
+        MaintenanceTasks::Run.create!(
+          task_name: TASK_NAME,
+          status: "running",
+          job_id: "running-job",
+          started_at: now,
+          tick_count: 1,
+          tick_total: 10
+        )
 
         get TASK_PATH
 
         assert_response :success
         assert_select ".badge.badge-warning", text: "Paused", count: 1
         assert_select "progress.progress-warning", count: 1
-        assert_select "form[action$='/resume'] .btn", text: "Resume", count: 2
-        assert_select "form[action$='/cancel'] .btn.btn-error", text: "Cancel", count: 1
+        assert_select ".card-actions.flex-wrap.justify-end", minimum: 3
+        assert_select "form[action$='/resume'] .btn.btn-rapid", text: "Resume", count: 2
+        assert_select "form[action$='/pause'] .btn.btn-outline.btn-warning.btn-rapid", text: "Pause", count: 1
+        assert_select "form[action$='/cancel'] .btn.btn-outline.btn-error.btn-rapid", text: "Cancel", count: 2
+        assert_select ".btn-sm, .btn-xs", count: 0
         assert_select ".badge.badge-error", text: "Errored", count: 1
-        assert_select ".alert.alert-error", text: /Something went wrong/, count: 1
+        assert_select ".alert.alert-error.alert-soft", text: /Something went wrong/, count: 1
+      end
+
+      test "renders cursor pagination with the shared button contract" do
+        sign_in_as(@admin)
+        now = Time.current
+        21.times do |index|
+          MaintenanceTasks::Run.create!(
+            task_name: TASK_NAME,
+            status: "succeeded",
+            job_id: "completed-job-\#{index}",
+            started_at: now - 2.minutes,
+            ended_at: now - 1.minute
+          )
+        end
+
+        get TASK_PATH
+
+        assert_response :success
+        assert_select 'nav[aria-label="Previous runs pagination"].overflow-x-auto > .flex.min-w-full.justify-end > .join', count: 1 do
+          assert_select "a.join-item.btn.btn-rapid", text: "Next page", count: 1
+        end
       end
 
       test "enqueues and executes a task while preserving standard run history" do
@@ -13775,13 +13916,10 @@ def configure_evidence_capture
             visit edit_account_siwe_identity_path(main_identity)
             fill_in translate("siwe.identities.name"), with: "Primary Wallet"
             click_button translate("common.update")
-            capture_page(
-              "siwe-identity-renamed",
-              translate("siwe.identities.updated"),
-              account_siwe_identities_path,
-              translate("siwe.identities.title"),
-              viewport_name
-            )
+            assert_current_path account_siwe_identities_path
+            assert_selector "h1", text: translate("siwe.identities.title")
+            assert_selector ".alert.alert-success.alert-soft", text: translate("siwe.identities.updated"), count: 1
+            capture_current_page("siwe-identity-renamed", translate("siwe.identities.updated"), viewport_name)
             assert_account_settings_tabs_geometry
             capture_page(
               "siwe-login-existing-user",
@@ -14084,6 +14222,7 @@ def configure_evidence_capture
               audience: :selected_users
             )
             notification.save_with_delivery_synchronization!(recipient_ids: [@user.id])
+            @evidence_notification = notification if index.zero?
           end
           @user.notification_deliveries.find_each do |delivery|
             delivery.update!(opened_at: nil)
@@ -14116,14 +14255,20 @@ def configure_evidence_capture
           end
 
           if API
-            @user.api_credentials.destroy_all
-            capture_page("api-credentials-empty", "APIキー一覧（空）", api_credentials_path, translate("api_credentials.title"), viewport)
+            ApiCredential.where(user: @user).destroy_all
+            assert_not ApiCredential.exists?(user: @user)
+            visit api_credentials_path
+            assert_equal 200, page.status_code
+            assert_selector "h1", text: translate("api_credentials.title")
+            assert_selector ".alert.alert-info.alert-soft", text: translate("api_credentials.empty"), count: 1
+            capture_current_page("api-credentials-empty", "APIキー一覧（空）", viewport)
             capture_page("api-credential-new", "APIキー作成", new_api_credential_path, translate("api_credentials.new"), viewport)
             fill_in ApiCredential.human_attribute_name(:name), with: "Evidence CLI"
             with_deterministic_secure_random do
               find('input[type="submit"]').click
             end
             assert_text translate("api_credentials.secret_once")
+            assert_selector ".alert.alert-warning.alert-soft", count: 1
             capture_current_page("api-credential-secret", "APIキー詳細（初回secret）", viewport)
             credential = @user.api_credentials.find_by!(name: "Evidence CLI")
             capture_page("api-credential-show", "APIキー詳細", api_credential_path(credential), "Evidence CLI", viewport)
@@ -14162,6 +14307,47 @@ def configure_evidence_capture
             assert_selector "textarea[name='task[note]']", count: 1
             assert_selector "input.checkbox[name='task[notify]']", count: 1
             capture_current_page("admin-maintenance-task-details", "運用タスク詳細", viewport)
+            task_path = page.current_path
+            paused_run = MaintenanceTasks::Run.create!(
+              task_name: "Maintenance::SafeTestTask",
+              status: "paused",
+              job_id: "evidence-paused-job",
+              started_at: 2.minutes.ago,
+              tick_count: 2,
+              tick_total: 10
+            )
+            running_run = MaintenanceTasks::Run.create!(
+              task_name: "Maintenance::SafeTestTask",
+              status: "running",
+              job_id: "evidence-running-job",
+              started_at: 1.minute.ago,
+              tick_count: 1,
+              tick_total: 10
+            )
+            visit task_path
+            assert_selector ".badge.badge-warning", text: "Paused", count: 1
+            assert_button "Pause"
+            assert_button "Resume"
+            assert_button "Cancel"
+            capture_current_page("admin-maintenance-task-paused", "運用タスク一時停止中", viewport)
+            paused_run.destroy!
+            running_run.destroy!
+            errored_run = MaintenanceTasks::Run.create!(
+              task_name: "Maintenance::SafeTestTask",
+              status: "errored",
+              job_id: "evidence-errored-job",
+              started_at: 1.minute.ago,
+              ended_at: Time.current,
+              error_class: "ArgumentError",
+              error_message: "Evidence task failure",
+              backtrace: ["app/tasks/maintenance/safe_test_task.rb:10"]
+            )
+            visit task_path
+            assert_selector ".badge.badge-error", text: "Errored", count: 1
+            assert_selector ".alert.alert-error.alert-soft", text: "Evidence task failure", count: 1
+            capture_current_page("admin-maintenance-task-errored", "運用タスクエラー", viewport)
+            errored_run.destroy!
+            visit task_path
             click_button "Run"
             assert_text "Enqueued"
             perform_enqueued_jobs
@@ -14188,6 +14374,14 @@ def configure_evidence_capture
           )
           assert_admin_navigation_active(translate("navigation.pages"))
           assert_selector "lexxy-editor"
+          capture_page(
+            "admin-faqs",
+            "FAQ管理",
+            admin_faqs_path,
+            translate("content_management.admin.faqs.title"),
+            viewport
+          )
+          assert_admin_navigation_active(translate("navigation.faqs"))
           capture_page(
             "admin-faq-edit",
             "FAQ編集",
@@ -14234,11 +14428,6 @@ def configure_evidence_capture
           assert_selector "#notification_unread_status .status", count: 1
           capture_current_page("notifications-popover-unread", "通知popover（未読）", viewport)
 
-          within("#notifications-popover") { click_button translate("notifications.open_all") }
-          assert_selector "#notifications-popover:popover-open"
-          assert_no_selector "#notification_unread_status .status"
-          capture_current_page("notifications-popover-opened", "通知popover（全件既読後）", viewport)
-
           capture_page(
             "notifications-history",
             "通知履歴",
@@ -14246,11 +14435,30 @@ def configure_evidence_capture
             translate("notifications.title"),
             viewport
           )
+          assert_button translate("notifications.open"), minimum: 1
+
+          visit root_path
+          find('button[popovertarget="notifications-popover"]').click
+          assert_selector "#notifications-popover:popover-open"
+          assert_text "Evidence notification 1"
+          within("#notifications-popover") { click_button translate("notifications.open_all") }
+          assert_selector "#notifications-popover:popover-open"
+          assert_no_selector "#notification_unread_status .status"
+          capture_current_page("notifications-popover-opened", "通知popover（全件既読後）", viewport)
+
           capture_page(
             "admin-notifications",
             "通知管理",
             admin_notifications_path,
             translate("notifications.admin.title"),
+            viewport
+          )
+          assert_admin_navigation_active(translate("navigation.admin_notifications"))
+          capture_page(
+            "admin-notification-show",
+            "通知詳細",
+            admin_notification_path(T.must(@evidence_notification)),
+            translate("notifications.admin.show"),
             viewport
           )
           assert_admin_navigation_active(translate("navigation.admin_notifications"))
@@ -14388,6 +14596,7 @@ def configure_evidence_capture
           fill_in translate("passkeys.name"), with: "Backup Security Key"
           click_button translate("common.update")
           assert_current_path account_passkeys_path
+          assert_selector ".alert.alert-success.alert-soft", text: translate("passkeys.updated"), count: 1
           capture_current_page("passkey-renamed", "Passkey一覧（名称変更後）", viewport)
           capture_page("passkey-delete-reauth", "Passkey解除（再認証）", account_passkey_path(second), translate("passkeys.delete_title"), viewport)
           assert_selector '[data-passkey-destruction-action-value="delete_passkey"]', count: 1
@@ -14403,9 +14612,9 @@ def configure_evidence_capture
           configure_webauthn_for_current_page
           click_button translate("authentication.sign_up_with_passkey")
           assert_current_path root_path
-          assert_selector ".alert-warning", text: translate("credential_risk.warning")
+          assert_selector ".alert-warning.alert-soft", text: translate("credential_risk.warning")
           assert_link translate("credential_risk.add_login_method"), href: account_passkeys_path
-          assert_no_selector ".alert-warning .btn"
+          assert_no_selector ".alert-warning.alert-soft .btn"
           capture_current_page("passkey-registration-risk-warning", "Passkey登録後の紛失リスク警告", viewport)
         end
 
@@ -14525,7 +14734,7 @@ def configure_evidence_capture
 
           accept_confirm { click_button translate("profiles.avatar_delete") }
           assert_current_path host_routes.profile_path
-          assert_selector ".alert.alert-success", text: translate("profiles.avatar.destroy.notice")
+          assert_selector ".alert.alert-success.alert-soft", text: translate("profiles.avatar.destroy.notice")
           capture_current_page("profile-avatar-deleted", "プロフィール（画像削除後）", viewport)
           capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, translate("home.heading"), viewport)
         ensure
@@ -14629,24 +14838,26 @@ def configure_evidence_capture
           toggle = find('[data-push-subscription-target="toggle"]:not([disabled])')
           assert_not toggle.checked?
           toggle.click
-          assert_selector '[data-push-subscription-target="status"].alert-success', text: translate("web_push.client.enabled")
+          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
+            text: translate("web_push.client.enabled")
           assert_selector '[data-push-subscription-target="testButton"]:not([disabled])', text: translate("web_push.page.send_test")
           capture_current_page("web-push-enabled", "Web Push（購読済み・テスト通知可能）", viewport)
 
           find('[data-push-subscription-target="testButton"]').click
-          assert_selector '[data-push-subscription-target="status"].alert-success', text: translate("web_push.client.test_sent")
+          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
+            text: translate("web_push.client.test_sent")
 
           set_evidence_web_push_mode("rotated")
           visit web_push_settings_path
           reconnect_web_push_controller
           install_evidence_csrf_token
-          assert_selector '[data-push-subscription-target="status"].alert-success',
+          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
             text: translate("web_push.client.reconciled")
           assert_equal({ "subscribeCount" => 1, "unsubscribeCount" => 1, "subscribed" => true,
                          "permissionRequests" => 0 }, evidence_web_push_stats)
 
           find('[data-push-subscription-target="toggle"]:not([disabled])').click
-          assert_selector '[data-push-subscription-target="status"].alert-info',
+          assert_selector '[data-push-subscription-target="status"].alert-info.alert-soft',
             text: translate("web_push.client.disabled")
           assert_equal false, evidence_web_push_stats.fetch("subscribed")
 
@@ -14655,21 +14866,21 @@ def configure_evidence_capture
           reconnect_web_push_controller
           install_evidence_csrf_token
           find('[data-push-subscription-target="toggle"]:not([disabled])').click
-          assert_selector '[data-push-subscription-target="status"].alert-success',
+          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
             text: translate("web_push.client.enabled")
           assert_equal 1, evidence_web_push_stats.fetch("permissionRequests")
 
           set_evidence_web_push_mode("denied")
           visit web_push_settings_path
           reconnect_web_push_controller
-          assert_selector '[data-push-subscription-target="status"].alert-warning',
+          assert_selector '[data-push-subscription-target="status"].alert-warning.alert-soft',
             text: translate("web_push.client.blocked")
           assert find('[data-push-subscription-target="toggle"]').disabled?
 
           set_evidence_web_push_mode("unsupported")
           visit web_push_settings_path
           reconnect_web_push_controller
-          assert_selector '[data-push-subscription-target="status"].alert-warning',
+          assert_selector '[data-push-subscription-target="status"].alert-warning.alert-soft',
             text: translate("web_push.client.unsupported")
           assert find('[data-push-subscription-target="toggle"]').disabled?
         ensure
@@ -15071,7 +15282,7 @@ def configure_evidence_capture
         end
 
         def verify_pagination_geometry
-          [320, 390].each do |width|
+          [320, 390, 640, 960, 961].each do |width|
             page.current_window.resize_to(width, 900)
             visit host_routes.admin_users_path
             assert_equal 200, page.status_code
@@ -15079,19 +15290,26 @@ def configure_evidence_capture
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
                   const nav = document.querySelector('nav[aria-label="#{translate("admin.users.pagination")}"]')
-                  const join = nav.querySelector(':scope > .join')
+                  const toolbar = nav.querySelector(':scope > .flex')
+                  const join = toolbar.querySelector(':scope > .join')
                   const items = Array.from(join.querySelectorAll(':scope > .join-item.btn'))
                   const active = join.querySelector(':scope > .btn-active[aria-current="page"]')
+                  nav.scrollLeft = nav.scrollWidth
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
                     directItemCount: items.length,
                     childCount: join.children.length,
+                    rapidItemCount: join.querySelectorAll(':scope > .join-item.btn.btn-rapid').length,
                     rowCount: new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size,
+                    fontSizes: [...new Set(items.map((item) => getComputedStyle(item).fontSize))],
                     activeText: active.textContent.trim(),
                     iconCount: join.querySelectorAll(':scope > .btn-square svg[aria-hidden="true"]').length,
+                    navOverflowX: getComputedStyle(nav).overflowX,
                     navScrollWidth: nav.scrollWidth,
-                    navClientWidth: nav.clientWidth
+                    navClientWidth: nav.clientWidth,
+                    toolbarRight: toolbar.getBoundingClientRect().right,
+                    navRight: nav.getBoundingClientRect().right
                   }
                 }
               JAVASCRIPT
@@ -15100,10 +15318,15 @@ def configure_evidence_capture
               "pagination should not overflow the document at #{width}px"
             assert_equal geometry.fetch("childCount"), geometry.fetch("directItemCount")
             assert_equal 5, geometry.fetch("directItemCount")
+            assert_equal geometry.fetch("directItemCount"), geometry.fetch("rapidItemCount")
             assert_equal 1, geometry.fetch("rowCount")
+            assert_equal ["16px"], geometry.fetch("fontSizes")
             assert_equal "1", geometry.fetch("activeText")
             assert_equal 2, geometry.fetch("iconCount")
+            assert_equal "auto", geometry.fetch("navOverflowX")
             assert_operator geometry.fetch("navScrollWidth"), :>=, geometry.fetch("navClientWidth")
+            assert_in_delta geometry.fetch("navRight"), geometry.fetch("toolbarRight"), 1,
+              "pagination toolbar should align to the right at #{width}px"
           end
         ensure
           desktop = VIEWPORTS.fetch("desktop")

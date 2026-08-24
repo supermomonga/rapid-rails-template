@@ -60,7 +60,24 @@ Kamal用のproduction imageではbuild stageにNode.jsとnpmを導入し、lockf
 | `warning` | `#f59e0b` | 警告通知 |
 | `error` | `#f43f5e` | error・危険操作 |
 
-field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnoiseは`0`に固定します。本文は16px・line-height 1.8、見出しはline-height 1.5、codeは14px・line-height 1.5とし、指定のsystem/Japanese font stackを使用します。本文へ`palt`を適用せず、`word-break: break-all`と`overflow-wrap: break-word`を設定します。補足文はopacityを重ねず`neutral`を直接使用して実効alphaを`0.55`に保ちます。入力欄にはdaisyUIの`--input-color` contractを利用する`input-rapid` utilityを併用し、通常時を`base-300`、focus時を`primary`へ切り替え、font sizeを16pxにします。buttonには`btn-rapid` utilityを併用して16px・weight 700とし、secondary buttonは公式の`btn-primary btn-outline`を組み合わせます。標準card surfaceはTailwind CSSのcomponents layerに置く`card-rapid`へ`card card-border bg-base-100 shadow-none`と`border-base-300`を順序を分けて`@apply`し、daisyUIのcard component contractとbase-300 borderを1classで再利用します。
+field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnoiseは`0`に固定します。本文は16px・line-height 1.8、見出しはline-height 1.5、codeは14px・line-height 1.5とし、指定のsystem/Japanese font stackを使用します。本文へ`palt`を適用せず、`word-break: break-all`と`overflow-wrap: break-word`を設定します。補足文はopacityを重ねず`neutral`を直接使用して実効alphaを`0.55`に保ちます。入力欄にはdaisyUIの`--input-color` contractを利用する`input-rapid` utilityを併用し、通常時を`base-300`、focus時を`primary`へ切り替え、font sizeを16pxにします。buttonには`btn-rapid` utilityを併用して16px・weight 700とします。標準card surfaceはTailwind CSSのcomponents layerに置く`card-rapid`へ`card card-border bg-base-100 shadow-none`と`border-base-300`を順序を分けて`@apply`し、daisyUIのcard component contractとbase-300 borderを1classで再利用します。
+
+通常の文字付き操作button・button相当のlinkは、共通の`ApplicationHelper#action_button_classes(role)`で次のroleとclassを一対一に対応させます。未知のroleは明示的に失敗させ、既定roleへのfallbackは行いません。
+
+| role | class | 用途 |
+| --- | --- | --- |
+| `:primary` | `btn btn-primary btn-rapid` | 作成、保存、登録など、その画面の主操作 |
+| `:secondary` | `btn btn-rapid` | 編集、詳細、同格の代替操作 |
+| `:quiet` | `btn btn-ghost btn-rapid` | 戻る、キャンセルなどの低強調操作 |
+| `:warning` | `btn btn-outline btn-warning btn-rapid` | pause、retryなど注意を伴う実行操作 |
+| `:destructive` | `btn btn-outline btn-error btn-rapid` | 削除・解除への導線、または別の確認を挟む危険操作 |
+| `:destructive_confirm` | `btn btn-error btn-rapid` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
+
+theme tokenの`secondary`はprimary色のhover・press用の色、button roleの`:secondary`は副操作の見た目、`page_actions_secondary`は補助的なページ操作の配置先を表します。同じ`secondary`という語を含みますが別の契約であり、slot名からbuttonの色を決めたり、`:secondary`へtheme tokenの`secondary`色を適用したりしません。
+
+`:warning`は注意を促すsemantic colorを維持しつつ、画面内でオレンジ色の占有面積が過度に大きくならないよう`btn-outline`を必須とします。通常のコンテンツ操作へ塗りつぶしの`btn-warning`は使用しません。
+
+daisyUIのAlertは、`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合に`alert-soft`を必須とし、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。静的View、flash、JavaScriptによる状態切り替え、engineの上書きViewを同じ契約に含めます。JavaScriptで状態色を切り替える場合も`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはこのAlert固有の規約の対象外です。
 
 `DESIGN.md`は任意のCSS Custom Propertiesへ依存しない方針ですが、daisyUI custom themeとcomponent自体が公式の`--color-*`、`--radius-*`、`--size-*`、`--input-color`等をcontractとします。daisyUIのtheme・component contractに必要な変数だけを例外として使用し、独自の追加変数やView内のraw palette colorは定義しません。
 
@@ -70,7 +87,7 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 
 Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`、guest向けdesktopの`button`群、guest向けmobileと認証後の`dropdown` + `menu dropdown-content`、footerは内側幅をheaderと共有する`footer`と`footer-title`、homeの導入部は`hero`、情報ブロックは`card`、FAQはnativeの`details`を使う`collapse`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`file-input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
 
-Rails 8.1.3の公式templateを基準に、`generate scaffold`用controllerと6 View、`generate controller NAME ACTION`用Viewを上書きします。生成アプリケーションの`lib/templates/rails/scaffold_controller`、`lib/templates/erb/scaffold`、`lib/templates/erb/controller`へ変更したtemplateだけを配置し、mailerなどの未変更copyは配置しません。scaffoldの一覧は主キー昇順で25件ずつPagy paginationを適用し、`table table-sm table-pin-rows`を`overflow-x-auto`で囲みます。paginationは共通`ApplicationHelper#pagination`がPagyの7枠seriesをdaisyUIの`join`、`join-item`、`btn`で描画し、前後操作にはaccessible name付きHeroicons矢印を使用します。詳細・編集画面は`card`、属性表示は`list`、formは属性型に対応する`input`、`textarea`、`file-input`、`checkbox`を使用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。
+Rails 8.1.3の公式templateを基準に、`generate scaffold`用controllerと6 View、`generate controller NAME ACTION`用Viewを上書きします。生成アプリケーションの`lib/templates/rails/scaffold_controller`、`lib/templates/erb/scaffold`、`lib/templates/erb/controller`へ変更したtemplateだけを配置し、mailerなどの未変更copyは配置しません。scaffoldの一覧は主キー昇順で25件ずつPagy paginationを適用し、`table table-sm table-pin-rows`を`overflow-x-auto`で囲みます。paginationは共通`ApplicationHelper#pagination`が`with_pagination`と`pagination_item_classes`を使用し、Pagyの7枠seriesをdaisyUIの`join`、`join-item`、`btn btn-rapid`で描画します。`with_pagination`は空でない`aria_label`、任意のsummary、右寄せした1段の`join`、navigation内だけの横overflowを担当します。`pagination_item_classes`は共通classとactive・disabled・square modifierを一元管理します。各engine固有の件数計算、cursor、URL生成は共通helperへ移しません。active・disabled状態と、accessible name付きHeroicons矢印を持つ正方形の前後操作もhelperが一括生成し、個別Viewでは再構築しません。paginationはaction button roleの対象外ですが、通常の文字付きbuttonと同じtypographyを維持するため`btn-rapid`を省略しません。詳細・編集画面は`card`、属性表示は`list`、formは属性型に対応する`input`、`textarea`、`file-input`、`checkbox`を使用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。scaffoldのindex、new、editにあるheader actionはpage actionsへ移さず、standalone scaffoldだけの例外として維持し、他のViewへ一般化しません。
 
 全生成Viewの主見出しは`content_for :page_title`へ文字列を1回だけ設定し、Viewまたは`with_menu` layoutの`h1`とdocument titleから再利用します。document titleと`og:title`は通常ページで「page title | application name」、`page_title`を持たない公開homeだけapplication nameとします。主見出し直前のeyebrowは置かず、カードや機能紹介など主見出しではないsection headingは維持します。
 
@@ -86,12 +103,14 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、themeのbase-100、primary、base-200、secondary、base-300に対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `haikunator`を常設し、User作成と同時に必須かつ一意な`screen_name`を生成し、そのCamelCaseを`display_name`の初期値とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
-- Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。
+- Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。認証画面ではPasskeyを既定の認証方法として`:primary`、SIWEを選択した場合のWallet署名を代替手段として`:secondary`で表示し、この優先順位を画面ごとに変えない。
 - ブラウザ側はWebAuthn Level 3の`parseCreationOptionsFromJSON`、`parseRequestOptionsFromJSON`、credentialの`toJSON`を使用する。未対応ブラウザは利用不可を明示し、独自変換のfallbackは追加しない。
 - SIWE選択時だけsignup・login画面へ明示的な署名buttonを追加する。全SIWE操作でEIP-6963 Providerを収集し、複数Providerの場合は共通`with_modal`による名前一覧から選択したProviderだけを接続・署名に使用する。EIP-6963非対応時だけ`window.ethereum`を使用する。「アカウント設定」の`tabs-lift`でPasskeys、EVMウォレット、アカウント削除を切り替え、解除・削除は操作ごとの別資格情報による再認証画面へ分離する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
-- ページ全体に作用する追加、単一controlの簡易絞り込み、一括操作はViewから`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ渡す。primaryは基本操作、secondaryは簡易絞り込みやapplication/server選択などの補助操作とする。複数fieldまたは複数行になる複雑な検索formはpage actionsへ入れず、content areaの`card-rapid`内へ配置する。個別model・table row・formに属する編集、削除、pause、run、保存、戻る操作は移動しない。共通rendererは未指定slotを出力せず、複数回設定されたfragmentを各列内で縦に並べる。640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列とする。
+- ページ全体に作用する追加、単一controlの簡易絞り込み、一括操作はViewから`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ渡す。primaryは基本操作、secondaryは簡易絞り込みやapplication/server選択などの補助操作とする。slotは配置する操作群だけを表し、buttonのroleや配色を決定しないため、primary側へ置く一括削除も`:primary`ではなく操作の意味に対応するroleを使用する。複数fieldまたは複数行になる複雑な検索formはpage actionsへ入れず、content areaの`card-rapid`内へ配置する。個別model・table row・formに属する編集、削除、pause、run、保存、戻る操作は移動しない。共通rendererは未指定slotを出力せず、複数回設定されたfragmentを各列内で縦に並べる。640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列とする。
+- card、form、modal、row内のaction groupは右寄せし、狭幅では折り返せるようにする。DOM順は低強調から高影響の`:quiet`、`:secondary`、`:warning`、`:primary`または`:destructive`とし、その画面の最終操作を右端へ置く。専用の確認・再認証画面では`:destructive_confirm`を最終操作とする。daisyUIの`card-actions`・`modal-action`を優先し、通常の文字付き操作をtable row内だけ小さくする`btn-sm`は使用しない。
+- `action_button_classes`のcompact例外は、通知popover、受信者selector・badge、inputへ連結するCopy操作、header、menu、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuに限定する。これらは該当するdaisyUI componentとmodifierを直接使用し、例外を通常のcontent actionへ広げない。
 - `with_menu`は本文blockを先にcaptureしてタブ有無を確定し、タブなしのpage actionsだけを主見出し直下の`card-rapid`と`card-body p-3`へ配置する。タブなしページの最外周表示面となる標準`card-rapid > .card-body`も`p-3`とし、activeな`tab-content`と内部余白を0.75remへ統一する。入れ子のcard、error variant、tableを端まで表示する意図的な`p-0`、`with_menu`外のcardは対象外とする。`with_tab`はactiveな`tab-content`の先頭へpage actionsをcardなしで配置して内部markerを設定し、`with_menu`による二重出力を防ぐ。両slotが空ならcardもaction containerも生成しない。
 - account sub-layoutの左ペインにはユーザー向けmenuと、`UserPolicy#overview?`を満たすUserだけに表示する単一の管理画面bridge linkを末尾へ置き、個別の管理項目は混在させない。admin sub-layoutの左ペインには見出し「管理画面」と管理menuを表示し、全管理項目の後の末尾にだけマイページへのbridge linkを置く。現在のControllerに対応する管理linkは`menu-active`と`aria-current="page"`で示す。
 - 複数Viewで共通する階層メニューは個別Viewへ複製せず、その画面群の機能単位nested layoutで1回だけ定義する。`with_menu`が主見出しを描画してからnested layoutを本文blockとして受け取るため、表示順は主見出し、subnavigation、本文となる。

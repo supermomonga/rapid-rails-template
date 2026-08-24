@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `4f031282dbb07929d901490ca1ac8621a9f4471502e18d23cc84b61a8515a49f`
-- Base commit: `2aa18317384dbb4dd5100829bdb6ba747d7b5079`
+- Source fingerprint: `c2eba35b6f6b6ba9cb71d21d8073392410e78883e8e9723d9a1cbf0032a887c6`
+- Base commit: `d100aa49868ca15df95a385953905f30c0875d25`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -60,23 +60,29 @@
 |---|---|
 |![通知popover（未読） (desktop)](notifications-popover-unread--desktop.png)|![通知popover（未読） (mobile)](notifications-popover-unread--mobile.png)|
 
-## 通知popover（全件既読後）
-
-|Desktop|Mobile|
-|---|---|
-|![通知popover（全件既読後） (desktop)](notifications-popover-opened--desktop.png)|![通知popover（全件既読後） (mobile)](notifications-popover-opened--mobile.png)|
-
 ## 通知履歴
 
 |Desktop|Mobile|
 |---|---|
 |![通知履歴 (desktop)](notifications-history--desktop.png)|![通知履歴 (mobile)](notifications-history--mobile.png)|
 
+## 通知popover（全件既読後）
+
+|Desktop|Mobile|
+|---|---|
+|![通知popover（全件既読後） (desktop)](notifications-popover-opened--desktop.png)|![通知popover（全件既読後） (mobile)](notifications-popover-opened--mobile.png)|
+
 ## 通知管理
 
 |Desktop|Mobile|
 |---|---|
 |![通知管理 (desktop)](admin-notifications--desktop.png)|![通知管理 (mobile)](admin-notifications--mobile.png)|
+
+## 通知詳細
+
+|Desktop|Mobile|
+|---|---|
+|![通知詳細 (desktop)](admin-notification-show--desktop.png)|![通知詳細 (mobile)](admin-notification-show--mobile.png)|
 
 ## 通知の個別受信者選択
 
@@ -258,6 +264,18 @@
 |---|---|
 |![運用タスク詳細 (desktop)](admin-maintenance-task-details--desktop.png)|![運用タスク詳細 (mobile)](admin-maintenance-task-details--mobile.png)|
 
+## 運用タスク一時停止中
+
+|Desktop|Mobile|
+|---|---|
+|![運用タスク一時停止中 (desktop)](admin-maintenance-task-paused--desktop.png)|![運用タスク一時停止中 (mobile)](admin-maintenance-task-paused--mobile.png)|
+
+## 運用タスクエラー
+
+|Desktop|Mobile|
+|---|---|
+|![運用タスクエラー (desktop)](admin-maintenance-task-errored--desktop.png)|![運用タスクエラー (mobile)](admin-maintenance-task-errored--mobile.png)|
+
 ## 運用タスク完了
 
 |Desktop|Mobile|
@@ -269,6 +287,12 @@
 |Desktop|Mobile|
 |---|---|
 |![固定ページ編集 (desktop)](admin-page-edit--desktop.png)|![固定ページ編集 (mobile)](admin-page-edit--mobile.png)|
+
+## FAQ管理
+
+|Desktop|Mobile|
+|---|---|
+|![FAQ管理 (desktop)](admin-faqs--desktop.png)|![FAQ管理 (mobile)](admin-faqs--mobile.png)|
 
 ## FAQ編集
 

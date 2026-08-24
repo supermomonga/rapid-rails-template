@@ -157,6 +157,12 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 `boring_avatars`は`avatar`選択時だけRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。theme色はserver-side generatorが要求する16進色の定数として一元化し、CSS themeとの一致を契約テストで保証します。
 
+### アプリ内通知
+
+全構成へ`Notification`と`NotificationDelivery`を生成します。通知は1〜140文字へtrimしたmessage、必須の公開日時、下書き状態、全ユーザーまたは個別ユーザーの通知先を持ち、公開範囲を`draft = false AND published_at <= Time.current`に限定します。配信は通知とUserの組をdatabaseの一意制約で保護し、削除時はcascadeします。個別通知は下書き中から対象差分を同期して継続対象の既読日時を保持し、全体通知は公開時だけ現在Userとの差分をbulk insertします。通知保存と同期は同じtransactionで行います。
+
+認証済み画面のheaderにはHeroiconsのbellと、未読がある場合だけdaisyUIの`indicator`と`status`を表示します。native Popover APIとdaisyUI `dropdown`内のTurbo Frameは閉じている間に通信せず、初回表示で最新10件を読み込みます。公開通知の履歴は`/notifications`で公開日時・ID降順に25件ずつ表示し、個別既読と一括既読は現在Userが所有する公開済み配信だけを更新します。管理CRUDと最大20件の受信者検索はAction Policyでadminに限定します。
+
 ### PWAとWeb Push
 
 `pwa=use`ではRails 8.1標準のPWA controllerを利用し、`/manifest.json`と`/service-worker`を明示的にrouteへ接続します。manifestはApplication Identityの表示用アプリ名と既定locale、`/icon.png`、scopeとstart URL `/`、`standalone`表示、theme色`#3ea8ff`を持ちます。Service Workerの`push` handlerは`{ title, options }`を表示し、`notificationclick` handlerはpayloadの`options.data.path`を同一origin内へ制限した上で、既存windowのfocus・navigateまたは新規windowのopenを行います。
@@ -190,7 +196,7 @@ PushNotifier.deliver_later(
 | `DELETE /push_subscription` | 現在のUser範囲でbrowser IDを冪等削除して`204` |
 | `POST /push_subscription/test` | 現在のUserとbrowser IDに一致する購読へ固定通知をenqueueして`202`。未登録は`404`、設定不足は`503`、5回/分超過は`429` |
 
-追加ログイン方法にかかわらず共通のDevise認証必須`/notification`ページを生成し、account navigationの独立項目「通知」から開きます。アカウント設定画面へWeb Push UIは埋め込みません。通知ページはdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
+追加ログイン方法にかかわらず、Web Pushを有効にした場合だけDevise認証必須の`/web-push`を生成し、account navigationの独立項目「Web Push設定」から開きます。アプリ内通知の`/notifications`やheader popoverとは共有しません。設定画面はdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
 
 ### Roleと認可
 

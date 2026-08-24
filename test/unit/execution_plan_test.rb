@@ -61,6 +61,27 @@ class ExecutionPlanTest < Minitest::Test
     assert_operator plan.steps.index("configure_generator_templates"), :<, plan.steps.index("configure_default_views")
     assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "configure_profile"
+    assert_includes plan.steps, "configure_in_app_notifications"
+    assert_operator plan.steps.index("configure_profile"), :<, plan.steps.index("configure_in_app_notifications")
+    assert_operator plan.steps.index("configure_in_app_notifications"), :<, plan.steps.index("configure_api")
+    assert_operator plan.steps.index("configure_in_app_notifications"), :<, plan.steps.index("configure_default_views")
+    assert_includes plan.artifacts, "app/models/notification.rb"
+    assert_includes plan.artifacts, "app/models/notification_delivery.rb"
+    assert_includes plan.artifacts, "app/controllers/notifications_controller.rb"
+    assert_includes plan.artifacts, "app/views/notifications/index.html.erb"
+    assert_includes plan.artifacts, "app/views/notifications/popover.html.erb"
+    assert_includes plan.artifacts, "app/controllers/admin/notifications_controller.rb"
+    assert_includes plan.artifacts, "app/controllers/admin/notification_recipients_controller.rb"
+    assert_includes plan.artifacts, "app/views/admin/notifications/index.html.erb"
+    assert_includes plan.artifacts, "app/views/admin/notification_recipients/index.html.erb"
+    assert_includes plan.artifacts, "app/javascript/controllers/notification_popover_controller.js"
+    assert_includes plan.artifacts, "config/locales/notifications.ja.yml"
+    assert_includes plan.artifacts, "config/locales/notifications.en.yml"
+    assert_includes plan.artifacts, "db/migrate/*_create_notifications.rb"
+    assert_includes plan.artifacts, "db/migrate/*_create_notification_deliveries.rb"
+    assert_includes plan.artifacts, "test/models/notification_test.rb"
+    assert_includes plan.artifacts, "test/controllers/notifications_controller_test.rb"
+    assert_includes plan.artifacts, "test/system/notifications_test.rb"
     assert_includes plan.steps, "install_image_cropper"
     assert_operator plan.steps.index("install_image_cropper"), :<, plan.steps.index("configure_profile")
     assert_includes plan.steps, "configure_default_views"
@@ -431,8 +452,65 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/models/push_subscription.rb"
     assert_includes plan.artifacts, "app/jobs/push_notification_job.rb"
     assert_includes plan.artifacts, "app/services/push_notifier.rb"
-    assert_includes plan.artifacts, "app/controllers/notifications_controller.rb"
-    assert_includes plan.artifacts, "app/views/notifications/show.html.erb"
+    assert_includes plan.artifacts, "app/controllers/web_push_settings_controller.rb"
+    assert_includes plan.artifacts, "app/views/web_push_settings/show.html.erb"
+  end
+
+  def test_in_app_notifications_are_always_generated_without_optional_features
+    plan = RapidRailsTemplate::ExecutionPlan.build(
+      RapidRailsTemplate::Configuration.build(
+        "web_push" => "skip",
+        "action_cable" => "skip",
+        "active_job" => "skip",
+        "profile_features" => []
+      ),
+      app_id: "sample", app_name: "Sample App"
+    )
+
+    assert_includes plan.steps, "configure_in_app_notifications"
+    refute_includes plan.steps, "configure_profile"
+    refute_includes plan.steps, "configure_web_push"
+    assert_operator plan.steps.index("configure_content_management"), :<, plan.steps.index("configure_in_app_notifications")
+    assert_operator plan.steps.index("configure_in_app_notifications"), :<, plan.steps.index("configure_default_views")
+    assert_equal plan.artifacts.uniq, plan.artifacts
+    %w[
+      app/models/notification.rb
+      app/models/notification_delivery.rb
+      app/services/notification_delivery_synchronization.rb
+      app/policies/notification_policy.rb
+      app/controllers/notifications_controller.rb
+      app/controllers/admin/notifications_controller.rb
+      app/controllers/admin/notification_recipients_controller.rb
+      app/views/notifications/index.html.erb
+      app/views/notifications/popover.html.erb
+      app/views/notifications/_popover.html.erb
+      app/views/notifications/_notification.html.erb
+      app/views/notifications/_unread_status.html.erb
+      app/views/notifications/open.turbo_stream.erb
+      app/views/notifications/open_all.turbo_stream.erb
+      app/views/admin/notifications/index.html.erb
+      app/views/admin/notifications/show.html.erb
+      app/views/admin/notifications/new.html.erb
+      app/views/admin/notifications/edit.html.erb
+      app/views/admin/notifications/_form.html.erb
+      app/views/admin/notification_recipients/index.html.erb
+      app/javascript/controllers/notification_popover_controller.js
+      app/javascript/controllers/notification_recipients_controller.js
+      config/locales/notifications.ja.yml
+      config/locales/notifications.en.yml
+      db/migrate/*_create_notifications.rb
+      db/migrate/*_create_notification_deliveries.rb
+      test/models/notification_test.rb
+      test/models/notification_delivery_test.rb
+      test/services/notification_delivery_synchronization_test.rb
+      test/policies/notification_policy_test.rb
+      test/controllers/notifications_controller_test.rb
+      test/controllers/admin/notifications_controller_test.rb
+      test/controllers/admin/notification_recipients_controller_test.rb
+      test/system/notifications_test.rb
+      test/fixtures/notifications.yml
+      test/fixtures/notification_deliveries.yml
+    ].each { |artifact| assert_includes plan.artifacts, artifact }
   end
 
   def test_pwa_without_web_push_only_generates_pwa_foundation

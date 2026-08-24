@@ -327,8 +327,8 @@ def configure_application_identity
       "meta" => { "description" => "%{app_name}のWebアプリケーションです。" },
       "navigation" => {
         "main" => "メインナビゲーション", "account_menu" => "アカウントメニュー", "admin_menu" => "管理メニュー", "open_account_menu" => "アカウントメニューを開く",
-        "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "notifications" => "通知",
-        "api_credentials" => "APIキーの管理", "overview" => "概要", "users" => "ユーザー管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
+        "dashboard" => "マイページ", "profile" => "プロフィール", "account_settings" => "アカウント設定", "web_push_settings" => "Web Push設定",
+        "api_credentials" => "APIキーの管理", "overview" => "概要", "users" => "ユーザー管理", "admin_notifications" => "通知管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
         "admin" => "管理画面", "sign_in" => "ログイン", "sign_up" => "アカウント作成", "sign_out" => "ログアウト"
       },
       "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営会社", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
@@ -345,14 +345,14 @@ def configure_application_identity
       },
       "credential_risk" => { "warning" => "現在のログイン方法は未バックアップのPasskey 1件だけです。端末の紛失・故障に備えて別のログイン方法を追加してください。", "add_login_method" => "ログイン方法を追加" },
       "siwe" => { "statement" => "Login to %{app_name}" },
-      "common" => { "edit" => "編集", "delete" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
+      "common" => { "show" => "詳細", "edit" => "編集", "delete" => "削除", "destroy" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
     },
     en: {
       "meta" => { "description" => "The web application for %{app_name}." },
       "navigation" => {
         "main" => "Main navigation", "account_menu" => "Account menu", "admin_menu" => "Administration menu", "open_account_menu" => "Open account menu",
-        "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "notifications" => "Notifications",
-        "api_credentials" => "API credentials", "overview" => "Overview", "users" => "Users", "pages" => "Pages", "faqs" => "FAQs",
+        "dashboard" => "Dashboard", "profile" => "Profile", "account_settings" => "Account settings", "web_push_settings" => "Web Push settings",
+        "api_credentials" => "API credentials", "overview" => "Overview", "users" => "Users", "admin_notifications" => "Notifications", "pages" => "Pages", "faqs" => "FAQs",
         "admin" => "Administration", "sign_in" => "Sign in", "sign_up" => "Create account", "sign_out" => "Sign out"
       },
       "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Company", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
@@ -369,7 +369,7 @@ def configure_application_identity
       },
       "credential_risk" => { "warning" => "Your only sign-in method is a passkey that is not backed up. Add another sign-in method in case this device is lost or damaged.", "add_login_method" => "Add sign-in method" },
       "siwe" => { "statement" => "Sign in to %{app_name}" },
-      "common" => { "edit" => "Edit", "delete" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
+      "common" => { "show" => "Show", "edit" => "Edit", "delete" => "Delete", "destroy" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
     }
   )
 
@@ -8351,6 +8351,1093 @@ def configure_devise_views
   )
 end
 
+def configure_in_app_notifications
+  profile_features = VALUES.fetch("profile_features")
+  searchable_profile_columns = %w[screen_name display_name] & profile_features
+  recipient_user_scope = searchable_profile_columns.empty? ? "User" : "User.includes(:profile)"
+  recipient_label_ruby = if profile_features.include?("screen_name")
+    'user.profile&.screen_name.presence&.then { |name| "@#{name}" } || "User ##{user.id}"'
+  elsif profile_features.include?("display_name")
+    'user.profile&.display_name.presence || "User ##{user.id}"'
+  else
+    '"User ##{user.id}"'
+  end
+
+  generate "model", "Notification", "message:string", "published_at:datetime", "draft:boolean", "audience:string"
+  notification_migration = Dir.glob("db/migrate/*_create_notifications.rb")
+  raise "CreateNotifications migrationが一意ではありません" unless notification_migration.one?
+
+  create_file notification_migration.first, <<~RUBY, force: true
+    class CreateNotifications < ActiveRecord::Migration[8.1]
+      def change
+        create_table :notifications do |t|
+          t.string :message, null: false
+          t.datetime :published_at, null: false
+          t.boolean :draft, null: false, default: true
+          t.string :audience, null: false, default: "all_users"
+          t.timestamps
+        end
+
+        add_index :notifications, [:draft, :published_at, :id]
+        add_check_constraint :notifications,
+          "audience IN ('all_users', 'selected_users')",
+          name: "notifications_audience_check"
+      end
+    end
+  RUBY
+
+  generate "model", "NotificationDelivery", "notification:references", "user:references", "opened_at:datetime"
+  delivery_migration = Dir.glob("db/migrate/*_create_notification_deliveries.rb")
+  raise "CreateNotificationDeliveries migrationが一意ではありません" unless delivery_migration.one?
+
+  create_file delivery_migration.first, <<~RUBY, force: true
+    class CreateNotificationDeliveries < ActiveRecord::Migration[8.1]
+      def change
+        create_table :notification_deliveries do |t|
+          t.references :notification, null: false, foreign_key: { on_delete: :cascade }
+          t.references :user, null: false, foreign_key: { on_delete: :cascade }
+          t.datetime :opened_at
+          t.timestamps
+        end
+
+        add_index :notification_deliveries, [:notification_id, :user_id], unique: true
+        add_index :notification_deliveries, [:user_id, :opened_at]
+      end
+    end
+  RUBY
+
+  create_file "app/models/notification.rb", <<~RUBY, force: true
+    class Notification < ApplicationRecord
+      extend T::Sig
+
+      AUDIENCES = { all_users: "all_users", selected_users: "selected_users" }.freeze
+
+      has_many :notification_deliveries, dependent: :destroy
+      has_many :recipients, through: :notification_deliveries, source: :user
+
+      enum :audience, AUDIENCES, validate: true
+
+      before_validation :trim_message
+
+      validates :message, length: { in: 1..140 }
+      validates :published_at, presence: true
+
+      scope :published, -> { where(draft: false).where(published_at: ..Time.current) }
+
+      sig { returns(T::Boolean) }
+      def published?
+        !draft? && published_at.present? && published_at <= Time.current
+      end
+
+      sig { params(recipient_ids: T::Array[Integer]).returns(Notification) }
+      def save_with_delivery_synchronization!(recipient_ids: [])
+        synchronize_all_users = should_synchronize_all_users?
+        transaction do
+          save!
+          NotificationDeliverySynchronization.call(notification: self, recipient_ids:, synchronize_all_users:)
+        end
+        self
+      end
+
+      private
+        sig { returns(T::Boolean) }
+        def should_synchronize_all_users?
+          return false unless all_users? && !draft?
+          return true if new_record?
+
+          attribute_in_database("draft") || attribute_in_database("audience") != "all_users"
+        end
+
+        sig { void }
+        def trim_message
+          self.message = T.unsafe(message)&.strip
+        end
+    end
+  RUBY
+
+  create_file "app/models/notification_delivery.rb", <<~RUBY, force: true
+    class NotificationDelivery < ApplicationRecord
+      extend T::Sig
+
+      belongs_to :notification
+      belongs_to :user
+
+      validates :notification_id, uniqueness: { scope: :user_id }
+
+      scope :published, -> {
+        joins(:notification)
+          .where(notification: { draft: false })
+          .where(notification: { published_at: ..Time.current })
+      }
+      scope :ordered, -> { order(notification: { published_at: :desc, id: :desc }) }
+      scope :unopened, -> { where(opened_at: nil) }
+
+      sig { returns(T::Boolean) }
+      def opened?
+        opened_at.present?
+      end
+
+      sig { returns(NotificationDelivery) }
+      def open!
+        update!(opened_at: Time.current) if opened_at.nil?
+        self
+      end
+    end
+  RUBY
+
+  inject_into_class "app/models/user.rb", "User", <<~RUBY
+      has_many :notification_deliveries, dependent: :destroy
+      has_many :notifications, through: :notification_deliveries
+
+  RUBY
+
+  create_file "app/services/notification_delivery_synchronization.rb", <<~RUBY, force: true
+    class NotificationDeliverySynchronization
+      extend T::Sig
+
+      sig do
+        params(
+          notification: Notification,
+          recipient_ids: T::Array[Integer],
+          synchronize_all_users: T::Boolean
+        ).void
+      end
+      def self.call(notification:, recipient_ids: [], synchronize_all_users: true)
+        new(notification:, recipient_ids:, synchronize_all_users:).call
+      end
+
+      sig do
+        params(
+          notification: Notification,
+          recipient_ids: T::Array[Integer],
+          synchronize_all_users: T::Boolean
+        ).void
+      end
+      def initialize(notification:, recipient_ids: [], synchronize_all_users: true)
+        @notification = notification
+        @recipient_ids = recipient_ids.uniq
+        @synchronize_all_users = synchronize_all_users
+      end
+
+      sig { void }
+      def call
+        if notification.selected_users?
+          synchronize_selected_users
+        elsif synchronize_all_users && notification.all_users? && !notification.draft?
+          insert_missing(User.ids)
+        end
+      end
+
+      private
+        sig { returns(Notification) }
+        attr_reader :notification
+
+        sig { returns(T::Array[Integer]) }
+        attr_reader :recipient_ids
+
+        sig { returns(T::Boolean) }
+        attr_reader :synchronize_all_users
+
+        sig { void }
+        def synchronize_selected_users
+          existing_user_ids = User.where(id: recipient_ids).pluck(:id)
+          raise ActiveRecord::RecordNotFound unless existing_user_ids.sort == recipient_ids.sort
+
+          # rubocop:disable Rails/SkipsModelValidations -- 差分同期で継続対象のopened_atを保持する
+          notification.notification_deliveries.where.not(user_id: recipient_ids).delete_all
+          # rubocop:enable Rails/SkipsModelValidations
+          insert_missing(recipient_ids)
+        end
+
+        sig { params(user_ids: T::Array[Integer]).void }
+        def insert_missing(user_ids)
+          existing_ids = notification.notification_deliveries.where(user_id: user_ids).pluck(:user_id)
+          missing_ids = user_ids - existing_ids
+          return if missing_ids.empty?
+
+          now = Time.current
+          rows = missing_ids.map do |user_id|
+            { notification_id: notification.id, user_id:, opened_at: nil, created_at: now, updated_at: now }
+          end
+          # rubocop:disable Rails/SkipsModelValidations -- bulk insertと一意制約で同時実行時の重複を防ぐ
+          NotificationDelivery.insert_all(rows, unique_by: :index_notification_deliveries_on_notification_id_and_user_id)
+          # rubocop:enable Rails/SkipsModelValidations
+        end
+    end
+  RUBY
+
+  create_file "app/policies/notification_policy.rb", <<~RUBY, force: true
+    class NotificationPolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def index?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def show?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def create?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def update?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def destroy?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def search_recipients?
+        admin?
+      end
+
+      relation_scope do |relation|
+        admin? ? relation : relation.none
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/notifications_controller.rb", <<~RUBY, force: true
+    class NotificationsController < ApplicationController
+      extend T::Sig
+
+      before_action :authenticate_user!
+
+      sig { void }
+      def index
+        @pagy, @deliveries = pagy(:offset, deliveries_scope, limit: 25)
+      end
+
+      sig { void }
+      def popover
+        @deliveries = deliveries_scope.limit(10)
+        render layout: false
+      end
+
+      sig { void }
+      def open
+        @delivery = deliveries_scope.find_by!(notification_id: params.expect(:id))
+        allowed_frames = %W[popover_notification_\#{@delivery.notification_id} history_notification_\#{@delivery.notification_id}]
+        @origin_frame = params.expect(:origin_frame)
+        raise ActionController::BadRequest unless allowed_frames.include?(@origin_frame)
+
+        @delivery.open!
+      end
+
+      sig { void }
+      def open_all
+        @origin_frame = params.expect(:origin_frame)
+        raise ActionController::BadRequest unless @origin_frame == "notifications_popover"
+
+        # rubocop:disable Rails/SkipsModelValidations -- 現在Userの公開済み未読だけを一括更新する
+        deliveries_scope.where(opened_at: nil).update_all(opened_at: Time.current, updated_at: Time.current)
+        # rubocop:enable Rails/SkipsModelValidations
+        @deliveries = deliveries_scope.limit(10)
+      end
+
+      private
+        sig { returns(ActiveRecord::Relation) }
+        def deliveries_scope
+          T.must(current_user).notification_deliveries.published.ordered.includes(:notification)
+        end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/notifications_controller.rb", <<~RUBY, force: true
+    module Admin
+      class NotificationsController < BaseController
+        extend T::Sig
+
+        before_action :set_notification, only: %i[show edit update destroy]
+
+        sig { void }
+        def index
+          authorize! Notification, to: :index?
+          @pagy, @notifications = pagy(:offset, authorized_scope(Notification.all).order(published_at: :desc, id: :desc), limit: 25)
+        end
+
+        sig { void }
+        def show
+          authorize! @notification
+        end
+
+        sig { void }
+        def new
+          @notification = Notification.new(draft: true, published_at: Time.current, audience: :all_users)
+          authorize! @notification
+          @recipient_ids = []
+        end
+
+        sig { void }
+        def edit
+          authorize! @notification
+          @recipient_ids = @notification.notification_deliveries.pluck(:user_id)
+        end
+
+        sig { void }
+        def create
+          @notification = Notification.new(notification_attributes)
+          authorize! @notification
+          @recipient_ids = recipient_ids
+          @notification.save_with_delivery_synchronization!(recipient_ids: @recipient_ids)
+          redirect_to admin_notification_path(@notification), notice: t("notifications.admin.created"), status: :see_other
+        rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotFound
+          render :new, status: :unprocessable_content
+        end
+
+        sig { void }
+        def update
+          authorize! @notification
+          @recipient_ids = recipient_ids
+          @notification.assign_attributes(notification_attributes)
+          @notification.save_with_delivery_synchronization!(recipient_ids: @recipient_ids)
+          redirect_to admin_notification_path(@notification), notice: t("notifications.admin.updated"), status: :see_other
+        rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotFound
+          render :edit, status: :unprocessable_content
+        end
+
+        sig { void }
+        def destroy
+          authorize! @notification
+          @notification.destroy!
+          redirect_to admin_notifications_path, notice: t("notifications.admin.destroyed"), status: :see_other
+        end
+
+        private
+          sig { void }
+          def set_notification
+            @notification = Notification.find(params.expect(:id))
+          end
+
+          def notification_attributes
+            params.expect(notification: %i[message audience published_at draft])
+          end
+
+          sig { returns(T::Array[Integer]) }
+          def recipient_ids
+            Array(params.dig(:notification, :recipient_ids)).compact_blank.map { |value| Integer(value, 10) }.uniq
+          end
+      end
+    end
+  RUBY
+
+  recipient_relation = if searchable_profile_columns.empty?
+    "User.where(id: integer_query).order(:id)"
+  else
+    profile_predicates = searchable_profile_columns.map { |column| "profiles.#{column} LIKE :query" }
+    "User.left_joins(:profile).where(\"users.id = :id OR #{profile_predicates.join(' OR ')}\", id: integer_query, query: like_query).distinct.order(:id)"
+  end
+  create_file "app/controllers/admin/notification_recipients_controller.rb", <<~RUBY, force: true
+    module Admin
+      class NotificationRecipientsController < BaseController
+        extend T::Sig
+
+        sig { void }
+        def index
+          authorize! Notification, to: :search_recipients?
+          query = params[:q].to_s.strip
+          @selected_ids = Array(params[:selected_ids]).compact_blank.map { |value| Integer(value, 10) }
+          integer_query = Integer(query, 10, exception: false)
+          like_query = "%\#{ActiveRecord::Base.sanitize_sql_like(query)}%"
+          @users = query.present? ? #{recipient_relation}.limit(20) : User.none
+        end
+      end
+    end
+  RUBY
+
+  route <<~RUBY
+    resources :notifications, only: :index do
+      collection do
+        get :popover
+        patch "open-all", action: :open_all, as: :open_all
+      end
+      member do
+        patch :open
+      end
+    end
+    namespace :admin do
+      resources :notifications
+      resources :notification_recipients, only: :index, path: "notification-recipients"
+    end
+  RUBY
+
+  create_file "app/javascript/controllers/notification_popover_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["frame", "error"]
+      static values = { url: String }
+
+      load(event) {
+        if (event.newState !== "open" || this.frameTarget.src) return
+
+        this.frameTarget.src = this.urlValue
+      }
+
+      retry() {
+        this.frameTarget.replaceChildren()
+        this.frameTarget.removeAttribute("complete")
+        this.frameTarget.reload()
+      }
+
+      error(event) {
+        event.preventDefault()
+        const content = this.errorTarget.content.cloneNode(true)
+        content.querySelector("[data-notification-load-error]").classList.add("alert-error")
+        this.frameTarget.replaceChildren(content)
+      }
+    }
+  JAVASCRIPT
+
+  create_file "app/javascript/controllers/notification_recipients_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["frame", "hidden", "search"]
+      static values = { selected: Object, url: String }
+
+      connect() {
+        this.renderHiddenInputs()
+      }
+
+      search() {
+        clearTimeout(this.timeout)
+        this.timeout = setTimeout(() => this.loadResults(), 200)
+      }
+
+      select(event) {
+        const { userId, userLabel } = event.currentTarget.dataset
+        if (this.selectedValue[userId]) {
+          delete this.selectedValue[userId]
+        } else {
+          this.selectedValue[userId] = userLabel
+        }
+        this.selectedValue = { ...this.selectedValue }
+        this.renderHiddenInputs()
+        this.loadResults()
+      }
+
+      loadResults() {
+        const url = new URL(this.urlValue, window.location.origin)
+        url.searchParams.set("q", this.searchTarget.value)
+        Object.keys(this.selectedValue).forEach((id) => url.searchParams.append("selected_ids[]", id))
+        this.frameTarget.src = url.toString()
+      }
+
+      renderHiddenInputs() {
+        this.hiddenTarget.replaceChildren(...Object.entries(this.selectedValue).map(([id, label]) => {
+          const wrapper = document.createElement("span")
+          wrapper.className = "badge badge-outline gap-1"
+          wrapper.textContent = label
+          const input = document.createElement("input")
+          input.type = "hidden"
+          input.name = "notification[recipient_ids][]"
+          input.value = id
+          wrapper.append(input)
+          return wrapper
+        }))
+      }
+    }
+  JAVASCRIPT
+
+  create_file "app/views/notifications/_unread_status.html.erb", <<~ERB, force: true
+    <span id="notification_unread_status" class="indicator-item">
+      <% if current_user.notification_deliveries.published.unopened.exists? %>
+        <span class="status status-primary status-sm" aria-label="<%= t('notifications.unread_status') %>"></span>
+      <% end %>
+    </span>
+  ERB
+
+  create_file "app/views/notifications/_notification.html.erb", <<~ERB, force: true
+    <% frame_id = [frame_prefix, delivery.notification_id].join("_") %>
+    <%= turbo_frame_tag frame_id do %>
+      <li class="list-row items-start">
+        <div class="list-col-grow min-w-0">
+          <p class="break-words <%= 'font-semibold' unless delivery.opened? %>"><%= delivery.notification.message %></p>
+          <p class="mt-1 text-xs text-neutral"><%= time_tag delivery.notification.published_at, l(delivery.notification.published_at, format: :short) %></p>
+        </div>
+        <% unless delivery.opened? %>
+          <%= button_to t("notifications.open"), open_notification_path(delivery.notification), method: :patch,
+            params: { origin_frame: frame_id }, class: "btn btn-ghost btn-sm", form: { data: { turbo_stream: true } } %>
+        <% end %>
+      </li>
+    <% end %>
+  ERB
+
+  create_file "app/views/notifications/_popover.html.erb", <<~ERB, force: true
+    <%= turbo_frame_tag "notifications_popover" do %>
+      <div class="flex items-center justify-between gap-3 border-b border-base-300 p-3">
+        <h2 class="font-semibold leading-[1.5]"><%= t("notifications.title") %></h2>
+        <% if deliveries.any?(&:opened_at) || deliveries.any? { |delivery| !delivery.opened? } %>
+          <% if deliveries.any? { |delivery| !delivery.opened? } %>
+            <%= button_to t("notifications.open_all"), open_all_notifications_path, method: :patch,
+              params: { origin_frame: "notifications_popover" }, class: "btn btn-ghost btn-sm", form: { data: { turbo_stream: true } } %>
+          <% end %>
+        <% end %>
+      </div>
+      <% if deliveries.empty? %>
+        <p class="p-4 text-sm text-neutral"><%= t("notifications.empty") %></p>
+      <% else %>
+        <ul class="list max-h-96 overflow-y-auto">
+          <% deliveries.each do |delivery| %>
+            <%= render "notifications/notification", delivery:, frame_prefix: "popover_notification" %>
+          <% end %>
+        </ul>
+      <% end %>
+      <div class="border-t border-base-300 p-2 text-center">
+        <%= link_to t("notifications.more"), notifications_path, class: "btn btn-ghost btn-sm", data: { turbo_frame: "_top" } %>
+      </div>
+    <% end %>
+  ERB
+
+  create_file "app/views/notifications/popover.html.erb", <<~ERB, force: true
+    <%= render "notifications/popover", deliveries: @deliveries %>
+  ERB
+
+  create_file "app/views/notifications/index.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("notifications.title") %>
+    <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
+      <header>
+        <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
+        <p class="text-sm text-neutral"><%= t("notifications.description") %></p>
+      </header>
+      <section class="card-rapid">
+        <div class="card-body">
+          <%= turbo_frame_tag "notifications_history", data: { turbo_action: "advance" } do %>
+            <% if @deliveries.empty? %>
+              <p class="text-sm text-neutral"><%= t("notifications.empty") %></p>
+            <% else %>
+              <ul class="list">
+                <% @deliveries.each do |delivery| %>
+                  <%= render "notifications/notification", delivery:, frame_prefix: "history_notification" %>
+                <% end %>
+              </ul>
+              <%= pagination(@pagy, aria_label: t("notifications.pagination")) %>
+            <% end %>
+          <% end %>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/notifications/open.turbo_stream.erb", <<~ERB, force: true
+    <%= turbo_stream.replace "notification_unread_status", partial: "notifications/unread_status" %>
+    <% frame_prefix = @origin_frame.delete_suffix("_\#{@delivery.notification_id}") %>
+    <%= turbo_stream.replace @origin_frame,
+      partial: "notifications/notification",
+      locals: { delivery: @delivery, frame_prefix: } %>
+  ERB
+
+  create_file "app/views/notifications/open_all.turbo_stream.erb", <<~ERB, force: true
+    <%= turbo_stream.replace "notification_unread_status", partial: "notifications/unread_status" %>
+    <%= turbo_stream.replace @origin_frame,
+      partial: "notifications/popover",
+      locals: { deliveries: @deliveries } %>
+  ERB
+
+  create_file "app/views/admin/notifications/index.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("notifications.admin.title") %>
+    <% content_for :page_actions_primary do %>
+      <%= link_to t("notifications.admin.new"), new_admin_notification_path, class: "btn btn-primary btn-rapid" %>
+    <% end %>
+    <section class="card-rapid">
+      <div class="card-body p-3">
+        <div class="overflow-x-auto">
+          <table class="table table-sm table-pin-rows min-w-max">
+            <thead>
+              <tr>
+                <th><%= t("notifications.admin.message") %></th>
+                <th><%= t("notifications.admin.state") %></th>
+                <th><%= t("notifications.admin.audience") %></th>
+                <th><%= t("notifications.admin.published_at") %></th>
+                <th><%= t("notifications.admin.deliveries") %></th>
+                <th><span class="sr-only"><%= t("common.actions") %></span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @notifications.each do |notification| %>
+                <tr>
+                  <td class="max-w-md break-words"><%= notification.message %></td>
+                  <td><span class="badge"><%= t("notifications.admin.states.\#{notification.published? ? 'published' : notification.draft? ? 'draft' : 'scheduled'}") %></span></td>
+                  <td><%= t("notifications.audiences.\#{notification.audience}") %></td>
+                  <td><%= l(notification.published_at, format: :short) %></td>
+                  <td><%= notification.notification_deliveries.size %></td>
+                  <td>
+                    <div class="flex justify-end gap-1">
+                      <%= link_to t("common.show"), admin_notification_path(notification), class: "btn btn-ghost btn-sm" %>
+                      <%= link_to t("common.edit"), edit_admin_notification_path(notification), class: "btn btn-ghost btn-sm" %>
+                      <%= button_to t("common.destroy"), admin_notification_path(notification), method: :delete,
+                        class: "btn btn-ghost btn-sm text-error", data: { turbo_confirm: t("notifications.admin.destroy_confirm") } %>
+                    </div>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <%= pagination(@pagy, aria_label: t("notifications.admin.pagination")) %>
+  ERB
+
+  create_file "app/views/admin/notifications/_form.html.erb", <<~ERB, force: true
+    <% selected_users = #{recipient_user_scope}.where(id: @recipient_ids).index_with { |user| #{recipient_label_ruby} } %>
+    <%= form_with model: [:admin, notification], class: "space-y-6",
+      data: { controller: "notification-recipients", notification_recipients_url_value: admin_notification_recipients_path,
+        notification_recipients_selected_value: selected_users.to_json } do |form| %>
+      <% if notification.errors.any? %>
+        <div class="alert alert-error" role="alert"><%= notification.errors.full_messages.to_sentence %></div>
+      <% end %>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= form.label :message, t("notifications.admin.message") %></legend>
+        <%= form.text_area :message, maxlength: 140, required: true, class: "textarea w-full", rows: 4 %>
+      </fieldset>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><%= form.label :audience, t("notifications.admin.audience") %></legend>
+          <%= form.select :audience, Notification.audiences.keys.map { |value| [t("notifications.audiences.\#{value}"), value] }, {}, class: "select w-full" %>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><%= form.label :published_at, t("notifications.admin.published_at") %></legend>
+          <%= form.datetime_local_field :published_at, required: true, class: "input input-rapid w-full" %>
+        </fieldset>
+      </div>
+      <label class="label cursor-pointer justify-start gap-3">
+        <%= form.checkbox :draft, class: "checkbox" %>
+        <span><%= t("notifications.admin.draft") %></span>
+      </label>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><%= t("notifications.admin.recipients") %></legend>
+        <input type="search" class="input input-rapid w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
+          data-notification-recipients-target="search" data-action="input->notification-recipients#search">
+        <div class="flex flex-wrap gap-2" data-notification-recipients-target="hidden"></div>
+        <%= turbo_frame_tag "notification_recipient_results", data: { notification_recipients_target: "frame" } do %>
+          <p class="text-sm text-neutral"><%= t("notifications.admin.recipient_search_hint") %></p>
+        <% end %>
+      </fieldset>
+      <div class="flex flex-wrap justify-end gap-2">
+        <%= link_to t("common.back"), admin_notifications_path, class: "btn btn-ghost" %>
+        <%= form.submit class: "btn btn-primary btn-rapid" %>
+      </div>
+    <% end %>
+  ERB
+
+  create_file "app/views/admin/notifications/new.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("notifications.admin.new") %>
+    <section class="card-rapid"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
+  ERB
+
+  create_file "app/views/admin/notifications/edit.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("notifications.admin.edit") %>
+    <section class="card-rapid"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
+  ERB
+
+  create_file "app/views/admin/notifications/show.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("notifications.admin.show") %>
+    <section class="card-rapid">
+      <div class="card-body p-3">
+        <p class="break-words"><%= @notification.message %></p>
+        <dl class="grid gap-3 sm:grid-cols-2">
+          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.state") %></dt><dd><%= @notification.draft? ? t("notifications.admin.states.draft") : t("notifications.admin.states.published") %></dd></div>
+          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.audience") %></dt><dd><%= t("notifications.audiences.\#{@notification.audience}") %></dd></div>
+          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.published_at") %></dt><dd><%= l(@notification.published_at, format: :short) %></dd></div>
+          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.deliveries") %></dt><dd><%= @notification.notification_deliveries.count %></dd></div>
+        </dl>
+        <div class="card-actions justify-end">
+          <%= link_to t("common.edit"), edit_admin_notification_path(@notification), class: "btn" %>
+          <%= link_to t("common.back"), admin_notifications_path, class: "btn btn-ghost" %>
+        </div>
+      </div>
+    </section>
+  ERB
+
+  create_file "app/views/admin/notification_recipients/index.html.erb", <<~ERB, force: true
+    <%= turbo_frame_tag "notification_recipient_results" do %>
+      <% if @users.empty? %>
+        <p class="text-sm text-neutral"><%= t("notifications.admin.no_recipients") %></p>
+      <% else %>
+        <ul class="list">
+          <% @users.each do |user| %>
+            <% label = #{recipient_label_ruby} %>
+            <li class="list-row items-center">
+              <span class="list-col-grow"><%= label %> <span class="text-xs text-neutral">ID: <%= user.id %></span></span>
+              <button type="button" class="btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>"
+                data-user-id="<%= user.id %>" data-user-label="<%= label %>" data-action="notification-recipients#select">
+                <%= @selected_ids.include?(user.id) ? t("notifications.admin.remove_recipient") : t("notifications.admin.add_recipient") %>
+              </button>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    <% end %>
+  ERB
+
+  create_locale_pair("notifications",
+    ja: {
+      "notifications" => {
+        "title" => "通知履歴", "description" => "公開された通知を確認できます。", "open" => "既読にする", "open_all" => "すべて既読にする",
+        "more" => "もっと見る", "empty" => "通知はありません。", "pagination" => "通知履歴のページ", "unread_status" => "未読通知あり",
+        "popover_label" => "通知", "loading" => "通知を読み込んでいます。", "load_failed" => "通知を読み込めませんでした。", "retry" => "再試行",
+        "audiences" => { "all_users" => "全ユーザー", "selected_users" => "個別ユーザー" },
+        "admin" => {
+          "title" => "通知管理", "new" => "通知を作成", "edit" => "通知を編集", "show" => "通知詳細", "message" => "メッセージ",
+          "state" => "状態", "audience" => "通知先", "published_at" => "公開日時", "deliveries" => "配信件数", "draft" => "下書き",
+          "recipients" => "個別受信者", "recipient_search" => "User IDまたはプロフィール名で検索", "recipient_search_hint" => "検索すると最大20件を表示します。",
+          "no_recipients" => "該当するユーザーはいません。", "add_recipient" => "追加", "remove_recipient" => "解除", "created" => "通知を作成しました。",
+          "updated" => "通知を更新しました。", "destroyed" => "通知を削除しました。", "destroy_confirm" => "通知を削除しますか？", "pagination" => "通知管理のページ",
+          "states" => { "draft" => "下書き", "scheduled" => "公開待ち", "published" => "公開済み" }
+        }
+      }
+    },
+    en: {
+      "notifications" => {
+        "title" => "Notification history", "description" => "Review published notifications.", "open" => "Mark as read", "open_all" => "Mark all as read",
+        "more" => "View more", "empty" => "There are no notifications.", "pagination" => "Notification history pages", "unread_status" => "Unread notifications",
+        "popover_label" => "Notifications", "loading" => "Loading notifications.", "load_failed" => "Notifications could not be loaded.", "retry" => "Retry",
+        "audiences" => { "all_users" => "All users", "selected_users" => "Selected users" },
+        "admin" => {
+          "title" => "Notifications", "new" => "New notification", "edit" => "Edit notification", "show" => "Notification details", "message" => "Message",
+          "state" => "State", "audience" => "Audience", "published_at" => "Publish at", "deliveries" => "Deliveries", "draft" => "Draft",
+          "recipients" => "Selected recipients", "recipient_search" => "Search by User ID or profile name", "recipient_search_hint" => "Search results are limited to 20 users.",
+          "no_recipients" => "No users matched.", "add_recipient" => "Add", "remove_recipient" => "Remove", "created" => "Notification created.",
+          "updated" => "Notification updated.", "destroyed" => "Notification deleted.", "destroy_confirm" => "Delete this notification?", "pagination" => "Notification administration pages",
+          "states" => { "draft" => "Draft", "scheduled" => "Scheduled", "published" => "Published" }
+        }
+      }
+    }
+  )
+
+  append_to_file "db/seeds.rb", <<~RUBY
+
+    [
+      ["新しいお知らせがあります。", Time.zone.parse("2026-01-01 09:00:00")],
+      ["サービスの使い方を確認できます。", Time.zone.parse("2026-01-02 09:00:00")],
+      ["最新情報をお届けします。", Time.zone.parse("2026-01-03 09:00:00")]
+    ].each do |message, published_at|
+      notification = Notification.find_or_initialize_by(message:)
+      notification.assign_attributes(audience: :all_users, draft: false, published_at:)
+      notification.save_with_delivery_synchronization!
+    end
+  RUBY
+
+  create_file "test/fixtures/notifications.yml", <<~YAML, force: true
+    published_all:
+      message: Published for everyone
+      published_at: <%= 1.day.ago %>
+      draft: false
+      audience: all_users
+
+    selected_draft:
+      message: Selected draft
+      published_at: <%= Time.current %>
+      draft: true
+      audience: selected_users
+
+    future:
+      message: Future notification
+      published_at: <%= 1.day.from_now %>
+      draft: false
+      audience: all_users
+  YAML
+
+  create_file "test/fixtures/notification_deliveries.yml", <<~YAML, force: true
+    one_published:
+      notification: published_all
+      user: one
+      opened_at:
+
+    two_published:
+      notification: published_all
+      user: two
+      opened_at:
+  YAML
+
+  create_file "test/models/notification_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class NotificationTest < ActiveSupport::TestCase
+      test "trims message and validates its published contract" do
+        notification = Notification.new(message: "  hello  ", published_at: Time.current, audience: :all_users)
+        assert notification.valid?
+        assert_equal "hello", notification.message
+
+        notification.message = " "
+        assert_not notification.valid?
+        notification.message = "x" * 141
+        assert_not notification.valid?
+        notification.message = "valid"
+        notification.published_at = T.unsafe(nil)
+        assert_not notification.valid?
+      end
+
+      test "published scope excludes drafts and future notifications" do
+        assert_includes Notification.published, notifications(:published_all)
+        refute_includes Notification.published, notifications(:selected_draft)
+        refute_includes Notification.published, notifications(:future)
+      end
+
+      test "selected users synchronize in draft and preserve retained opened state" do
+        notification = notifications(:selected_draft)
+        retained = NotificationDelivery.create!(notification:, user: users(:one), opened_at: 1.hour.ago)
+        NotificationDelivery.create!(notification:, user: users(:two))
+        third = User.create!
+
+        notification.save_with_delivery_synchronization!(recipient_ids: [users(:one).id, third.id])
+
+        assert_equal [users(:one).id, third.id].sort, notification.notification_deliveries.pluck(:user_id).sort
+        assert_equal retained.opened_at, retained.reload.opened_at
+      end
+
+      test "all users create no draft rows and synchronize only on publish and republish" do
+        notification = Notification.new(message: "All", published_at: Time.current, draft: true, audience: :all_users)
+        notification.save_with_delivery_synchronization!
+        assert_empty notification.notification_deliveries
+
+        notification.draft = false
+        notification.save_with_delivery_synchronization!
+        assert_equal User.count, notification.notification_deliveries.count
+        new_user = User.create!
+        notification.save_with_delivery_synchronization!
+        assert_not notification.notification_deliveries.exists?(user: new_user)
+
+        notification.update!(draft: true)
+        notification.draft = false
+        notification.save_with_delivery_synchronization!
+        assert notification.notification_deliveries.exists?(user: new_user)
+      end
+    end
+  RUBY
+
+  create_file "test/models/notification_delivery_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class NotificationDeliveryTest < ActiveSupport::TestCase
+      test "keeps notification and user pair unique and opens only once" do
+        delivery = notification_deliveries(:one_published)
+        duplicate = delivery.dup
+        assert_not duplicate.valid?
+
+        delivery.open!
+        opened_at = delivery.opened_at
+        travel 1.minute do
+          delivery.open!
+        end
+        assert_equal opened_at, delivery.reload.opened_at
+      end
+    end
+  RUBY
+
+  create_file "test/services/notification_delivery_synchronization_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class NotificationDeliverySynchronizationTest < ActiveSupport::TestCase
+      test "uses a bulk insert protected by the database unique index" do
+        notification = Notification.create!(message: "Bulk", published_at: Time.current, draft: false, audience: :all_users)
+        NotificationDeliverySynchronization.call(notification:)
+        assert_no_difference("NotificationDelivery.count") do
+          NotificationDeliverySynchronization.call(notification:)
+        end
+      end
+    end
+  RUBY
+
+  create_file "test/policies/notification_policy_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class NotificationPolicyTest < ActiveSupport::TestCase
+      test "allows administrators and rejects regular users" do
+        admin = users(:one)
+        admin.grant_role!(:admin)
+        assert NotificationPolicy.new(Notification, user: admin).index?
+        assert_not NotificationPolicy.new(Notification, user: users(:two)).index?
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/notifications_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class NotificationsControllerTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
+
+      setup do
+        @user = users(:one)
+        sign_in @user
+      end
+
+      test "lists only the current user's published deliveries" do
+        get notifications_url
+        assert_response :success
+        assert_select "turbo-frame#notifications_history" do
+          assert_select "li", text: /\#{Regexp.escape(notifications(:published_all).message)}/, count: 1
+          assert_select "li", text: /\#{Regexp.escape(notifications(:future).message)}/, count: 0
+        end
+      end
+
+      test "opens only an owned published delivery and replaces two regions" do
+        delivery = notification_deliveries(:one_published)
+        patch open_notification_url(delivery.notification),
+          params: { origin_frame: "popover_notification_\#{delivery.notification_id}" },
+          as: :turbo_stream
+        assert_response :success
+        assert delivery.reload.opened?
+        assert_select 'turbo-stream[action="replace"]', count: 2
+        assert_select 'turbo-stream[target="notification_unread_status"]', count: 1
+
+        delivery.update!(user: User.create!, opened_at: nil)
+        patch open_notification_url(delivery.notification),
+          params: { origin_frame: "popover_notification_\#{delivery.notification_id}" },
+          as: :turbo_stream
+        assert_response :not_found
+      end
+
+      test "open all updates only the current user's published unread rows" do
+        owned = notification_deliveries(:one_published)
+        other = notification_deliveries(:two_published)
+        future_delivery = NotificationDelivery.create!(notification: notifications(:future), user: @user)
+        patch open_all_notifications_url,
+          params: { origin_frame: "notifications_popover" }, as: :turbo_stream
+        assert_response :success
+        assert owned.reload.opened?
+        assert_not other.reload.opened?
+        assert_not future_delivery.reload.opened?
+        assert_select 'turbo-stream[action="replace"]', count: 2
+      end
+
+      test "rejects invalid origin frames before changing opened state" do
+        delivery = notification_deliveries(:one_published)
+
+        assert_no_changes -> { delivery.reload.opened_at } do
+          patch open_notification_url(delivery.notification),
+            params: { origin_frame: "invalid" }, as: :turbo_stream
+          assert_response :bad_request
+        end
+
+        sign_in @user
+        assert_no_changes -> { delivery.reload.opened_at } do
+          patch open_all_notifications_url,
+            params: { origin_frame: "invalid" }, as: :turbo_stream
+          assert_response :bad_request
+        end
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/admin/notifications_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::NotificationsControllerTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
+
+      test "requires administrator authorization" do
+        sign_in users(:two)
+        get admin_notifications_url
+        assert_response :forbidden
+      end
+
+      test "creates updates and hard deletes a notification with deliveries" do
+        admin = users(:one)
+        admin.grant_role!(:admin)
+        sign_in admin
+        assert_difference("Notification.count", 1) do
+          post admin_notifications_url, params: {
+            notification: { message: " Selected ", audience: "selected_users", published_at: Time.current,
+              draft: "1", recipient_ids: [users(:two).id] }
+          }
+        end
+        notification = T.must(Notification.order(:id).last)
+        assert_equal [users(:two).id], notification.notification_deliveries.pluck(:user_id)
+
+        assert_difference("NotificationDelivery.count", -1) do
+          delete admin_notification_url(notification)
+        end
+        assert_not Notification.exists?(notification.id)
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/admin/notification_recipients_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::NotificationRecipientsControllerTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
+
+      setup do
+        @admin = users(:one)
+        @admin.grant_role!(:admin)
+        sign_in @admin
+      end
+
+      test "searches user id while preserving selected state" do
+        get admin_notification_recipients_url,
+          params: { q: users(:two).id.to_s, selected_ids: [users(:two).id] },
+          headers: { "Turbo-Frame" => "notification_recipient_results" }
+        assert_response :success
+        assert_select "turbo-frame#notification_recipient_results" do
+          assert_select "li", count: 1
+          assert_select "button.btn-active[data-user-id=?]", users(:two).id.to_s, count: 1
+        end
+      end
+    end
+  RUBY
+
+  create_file "test/system/notifications_test.rb", <<~RUBY, force: true
+    require "application_system_test_case"
+
+    class NotificationsTest < ApplicationSystemTestCase
+      setup do
+        @user = users(:one)
+        login_as @user, scope: :user
+      end
+
+      test "loads the popover on first open and keeps it open after marking read" do
+        visit account_path
+        assert_no_match(%r{/notifications/popover}, resource_names.join("\n"))
+        assert_selector "#notifications_popover .skeleton", count: 3, visible: :all
+
+        find('button[popovertarget="notifications-popover"]').click
+        assert_selector "#notifications-popover:popover-open"
+        assert_text notifications(:published_all).message
+        assert_match(%r{/notifications/popover}, resource_names.join("\n"))
+
+        within("#notifications-popover") { click_on I18n.t("notifications.open"), match: :first }
+        assert_selector "#notifications-popover:popover-open"
+        assert_no_selector "#notification_unread_status .status"
+      end
+
+      test "advances notification history pagination and searches recipients in its frame" do
+        30.times do |index|
+          notification = Notification.create!(message: "History \#{index}", published_at: index.minutes.ago,
+            draft: false, audience: :selected_users)
+          notification.save_with_delivery_synchronization!(recipient_ids: [@user.id])
+        end
+        visit notifications_path
+        within("turbo-frame#notifications_history") do
+          find("a[aria-label='\#{I18n.t('common.next')}']").click
+        end
+        assert_current_path notifications_path(page: 2), ignore_query: false
+
+        @user.grant_role!(:admin)
+        visit new_admin_notification_path
+        fill_in I18n.t("notifications.admin.recipient_search"), with: @user.id.to_s
+        assert_selector "turbo-frame#notification_recipient_results button[data-user-id='\#{@user.id}']"
+      end
+
+      private
+        def resource_names
+          page.evaluate_script("performance.getEntriesByType('resource').map((entry) => entry.name)")
+        end
+    end
+  RUBY
+end
+
 def configure_default_views
   siwe_enabled = VALUES.fetch("additional_login_methods").include?("siwe")
   pwa_enabled = VALUES.fetch("pwa") == "use"
@@ -8415,11 +9502,11 @@ def configure_default_views
   if web_push_enabled
     account_navigation_items += <<~ERB
       <li>
-        <%= link_to application_routes.notification_path, class: ("menu-active" if controller_path == "notifications"), aria: { current: ("page" if controller_path == "notifications") } do %>
+        <%= link_to application_routes.web_push_settings_path, class: ("menu-active" if controller_path == "web_push_settings"), aria: { current: ("page" if controller_path == "web_push_settings") } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
-          <%= t("navigation.notifications") %>
+          <%= t("navigation.web_push_settings") %>
         <% end %>
       </li>
     ERB
@@ -8463,6 +9550,14 @@ def configure_default_views
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m6-3c0 7.142-3.75 12-9 13.5C6.75 18.75 3 13.892 3 6.75c3.75 0 7.5-1.5 9-4.5 1.5 3 5.25 4.5 9 4.5Z" />
           </svg>
           <%= application_translate("navigation.users") %>
+        <% end %>
+      </li>
+      <li>
+        <%= link_to application_routes.admin_notifications_path, class: ("menu-active" if controller_path.start_with?("admin/notifications")), aria: { current: ("page" if controller_path.start_with?("admin/notifications")) } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+          </svg>
+          <%= application_translate("navigation.admin_notifications") %>
         <% end %>
       </li>
       <li>
@@ -8887,6 +9982,7 @@ def configure_default_views
 
   create_file "test/helpers/application_helper_test.rb", <<~'RUBY', force: true
     require "test_helper"
+    require "pagy/classes/request"
 
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
@@ -9254,7 +10350,37 @@ def configure_default_views
           <%= link_to application_identity.app_name, application_routes.root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
         </div>
         <% if #{signed_in_condition} %>
-          <div class="navbar-end">
+          <div class="navbar-end gap-1">
+            <button type="button" class="btn btn-ghost btn-circle" popovertarget="notifications-popover"
+              style="anchor-name: --notifications-anchor" aria-label="<%= t('notifications.popover_label') %>">
+              <span class="indicator">
+                <%= render "notifications/unread_status" %>
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                </svg>
+              </span>
+            </button>
+            <div id="notifications-popover" popover class="dropdown dropdown-end z-20 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-box border border-base-300 bg-base-100 shadow-elevation-2"
+              style="position-anchor: --notifications-anchor" data-controller="notification-popover"
+              data-notification-popover-url-value="<%= application_routes.popover_notifications_path %>"
+              data-action="toggle->notification-popover#load">
+              <%= turbo_frame_tag "notifications_popover", data: {
+                notification_popover_target: "frame",
+                action: "turbo:fetch-request-error->notification-popover#error turbo:frame-missing->notification-popover#error"
+              } do %>
+                <div class="space-y-3 p-3" aria-label="<%= t('notifications.loading') %>">
+                  <div class="skeleton h-4 w-4/5"></div>
+                  <div class="skeleton h-4 w-3/5"></div>
+                  <div class="skeleton h-4 w-2/3"></div>
+                </div>
+              <% end %>
+              <template data-notification-popover-target="error">
+                <div class="p-3">
+                  <div class="alert" role="alert" data-notification-load-error><span><%= t("notifications.load_failed") %></span></div>
+                  <button type="button" class="btn mt-3 w-full" data-action="notification-popover#retry"><%= t("notifications.retry") %></button>
+                </div>
+              </template>
+            </div>
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
     #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if #{admin_controller_condition} %>
@@ -10131,11 +11257,11 @@ def configure_web_push
       get :vapid_public_key
       post :test
     end
-    resource :notification, only: :show
+    resource :web_push_settings, only: :show, path: "web-push"
   RUBY
 
-  create_file "app/controllers/notifications_controller.rb", <<~RUBY, force: true
-    class NotificationsController < ApplicationController
+  create_file "app/controllers/web_push_settings_controller.rb", <<~RUBY, force: true
+    class WebPushSettingsController < ApplicationController
       layout "account"
     #{authentication_callback}end
   RUBY
@@ -10179,7 +11305,7 @@ def configure_web_push
           account_user.id,
           I18n.t("web_push.test.title"),
           I18n.t("web_push.test.body"),
-          notification_path,
+          web_push_settings_path,
           "web-push-test",
           "/icon.png",
           PushNotifier::DEFAULT_TTL
@@ -10457,7 +11583,7 @@ def configure_web_push
     }
   JAVASCRIPT
 
-  create_file "app/views/notifications/show.html.erb", <<~ERB, force: true
+  create_file "app/views/web_push_settings/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("web_push.page.title") %>
     <div class="space-y-6">
       <header>
@@ -10729,18 +11855,18 @@ def configure_web_push
         get vapid_public_key_push_subscription_url
 
         assert_redirected_to new_user_session_url
-        get notification_url
+        get web_push_settings_url
         assert_redirected_to new_user_session_url
       end
 
       test "renders the dedicated notification settings page" do
-        get notification_url
+        get web_push_settings_url
 
         assert_response :success
         page_title = I18n.t("web_push.page.title")
         assert_select "h1", text: page_title, count: 1
         assert_select "title", text: "\#{page_title} | \#{Rails.configuration.x.application_identity.app_name}", count: 1
-        assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', I18n.t("navigation.account_menu"), notification_path, count: 1
+        assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', I18n.t("navigation.account_menu"), web_push_settings_path, count: 1
         assert_select '[data-push-subscription-target="toggle"]', count: 1
         assert_select '[data-push-subscription-target="testButton"]', count: 1
       end
@@ -10842,7 +11968,7 @@ def configure_web_push
       "web_push" => {
         "errors" => { "configuration" => "Web Pushのサーバー設定が完了していません。" },
         "test" => { "title" => "テスト通知", "body" => "Web Pushは正常に設定されています。" },
-        "page" => { "title" => "通知", "description" => "このブラウザで受け取る通知を管理します。", "card_title" => "Web Push通知", "card_description" => "アプリからの更新を、このブラウザへ通知します。", "receive" => "通知を受け取る", "toggle_label" => "このブラウザのWeb Push通知を切り替える", "send_test" => "テスト通知を送信" },
+        "page" => { "title" => "Web Push設定", "description" => "このブラウザで受け取るWeb Pushを管理します。", "card_title" => "Web Push通知", "card_description" => "アプリからの更新を、このブラウザへ通知します。", "receive" => "通知を受け取る", "toggle_label" => "このブラウザのWeb Push通知を切り替える", "send_test" => "テスト通知を送信" },
         "client" => { "unsupported" => "このブラウザはWeb Pushに対応していません。", "test_failed" => "テスト通知を送信できませんでした。", "test_sent" => "テスト通知を送信しました。", "blocked" => "通知がブロックされています。ブラウザの設定から許可してください。", "off" => "このブラウザでは通知が無効です。", "unsubscribe_failed" => "Web Push購読を解除できませんでした。", "reconciled" => "VAPID鍵の変更に合わせて通知を再登録しました。", "on" => "このブラウザでは通知が有効です。", "denied" => "通知が許可されていません。ブラウザの設定を確認してください。", "enabled" => "このブラウザの通知を有効にしました。", "disabled" => "このブラウザの通知を無効にしました。", "public_key_failed" => "VAPID公開鍵を取得できませんでした。", "save_failed" => "Web Push購読を保存できませんでした。", "delete_failed" => "Web Push購読を削除できませんでした。", "csrf_missing" => "CSRF tokenが見つかりません。", "request_failed" => "Web Pushリクエストに失敗しました。", "operation_failed" => "Web Pushの処理に失敗しました。" }
       }
     },
@@ -10850,7 +11976,7 @@ def configure_web_push
       "web_push" => {
         "errors" => { "configuration" => "The Web Push server configuration is incomplete." },
         "test" => { "title" => "Test notification", "body" => "Web Push is configured correctly." },
-        "page" => { "title" => "Notifications", "description" => "Manage notifications received by this browser.", "card_title" => "Web Push notifications", "card_description" => "Receive application updates in this browser.", "receive" => "Receive notifications", "toggle_label" => "Toggle Web Push notifications for this browser", "send_test" => "Send test notification" },
+        "page" => { "title" => "Web Push settings", "description" => "Manage Web Push received by this browser.", "card_title" => "Web Push notifications", "card_description" => "Receive application updates in this browser.", "receive" => "Receive notifications", "toggle_label" => "Toggle Web Push notifications for this browser", "send_test" => "Send test notification" },
         "client" => { "unsupported" => "This browser does not support Web Push.", "test_failed" => "Could not send the test notification.", "test_sent" => "The test notification was sent.", "blocked" => "Notifications are blocked. Allow them in your browser settings.", "off" => "Notifications are disabled in this browser.", "unsubscribe_failed" => "Could not remove the Web Push subscription.", "reconciled" => "Notifications were re-registered for the new VAPID key.", "on" => "Notifications are enabled in this browser.", "denied" => "Notifications are not allowed. Check your browser settings.", "enabled" => "Notifications were enabled for this browser.", "disabled" => "Notifications were disabled for this browser.", "public_key_failed" => "Could not obtain the VAPID public key.", "save_failed" => "Could not save the Web Push subscription.", "delete_failed" => "Could not delete the Web Push subscription.", "csrf_missing" => "The CSRF token was not found.", "request_failed" => "The Web Push request failed.", "operation_failed" => "The Web Push operation failed." }
       }
     }
@@ -12443,6 +13569,7 @@ def configure_evidence_capture
             verify_page_actions_geometry if viewport_name == "desktop"
             verify_job_operations_geometry if viewport_name == "desktop" && JOB_OPERATIONS
             verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
+            verify_notification_geometry if viewport_name == "desktop"
             capture_authenticated_pages(viewport_name)
             capture_regular_user_navigation(viewport_name)
             Capybara.reset_sessions!
@@ -12780,6 +13907,22 @@ def configure_evidence_capture
           end
           prepare_job_operations_data if JOB_OPERATIONS
           @regular_user = create_evidence_user("evidence-regular") if @regular_user.nil?
+          prepare_notification_data
+        end
+
+        def prepare_notification_data
+          3.times do |index|
+            notification = Notification.find_or_initialize_by(message: "Evidence notification #{index + 1}")
+            notification.assign_attributes(
+              published_at: (index + 1).minutes.ago,
+              draft: false,
+              audience: :selected_users
+            )
+            notification.save_with_delivery_synchronization!(recipient_ids: [@user.id])
+          end
+          @user.notification_deliveries.find_each do |delivery|
+            delivery.update!(opened_at: nil)
+          end
         end
 
         def prepare_job_operations_data
@@ -12793,6 +13936,7 @@ def configure_evidence_capture
 
         def capture_authenticated_pages(viewport)
           capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, translate("home.heading"), viewport)
+          capture_notification_scenarios(viewport)
           capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
           capture_page("admin-overview", "管理画面", admin_root_path, translate("admin.overview.title"), viewport)
@@ -12802,7 +13946,7 @@ def configure_evidence_capture
           capture_passkey_pages(viewport)
           if WEB_PUSH
             set_evidence_web_push_mode("granted")
-            capture_page("notifications", "通知", notification_path, translate("web_push.page.title"), viewport)
+            capture_page("web-push-settings", "Web Push設定", web_push_settings_path, translate("web_push.page.title"), viewport)
             capture_enabled_web_push(viewport)
           end
 
@@ -12906,6 +14050,86 @@ def configure_evidence_capture
           verify_pagination_geometry if viewport == "desktop"
           capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
           assert_admin_navigation_active(translate("navigation.users"))
+        end
+
+        def capture_notification_scenarios(viewport)
+          visit root_path
+          page.execute_script(<<~JAVASCRIPT)
+            const popover = document.querySelector("#notifications-popover")
+            popover.removeAttribute("data-action")
+            popover.showPopover()
+          JAVASCRIPT
+          assert_selector "#notifications-popover:popover-open #notifications_popover .skeleton", count: 3
+          capture_current_page("notifications-popover-skeleton", "通知popover（読込中）", viewport)
+
+          visit root_path
+          find('button[popovertarget="notifications-popover"]').click
+          assert_selector "#notifications-popover:popover-open"
+          assert_text "Evidence notification 1"
+          assert_selector "#notification_unread_status .status", count: 1
+          capture_current_page("notifications-popover-unread", "通知popover（未読）", viewport)
+
+          within("#notifications-popover") { click_button translate("notifications.open_all") }
+          assert_selector "#notifications-popover:popover-open"
+          assert_no_selector "#notification_unread_status .status"
+          capture_current_page("notifications-popover-opened", "通知popover（全件既読後）", viewport)
+
+          capture_page(
+            "notifications-history",
+            "通知履歴",
+            notifications_path,
+            translate("notifications.title"),
+            viewport
+          )
+          capture_page(
+            "admin-notifications",
+            "通知管理",
+            admin_notifications_path,
+            translate("notifications.admin.title"),
+            viewport
+          )
+          assert_admin_navigation_active(translate("navigation.admin_notifications"))
+
+          visit new_admin_notification_path
+          assert_selector "h1", text: translate("notifications.admin.new"), count: 1
+          fill_in translate("notifications.admin.recipient_search"), with: @regular_user.id.to_s
+          assert_selector "turbo-frame#notification_recipient_results button[data-user-id='#{@regular_user.id}']"
+          capture_current_page("admin-notification-recipients", "通知の個別受信者選択", viewport)
+        end
+
+        def verify_notification_geometry
+          [320, 390, 640, 960, 961].each do |width|
+            page.current_window.resize_to(width, 900)
+            visit root_path
+            find('button[popovertarget="notifications-popover"]').click
+            assert_selector "#notifications-popover:popover-open"
+            assert_text "Evidence notification 1"
+            geometry = page.driver.with_playwright_page do |playwright_page|
+              playwright_page.evaluate(<<~JAVASCRIPT)
+                () => {
+                  const header = document.querySelector("header").getBoundingClientRect()
+                  const popover = document.querySelector("#notifications-popover").getBoundingClientRect()
+                  return {
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    headerLeft: header.left,
+                    headerRight: header.right,
+                    popoverLeft: popover.left,
+                    popoverRight: popover.right
+                  }
+                }
+              JAVASCRIPT
+            end
+            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+              "Notification header overflow at #{width}px"
+            assert_operator geometry.fetch("headerLeft"), :>=, 0
+            assert_operator geometry.fetch("headerRight"), :<=, geometry.fetch("viewportWidth")
+            assert_operator geometry.fetch("popoverLeft"), :>=, 0
+            assert_operator geometry.fetch("popoverRight"), :<=, geometry.fetch("viewportWidth")
+          end
+        ensure
+          desktop = VIEWPORTS.fetch("desktop")
+          page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
         end
 
         def assert_account_menu_visual_state
@@ -13241,7 +14465,7 @@ def configure_evidence_capture
           assert_selector '[data-push-subscription-target="status"].alert-success', text: translate("web_push.client.test_sent")
 
           set_evidence_web_push_mode("rotated")
-          visit notification_path
+          visit web_push_settings_path
           reconnect_web_push_controller
           install_evidence_csrf_token
           assert_selector '[data-push-subscription-target="status"].alert-success',
@@ -13255,7 +14479,7 @@ def configure_evidence_capture
           assert_equal false, evidence_web_push_stats.fetch("subscribed")
 
           set_evidence_web_push_mode("default")
-          visit notification_path
+          visit web_push_settings_path
           reconnect_web_push_controller
           install_evidence_csrf_token
           find('[data-push-subscription-target="toggle"]:not([disabled])').click
@@ -13264,14 +14488,14 @@ def configure_evidence_capture
           assert_equal 1, evidence_web_push_stats.fetch("permissionRequests")
 
           set_evidence_web_push_mode("denied")
-          visit notification_path
+          visit web_push_settings_path
           reconnect_web_push_controller
           assert_selector '[data-push-subscription-target="status"].alert-warning',
             text: translate("web_push.client.blocked")
           assert find('[data-push-subscription-target="toggle"]').disabled?
 
           set_evidence_web_push_mode("unsupported")
-          visit notification_path
+          visit web_push_settings_path
           reconnect_web_push_controller
           assert_selector '[data-push-subscription-target="status"].alert-warning',
             text: translate("web_push.client.unsupported")
@@ -14070,7 +15294,11 @@ def configure_evidence_capture
   disabled_constants << :API unless api
   unless job_operations
     disabled_constants << :JOB_OPERATIONS
-    disabled_methods.concat(%i[verify_job_operations_geometry assert_job_operations_tabs_single_row])
+    disabled_methods.concat(%i[
+      prepare_job_operations_data
+      verify_job_operations_geometry
+      assert_job_operations_tabs_single_row
+    ])
   end
   unless maintenance_tasks
     disabled_constants << :MAINTENANCE_TASKS
@@ -14238,6 +15466,8 @@ def configure_sorbet
         "application_mailer" => "app/mailers/application_mailer.rb",
         "faq" => "app/models/faq.rb",
         "footer_setting" => "app/models/footer_setting.rb",
+        "notification" => "app/models/notification.rb",
+        "notification_delivery" => "app/models/notification_delivery.rb",
         "page" => "app/models/page.rb",
         "profile" => "app/models/profile.rb",
         "push_notification_job" => "app/jobs/push_notification_job.rb",
@@ -14550,6 +15780,20 @@ def configure_sorbet_shims
             .bind(UserPolicy)
             .params(relation: User::PrivateRelation)
             .returns(User::PrivateRelation)
+        ).void
+      end
+      def self.relation_scope(&block); end
+    end
+
+    class NotificationPolicy
+      extend T::Sig
+
+      sig do
+        params(
+          block: T.proc
+            .bind(NotificationPolicy)
+            .params(relation: Notification::PrivateRelation)
+            .returns(Notification::PrivateRelation)
         ).void
       end
       def self.relation_scope(&block); end
@@ -16595,6 +17839,7 @@ def configure_litestream_r2(app_id)
       test "confirmation rejection has no external mutations" do
         Dir.mktmpdir do |directory|
           root = Pathname(directory)
+          app_id = Litestream::R2Configurator::APP_ID
           wrangler = root.join("node_modules/.bin/wrangler")
           FileUtils.mkdir_p(wrangler.dirname)
           wrangler.write("#!/bin/sh\n")
@@ -16608,7 +17853,10 @@ def configure_litestream_r2(app_id)
             FakeResult.new(stdout: JSON.generate(id: "op-id"), stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
             FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
-            FakeResult.new(stdout: JSON.generate([{ id: "production-vault", name: "sample-production" }, { id: "staging-vault", name: "sample-staging" }]), stderr: "", success: true, exitstatus: 0),
+            FakeResult.new(stdout: JSON.generate([
+              { id: "production-vault", name: Litestream::R2Configurator.destination_vault_name(app_id, "production") },
+              { id: "staging-vault", name: Litestream::R2Configurator.destination_vault_name(app_id, "staging") }
+            ]), stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
             FakeResult.new(stdout: "[]", stderr: "", success: true, exitstatus: 0)
           ]
@@ -17018,6 +18266,7 @@ after_bundle do
   configure_content_management
   install_image_cropper if VALUES.fetch("profile_features").include?("avatar")
   configure_profile if VALUES.fetch("profile_features").any?
+  configure_in_app_notifications
   configure_api if VALUES.fetch("api") == "enable"
   configure_pwa if VALUES.fetch("pwa") == "use"
   configure_web_push if VALUES.fetch("web_push") == "use"

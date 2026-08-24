@@ -131,11 +131,13 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 - 選択肢: `use`、`skip`
 - 既定値: `use`
 - 表示条件: `pwa == use`
-- 影響する処理: `use`の場合だけ`web-push ~> 3.1`、購読model、認証済みHTTP API、送信service/job、独立した通知設定ページを生成する
+- 影響する処理: `use`の場合だけ`web-push ~> 3.1`、購読model、認証済みHTTP API、送信service/job、独立した`/web-push`の「Web Push設定」ページを生成する
 
 `pwa == skip`の場合は質問せず、値を`skip`へ正規化します。ただしCLIで`--pwa=skip --web-push=use`を明示した場合は、矛盾を生成開始前に拒否します。`use`の場合はVAPID鍵を自動生成し、git管理外の`mise.local.toml`の`[env]`へ`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、開発用`VAPID_SUBJECT=https://localhost`として保存します。
 
 Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push選択時はActive Job質問を省略し、未指定値を理由付きで`solid_queue`へ正規化します。CLIで`--web-push=use --active-job=skip`を明示した場合は拒否し、同期送信や別adapterへのフォールバックは追加しません。
+
+アプリ内通知は`web_push`を含むConfigurationやQuestionnaireの選択結果に依存せず、すべての生成アプリへ常設します。Web Pushの購読設定、送信service、jobとはmodel・route・画面を共有しません。
 
 ## `active_job`
 

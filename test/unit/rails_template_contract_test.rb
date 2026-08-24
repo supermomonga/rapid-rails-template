@@ -42,6 +42,7 @@ class RailsTemplateContractTest < Minitest::Test
     initializer = generated_file_source("config/initializers/application_identity.rb")
     concern = generated_file_source("app/controllers/concerns/localized_request.rb")
     helper = generated_file_source("app/helpers/application_helper.rb")
+    helper_test = generated_file_source("test/helpers/application_helper_test.rb")
     layout = generated_file_source("app/views/layouts/application.html.erb")
     header = generated_file_source("app/views/shared/_header.html.erb")
     manifest = generated_file_source("app/views/pwa/manifest.json.erb")
@@ -65,6 +66,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "block: T.proc.returns(String)"
     refute_includes helper, "T.untyped"
     assert_includes helper, "def pagination(pagy, aria_label:)"
+    assert_includes helper_test, 'require "pagy/classes/request"'
     assert_includes helper, "params(pagy: Pagy::Offset, aria_label: String)"
     assert_includes helper, "pagy.data_hash(data_keys: [:series])"
     assert_includes helper, "pagy.page_url(item)"
@@ -221,7 +223,11 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/account/siwe_identities/new.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/show.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/edit.html.erb" => %w[fieldset fieldset-legend input btn alert],
-      "app/views/notifications/show.html.erb" => %w[card-rapid card-body card-title card-actions toggle btn alert],
+      "app/views/web_push_settings/show.html.erb" => %w[card-rapid card-body card-title card-actions toggle btn alert],
+      "app/views/notifications/index.html.erb" => %w[card-rapid card-body list],
+      "app/views/notifications/_popover.html.erb" => %w[list btn],
+      "app/views/admin/notifications/index.html.erb" => %w[card-rapid card-body table badge btn],
+      "app/views/admin/notifications/_form.html.erb" => %w[alert fieldset fieldset-legend textarea select input checkbox btn],
       "app/views/admin/overview/show.html.erb" => %w[card-rapid card-body stats stat stat-title stat-value],
       "app/views/admin/users/index.html.erb" => %w[card-rapid card-body table badge btn],
       "app/views/pages/_page.html.erb" => %w[card-rapid card-body],
@@ -415,7 +421,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes controller, 'head :accepted'
     assert_includes controller, 'status: :service_unavailable'
     assert_includes web_push, 'resource :push_subscription, only: %i[create destroy]'
-    assert_includes web_push, 'resource :notification, only: :show'
+    assert_includes web_push, 'resource :web_push_settings, only: :show, path: "web-push"'
     assert_includes controller, '"web-push-test",'
     assert_includes web_push, 'params.expect(push_subscription: %i[browser_id endpoint p256dh auth])'
     assert_includes web_push, "PushSubscriptionsController.cache_store.clear"
@@ -681,10 +687,10 @@ class RailsTemplateContractTest < Minitest::Test
       after_bundle.index("configure_database")
   end
 
-  def test_generates_web_push_client_state_reconciliation_and_notification_page
+  def test_generates_web_push_client_state_reconciliation_and_settings_page
     client = generated_file_source("app/javascript/controllers/push_subscription_controller.js")
-    notifications_view = generated_file_source("app/views/notifications/show.html.erb")
-    notifications_controller = generated_file_source("app/controllers/notifications_controller.rb")
+    notifications_view = generated_file_source("app/views/web_push_settings/show.html.erb")
+    notifications_controller = generated_file_source("app/controllers/web_push_settings_controller.rb")
     evidence = source_between("def configure_evidence_capture", "def configure_annotaterb")
     defaults = source_between("def configure_default_views", "def configure_web_push")
     devise = source_between("def configure_devise_views", "def configure_default_views")
@@ -702,8 +708,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes notifications_view, 'data-action="click->push-subscription#sendTest"'
     assert_includes notifications_view, 'aria-live="polite"'
     assert_includes notifications_controller, 'layout "account"'
-    assert_includes defaults, 'link_to application_routes.notification_path'
-    assert_includes defaults, 'controller_path == "notifications"'
+    assert_includes defaults, 'link_to application_routes.web_push_settings_path'
+    assert_includes defaults, 'controller_path == "web_push_settings"'
     refute_includes defaults, 'web_push_section'
     refute_includes devise, 'accounts/push_notifications'
     assert_includes defaults, 'body_controllers << "push-subscription" if web_push_enabled'
@@ -711,6 +717,41 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'set_evidence_web_push_mode("default")'
     assert_includes evidence, 'set_evidence_web_push_mode("denied")'
     assert_includes evidence, 'set_evidence_web_push_mode("unsupported")'
+  end
+
+  def test_generates_always_on_in_app_notifications_with_transactional_delivery_sync
+    notifications = source_between("def configure_in_app_notifications", "def configure_default_views")
+    header = generated_file_source("app/views/shared/_header.html.erb")
+    unread_status = generated_file_source("app/views/notifications/_unread_status.html.erb")
+    popover = generated_file_source("app/views/notifications/_popover.html.erb")
+    history = generated_file_source("app/views/notifications/index.html.erb")
+    admin_index = generated_file_source("app/views/admin/notifications/index.html.erb")
+    controller = generated_file_source("app/controllers/notifications_controller.rb")
+    service = generated_file_source("app/services/notification_delivery_synchronization.rb")
+    recipients = generated_file_source("app/controllers/admin/notification_recipients_controller.rb")
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+
+    assert_includes notifications, 'add_check_constraint :notifications'
+    assert_includes notifications, 'add_index :notification_deliveries, [:notification_id, :user_id], unique: true'
+    assert_includes notifications, 'foreign_key: { on_delete: :cascade }'
+    assert_includes notifications, 'scope :published, -> { where(draft: false).where(published_at: ..Time.current) }'
+    assert_includes notifications, 'save_with_delivery_synchronization!'
+    assert_includes service, 'NotificationDelivery.insert_all(rows, unique_by:'
+    assert_includes service, 'notification.notification_deliveries.where.not(user_id: recipient_ids).delete_all'
+    assert_includes controller, 'find_by!(notification_id: params.expect(:id))'
+    assert_includes controller, 'deliveries_scope.where(opened_at: nil).update_all'
+    assert_includes notifications, 'patch "open-all", action: :open_all'
+    assert_includes recipients, '.limit(20)'
+    assert_includes header, 'popovertarget="notifications-popover"'
+    assert_includes header, 'class="dropdown dropdown-end'
+    assert_includes header, 'notification-popover#load'
+    refute_includes header, 'src: application_routes.popover_notifications_path'
+    assert_includes header, 'class="skeleton h-4'
+    assert_includes unread_status, 'class="status status-primary status-sm"'
+    assert_includes popover, 'open_all_notifications_path'
+    assert_includes history, 'turbo_action: "advance"'
+    assert_includes admin_index, 'table table-sm table-pin-rows min-w-max'
+    assert_match(/configure_profile if .*\n  configure_in_app_notifications\n  configure_api/m, after_bundle)
   end
 
   def test_generates_fixed_multi_role_storage_and_action_policy_authorization
@@ -1725,8 +1766,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes account_navigation, 't("navigation.dashboard")'
     assert_includes account_navigation, 'M17.982 18.725A7.488 7.488 0 0 0 12 15.75'
     assert_includes account_navigation, 'M9.594 3.94c.09-.542.56-.94 1.11-.94'
-    assert_includes account_navigation, 'link_to application_routes.notification_path'
-    assert_includes account_navigation, 't("navigation.notifications")'
+    assert_includes account_navigation, 'link_to application_routes.web_push_settings_path'
+    assert_includes account_navigation, 't("navigation.web_push_settings")'
     assert_includes account_navigation, 'controller_path.in?(["account/passkeys", "account/siwe_identities"])'
     refute_includes account_navigation, "account_siwe_identities_path"
     refute_includes account_navigation, 'M9 12.75 11.25 15 15 9.75'
@@ -1740,12 +1781,13 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "admin_pages_path"
     refute_includes account_navigation, "admin_faqs_path"
     refute_includes account_navigation, "edit_admin_footer_setting_path"
-    assert_equal 8, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 8, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 9, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 9, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes admin_navigation, 'application_routes.admin_root_path'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/overview"'
     assert_includes admin_navigation, 'application_translate("navigation.overview")'
     assert_includes admin_navigation, '"menu-active" if controller_path.in?(%w[admin/users admin/user_roles])'
+    assert_includes admin_navigation, 'application_routes.admin_notifications_path'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/pages"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/faqs"'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/footer_settings"'
@@ -1854,7 +1896,11 @@ class RailsTemplateContractTest < Minitest::Test
       app/views/accounts/show.html.erb
       app/views/profiles/show.html.erb
       app/views/profiles/edit.html.erb
-      app/views/notifications/show.html.erb
+      app/views/web_push_settings/show.html.erb
+      app/views/admin/notifications/index.html.erb
+      app/views/admin/notifications/new.html.erb
+      app/views/admin/notifications/edit.html.erb
+      app/views/admin/notifications/show.html.erb
       app/views/api_credentials/index.html.erb
       app/views/api_credentials/show.html.erb
       app/views/api_credentials/new.html.erb
@@ -1898,6 +1944,7 @@ class RailsTemplateContractTest < Minitest::Test
       app/views/faqs/index.html.erb
       app/views/users/passkey_sessions/new.html.erb
       app/views/users/passkey_registrations/new.html.erb
+      app/views/notifications/index.html.erb
     ]
     with_menu_views = %w[
       app/views/accounts/show.html.erb
@@ -1923,7 +1970,11 @@ class RailsTemplateContractTest < Minitest::Test
       app/views/api_credentials/show.html.erb
       app/views/api_credentials/new.html.erb
       app/views/api_credentials/edit.html.erb
-      app/views/notifications/show.html.erb
+      app/views/web_push_settings/show.html.erb
+      app/views/admin/notifications/index.html.erb
+      app/views/admin/notifications/new.html.erb
+      app/views/admin/notifications/edit.html.erb
+      app/views/admin/notifications/show.html.erb
       app/views/maintenance_tasks/tasks/index.html.erb
       app/views/maintenance_tasks/tasks/show.html.erb
       app/views/mission_control/jobs/queues/index.html.erb

@@ -76,6 +76,7 @@ module RapidRailsTemplate
       result << "configure_content_management"
       result << "install_image_cropper" if configuration["profile_features"].include?("avatar")
       result << "configure_profile" if configuration["profile_features"].any?
+      result << "configure_in_app_notifications"
       result << "configure_api" if configuration["api"] == "enable"
       result << "configure_pwa" if configuration["pwa"] == "use"
       result << "configure_web_push" if configuration["web_push"] == "use"
@@ -253,6 +254,44 @@ module RapidRailsTemplate
           test/models/profile_test.rb
         ])
       end
+      result.concat(%w[
+        app/models/notification.rb
+        app/models/notification_delivery.rb
+        app/services/notification_delivery_synchronization.rb
+        app/policies/notification_policy.rb
+        app/controllers/notifications_controller.rb
+        app/controllers/admin/notifications_controller.rb
+        app/controllers/admin/notification_recipients_controller.rb
+        app/views/notifications/index.html.erb
+        app/views/notifications/popover.html.erb
+        app/views/notifications/_popover.html.erb
+        app/views/notifications/_notification.html.erb
+        app/views/notifications/_unread_status.html.erb
+        app/views/notifications/open.turbo_stream.erb
+        app/views/notifications/open_all.turbo_stream.erb
+        app/views/admin/notifications/index.html.erb
+        app/views/admin/notifications/show.html.erb
+        app/views/admin/notifications/new.html.erb
+        app/views/admin/notifications/edit.html.erb
+        app/views/admin/notifications/_form.html.erb
+        app/views/admin/notification_recipients/index.html.erb
+        app/javascript/controllers/notification_popover_controller.js
+        app/javascript/controllers/notification_recipients_controller.js
+        config/locales/notifications.ja.yml
+        config/locales/notifications.en.yml
+        db/migrate/*_create_notifications.rb
+        db/migrate/*_create_notification_deliveries.rb
+        test/models/notification_test.rb
+        test/models/notification_delivery_test.rb
+        test/services/notification_delivery_synchronization_test.rb
+        test/policies/notification_policy_test.rb
+        test/controllers/notifications_controller_test.rb
+        test/controllers/admin/notifications_controller_test.rb
+        test/controllers/admin/notification_recipients_controller_test.rb
+        test/system/notifications_test.rb
+        test/fixtures/notifications.yml
+        test/fixtures/notification_deliveries.yml
+      ])
       if configuration["profile_features"].include?("avatar")
         result.concat(%w[
           app/javascript/controllers/image_crop_controller.js
@@ -353,13 +392,13 @@ module RapidRailsTemplate
         result.concat(%w[
           app/models/push_subscription.rb
           app/controllers/push_subscriptions_controller.rb
-          app/controllers/notifications_controller.rb
+          app/controllers/web_push_settings_controller.rb
           app/jobs/push_notification_job.rb
           app/services/push_notification_payload.rb
           app/services/push_notifier.rb
           app/services/vapid_configuration.rb
           app/javascript/controllers/push_subscription_controller.js
-          app/views/notifications/show.html.erb
+          app/views/web_push_settings/show.html.erb
           config/locales/web_push.ja.yml
           config/locales/web_push.en.yml
           test/models/push_subscription_test.rb

@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `57492d396cfa931437a608b342b2938a41aa1ef83f181dd7494a601425babf2e`
-- Base commit: `4abef9fd4cc55ed2b56f38305a19cf6b2708ed8a`
+- Source fingerprint: `5d1d90584c7457932141103eedb3423cfcb048223e02a2c7d3d827e5ad68743f`
+- Base commit: `8cfe79260da11658b8879ace1e25282d5af7f97d`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -47,6 +47,42 @@
 |Desktop|Mobile|
 |---|---|
 |![ホーム（ログイン済み） (desktop)](home-authenticated--desktop.png)|![ホーム（ログイン済み） (mobile)](home-authenticated--mobile.png)|
+
+## 通知popover（読込中）
+
+|Desktop|Mobile|
+|---|---|
+|![通知popover（読込中） (desktop)](notifications-popover-skeleton--desktop.png)|![通知popover（読込中） (mobile)](notifications-popover-skeleton--mobile.png)|
+
+## 通知popover（未読）
+
+|Desktop|Mobile|
+|---|---|
+|![通知popover（未読） (desktop)](notifications-popover-unread--desktop.png)|![通知popover（未読） (mobile)](notifications-popover-unread--mobile.png)|
+
+## 通知popover（全件既読後）
+
+|Desktop|Mobile|
+|---|---|
+|![通知popover（全件既読後） (desktop)](notifications-popover-opened--desktop.png)|![通知popover（全件既読後） (mobile)](notifications-popover-opened--mobile.png)|
+
+## 通知履歴
+
+|Desktop|Mobile|
+|---|---|
+|![通知履歴 (desktop)](notifications-history--desktop.png)|![通知履歴 (mobile)](notifications-history--mobile.png)|
+
+## 通知管理
+
+|Desktop|Mobile|
+|---|---|
+|![通知管理 (desktop)](admin-notifications--desktop.png)|![通知管理 (mobile)](admin-notifications--mobile.png)|
+
+## 通知の個別受信者選択
+
+|Desktop|Mobile|
+|---|---|
+|![通知の個別受信者選択 (desktop)](admin-notification-recipients--desktop.png)|![通知の個別受信者選択 (mobile)](admin-notification-recipients--mobile.png)|
 
 ## マイページ
 
@@ -150,11 +186,11 @@
 |---|---|
 |![アカウント削除（再認証） (desktop)](account-delete-reauth--desktop.png)|![アカウント削除（再認証） (mobile)](account-delete-reauth--mobile.png)|
 
-## 通知
+## Web Push設定
 
 |Desktop|Mobile|
 |---|---|
-|![通知 (desktop)](notifications--desktop.png)|![通知 (mobile)](notifications--mobile.png)|
+|![Web Push設定 (desktop)](web-push-settings--desktop.png)|![Web Push設定 (mobile)](web-push-settings--mobile.png)|
 
 ## Web Push（購読済み・テスト通知可能）
 

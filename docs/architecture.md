@@ -150,6 +150,10 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 
 リポジトリ側の`rake evidence:update`は選択可能な機能をすべて有効にした日本語sampleを1回だけ生成し、全Rails test、RuboCop、Thruster cache smoke、共通・SIWE・avatar画面の撮影が成功してからmanifest、Markdown索引、画像hashを確定して`docs/evidence/`を置換します。同じcapture IDとviewportの重複を拒否し、鮮度はcommit hashではなく、テンプレート分割ソースと撮影オーケストレーターの内容fingerprintで判定します。
 
+### アプリ内通知
+
+`rails_template`はProfile設定後・既定View生成前に`configure_in_app_notifications`を常に登録します。この機能はConfigurationとQuestionnaireへ選択肢を追加しません。`Notification`が公開条件と通知先を、`NotificationDelivery`がUserごとの既読状態を、同期serviceが保存transaction内の差分同期を担当します。公開HTTP controllerは現在Userの公開済み配信だけを扱い、管理CRUDと受信者検索は`NotificationPolicy`でadminへ限定します。Web Pushは`WebPushSettingsController`と`/web-push`へ分離し、アプリ内通知のmodel、配信行、routeを利用しません。
+
 ### `editors`
 
 対象ファイルごとの構造化編集を担当します。汎用的なgrep・置換ヘルパーは作りません。Rubyコードを編集するeditorはPrismでASTを解析し、期待する構造とノード位置を確認してから変更します。期待する構造が見つからない場合は失敗として報告します。

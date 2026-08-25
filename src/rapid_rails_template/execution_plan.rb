@@ -451,6 +451,7 @@ module RapidRailsTemplate
           docs/job_operations.md
           test/policies/job_operation_policy_test.rb
           test/controllers/admin/job_operations_controller_test.rb
+          test/helpers/admin/job_operations_helper_test.rb
           test/models/solid_queue_cleanup_test.rb
         ])
       end

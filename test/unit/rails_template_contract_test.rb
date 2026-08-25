@@ -708,6 +708,7 @@ class RailsTemplateContractTest < Minitest::Test
       app/views/mission_control/jobs/workers/show.html.erb
     ].map { |path| generated_file_source(path) }.join("\n")
     controller_test = generated_file_source("test/controllers/admin/job_operations_controller_test.rb")
+    helper_test = generated_file_source("test/helpers/admin/job_operations_helper_test.rb")
     cleanup_test = generated_file_source("test/models/solid_queue_cleanup_test.rb")
     application_layout = generated_file_source("app/views/layouts/application.html.erb")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
@@ -731,6 +732,23 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes controller, "has_role?"
     assert_includes policy, "def manage?"
     assert_includes policy, "admin?"
+    assert_includes helper, "def with_host_application_locale(&block)"
+    assert_includes helper, "engine_config = I18n.config"
+    assert_includes helper, "I18n.config = I18n::Config.new"
+    assert_includes helper, "with_host_i18n { capture(&render_block) }"
+    assert_includes helper, "def translate(key = nil, **options)"
+    assert_includes helper, "with_host_i18n { super(key, **options) }"
+    assert_includes helper, "def t(key = nil, **options)"
+    assert_includes helper, "I18n.with_locale(application_identity.default_locale, &render_block)"
+    assert_includes helper, "I18n.config = engine_config"
+    assert_includes helper, "NAVIGATION_SECTIONS.fetch(section.to_sym)"
+    assert_includes helper, "JOB_STATUS_KEYS.fetch(status.to_s)"
+    assert_includes helper, "JOB_ATTRIBUTE_KEYS.fetch(status.to_s)"
+    assert_includes helper, "EVENT_KEYS.fetch(event)"
+    assert_includes helper_test, "include Admin::JobOperationsHelper"
+    refute_includes job_operations, "skip_around_action"
+    refute_includes job_operations, "prepend"
+    assert_includes layout, "<%= with_host_application_locale do %>"
     assert_includes layout, 'render template: "layouts/admin"'
     refute_includes layout, "with_menu_subnavigation"
     assert_includes layout, '<%= render layout: "layouts/mission_control/jobs/navigation" do %>'
@@ -739,6 +757,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_operator layout.index("admin_content"), :<, layout.index('render layout: "layouts/mission_control/jobs/navigation"')
     assert_equal 1, layout.scan('render layout: "layouts/mission_control/jobs/navigation"').size
     refute_includes navigation, '<nav aria-label="Job operations sections" class="overflow-x-auto">'
+    assert_includes navigation, "job_operation_navigation_label(key)"
+    assert_includes navigation, "t('job_operations.aria.sections')"
     assert_includes navigation, "with_tab(tabs:)"
     refute_includes navigation, "size:"
     assert_includes navigation, "is_active: -> { key == current_section }"
@@ -764,18 +784,19 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes jobs_index, 'class="card card-border bg-base-100"'
     assert_includes jobs_index, 'class="card-body"'
     assert_includes jobs_index, 'class="overflow-x-auto"'
-    assert_includes jobs_index, '<% content_for :page_title, "#{jobs_status.titleize} jobs" %>'
+    assert_includes jobs_index, "<% jobs_title = job_operation_jobs_title(jobs_status) %>"
+    assert_includes jobs_index, "<% content_for :page_title, jobs_title %>"
     assert_includes jobs_index, 'class="table min-w-max"'
-    assert_includes jobs_index, '<section class="card card-border bg-base-100" aria-label="Job filters">'
+    assert_includes jobs_index, '<section class="card card-border bg-base-100" aria-label="<%= t(\'job_operations.aria.filters\') %>">'
     assert_includes jobs_index, '<div class="card-body">'
     refute_includes jobs_index, "content_for :page_actions_secondary"
     assert_includes jobs_index, '<div class="card-actions flex-wrap justify-end md:col-span-2">'
     assert_includes jobs_index, "class: action_button_classes(:secondary)"
     assert_includes jobs_index, "class: action_button_classes(:warning)"
     assert_includes jobs_index, "class: action_button_classes(:destructive)"
-    assert_match(/button_to "Retry .*?action_button_classes\(:warning\).*?button_to "Discard .*?action_button_classes\(:destructive\)/m,
+    assert_match(/button_to t\(active_filters\?.*?action_button_classes\(:warning\).*?button_to t\(active_filters\?.*?action_button_classes\(:destructive\)/m,
       jobs_index)
-    assert_match(/button_to "Run now".*?action_button_classes\(:warning\).*?button_to "Discard".*?action_button_classes\(:destructive\)/m,
+    assert_match(/button_to t\("job_operations\.actions\.run_now"\).*?action_button_classes\(:warning\).*?button_to t\("job_operations\.actions\.discard"\).*?action_button_classes\(:destructive\)/m,
       jobs_index)
     refute_includes jobs_index, "btn-sm"
     refute_includes jobs_index, '<section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">'
@@ -786,16 +807,16 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes job_show, '<div class="flex flex-wrap justify-end gap-2">'
     assert_includes job_show, "class: action_button_classes(:warning)"
     assert_includes job_show, "class: action_button_classes(:destructive)"
-    assert_match(/button_to "Retry".*?action_button_classes\(:warning\).*?button_to "Discard".*?action_button_classes\(:destructive\)/m,
+    assert_match(/button_to t\("job_operations\.actions\.retry"\).*?action_button_classes\(:warning\).*?button_to t\("job_operations\.actions\.discard"\).*?action_button_classes\(:destructive\)/m,
       job_show)
-    assert_match(/button_to "Run now".*?action_button_classes\(:warning\).*?button_to "Discard".*?action_button_classes\(:destructive\)/m,
+    assert_match(/button_to t\("job_operations\.actions\.run_now"\).*?action_button_classes\(:warning\).*?button_to t\("job_operations\.actions\.discard"\).*?action_button_classes\(:destructive\)/m,
       job_show)
     refute_includes job_show, "tabs-sm"
     assert_includes queues_index, '<div class="flex flex-wrap justify-end gap-2">'
     assert_includes queues_index, "class: action_button_classes(:warning)"
     assert_includes queues_index, "class: action_button_classes(:secondary)"
     refute_includes queues_index, "btn-sm"
-    assert_includes queues_index, '<% content_for :page_title, "Queues" %>'
+    assert_includes queues_index, '<% content_for :page_title, t("job_operations.titles.queues") %>'
     [queue_show, recurring_tasks_index, recurring_task_show].each do |view|
       assert_includes view, '<div class="flex flex-wrap justify-end gap-2">'
     end
@@ -810,12 +831,16 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes pagination, 'class="join"'
     refute_includes pagination, 'class: "btn join-item"'
     refute_includes pagination, "btn-sm"
-    assert_includes queue_show, 'aria_label: "Queue jobs pagination"'
-    assert_includes jobs_index, 'aria_label: "#{jobs_status.titleize} jobs pagination"'
-    assert_includes recurring_task_show, 'aria_label: "Recurring task jobs pagination"'
-    assert_includes workers_index, 'aria_label: "Workers pagination"'
+    assert_includes queue_show, 'aria_label: t("job_operations.aria.queue_jobs_pagination")'
+    assert_includes jobs_index, 'aria_label: t("job_operations.aria.status_jobs_pagination", status: jobs_title)'
+    assert_includes recurring_task_show, 'aria_label: t("job_operations.aria.recurring_task_jobs_pagination")'
+    assert_includes workers_index, 'aria_label: t("job_operations.aria.workers_pagination")'
     assert_includes helper, '"failed" => "badge-error"'
     assert_includes helper, '"finished" => "badge-success"'
+    assert_includes job_operations, '"queues" => "キュー"'.b
+    assert_includes job_operations, '"queues" => "Queues"'
+    assert_includes job_operations, '"retry" => "再試行"'.b
+    assert_includes job_operations, '"retry" => "Retry"'
     refute_includes layout, "bulma.min.css"
     refute_includes job_operations, 'mission_control/jobs/bulma.min.css'
     refute_includes job_operations, "mission_control_jobs_scoped"
@@ -841,6 +866,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes controller_test, "assert_active_job_section"
     assert_includes controller_test, "allows admins to retry a failed Solid Queue job"
     assert_includes controller_test, "application_job_retry_path"
+    assert_includes helper_test, "renders with the host locale and restores the engine config"
+    assert_includes helper_test, "restores the engine config when rendering raises"
+    assert_includes helper_test, "assert_same engine_config, I18n.config"
     assert_includes controller_test, "assert SolidQueue::ReadyExecution.exists?"
     assert_includes cleanup_test, "SolidQueue::Job.clear_finished_in_batches"
     assert_includes cleanup_test, 'assert_equal "every hour at minute 12"'
@@ -2027,6 +2055,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes bundler_connection_pool_shim, "class ConnectionPool"
     assert_includes bundler_connection_pool_shim, "module ForkTracker; end"
     assert_includes shim_configuration, "module Admin::MaintenanceTasksHelper"
+    assert_includes shim_configuration, "job_operations_bindings = if VALUES.fetch(\"job_operations\") == \"enable\""
+    assert_includes shim_configuration, "module Admin::JobOperationsHelper"
+    assert_includes shim_configuration, "include MissionControl::Jobs::ApplicationHelper"
     assert_includes @source, "T.bind(self, Admin::MaintenanceTasksController)"
     assert_includes @source, '"triggered_by_user_id" => T.must(authorization_user).id'
     assert_includes shim, "class User"
@@ -2251,7 +2282,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"navigation-regular-user"'
     assert_includes evidence, 'viewport_size = VIEWPORTS.fetch(viewport)'
     assert_includes evidence, "def verify_job_operations_geometry"
-    assert_includes evidence, "text: /^Failed jobs/"
+    assert_includes evidence, 'failed_title = translate("job_operations.titles.status_jobs.failed")'
+    assert_includes evidence, 'text: /^#{Regexp.escape(failed_title)}/'
     assert_includes evidence, 'geometry.fetch("tabContentCount")'
     assert_includes evidence, 'failed_geometry.fetch("tabContentRadius")'
     assert_includes evidence, "REGULAR_PRIVATE_KEY"

@@ -68,6 +68,14 @@ responsive navigationを変更した場合は、DOM構造のテストだけで�
 
 機能を追加・変更した場合は、その変更によって`docs/evidence/`の撮影対象に不足や不要なシナリオが生じていないかを必ず検討してください。新しい画面、表示状態、認証・権限別の分岐、重要な操作結果を目視確認する必要がある場合は、選択可能な機能をすべて有効にした日本語sampleの撮影runnerと期待シナリオを適切に追加・変更し、`rake evidence:update`で証跡を更新してください。既存シナリオが不要になった場合も放置せず削除し、`rake evidence:verify`で画像、Markdown、manifest、生成元fingerprintの整合性を確認してください。
 
+### DaisyUI Blueprint MCP
+
+daisyUIを使うHTML/ERBの実装前に、関連するBlueprint MCPツールで構文とコンポーネント選択を確認してください。
+
+- ページ構成の変更には `daisyui_page_architect` を使用
+- コンポーネント実装には `daisyui_component_syntax_expert` を使用
+- 実装後の確認には `daisyui_rules_enforcer` または `daisyui_quality_inspector` を使用
+
 ## テスト方針
 
 Minitest を使用します。単体テストは `test/unit/`、アプリケーション生成の結合テストは `test/integration/` に配置し、ファイル名は `_test.rb` で終わらせます。`bootstrap.rb` の決定的生成、分割ソースとの同期、キャンセル時の無副作用、選択肢の正規化、実行順序、後始末、空白やシェルメタ文字を含むパスを検証してください。

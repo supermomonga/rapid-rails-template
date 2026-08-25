@@ -4644,7 +4644,7 @@ def configure_roles
                   <tr>
                     <td><%= user.id %></td>
                     <td>
-                      <%= link_to admin_user_path(user), class: "link link-hover inline-flex items-center gap-3" do %>
+                      <%= link_to admin_user_path(user), class: "link inline-flex items-center gap-3" do %>
                         <span class="avatar">
                           <span class="w-10 rounded-full">
                             <%= profile_avatar(T.must(user.profile), size: 40, alt: "") %>
@@ -5186,9 +5186,10 @@ def configure_roles
         assert_select 'a[href=?]', account_path, text: I18n.t("navigation.dashboard"), count: 2
         assert_select "table.table.table-sm.table-pin-rows"
         assert_select ".badge", text: I18n.t("admin.users.admin"), minimum: 1
-        assert_select 'a.link.link-hover[href=?]', admin_user_path(@regular), text: T.must(@regular.profile).display_name, count: 1 do
+        assert_select 'a.link[href=?]', admin_user_path(@regular), text: T.must(@regular.profile).display_name, count: 1 do
           assert_select '.avatar svg[width="40"][height="40"][aria-hidden="true"]', count: 1
         end
+        assert_select 'a.link-hover[href=?]', admin_user_path(@regular), count: 0
         assert_select 'form[action=?]', admin_user_roles_path(@regular), count: 0
         assert_select 'form[action=?]', admin_user_role_path(@admin, "admin"), count: 0
         assert_select ".join", count: 0

@@ -15427,7 +15427,11 @@ def install_maintenance_tasks
       <details class="collapse collapse-arrow card card-border bg-base-100">
         <summary class="collapse-title text-lg font-semibold">Source code</summary>
         <div class="collapse-content">
-          <div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= highlight_code(code) %></code></pre></div>
+          <div class="mockup-code overflow-x-auto">
+            <% code.lines(chomp: true).each.with_index(1) do |line, line_number| %>
+              <pre data-prefix="<%= line_number %>"><code><%= highlight_code(line) %></code></pre>
+            <% end %>
+          </div>
         </div>
       </details>
     <% end %>
@@ -15778,6 +15782,11 @@ def install_maintenance_tasks
         assert_select "form[action=?]", MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 1
         assert_select "details.collapse.collapse-arrow", minimum: 1
         assert_select ".mockup-code", count: 1
+        source_lines = T.must(MaintenanceTasks::TaskDataShow.prepare(TASK_NAME).code).lines(chomp: true)
+        assert_select ".mockup-code > pre", count: source_lines.length do |code_lines|
+          assert_equal((1..source_lines.length).map(&:to_s), code_lines.pluck("data-prefix"))
+          code_lines.each { |line| assert_select line, "code", count: 1 }
+        end
 
         get CSV_TASK_PATH
         assert_response :success
@@ -16556,6 +16565,12 @@ def configure_evidence_capture
             click_link "Maintenance::SafeTestTask"
             assert_selector "textarea[name='task[note]']", count: 1
             assert_selector "input.checkbox[name='task[notify]']", count: 1
+            find("details.collapse", text: "Source code").find("summary").click
+            assert_selector "details.collapse[open] .mockup-code", count: 1
+            code_lines = all(".mockup-code > pre")
+            assert_operator code_lines.length, :>, 1
+            assert_equal((1..code_lines.length).map(&:to_s), code_lines.pluck("data-prefix"))
+            assert_selector ".mockup-code > pre > code", count: code_lines.length
             capture_current_page("admin-maintenance-task-details", "運用タスク詳細", viewport)
             task_path = page.current_path
             paused_run = MaintenanceTasks::Run.create!(

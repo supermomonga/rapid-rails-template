@@ -1488,6 +1488,38 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes @source, 'import \\"siwe_sign_in\\"'
   end
 
+  def test_authentication_buttons_use_accessible_method_icons_and_evm_wallet_copy
+    devise_views = source_between("def configure_devise_views", "def configure_in_app_notifications")
+    passkey_svg = <<~'SVG'.strip
+      <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+    SVG
+    evm_wallet_svg = <<~'SVG'.strip
+      <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 507.83 470.86" aria-hidden="true">
+    SVG
+
+    assert_equal 1, devise_views.scan("passkey_icon = <<~'SVG'.strip").size
+    assert_equal 1, devise_views.scan("evm_wallet_icon = <<~'SVG'.strip").size
+    assert_equal 1, devise_views.scan(passkey_svg).size
+    assert_equal 1, devise_views.scan(evm_wallet_svg).size
+    assert_includes devise_views,
+      'd="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268'
+    assert_includes devise_views, 'd="M482.09.5 284.32 147.38l36.58-86.66z"'
+    assert_equal 2, devise_views.scan('#{passkey_icon}<%= t("authentication.sign_').size
+    assert_equal 2, devise_views.scan('#{evm_wallet_icon}<%= t("authentication.sign_').size
+    assert_includes devise_views, '#{passkey_icon}<%= t("authentication.sign_in_with_passkey") %>'
+    assert_includes devise_views, '#{passkey_icon}<%= t("authentication.sign_up_with_passkey") %>'
+    assert_includes devise_views, '#{evm_wallet_icon}<%= t("authentication.sign_in_with_wallet") %>'
+    assert_includes devise_views, '#{evm_wallet_icon}<%= t("authentication.sign_up_with_wallet") %>'
+
+    assert_includes @source,
+      '"sign_in_description" => "Passkeyまたは登録済みEVMウォレットでログインします。"'.b
+    assert_includes @source,
+      '"sign_up_description" => "PasskeyまたはEVMウォレットで、パスワードなしのアカウントを作成します。"'.b
+    assert_includes @source,
+      '"sign_in_with_wallet" => "EVMウォレットでログイン", "sign_up_with_wallet" => "EVMウォレットでアカウントを作成"'.b
+    refute_match(Regexp.new("(?<!EVM)(?<!EOA)ウォレット".b), @source)
+  end
+
   def test_siwe_requests_are_post_only_csrf_protected_and_rate_limited_by_ip_and_session
     sessions = generated_file_source("app/controllers/users/siwe_sessions_controller.rb")
     registrations = generated_file_source("app/controllers/users/siwe_registrations_controller.rb")
@@ -2272,7 +2304,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'SCENARIO_SET = "full"'
     assert_includes evidence, "capture_common_scenarios"
     assert_includes evidence, 'capture_siwe_scenarios if ADDITIONAL_LOGIN_METHODS.include?("siwe")'
-    assert_includes evidence, 'capture_current_page("siwe-provider-picker", "ウォレット選択", viewport_name)'
+    assert_includes evidence, 'capture_current_page("siwe-provider-picker", "EVMウォレット選択", viewport_name)'
     assert_includes evidence, 'text: "MetaMask", count: 1'
     assert_includes evidence, 'text: "Rabby Wallet", count: 1'
     assert_includes evidence, "capture_avatar_scenarios if AVATAR"

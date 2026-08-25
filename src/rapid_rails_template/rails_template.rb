@@ -340,7 +340,7 @@ def configure_application_identity
       },
       "accounts" => {
         "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "サイドメニューから利用設定を管理できます。", "action_with_profile" => "サイドメニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
-        "delete" => { "title" => "アカウント削除", "description" => "この操作は取り消せません。現在使えるログイン方法で再認証してください。", "with_passkey" => "Passkeyでアカウントを削除", "with_wallet" => "ウォレットでアカウントを削除" },
+        "delete" => { "title" => "アカウント削除", "description" => "この操作は取り消せません。現在使えるログイン方法で再認証してください。", "with_passkey" => "Passkeyでアカウントを削除", "with_wallet" => "EVMウォレットでアカウントを削除" },
         "destroy" => { "notice" => "アカウントを削除しました", "last_admin" => "最後の管理者はアカウントを削除できません" }
       },
       "credential_risk" => { "warning" => "現在のログイン方法は未バックアップのPasskey 1件だけです。端末の紛失・故障に備えて別のログイン方法を追加してください。", "add_login_method" => "ログイン方法を追加" },
@@ -2247,7 +2247,7 @@ def install_passkey_views
         "edit_title" => "Passkeyを編集", "name" => "Passkey名", "updated" => "Passkey名を更新しました。",
         "backed_up" => "同期済み", "not_backed_up" => "未バックアップ", "delete" => "解除", "delete_title" => "Passkeyを解除",
         "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete_with_passkey" => "別のPasskeyで解除",
-        "delete_with_wallet" => "ウォレットで解除",
+        "delete_with_wallet" => "EVMウォレットで解除",
         "errors" => { "unsupported" => "このブラウザは必要なWebAuthn APIに対応していません。", "verification" => "Passkeyを検証できませんでした。", "last_credential" => "最後のログイン方法は解除できません。" }
       }
     },
@@ -3625,11 +3625,11 @@ def install_siwe
     "siwe",
     ja: {
       "siwe" => {
-        "sign_in" => { "title" => "Ethereumでログイン", "description" => "登録済みのEOAウォレットで署名してログインします。", "connect" => "ウォレットでログイン" },
+        "sign_in" => { "title" => "Ethereumでログイン", "description" => "登録済みのEOAウォレットで署名してログインします。", "connect" => "EVMウォレットでログイン" },
         "account_settings" => { "basic" => "基本設定" },
-        "provider_picker" => { "title" => "ウォレットを選択", "description" => "接続に使用するウォレットを選択してください。", "close" => "閉じる" },
-        "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのウォレットはありません。", "add" => "ウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。ウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "ウォレット名", "connect" => "ウォレットを接続", "current" => "現在使用中", "last_credential_label" => "最後のログイン方法", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete" => "解除", "delete_with_passkey" => "Passkeyで解除", "delete_with_wallet" => "別のウォレットで解除", "current_credential" => "現在のログインに使用しているウォレットは解除できません。", "last_credential" => "最後のログイン方法は解除できません。", "updated" => "ウォレット名を更新しました。", "deleted" => "ウォレットを解除しました。" },
-        "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。", "wallet_not_registered" => "このウォレットはログイン方法として登録されていません。登録済みのウォレットを使用するか、アカウントを作成してください。" }
+        "provider_picker" => { "title" => "EVMウォレットを選択", "description" => "接続に使用するEVMウォレットを選択してください。", "close" => "閉じる" },
+        "identities" => { "title" => "EVMウォレットログイン", "description" => "ログインに使用できるEOAウォレットを管理します。", "empty" => "登録済みのEVMウォレットはありません。", "add" => "EVMウォレットを追加", "new_title" => "EVMウォレットを登録", "new_description" => "接続するEOAウォレットで署名します。EVMウォレット名は登録後に自動設定されます。", "edit_title" => "EVMウォレットログインを編集", "name" => "EVMウォレット名", "connect" => "EVMウォレットを接続", "current" => "現在使用中", "last_credential_label" => "最後のログイン方法", "delete_title" => "EVMウォレットログインを解除", "delete_description" => "削除対象とは別のログイン方法で再認証してください。", "delete" => "解除", "delete_with_passkey" => "Passkeyで解除", "delete_with_wallet" => "別のEVMウォレットで解除", "current_credential" => "現在のログインに使用しているEVMウォレットは解除できません。", "last_credential" => "最後のログイン方法は解除できません。", "updated" => "EVMウォレット名を更新しました。", "deleted" => "EVMウォレットを解除しました。" },
+        "errors" => { "wallet_missing" => "EOAウォレットが見つかりません。", "challenge" => "認証要求を作成できませんでした。", "verification" => "署名を検証できませんでした。", "wallet_not_registered" => "このEVMウォレットはログイン方法として登録されていません。登録済みのEVMウォレットを使用するか、アカウントを作成してください。" }
       }
     },
     en: {
@@ -9236,8 +9236,16 @@ def configure_api
 end
 
 def configure_devise_views
+  passkey_icon = <<~'SVG'.strip
+    <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a7.464 7.464 0 0 1-1.15 3.993m1.989 3.559A11.209 11.209 0 0 0 8.25 10.5a3.75 3.75 0 1 1 7.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 0 1-3.6 9.75m6.633-4.596a18.666 18.666 0 0 1-2.485 5.33"/>
+    </svg>
+  SVG
+  evm_wallet_icon = <<~'SVG'.strip
+    <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 507.83 470.86" aria-hidden="true"><defs><style>.b,.c,.d,.e,.f,.g,.j{stroke-linecap:round;stroke-linejoin:round}.b{fill:#e4761b;stroke:#e4761b}.c{fill:#d7c1b3;stroke:#d7c1b3}.d{fill:#233447;stroke:#233447}.e{fill:#cd6116;stroke:#cd6116}.f{fill:#e4751f;stroke:#e4751f}.g{fill:#f6851b;stroke:#f6851b}.j{fill:#763d16;stroke:#763d16}</style></defs><path d="M482.09.5 284.32 147.38l36.58-86.66z" style="fill:#e2761b;stroke:#e2761b;stroke-linecap:round;stroke-linejoin:round"/><path d="m25.54.5 196.18 148.27-34.79-88.05zM410.93 340.97l-52.67 80.7 112.7 31 32.4-109.91zM4.67 342.76l32.2 109.91 112.7-31-52.67-80.7z" class="b"/><path d="m143.21 204.62-31.41 47.51 111.9 4.97-3.97-120.25zM364.42 204.62l-77.51-69.16-2.59 121.64 111.71-4.97zM149.57 421.67l67.18-32.8-58.04-45.32zM290.88 388.87l67.38 32.8-9.34-78.12z" class="b"/><path d="m358.26 421.67-67.38-32.8 5.37 43.93-.6 18.48zM149.57 421.67l62.61 29.61-.4-18.48 4.97-43.93z" class="c"/><path d="m213.17 314.54-56.05-16.5 39.55-18.09zM294.46 314.54l16.5-34.59 39.75 18.09z" class="d"/><path d="m149.57 421.67 9.54-80.7-62.21 1.79zM348.72 340.97l9.54 80.7 52.67-78.91zM396.03 252.13l-111.71 4.97 10.34 57.44 16.5-34.59 39.75 18.09zM157.12 298.04l39.75-18.09 16.3 34.59 10.53-57.44-111.9-4.97z" class="e"/><path d="m111.8 252.13 46.91 91.42-1.59-45.51zM350.91 298.04l-1.99 45.51 47.11-91.42zM223.7 257.1l-10.53 57.44 13.12 67.77 2.98-89.24zM284.32 257.1l-5.36 35.77 2.38 89.44 13.32-67.77z" class="f"/><path d="m294.66 314.54-13.32 67.77 9.54 6.56 58.04-45.32 1.99-45.51zM157.12 298.04l1.59 45.51 58.04 45.32 9.54-6.56-13.12-67.77z" class="g"/><path d="m295.65 451.28.6-18.48-4.97-4.38h-74.93l-4.57 4.38.4 18.48-62.61-29.61 21.86 17.88 44.32 30.81h76.13l44.52-30.81 21.86-17.88z" style="stroke-linecap:round;stroke-linejoin:round;fill:#c0ad9e;stroke:#c0ad9e"/><path d="m290.88 388.87-9.54-6.56h-55.05l-9.54 6.56-4.97 43.93 4.57-4.38h74.93l4.97 4.38z" style="stroke-linecap:round;stroke-linejoin:round;fill:#161616;stroke:#161616"/><path d="m490.44 156.92 16.89-81.09L482.09.5 290.88 142.41l73.54 62.21 103.95 30.41 23.06-26.83-9.94-7.15 15.9-14.51-12.32-9.54 15.9-12.13zM.5 75.83l16.89 81.09-10.73 7.95L22.56 177l-12.12 9.54 15.9 14.51-9.94 7.15 22.86 26.83 103.95-30.41 73.54-62.21L25.54.5z" class="j"/><path d="m468.37 235.03-103.95-30.41 31.61 47.51-47.11 91.42 62.01-.79h92.43zM143.21 204.62 39.26 235.03 4.67 342.76H96.9l61.81.79-46.91-91.42zM284.32 257.1l6.56-114.69 30.22-81.69H186.93l29.82 81.69 6.95 114.69 2.39 36.17.2 89.04h55.05l.4-89.04z" class="g"/></svg>
+  SVG
   siwe_login = if VALUES.fetch("additional_login_methods").include?("siwe")
-    <<~'ERB'
+    <<~ERB
       <div class="divider"><%= t("authentication.or") %></div>
       <div data-controller="siwe-sign-in"
            data-siwe-sign-in-mode-value="login"
@@ -9247,7 +9255,7 @@ def configure_devise_views
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>"
            data-siwe-sign-in-wallet-not-registered-value="<%= t('siwe.errors.wallet_not_registered') %>">
-        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_in_with_wallet") %></button>
+        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate">#{evm_wallet_icon}<%= t("authentication.sign_in_with_wallet") %></button>
         <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-login-provider-picker" %>
       </div>
@@ -9256,7 +9264,7 @@ def configure_devise_views
     ""
   end
   siwe_signup = if VALUES.fetch("additional_login_methods").include?("siwe")
-    <<~'ERB'
+    <<~ERB
       <div class="divider"><%= t("authentication.or") %></div>
       <div data-controller="siwe-sign-in"
            data-siwe-sign-in-mode-value="signup"
@@ -9265,7 +9273,7 @@ def configure_devise_views
            data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate"><%= t("authentication.sign_up_with_wallet") %></button>
+        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate">#{evm_wallet_icon}<%= t("authentication.sign_up_with_wallet") %></button>
         <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-signup-provider-picker" %>
       </div>
@@ -9291,7 +9299,7 @@ def configure_devise_views
         <input type="checkbox" class="checkbox checkbox-sm" data-passkey-target="rememberMe">
         <span><%= t("authentication.remember_me") %></span>
       </label>
-      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate"><%= t("authentication.sign_in_with_passkey") %></button>
+      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate">#{passkey_icon}<%= t("authentication.sign_in_with_passkey") %></button>
       <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
     </div>
 
@@ -9316,7 +9324,7 @@ def configure_devise_views
          data-passkey-verify-url-value="<%= user_passkey_registration_path %>"
          data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
          data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate"><%= t("authentication.sign_up_with_passkey") %></button>
+      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate">#{passkey_icon}<%= t("authentication.sign_up_with_passkey") %></button>
       <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
     </div>
 
@@ -9332,10 +9340,10 @@ def configure_devise_views
     "authentication",
     ja: {
       "authentication" => {
-        "sign_in_title" => "ログイン", "sign_in_description" => "Passkeyまたは登録済みウォレットでログインします。",
-        "sign_up_title" => "アカウント作成", "sign_up_description" => "Passkeyまたはウォレットで、パスワードなしのアカウントを作成します。",
+        "sign_in_title" => "ログイン", "sign_in_description" => "Passkeyまたは登録済みEVMウォレットでログインします。",
+        "sign_up_title" => "アカウント作成", "sign_up_description" => "PasskeyまたはEVMウォレットで、パスワードなしのアカウントを作成します。",
         "sign_in_with_passkey" => "Passkeyでログイン", "sign_up_with_passkey" => "Passkeyでアカウントを作成",
-        "sign_in_with_wallet" => "ウォレットでログイン", "sign_up_with_wallet" => "ウォレットでアカウントを作成",
+        "sign_in_with_wallet" => "EVMウォレットでログイン", "sign_up_with_wallet" => "EVMウォレットでアカウントを作成",
         "remember_me" => "ログイン状態を保持する", "or" => "または", "create_account" => "アカウントを作成",
         "back_to_sign_in" => "ログイン画面へ", "new_account_prompt" => "新規にアカウント登録を行う場合はこちら",
         "existing_account_prompt" => "既にアカウント登録済みの場合はこちら"
@@ -16081,7 +16089,7 @@ def configure_evidence_capture
             assert_selector 'dialog#siwe-link-provider-picker [data-siwe-sign-in-target="providerList"] button',
               text: "Rabby Wallet", count: 1
             assert_no_selector "dialog#siwe-link-provider-picker img"
-            capture_current_page("siwe-provider-picker", "ウォレット選択", viewport_name)
+            capture_current_page("siwe-provider-picker", "EVMウォレット選択", viewport_name)
             page.execute_script('document.querySelector("dialog#siwe-link-provider-picker").close()')
             assert_no_selector "dialog#siwe-link-provider-picker[open]"
 
@@ -16241,7 +16249,7 @@ def configure_evidence_capture
             ({ documentWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth })
           JAVASCRIPT
           assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")
-          capture_current_page("siwe-login-unregistered-wallet", "未登録ウォレットのログインエラー", viewport)
+          capture_current_page("siwe-login-unregistered-wallet", "未登録EVMウォレットのログインエラー", viewport)
         end
 
         def install_unlinked_siwe_provider(address, signature, challenge)

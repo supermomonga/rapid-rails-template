@@ -945,6 +945,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes task_show, 'form.submit "Run", class: action_button_classes(:primary)'
     assert_class_tokens task_show, "collapse", "collapse-arrow"
     assert_class_tokens task_show, "mockup-code"
+    assert_includes task_show, "code.lines(chomp: true).each.with_index(1)"
+    assert_includes task_show, '<pre data-prefix="<%= line_number %>"><code><%= highlight_code(line) %></code></pre>'
+    refute_includes task_show, '<pre data-prefix=""><code><%= highlight_code(code) %></code></pre>'
+    assert_includes controller_test, 'assert_select ".mockup-code > pre", count: source_lines.length'
+    assert_includes controller_test, 'code_lines.pluck("data-prefix")'
     assert_includes task_show, '<%= with_pagination(aria_label: "Previous runs pagination") do %>'
     assert_includes task_show, 'class: pagination_item_classes %>'
     refute_includes task_show, 'class="join justify-end"'
@@ -2346,6 +2351,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, "def verify_maintenance_tasks_geometry"
     assert_includes evidence, "[320, 390, 640, 960, 961].each"
     assert_includes evidence, 'visit host_routes.admin_maintenance_tasks_path'
+    assert_includes evidence, 'find("details.collapse", text: "Source code").find("summary").click'
+    assert_includes evidence, 'code_lines = all(".mockup-code > pre")'
+    assert_includes evidence, 'code_lines.pluck("data-prefix")'
     assert_includes evidence, 'meta[name="csp-nonce"]'
     refute_includes evidence, "runner.sub!"
     assert_includes @source, "configure_common_files\n  configure_evidence_capture"

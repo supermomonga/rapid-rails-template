@@ -1819,7 +1819,8 @@ class RailsTemplateContractTest < Minitest::Test
     admin_faqs_controller = generated_file_source("app/controllers/admin/faqs_controller.rb")
     footer = generated_file_source("app/views/shared/_footer.html.erb")
     faq_index = generated_file_source("app/views/faqs/index.html.erb")
-    legal_page_seeds = source_between("    legal_page_contents = {", "    FooterSetting.find_or_create_by!")
+    evidence_capture = source_between("  runner = <<~'RUBY'", "\n  RUBY\n  runner = runner.sub")
+    default_page_seeds = source_between("    default_page_contents = {", "    FooterSetting.find_or_create_by!")
 
     assert_includes page_model, "has_rich_text :content, store_if_blank: false"
     assert_includes @source, '"transaction-law" => "content_management.pages.transaction_law"'
@@ -1836,18 +1837,34 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_faqs_controller, 'I18n.t("admin.faqs.update.notice")'
     assert_includes @source, 'get "/transaction-law", to: "pages#show"'
     assert_includes @source, 'resource :footer_setting, path: "footer-setting", only: %i[edit update]'
-    assert_equal 2, legal_page_seeds.scan('"terms" => <<~HTML').size
-    assert_equal 2, legal_page_seeds.scan('"privacy" => <<~HTML').size
-    assert_equal 2, legal_page_seeds.scan('"transaction-law" => <<~HTML').size
-    assert_includes legal_page_seeds, "}.fetch(I18n.default_locale)"
-    assert_includes legal_page_seeds, 'page.content = legal_page_contents.fetch(slug) if page.new_record? && legal_page_contents.key?(slug)'
-    refute_includes legal_page_seeds, "page.content.blank?"
-    assert_includes legal_page_seeds, "第5条（禁止事項）".b
-    assert_includes legal_page_seeds, "5. Prohibited conduct"
-    assert_includes legal_page_seeds, "3. 利用目的".b
-    assert_includes legal_page_seeds, "3. Purposes of use"
-    assert_includes legal_page_seeds, "販売事業者".b
-    assert_includes legal_page_seeds, "Seller or Service Provider"
+    assert_equal 2, default_page_seeds.scan('"corp" => <<~HTML').size
+    assert_equal 2, default_page_seeds.scan('"terms" => <<~HTML').size
+    assert_equal 2, default_page_seeds.scan('"privacy" => <<~HTML').size
+    assert_equal 2, default_page_seeds.scan('"transaction-law" => <<~HTML').size
+    assert_includes default_page_seeds, "}.fetch(I18n.default_locale)"
+    assert_includes default_page_seeds, 'page.content = default_page_contents.fetch(slug) if page.new_record? && default_page_contents.key?(slug)'
+    refute_includes default_page_seeds, "page.content.blank?"
+    assert_includes default_page_seeds, '<th class="lexxy-content__table-cell--header"><p>運営者名</p></th><td><p>株式会社◯◯</p></td>'.b
+    assert_includes default_page_seeds, '<th class="lexxy-content__table-cell--header"><p>Operator name</p></th><td><p>Example Co., Ltd.</p></td>'
+    assert_equal 8, default_page_seeds.scan('class="lexxy-content__table-cell--header"').size
+    refute_includes default_page_seeds, 'scope="row"'
+    assert_includes default_page_seeds, "第5条（禁止事項）".b
+    assert_includes default_page_seeds, "5. Prohibited conduct"
+    assert_includes default_page_seeds, "3. 利用目的".b
+    assert_includes default_page_seeds, "3. Purposes of use"
+    assert_includes default_page_seeds, "販売事業者".b
+    assert_includes default_page_seeds, "Seller or Service Provider"
+    assert_equal 1, @source.scan('"company" => "運営者情報"'.b).size
+    assert_equal 1, @source.scan('"company" => "Operator information"').size
+    assert_equal 1, @source.scan('"corp" => "運営者情報"'.b).size
+    assert_equal 1, @source.scan('"corp" => "Operator information"').size
+    refute_includes @source, '"company" => "運営会社"'.b
+    refute_includes @source, '"corp" => "運営会社"'.b
+    refute_includes @source, '"company" => "Company"'
+    refute_includes @source, '"corp" => "Company"'
+    assert_includes evidence_capture, '<th class="lexxy-content__table-cell--header"><p>運営者名</p></th><td><p>株式会社◯◯</p></td>'.b
+    assert_includes evidence_capture, 'assert_operator_information_table(viewport)'
+    assert_includes evidence_capture, 'assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")'
     assert_class_tokens faq_index, "collapse", "collapse-arrow"
     assert_includes faq_index, "faq.answer"
     assert_class_tokens footer, "footer", "footer-vertical", "sm:footer-horizontal"

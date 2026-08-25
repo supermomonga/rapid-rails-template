@@ -331,7 +331,7 @@ def configure_application_identity
         "api_credentials" => "APIキーの管理", "overview" => "概要", "users" => "ユーザー管理", "admin_notifications" => "通知管理", "pages" => "固定ページ管理", "faqs" => "FAQ管理",
         "admin" => "管理画面", "sign_in" => "ログイン", "sign_up" => "アカウント作成", "sign_out" => "ログアウト"
       },
-      "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営会社", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
+      "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営者情報", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
       "home" => {
         "badge" => "Railsアプリケーションテンプレート", "heading" => "迷わず始められる、モダンなRails開発環境。",
         "description" => "Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。",
@@ -355,7 +355,7 @@ def configure_application_identity
         "api_credentials" => "API credentials", "overview" => "Overview", "users" => "Users", "admin_notifications" => "Notifications", "pages" => "Pages", "faqs" => "FAQs",
         "admin" => "Administration", "sign_in" => "Sign in", "sign_up" => "Create account", "sign_out" => "Sign out"
       },
-      "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Company", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
+      "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Operator information", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
       "home" => {
         "badge" => "Rails application template", "heading" => "A modern Rails environment without the guesswork.",
         "description" => "Build on Rails 8.1 defaults with reproducible authentication, UI, testing, and deployment foundations.",
@@ -5884,8 +5884,18 @@ def configure_content_management
 
   append_to_file "db/seeds.rb", <<~RUBY
 
-    legal_page_contents = {
+    default_page_contents = {
       ja: {
+        "corp" => <<~HTML,
+          <table>
+            <tbody>
+              <tr><th class="lexxy-content__table-cell--header"><p>運営者名</p></th><td><p>株式会社◯◯</p></td></tr>
+              <tr><th class="lexxy-content__table-cell--header"><p>設立日</p></th><td><p>20XX年XX月XX日</p></td></tr>
+              <tr><th class="lexxy-content__table-cell--header"><p>代表者</p></th><td><p>◯◯ ◯◯</p></td></tr>
+              <tr><th class="lexxy-content__table-cell--header"><p>適格請求書発行事業者登録番号</p></th><td><p>T3000000000000</p></td></tr>
+            </tbody>
+          </table>
+        HTML
         "terms" => <<~HTML,
           <p><strong>公開前に、【】内の項目を実際の内容へ置き換え、サービスの機能・料金・対象地域に合わせて全条項を確認してください。</strong></p>
 
@@ -6126,6 +6136,16 @@ def configure_content_management
         HTML
       },
       en: {
+        "corp" => <<~HTML,
+          <table>
+            <tbody>
+              <tr><th class="lexxy-content__table-cell--header"><p>Operator name</p></th><td><p>Example Co., Ltd.</p></td></tr>
+              <tr><th class="lexxy-content__table-cell--header"><p>Date established</p></th><td><p>Month DD, 20XX</p></td></tr>
+              <tr><th class="lexxy-content__table-cell--header"><p>Representative</p></th><td><p>Firstname Lastname</p></td></tr>
+              <tr><th class="lexxy-content__table-cell--header"><p>Qualified invoice issuer registration number</p></th><td><p>T3000000000000</p></td></tr>
+            </tbody>
+          </table>
+        HTML
         "terms" => <<~HTML,
           <p><strong>Before publication, replace all bracketed items and review every provision against the Service's actual features, fees, and target regions.</strong></p>
 
@@ -6369,7 +6389,7 @@ def configure_content_management
 
     Page::TITLES.each do |slug, title|
       page = Page.find_or_initialize_by(slug: slug)
-      page.content = legal_page_contents.fetch(slug) if page.new_record? && legal_page_contents.key?(slug)
+      page.content = default_page_contents.fetch(slug) if page.new_record? && default_page_contents.key?(slug)
       page.title = title
       page.save!
     end
@@ -6379,7 +6399,7 @@ def configure_content_management
     "content_management",
     ja: {
       "content_management" => {
-        "pages" => { "about" => "%{app_name}について", "corp" => "運営会社", "manual" => "使い方", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
+        "pages" => { "about" => "%{app_name}について", "corp" => "運営者情報", "manual" => "使い方", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
         "faqs" => { "title" => "よくある質問", "empty" => "現在、公開中のよくある質問はありません。" },
         "admin" => {
           "pages" => { "title" => "固定ページ管理", "page" => "ページ", "url" => "URL", "actions" => "操作", "body" => "本文", "edit_description" => "固定ページの本文を編集します。" },
@@ -6396,7 +6416,7 @@ def configure_content_management
     },
     en: {
       "content_management" => {
-        "pages" => { "about" => "About %{app_name}", "corp" => "Company", "manual" => "Guides", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
+        "pages" => { "about" => "About %{app_name}", "corp" => "Operator information", "manual" => "Guides", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
         "faqs" => { "title" => "Frequently asked questions", "empty" => "There are no published frequently asked questions." },
         "admin" => {
           "pages" => { "title" => "Manage pages", "page" => "Page", "url" => "URL", "actions" => "Actions", "body" => "Body", "edit_description" => "Edit the body of this page." },
@@ -6690,26 +6710,40 @@ def configure_content_management
         # rubocop:enable Rails/SkipsModelValidations
       end
 
-      test "seeds localized legal page content once and keeps edited content" do
-        legal_slugs = %w[terms privacy transaction-law]
-        Page.where(slug: legal_slugs).destroy_all
+      test "seeds localized default page content once and keeps edited content" do
+        default_content_slugs = %w[corp terms privacy transaction-law]
+        Page.where(slug: default_content_slugs).destroy_all
         load Rails.root.join("db/seeds.rb").to_s
 
         assert_equal Page::TITLES, Page.order(:id).to_h { |page| [page.slug, page.title] }
-        legal_pages = Page.where(slug: legal_slugs).index_by(&:slug)
-        assert_equal legal_slugs.sort, legal_pages.keys.sort
-        assert legal_pages.values.all? { |page| page.content.present? }
-        assert_includes legal_pages.fetch("terms").content.to_plain_text, I18n.default_locale == :ja ? "禁止事項" : "Prohibited conduct"
-        assert_includes legal_pages.fetch("privacy").content.to_plain_text, I18n.default_locale == :ja ? "利用目的" : "Purposes of use"
-        assert_includes legal_pages.fetch("transaction-law").content.to_plain_text, I18n.default_locale == :ja ? "販売事業者" : "Seller or Service Provider"
+        default_content_pages = Page.where(slug: default_content_slugs).index_by(&:slug)
+        assert_equal default_content_slugs.sort, default_content_pages.keys.sort
+        assert default_content_pages.values.all? { |page| page.content.present? }
+        operator_page = default_content_pages.fetch("corp")
+        operator_content = operator_page.content.body.to_html
+        operator_rows = I18n.default_locale == :ja ?
+          [["運営者名", "株式会社◯◯"], ["設立日", "20XX年XX月XX日"], ["代表者", "◯◯ ◯◯"], ["適格請求書発行事業者登録番号", "T3000000000000"]] :
+          [["Operator name", "Example Co., Ltd."], ["Date established", "Month DD, 20XX"], ["Representative", "Firstname Lastname"], ["Qualified invoice issuer registration number", "T3000000000000"]]
+        operator_fragment = Nokogiri::HTML.fragment(operator_content)
+        actual_operator_rows = operator_fragment.css("tr").map do |row|
+          row.css("th, td").map { |cell| cell.text.strip }
+        end
+        assert_equal operator_rows, actual_operator_rows
+        assert_equal 4, operator_content.scan("<tr>").size
+        assert_equal 4, operator_content.scan('class="lexxy-content__table-cell--header"').size
+        assert_includes default_content_pages.fetch("terms").content.to_plain_text, I18n.default_locale == :ja ? "禁止事項" : "Prohibited conduct"
+        assert_includes default_content_pages.fetch("privacy").content.to_plain_text, I18n.default_locale == :ja ? "利用目的" : "Purposes of use"
+        assert_includes default_content_pages.fetch("transaction-law").content.to_plain_text, I18n.default_locale == :ja ? "販売事業者" : "Seller or Service Provider"
         assert_equal FooterSetting::DEFAULT_KEY, FooterSetting.default_record.key
 
-        terms = legal_pages.fetch("terms")
+        terms = default_content_pages.fetch("terms")
         terms.update!(content: "<p>管理者が編集した本文</p>")
+        operator_page.update!(content: "")
         assert_no_difference(["Page.count", "FooterSetting.count", "ActionText::RichText.count"]) do
           load Rails.root.join("db/seeds.rb").to_s
         end
         assert_equal "管理者が編集した本文", terms.reload.content.to_plain_text
+        assert_empty operator_page.reload.content.to_plain_text
       end
     end
   RUBY
@@ -6839,6 +6873,24 @@ def configure_content_management
 
         assert_response :success
         assert_select ".lexxy-content", text: "管理された本文", count: 1
+      end
+
+      test "renders the seeded operator information table publicly" do
+        pages(:corp).destroy!
+        load Rails.root.join("db/seeds.rb").to_s
+        expected_rows = I18n.default_locale == :ja ?
+          [["運営者名", "株式会社◯◯"], ["設立日", "20XX年XX月XX日"], ["代表者", "◯◯ ◯◯"], ["適格請求書発行事業者登録番号", "T3000000000000"]] :
+          [["Operator name", "Example Co., Ltd."], ["Date established", "Month DD, 20XX"], ["Representative", "Firstname Lastname"], ["Qualified invoice issuer registration number", "T3000000000000"]]
+
+        get corp_url
+
+        assert_response :success
+        assert_select "h1", text: Page::TITLES.fetch("corp"), count: 1
+        assert_select ".lexxy-content table tbody tr", count: 4
+        headings = css_select(".lexxy-content th.lexxy-content__table-cell--header").map { |node| node.text.strip }
+        values = css_select(".lexxy-content td").map { |node| node.text.strip }
+        assert_equal expected_rows.map(&:first), headings
+        assert_equal expected_rows.map(&:last), values
       end
 
       test "keeps Action Text image attachments separate from the avatar policy" do
@@ -16299,6 +16351,18 @@ def configure_evidence_capture
               <p>管理画面から更新したAction Text本文を表示しています。</p>
             HTML
           )
+          Page.find_by!(slug: "corp").update!(
+            content: <<~HTML
+              <table>
+                <tbody>
+                  <tr><th class="lexxy-content__table-cell--header"><p>運営者名</p></th><td><p>株式会社◯◯</p></td></tr>
+                  <tr><th class="lexxy-content__table-cell--header"><p>設立日</p></th><td><p>20XX年XX月XX日</p></td></tr>
+                  <tr><th class="lexxy-content__table-cell--header"><p>代表者</p></th><td><p>◯◯ ◯◯</p></td></tr>
+                  <tr><th class="lexxy-content__table-cell--header"><p>適格請求書発行事業者登録番号</p></th><td><p>T3000000000000</p></td></tr>
+                </tbody>
+              </table>
+            HTML
+          )
           @evidence_faq = Faq.find_or_initialize_by(question: "サービスはどのように使えますか？")
           @evidence_faq.update!(
             answer: "<p>アカウントを作成し、マイページから各機能をご利用ください。</p>",
@@ -16323,6 +16387,8 @@ def configure_evidence_capture
           capture_page("home-guest", "ホーム（未ログイン）", root_path, translate("home.heading"), viewport)
           capture_page("about", "アプリについて", about_path, Page::TITLES.fetch("about"), viewport)
           assert_selector ".lexxy-content", text: "管理画面から更新したAction Text本文"
+          capture_page("corp", "運営者情報", corp_path, Page::TITLES.fetch("corp"), viewport)
+          assert_operator_information_table(viewport)
           capture_faq_page(viewport)
           capture_page("login", translate("authentication.sign_in_title"), new_user_session_path, translate("authentication.sign_in_title"), viewport)
           capture_page("registration", "アカウント作成", new_user_registration_path, translate("authentication.sign_up_title"), viewport)
@@ -17069,6 +17135,44 @@ def configure_evidence_capture
           assert_equal 200, page.status_code
           assert_selector "h1", text: heading
           capture_current_page(identifier, title, viewport)
+        end
+
+        def assert_operator_information_table(viewport)
+          expected_rows = [
+            ["運営者名", "株式会社◯◯"],
+            ["設立日", "20XX年XX月XX日"],
+            ["代表者", "◯◯ ◯◯"],
+            ["適格請求書発行事業者登録番号", "T3000000000000"]
+          ]
+          rows = all(".lexxy-content table tbody tr")
+          assert_equal expected_rows, rows.map { |row| row.all("th, td").map { |cell| cell.text.strip } }
+          assert_selector ".lexxy-content th.lexxy-content__table-cell--header", count: 4
+
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const table = document.querySelector(".lexxy-content table")
+                const cells = Array.from(table.querySelectorAll("th, td"))
+                const lastHeading = table.querySelectorAll("th")[3].querySelector("p")
+                const headingRange = document.createRange()
+                headingRange.selectNodeContents(lastHeading)
+                const tableBounds = table.getBoundingClientRect()
+                return {
+                  documentWidth: document.documentElement.scrollWidth,
+                  viewportWidth: window.innerWidth,
+                  tableLeft: tableBounds.left,
+                  tableRight: tableBounds.right,
+                  cellOverflow: cells.some((cell) => cell.scrollWidth > cell.clientWidth + 1),
+                  lastHeadingLineCount: headingRange.getClientRects().length
+                }
+              }
+            JAVASCRIPT
+          end
+          assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")
+          assert_operator geometry.fetch("tableLeft"), :>=, 0
+          assert_operator geometry.fetch("tableRight"), :<=, geometry.fetch("viewportWidth")
+          assert_not geometry.fetch("cellOverflow")
+          assert_operator geometry.fetch("lastHeadingLineCount"), :>, 1 if viewport == "mobile"
         end
 
         def capture_avatar_page(identifier, title, path, heading, viewport, sizes)

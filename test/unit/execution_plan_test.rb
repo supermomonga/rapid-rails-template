@@ -74,12 +74,16 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/controllers/admin/notification_recipients_controller.rb"
     assert_includes plan.artifacts, "app/views/admin/notifications/index.html.erb"
     assert_includes plan.artifacts, "app/views/admin/notification_recipients/index.html.erb"
+    assert_includes plan.artifacts, "app/javascript/controllers/notification_announcements_controller.js"
     assert_includes plan.artifacts, "app/javascript/controllers/notification_popover_controller.js"
     assert_includes plan.artifacts, "config/locales/notifications.ja.yml"
     assert_includes plan.artifacts, "config/locales/notifications.en.yml"
     assert_includes plan.artifacts, "db/migrate/*_create_notifications.rb"
     assert_includes plan.artifacts, "db/migrate/*_create_notification_deliveries.rb"
+    assert_includes plan.artifacts, "db/migrate/*_add_global_notifications_read_at_to_users.rb"
+    assert_includes plan.artifacts, "app/views/notifications/read_announcements.turbo_stream.erb"
     assert_includes plan.artifacts, "test/models/notification_test.rb"
+    assert_includes plan.artifacts, "test/models/user_notification_test.rb"
     assert_includes plan.artifacts, "test/controllers/notifications_controller_test.rb"
     assert_includes plan.artifacts, "test/system/notifications_test.rb"
     assert_includes plan.steps, "install_image_cropper"
@@ -448,23 +452,32 @@ class ExecutionPlanTest < Minitest::Test
       app/views/notifications/popover.html.erb
       app/views/notifications/_popover.html.erb
       app/views/notifications/_notification.html.erb
+      app/views/notifications/_announcement.html.erb
+      app/views/notifications/_announcements_panel.html.erb
+      app/views/notifications/_announcement_read_error.html.erb
       app/views/notifications/_unread_status.html.erb
+      app/views/notifications/_tab_unread_status.html.erb
+      app/views/notifications/_tab_name.html.erb
       app/views/notifications/open.turbo_stream.erb
       app/views/notifications/open_all.turbo_stream.erb
+      app/views/notifications/read_announcements.turbo_stream.erb
       app/views/admin/notifications/index.html.erb
       app/views/admin/notifications/show.html.erb
       app/views/admin/notifications/new.html.erb
       app/views/admin/notifications/edit.html.erb
       app/views/admin/notifications/_form.html.erb
       app/views/admin/notification_recipients/index.html.erb
+      app/javascript/controllers/notification_announcements_controller.js
       app/javascript/controllers/notification_popover_controller.js
       app/javascript/controllers/notification_recipients_controller.js
       config/locales/notifications.ja.yml
       config/locales/notifications.en.yml
       db/migrate/*_create_notifications.rb
       db/migrate/*_create_notification_deliveries.rb
+      db/migrate/*_add_global_notifications_read_at_to_users.rb
       test/models/notification_test.rb
       test/models/notification_delivery_test.rb
+      test/models/user_notification_test.rb
       test/services/notification_delivery_synchronization_test.rb
       test/policies/notification_policy_test.rb
       test/controllers/notifications_controller_test.rb

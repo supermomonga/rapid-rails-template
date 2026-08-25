@@ -178,9 +178,11 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 ### アプリ内通知
 
-全構成へ`Notification`と`NotificationDelivery`を生成します。通知本文は`has_rich_text :message`でAction Textへ保存し、固定ページ編集と同じ`form.rich_text_area`をLexxy editorとして表示します。装飾を除いたプレーンテキストをtrimした長さは1〜140文字に限定します。通知は必須の公開日時、下書き状態、全ユーザーまたは個別ユーザーの通知先を持ち、公開範囲を`draft = false AND published_at <= Time.current`に限定します。配信は通知とUserの組をdatabaseの一意制約で保護し、削除時はcascadeします。個別通知は下書き中から対象差分を同期して継続対象の既読日時を保持し、全体通知は公開時だけ現在Userとの差分をbulk insertします。通知保存と同期は同じtransactionで行います。
+全構成へ`Notification`と`NotificationDelivery`を生成します。通知本文は`has_rich_text :message`でAction Textへ保存し、固定ページ編集と同じ`form.rich_text_area`をLexxy editorとして表示します。装飾を除いたプレーンテキストをtrimした長さは1〜140文字に限定します。通知は必須の公開日時、下書き状態、全ユーザーまたは個別ユーザーの通知先を持ち、公開範囲を`draft = false AND published_at <= cutoff`に限定します。`NotificationDelivery`は個別通知にだけ許可し、通知とUserの組をdatabaseの一意制約で保護して通知削除時にcascadeします。下書きでない個別通知は予約公開を含め受信者を1人以上必須とします。個別通知は通知保存と同じtransactionで対象差分を同期し、継続対象の既読日時を保持します。全体通知へ切り替えた場合は既存の個別配信行を削除し、全UserのID取得や配信行のbulk insertは行いません。
 
-認証済み画面のheaderにはHeroiconsのbellと、未読がある場合だけdaisyUIの`indicator`と`status`を表示します。native Popover APIとdaisyUI `dropdown`内のTurbo Frameは閉じている間に通信せず、初回表示で最新10件を読み込みます。公開通知の履歴は`/notifications`で公開日時・ID降順に25件ずつ表示し、個別既読と一括既読は現在Userが所有する公開済み配信だけを更新します。管理CRUDとProfile表示名による最大20件の受信者検索はAction Policyでadminに限定し、User IDは画面へ表示しません。
+Userの`global_notifications_read_at`はUser作成時の`created_at`と同じ値で初期化し、全体通知の未読を`published_at > global_notifications_read_at`で判定します。これにより、後登録のUserも過去の全体通知を一覧表示できますが、User作成前の通知は未読になりません。最終確認日時は、「お知らせ」表示取得時のcutoff以前を対象とする条件付き単一SQLで単調に更新し、並行する古いrequestで巻き戻しません。既読後の本文編集、下書き化・再公開、通知先の切替えは未読を再生成せず、`published_at`を明示的に後へ変更した場合だけ判定へ影響します。過去の`published_at`を指定して後から公開した全体通知は一覧には表示されますが未読にはなりません。
+
+認証済み画面のheaderにはHeroiconsのbellと、公開済みの未読個別通知、または最終確認日時より新しい公開済み全体通知がある場合だけdaisyUIの`indicator`と`status`を表示します。native Popover APIとdaisyUI `dropdown`内のTurbo Frameは閉じている間に通信せず、開くたびに初期タブの「あなたへの通知」へ戻って最新10件を読み込みます。popoverと`/notifications`は`tab=personal|announcements`を受け付け、「あなたへの通知」に個別配信、「お知らせ」に全体通知を公開日時・ID降順で表示します。省略時は`personal`、不正値は`400 Bad Request`とし、一覧はタブ別に25件ずつpaginateします。個別通知のみ既読表示・個別既読・一括既読を持ちます。「お知らせ」のGET取得では最終確認日時を変更せず、表示成功後の専用`PATCH /notifications/global-read`が取得時のcutoffまで単調更新し、Turbo Streamでnavbarとタブの未読表示を更新します。previewや読込失敗では更新せず、失敗時は未読表示を残して再試行できるエラーを表示します。popoverの「もっと見る」は現在タブを履歴へ引き継ぎます。管理CRUDとProfile表示名による最大20件の受信者検索はAction Policyでadminに限定し、User IDは画面へ表示しません。管理一覧の対象表示は全体通知を「全ユーザー」、個別通知を受信者数とし、受信者selectorは個別通知の場合だけ有効にします。
 
 ### PWAとWeb Push
 
@@ -215,7 +217,7 @@ PushNotifier.deliver_later(
 | `DELETE /push_subscription` | 現在のUser範囲でbrowser IDを冪等削除して`204` |
 | `POST /push_subscription/test` | 現在のUserとbrowser IDに一致する購読へ固定通知をenqueueして`202`。未登録は`404`、設定不足は`503`、5回/分超過は`429` |
 
-追加ログイン方法にかかわらず、Web Pushを有効にした場合だけDevise認証必須の`/web-push`を生成し、account navigationの独立項目「Web Push設定」から開きます。アプリ内通知の`/notifications`やheader popoverとは共有しません。設定画面はdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
+追加ログイン方法にかかわらず、Web Pushを有効にした場合だけDevise認証必須の`/web-push`を生成し、account navigationの独立項目「Web Push設定」から開きます。アプリ内通知の`/notifications`やheader popover、`Notification`、`NotificationDelivery`とは共有しません。全体通知の日時カーソルはWeb Pushの配信対象や過去配信には使用しません。設定画面はdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
 
 ### Roleと認可
 

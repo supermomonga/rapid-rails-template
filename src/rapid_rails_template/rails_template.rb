@@ -1247,11 +1247,16 @@ def install_devise
     }
   JAVASCRIPT
   create_file "test/fixtures/users.yml", <<~'YAML', force: true
+    <% fixture_created_at = 2.days.ago %>
     one:
       webauthn_id: "dGVzdC11c2VyLW9uZQ"
+      created_at: <%= fixture_created_at %>
+      global_notifications_read_at: <%= fixture_created_at %>
 
     two:
       webauthn_id: "dGVzdC11c2VyLXR3bw"
+      created_at: <%= fixture_created_at %>
+      global_notifications_read_at: <%= fixture_created_at %>
   YAML
   create_file "test/fixtures/passkey_credentials.yml", <<~'YAML', force: true
     one:
@@ -8448,10 +8453,22 @@ def configure_in_app_notifications
           t.timestamps
         end
 
-        add_index :notifications, [:draft, :published_at, :id]
+        add_index :notifications, [:audience, :draft, :published_at, :id]
         add_check_constraint :notifications,
           "audience IN ('all_users', 'selected_users')",
           name: "notifications_audience_check"
+      end
+    end
+  RUBY
+
+  generate "migration", "AddGlobalNotificationsReadAtToUsers"
+  user_notification_migration = Dir.glob("db/migrate/*_add_global_notifications_read_at_to_users.rb")
+  raise "AddGlobalNotificationsReadAtToUsers migrationが一意ではありません" unless user_notification_migration.one?
+
+  create_file user_notification_migration.first, <<~RUBY, force: true
+    class AddGlobalNotificationsReadAtToUsers < ActiveRecord::Migration[8.1]
+      def change
+        add_column :users, :global_notifications_read_at, :datetime, null: false
       end
     end
   RUBY
@@ -8489,9 +8506,13 @@ def configure_in_app_notifications
       enum :audience, AUDIENCES, validate: true
 
       validates :published_at, presence: true
+      validate :published_selected_notification_has_recipient
       validate :message_plain_text_length
+      after_update :delete_deliveries_for_announcement, if: :changed_to_announcement?
 
-      scope :published, -> { where(draft: false).where(published_at: ..Time.current) }
+      scope :published, ->(cutoff = Time.current) { where(draft: false).where(published_at: ..cutoff) }
+      scope :announcements, -> { where(audience: "all_users") }
+      scope :ordered, -> { order(published_at: :desc, id: :desc) }
 
       sig { returns(T::Boolean) }
       def published?
@@ -8505,21 +8526,40 @@ def configure_in_app_notifications
 
       sig { params(recipient_ids: T::Array[Integer]).returns(Notification) }
       def save_with_delivery_synchronization!(recipient_ids: [])
-        synchronize_all_users = should_synchronize_all_users?
+        @recipient_ids_for_validation = recipient_ids
         transaction do
           save!
-          NotificationDeliverySynchronization.call(notification: self, recipient_ids:, synchronize_all_users:)
+          NotificationDeliverySynchronization.call(notification: self, recipient_ids:)
         end
         self
+      ensure
+        @recipient_ids_for_validation = nil
       end
 
       private
         sig { returns(T::Boolean) }
-        def should_synchronize_all_users?
-          return false unless all_users? && !draft?
-          return true if new_record?
+        def changed_to_announcement?
+          saved_change_to_audience? && all_users?
+        end
 
-          attribute_in_database("draft") || attribute_in_database("audience") != "all_users"
+        sig { void }
+        def delete_deliveries_for_announcement
+          # rubocop:disable Rails/SkipsModelValidations -- 全体通知に個別配信行を残さない
+          notification_deliveries.delete_all
+          # rubocop:enable Rails/SkipsModelValidations
+        end
+
+        sig { void }
+        def published_selected_notification_has_recipient
+          return if draft? || !selected_users?
+
+          recipient_ids = @recipient_ids_for_validation
+          has_recipient = if recipient_ids.nil?
+            notification_deliveries.exists?
+          else
+            User.exists?(id: recipient_ids)
+          end
+          errors.add(:recipients, :blank) unless has_recipient
         end
 
         sig { void }
@@ -8542,11 +8582,12 @@ def configure_in_app_notifications
       belongs_to :user
 
       validates :notification_id, uniqueness: { scope: :user_id }
+      validate :notification_targets_selected_users
 
-      scope :published, -> {
+      scope :published, ->(cutoff = Time.current) {
         joins(:notification)
-          .where(notification: { draft: false })
-          .where(notification: { published_at: ..Time.current })
+          .where(notification: { audience: "selected_users", draft: false })
+          .where(notification: { published_at: ..cutoff })
       }
       scope :ordered, -> { order(notification: { published_at: :desc, id: :desc }) }
       scope :unopened, -> { where(opened_at: nil) }
@@ -8561,12 +8602,54 @@ def configure_in_app_notifications
         update!(opened_at: Time.current) if opened_at.nil?
         self
       end
+
+      private
+        sig { void }
+        def notification_targets_selected_users
+          errors.add(:notification, :invalid) unless notification&.selected_users?
+        end
     end
   RUBY
 
   inject_into_class "app/models/user.rb", "User", <<~RUBY
+      extend T::Sig
+
       has_many :notification_deliveries, dependent: :destroy
       has_many :notifications, through: :notification_deliveries
+
+      before_create :initialize_global_notifications_read_at
+
+      sig { params(cutoff: T.any(Time, ActiveSupport::TimeWithZone)).returns(T::Boolean) }
+      def has_unread_personal_notifications?(cutoff: Time.current)
+        notification_deliveries.published(cutoff).unopened.exists?
+      end
+
+      sig { params(cutoff: T.any(Time, ActiveSupport::TimeWithZone)).returns(T::Boolean) }
+      def has_unread_announcements?(cutoff: Time.current)
+        Notification.published(cutoff).announcements
+          .exists?(["published_at > ?", global_notifications_read_at])
+      end
+
+      sig { params(cutoff: T.any(Time, ActiveSupport::TimeWithZone)).returns(T::Boolean) }
+      def has_unread_notifications?(cutoff: Time.current)
+        has_unread_personal_notifications?(cutoff:) || has_unread_announcements?(cutoff:)
+      end
+
+      sig { params(cutoff: T.any(Time, ActiveSupport::TimeWithZone)).returns(User) }
+      def mark_announcements_read_through!(cutoff:)
+        now = Time.current
+        # rubocop:disable Rails/SkipsModelValidations -- 条件付き単一SQLでcursorの巻き戻りを防ぐ
+        self.class.where(id:, global_notifications_read_at: ...cutoff)
+          .update_all(global_notifications_read_at: cutoff, updated_at: now)
+        # rubocop:enable Rails/SkipsModelValidations
+        reload
+      end
+
+      sig { void }
+      def initialize_global_notifications_read_at
+        self.global_notifications_read_at = T.must(created_at)
+      end
+      private :initialize_global_notifications_read_at
 
   RUBY
 
@@ -8577,34 +8660,27 @@ def configure_in_app_notifications
       sig do
         params(
           notification: Notification,
-          recipient_ids: T::Array[Integer],
-          synchronize_all_users: T::Boolean
+          recipient_ids: T::Array[Integer]
         ).void
       end
-      def self.call(notification:, recipient_ids: [], synchronize_all_users: true)
-        new(notification:, recipient_ids:, synchronize_all_users:).call
+      def self.call(notification:, recipient_ids: [])
+        new(notification:, recipient_ids:).call
       end
 
       sig do
         params(
           notification: Notification,
-          recipient_ids: T::Array[Integer],
-          synchronize_all_users: T::Boolean
+          recipient_ids: T::Array[Integer]
         ).void
       end
-      def initialize(notification:, recipient_ids: [], synchronize_all_users: true)
+      def initialize(notification:, recipient_ids: [])
         @notification = notification
         @recipient_ids = recipient_ids.uniq
-        @synchronize_all_users = synchronize_all_users
       end
 
       sig { void }
       def call
-        if notification.selected_users?
-          synchronize_selected_users
-        elsif synchronize_all_users && notification.all_users? && !notification.draft?
-          insert_missing(User.ids)
-        end
+        synchronize_selected_users if notification.selected_users?
       end
 
       private
@@ -8613,9 +8689,6 @@ def configure_in_app_notifications
 
         sig { returns(T::Array[Integer]) }
         attr_reader :recipient_ids
-
-        sig { returns(T::Boolean) }
-        attr_reader :synchronize_all_users
 
         sig { void }
         def synchronize_selected_users
@@ -8687,26 +8760,47 @@ def configure_in_app_notifications
     class NotificationsController < ApplicationController
       extend T::Sig
 
+      TABS = %w[personal announcements].freeze
+      ANNOUNCEMENT_SURFACES = %w[history popover].freeze
+
       before_action :authenticate_user!
+      before_action :set_tab, only: %i[index popover]
 
       sig { void }
       def index
-        @pagy, @deliveries = pagy(:offset, deliveries_scope, limit: 25)
+        @surface = "history"
+        @cutoff = Time.current
+        if @tab == "personal"
+          @pagy, @deliveries = pagy(:offset, deliveries_scope(@cutoff), limit: 25)
+        else
+          @pagy, @announcements = pagy(:offset, announcements_scope(@cutoff), limit: 25)
+        end
       end
 
       sig { void }
       def popover
-        @deliveries = deliveries_scope.limit(10)
+        @surface = "popover"
+        @cutoff = Time.current
+        if @tab == "personal"
+          @deliveries = deliveries_scope(@cutoff).limit(10)
+        else
+          @announcements = announcements_scope(@cutoff).limit(10)
+        end
         render layout: false
       end
 
       sig { void }
       def open
         @delivery = deliveries_scope.find_by!(notification_id: params.expect(:id))
-        allowed_frames = %W[popover_notification_\#{@delivery.notification_id} history_notification_\#{@delivery.notification_id}]
+        allowed_frames = %W[
+          popover_personal_notification_\#{@delivery.notification_id}
+          history_personal_notification_\#{@delivery.notification_id}
+        ]
         @origin_frame = params.expect(:origin_frame)
         raise ActionController::BadRequest unless allowed_frames.include?(@origin_frame)
 
+        @personal_status_target = @origin_frame.start_with?("popover_") ?
+          "popover_personal_unread_status" : "history_personal_unread_status"
         @delivery.open!
       end
 
@@ -8718,15 +8812,45 @@ def configure_in_app_notifications
         # rubocop:disable Rails/SkipsModelValidations -- 現在Userの公開済み未読だけを一括更新する
         deliveries_scope.where(opened_at: nil).update_all(opened_at: Time.current, updated_at: Time.current)
         # rubocop:enable Rails/SkipsModelValidations
-        @deliveries = deliveries_scope.limit(10)
+        @tab = "personal"
+        @surface = "popover"
+        @cutoff = Time.current
+        @deliveries = deliveries_scope(@cutoff).limit(10)
+      end
+
+      sig { void }
+      def read_announcements
+        @surface = params.expect(:surface)
+        raise ActionController::BadRequest unless ANNOUNCEMENT_SURFACES.include?(@surface)
+
+        @cutoff = Time.zone.iso8601(params.expect(:cutoff))
+        raise ActionController::BadRequest if @cutoff > Time.current
+
+        T.must(current_user).mark_announcements_read_through!(cutoff: @cutoff)
+      rescue ActiveRecord::ActiveRecordError
+        @read_failed = true
+        render :read_announcements, status: :unprocessable_content
+      rescue ArgumentError
+        raise ActionController::BadRequest
       end
 
       private
-        sig { returns(ActiveRecord::Relation) }
-        def deliveries_scope
-          T.must(current_user).notification_deliveries.published.ordered.includes(
+        sig { void }
+        def set_tab
+          @tab = params.fetch(:tab, "personal")
+          raise ActionController::BadRequest unless TABS.include?(@tab)
+        end
+
+        sig { params(cutoff: T.any(Time, ActiveSupport::TimeWithZone)).returns(ActiveRecord::Relation) }
+        def deliveries_scope(cutoff = Time.current)
+          T.must(current_user).notification_deliveries.published(cutoff).ordered.includes(
             notification: { rich_text_message: { embeds_attachments: :blob } }
           )
+        end
+
+        sig { params(cutoff: T.any(Time, ActiveSupport::TimeWithZone)).returns(ActiveRecord::Relation) }
+        def announcements_scope(cutoff)
+          Notification.published(cutoff).announcements.ordered.with_rich_text_message_and_embeds
         end
     end
   RUBY
@@ -8743,6 +8867,7 @@ def configure_in_app_notifications
           authorize! Notification, to: :index?
           notifications = authorized_scope(Notification.all)
             .with_rich_text_message_and_embeds
+            .includes(:notification_deliveries)
             .order(published_at: :desc, id: :desc)
           @pagy, @notifications = pagy(:offset, notifications, limit: 25)
         end
@@ -8841,6 +8966,7 @@ def configure_in_app_notifications
       collection do
         get :popover
         patch "open-all", action: :open_all, as: :open_all
+        patch "global-read", action: :read_announcements, as: :read_announcements
       end
       member do
         patch :open
@@ -8860,9 +8986,15 @@ def configure_in_app_notifications
       static values = { url: String }
 
       load(event) {
-        if (event.newState !== "open" || this.frameTarget.src) return
+        if (event.newState !== "open") return
 
-        this.frameTarget.src = this.urlValue
+        const personalUrl = new URL(this.urlValue, window.location.origin).toString()
+        this.frameTarget.removeAttribute("complete")
+        if (this.frameTarget.src === personalUrl) {
+          this.frameTarget.reload()
+        } else {
+          this.frameTarget.src = personalUrl
+        }
       }
 
       retry() {
@@ -8880,15 +9012,58 @@ def configure_in_app_notifications
     }
   JAVASCRIPT
 
+  create_file "app/javascript/controllers/notification_announcements_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["error", "form"]
+
+      connect() {
+        if (document.documentElement.hasAttribute("data-turbo-preview")) return
+
+        this.markRead()
+      }
+
+      complete(event) {
+        if (event.detail.success) return
+
+        this.errorTarget.classList.remove("hidden")
+      }
+
+      failed(event) {
+        event.preventDefault()
+        event.stopPropagation()
+        this.errorTarget.classList.remove("hidden")
+      }
+
+      retry() {
+        this.errorTarget.classList.add("hidden")
+        this.markRead()
+      }
+
+      markRead() {
+        this.formTarget.requestSubmit()
+      }
+    }
+  JAVASCRIPT
+
   create_file "app/javascript/controllers/notification_recipients_controller.js", <<~JAVASCRIPT, force: true
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
-      static targets = ["frame", "hidden", "search"]
+      static targets = ["audience", "frame", "hidden", "search", "selector"]
       static values = { removeLabel: String, selected: Object, url: String }
 
       connect() {
         this.renderHiddenInputs()
+        this.toggle()
+      }
+
+      toggle() {
+        const selectedUsers = this.audienceTarget.value === "selected_users"
+        this.selectorTarget.hidden = !selectedUsers
+        this.searchTarget.disabled = !selectedUsers
+        this.hiddenTarget.querySelectorAll("input").forEach((input) => { input.disabled = !selectedUsers })
       }
 
       search() {
@@ -8933,6 +9108,7 @@ def configure_in_app_notifications
           input.type = "hidden"
           input.name = "notification[recipient_ids][]"
           input.value = id
+          input.disabled = this.audienceTarget.value !== "selected_users"
           const button = document.createElement("button")
           button.type = "button"
           button.className = "btn btn-ghost btn-xs"
@@ -8948,10 +9124,23 @@ def configure_in_app_notifications
 
   create_file "app/views/notifications/_unread_status.html.erb", <<~ERB, force: true
     <span id="notification_unread_status" class="indicator-item">
-      <% if current_user.notification_deliveries.published.unopened.exists? %>
+      <% if current_user.has_unread_notifications? %>
         <span class="status status-primary status-sm" aria-label="<%= t('notifications.unread_status') %>"></span>
       <% end %>
     </span>
+  ERB
+
+  create_file "app/views/notifications/_tab_unread_status.html.erb", <<~ERB, force: true
+    <span id="<%= status_id %>" class="inline-flex size-3 items-center justify-center">
+      <% if unread %>
+        <span class="status status-primary status-xs" aria-label="<%= t('notifications.tab_unread_status', tab: label) %>"></span>
+      <% end %>
+    </span>
+  ERB
+
+  create_file "app/views/notifications/_tab_name.html.erb", <<~ERB, force: true
+    <span><%= label %></span>
+    <%= render "notifications/tab_unread_status", status_id:, unread:, label: %>
   ERB
 
   create_file "app/views/notifications/_notification.html.erb", <<~ERB, force: true
@@ -8972,34 +9161,101 @@ def configure_in_app_notifications
     <% end %>
   ERB
 
+  create_file "app/views/notifications/_announcement.html.erb", <<~ERB, force: true
+    <li class="list-row items-start">
+      <div class="list-col-grow min-w-0">
+        <div class="break-words"><%= announcement.message %></div>
+        <p class="mt-1 text-xs text-neutral"><%= time_tag announcement.published_at, l(announcement.published_at, format: :short) %></p>
+      </div>
+    </li>
+  ERB
+
+  create_file "app/views/notifications/_announcements_panel.html.erb", <<~ERB, force: true
+    <div data-controller="notification-announcements">
+      <%= form_with url: read_announcements_notifications_path, method: :patch, class: "hidden",
+        data: { notification_announcements_target: "form", turbo_stream: true,
+          action: "turbo:submit-end->notification-announcements#complete turbo:fetch-request-error->notification-announcements#failed" } do |form| %>
+        <%= form.hidden_field :cutoff, value: cutoff.iso8601(6) %>
+        <%= form.hidden_field :surface, value: surface %>
+      <% end %>
+      <%= render "notifications/announcement_read_error", surface:, compact:, visible: false %>
+      <% if announcements.empty? %>
+        <p class="text-sm text-neutral"><%= t("notifications.announcements_empty") %></p>
+      <% else %>
+        <ul class="list <%= 'max-h-96 overflow-y-auto' if compact %>">
+          <% announcements.each do |announcement| %>
+            <%= render "notifications/announcement", announcement: %>
+          <% end %>
+        </ul>
+        <%= pagination(pagy, aria_label: t("notifications.announcements_pagination")) if pagy %>
+      <% end %>
+    </div>
+  ERB
+
+  create_file "app/views/notifications/_announcement_read_error.html.erb", <<~ERB, force: true
+    <div id="<%= surface %>_announcement_read_error"
+      class="alert alert-error alert-soft mb-3 <%= 'hidden' unless visible %>" role="alert"
+      data-notification-announcements-target="error">
+      <span><%= t("notifications.announcement_read_failed") %></span>
+      <button type="button" class="<%= compact ? 'btn btn-sm' : action_button_classes(:secondary) %>"
+        data-action="notification-announcements#retry"><%= t("notifications.retry") %></button>
+    </div>
+  ERB
+
   create_file "app/views/notifications/_popover.html.erb", <<~ERB, force: true
     <%= turbo_frame_tag "notifications_popover" do %>
-      <div class="flex items-center justify-between gap-3 border-b border-base-300 p-3">
+      <div class="border-b border-base-300 p-3">
         <h2 class="font-semibold leading-[1.5]"><%= t("notifications.title") %></h2>
-        <% if deliveries.any?(&:opened_at) || deliveries.any? { |delivery| !delivery.opened? } %>
-          <% if deliveries.any? { |delivery| !delivery.opened? } %>
-            <%= button_to t("notifications.open_all"), open_all_notifications_path, method: :patch,
-              params: { origin_frame: "notifications_popover" }, class: "btn btn-ghost btn-sm", form: { data: { turbo_stream: true } } %>
+      </div>
+      <% personal_label = t("notifications.tabs.personal") %>
+      <% announcements_label = t("notifications.tabs.announcements") %>
+      <% tabs = [
+        ApplicationHelper::Tab.new(
+          name: render("notifications/tab_name", label: personal_label,
+            status_id: "popover_personal_unread_status", unread: current_user.has_unread_personal_notifications?(cutoff:)),
+          path: popover_notifications_path(tab: "personal"), is_active: -> { tab == "personal" }
+        ),
+        ApplicationHelper::Tab.new(
+          name: render("notifications/tab_name", label: announcements_label,
+            status_id: "popover_announcements_unread_status", unread: current_user.has_unread_announcements?(cutoff:)),
+          path: popover_notifications_path(tab: "announcements"), is_active: -> { tab == "announcements" }
+        )
+      ] %>
+      <div class="p-3">
+        <%= with_tab(tabs:, size: :sm) do %>
+          <% if tab == "personal" %>
+            <% if deliveries.any? { |delivery| !delivery.opened? } %>
+              <div class="mb-2 flex justify-end">
+                <%= button_to t("notifications.open_all"), open_all_notifications_path, method: :patch,
+                  params: { origin_frame: "notifications_popover" }, class: "btn btn-ghost btn-sm",
+                  form: { data: { turbo_stream: true } } %>
+              </div>
+            <% end %>
+            <% if deliveries.empty? %>
+              <p class="text-sm text-neutral"><%= t("notifications.personal_empty") %></p>
+            <% else %>
+              <ul class="list max-h-96 overflow-y-auto">
+                <% deliveries.each do |delivery| %>
+                  <%= render "notifications/notification", delivery:,
+                    frame_prefix: "popover_personal_notification", compact: true %>
+                <% end %>
+              </ul>
+            <% end %>
+          <% else %>
+            <%= render "notifications/announcements_panel", announcements:, cutoff:, surface:,
+              compact: true, pagy: nil %>
           <% end %>
         <% end %>
       </div>
-      <% if deliveries.empty? %>
-        <p class="p-4 text-sm text-neutral"><%= t("notifications.empty") %></p>
-      <% else %>
-        <ul class="list max-h-96 overflow-y-auto">
-          <% deliveries.each do |delivery| %>
-            <%= render "notifications/notification", delivery:, frame_prefix: "popover_notification", compact: true %>
-          <% end %>
-        </ul>
-      <% end %>
       <div class="border-t border-base-300 p-2 text-center">
-        <%= link_to t("notifications.more"), notifications_path, class: "btn btn-ghost btn-sm", data: { turbo_frame: "_top" } %>
+        <%= link_to t("notifications.more"), notifications_path(tab:), class: "btn btn-ghost btn-sm", data: { turbo_frame: "_top" } %>
       </div>
     <% end %>
   ERB
 
   create_file "app/views/notifications/popover.html.erb", <<~ERB, force: true
-    <%= render "notifications/popover", deliveries: @deliveries %>
+    <%= render "notifications/popover", tab: @tab, surface: @surface, cutoff: @cutoff,
+      deliveries: @deliveries, announcements: @announcements %>
   ERB
 
   create_file "app/views/notifications/index.html.erb", <<~ERB, force: true
@@ -9010,17 +9266,39 @@ def configure_in_app_notifications
         <p class="text-sm text-neutral"><%= t("notifications.description") %></p>
       </header>
       <section class="card-rapid">
-        <div class="card-body">
+        <div class="card-body p-3">
           <%= turbo_frame_tag "notifications_history", data: { turbo_action: "advance" } do %>
-            <% if @deliveries.empty? %>
-              <p class="text-sm text-neutral"><%= t("notifications.empty") %></p>
-            <% else %>
-              <ul class="list">
-                <% @deliveries.each do |delivery| %>
-                  <%= render "notifications/notification", delivery:, frame_prefix: "history_notification", compact: false %>
+            <% personal_label = t("notifications.tabs.personal") %>
+            <% announcements_label = t("notifications.tabs.announcements") %>
+            <% tabs = [
+              ApplicationHelper::Tab.new(
+                name: render("notifications/tab_name", label: personal_label,
+                  status_id: "history_personal_unread_status", unread: current_user.has_unread_personal_notifications?(cutoff: @cutoff)),
+                path: notifications_path(tab: "personal"), is_active: -> { @tab == "personal" }
+              ),
+              ApplicationHelper::Tab.new(
+                name: render("notifications/tab_name", label: announcements_label,
+                  status_id: "history_announcements_unread_status", unread: current_user.has_unread_announcements?(cutoff: @cutoff)),
+                path: notifications_path(tab: "announcements"), is_active: -> { @tab == "announcements" }
+              )
+            ] %>
+            <%= with_tab(tabs:) do %>
+              <% if @tab == "personal" %>
+                <% if @deliveries.empty? %>
+                  <p class="text-sm text-neutral"><%= t("notifications.personal_empty") %></p>
+                <% else %>
+                  <ul class="list">
+                    <% @deliveries.each do |delivery| %>
+                      <%= render "notifications/notification", delivery:,
+                        frame_prefix: "history_personal_notification", compact: false %>
+                    <% end %>
+                  </ul>
+                  <%= pagination(@pagy, aria_label: t("notifications.personal_pagination")) %>
                 <% end %>
-              </ul>
-              <%= pagination(@pagy, aria_label: t("notifications.pagination")) %>
+              <% else %>
+                <%= render "notifications/announcements_panel", announcements: @announcements, cutoff: @cutoff,
+                  surface: @surface, compact: false, pagy: @pagy %>
+              <% end %>
             <% end %>
           <% end %>
         </div>
@@ -9031,7 +9309,11 @@ def configure_in_app_notifications
   create_file "app/views/notifications/open.turbo_stream.erb", <<~ERB, force: true
     <%= turbo_stream.replace "notification_unread_status", partial: "notifications/unread_status" %>
     <% frame_prefix = @origin_frame.delete_suffix("_\#{@delivery.notification_id}") %>
-    <% compact = frame_prefix == "popover_notification" %>
+    <% compact = frame_prefix == "popover_personal_notification" %>
+    <%= turbo_stream.replace @personal_status_target,
+      partial: "notifications/tab_unread_status",
+      locals: { status_id: @personal_status_target, unread: current_user.has_unread_personal_notifications?,
+        label: t("notifications.tabs.personal") } %>
     <%= turbo_stream.replace @origin_frame,
       partial: "notifications/notification",
       locals: { delivery: @delivery, frame_prefix:, compact: } %>
@@ -9041,7 +9323,23 @@ def configure_in_app_notifications
     <%= turbo_stream.replace "notification_unread_status", partial: "notifications/unread_status" %>
     <%= turbo_stream.replace @origin_frame,
       partial: "notifications/popover",
-      locals: { deliveries: @deliveries } %>
+      locals: { tab: @tab, surface: @surface, cutoff: @cutoff,
+        deliveries: @deliveries, announcements: nil } %>
+  ERB
+
+  create_file "app/views/notifications/read_announcements.turbo_stream.erb", <<~ERB, force: true
+    <% if @read_failed %>
+      <%= turbo_stream.replace "\#{@surface}_announcement_read_error",
+        partial: "notifications/announcement_read_error",
+        locals: { surface: @surface, compact: @surface == "popover", visible: true } %>
+    <% else %>
+      <%= turbo_stream.replace "notification_unread_status", partial: "notifications/unread_status" %>
+      <% status_target = "\#{@surface}_announcements_unread_status" %>
+      <%= turbo_stream.replace status_target,
+        partial: "notifications/tab_unread_status",
+        locals: { status_id: status_target, unread: current_user.has_unread_announcements?,
+          label: t("notifications.tabs.announcements") } %>
+    <% end %>
   ERB
 
   create_file "app/views/admin/notifications/index.html.erb", <<~ERB, force: true
@@ -9059,7 +9357,7 @@ def configure_in_app_notifications
                 <th><%= t("notifications.admin.state") %></th>
                 <th><%= t("notifications.admin.audience") %></th>
                 <th><%= t("notifications.admin.published_at") %></th>
-                <th><%= t("notifications.admin.deliveries") %></th>
+                <th><%= t("notifications.admin.recipients_count") %></th>
                 <th><span class="sr-only"><%= t("common.actions") %></span></th>
               </tr>
             </thead>
@@ -9072,7 +9370,7 @@ def configure_in_app_notifications
                   <td><span class="badge"><%= t("notifications.admin.states.\#{notification.published? ? 'published' : notification.draft? ? 'draft' : 'scheduled'}") %></span></td>
                   <td><%= t("notifications.audiences.\#{notification.audience}") %></td>
                   <td><%= l(notification.published_at, format: :short) %></td>
-                  <td><%= notification.notification_deliveries.size %></td>
+                  <td><%= notification.all_users? ? t("notifications.admin.all_users") : notification.notification_deliveries.size %></td>
                   <td>
                     <div class="flex flex-wrap justify-end gap-2">
                       <%= link_to t("common.show"), admin_notification_path(notification), class: action_button_classes(:secondary) %>
@@ -9108,7 +9406,9 @@ def configure_in_app_notifications
       <div class="grid gap-4 sm:grid-cols-2">
         <fieldset class="fieldset">
           <legend class="fieldset-legend"><%= form.label :audience, t("notifications.admin.audience") %></legend>
-          <%= form.select :audience, Notification.audiences.keys.map { |value| [t("notifications.audiences.\#{value}"), value] }, {}, class: "select w-full" %>
+          <%= form.select :audience, Notification.audiences.keys.map { |value| [t("notifications.audiences.\#{value}"), value] }, {},
+            class: "select w-full", data: { notification_recipients_target: "audience",
+              action: "change->notification-recipients#toggle" } %>
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend"><%= form.label :published_at, t("notifications.admin.published_at") %></legend>
@@ -9119,7 +9419,7 @@ def configure_in_app_notifications
         <%= form.checkbox :draft, class: "checkbox" %>
         <span><%= t("notifications.admin.draft") %></span>
       </label>
-      <fieldset class="fieldset">
+      <fieldset class="fieldset" data-notification-recipients-target="selector">
         <legend class="fieldset-legend"><%= t("notifications.admin.recipients") %></legend>
         <input type="search" class="input input-rapid w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
           data-notification-recipients-target="search" data-action="input->notification-recipients#search">
@@ -9155,7 +9455,7 @@ def configure_in_app_notifications
           <div><dt class="text-sm text-neutral"><%= t("notifications.admin.state") %></dt><dd><%= @notification.draft? ? t("notifications.admin.states.draft") : t("notifications.admin.states.published") %></dd></div>
           <div><dt class="text-sm text-neutral"><%= t("notifications.admin.audience") %></dt><dd><%= t("notifications.audiences.\#{@notification.audience}") %></dd></div>
           <div><dt class="text-sm text-neutral"><%= t("notifications.admin.published_at") %></dt><dd><%= l(@notification.published_at, format: :short) %></dd></div>
-          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.deliveries") %></dt><dd><%= @notification.notification_deliveries.count %></dd></div>
+          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.recipients_count") %></dt><dd><%= @notification.all_users? ? t("notifications.admin.all_users") : @notification.notification_deliveries.count %></dd></div>
         </dl>
         <div class="card-actions flex-wrap justify-end">
           <%= link_to t("common.back"), admin_notifications_path, class: action_button_classes(:quiet) %>
@@ -9190,13 +9490,16 @@ def configure_in_app_notifications
     ja: {
       "notifications" => {
         "title" => "通知履歴", "description" => "公開された通知を確認できます。", "open" => "既読にする", "open_all" => "すべて既読にする",
-        "more" => "もっと見る", "empty" => "通知はありません。", "pagination" => "通知履歴のページ", "unread_status" => "未読通知あり",
+        "more" => "もっと見る", "personal_empty" => "あなたへの通知はありません。", "announcements_empty" => "お知らせはありません。",
+        "personal_pagination" => "あなたへの通知のページ", "announcements_pagination" => "お知らせのページ", "unread_status" => "未読通知あり",
+        "tab_unread_status" => "%{tab}に未読あり", "announcement_read_failed" => "お知らせの既読状態を更新できませんでした。",
         "popover_label" => "通知", "loading" => "通知を読み込んでいます。", "load_failed" => "通知を読み込めませんでした。", "retry" => "再試行",
+        "tabs" => { "personal" => "あなたへの通知", "announcements" => "お知らせ" },
         "audiences" => { "all_users" => "全ユーザー", "selected_users" => "個別ユーザー" },
         "admin" => {
           "title" => "通知管理", "new" => "通知を作成", "edit" => "通知を編集", "show" => "通知詳細", "message" => "メッセージ",
           "message_hint" => "装飾を除いた本文を140文字以内で入力してください。",
-          "state" => "状態", "audience" => "通知先", "published_at" => "公開日時", "deliveries" => "配信件数", "draft" => "下書き",
+          "state" => "状態", "audience" => "通知先", "published_at" => "公開日時", "recipients_count" => "対象", "all_users" => "全ユーザー", "draft" => "下書き",
           "recipients" => "個別受信者", "recipient_search" => "表示名で検索", "recipient_search_hint" => "プロフィールの表示名を入力すると最大20件を表示します。", "selected_recipients" => "選択済み",
           "no_recipients" => "該当するユーザーはいません。", "add_recipient" => "追加", "remove_recipient" => "解除", "created" => "通知を作成しました。",
           "updated" => "通知を更新しました。", "destroyed" => "通知を削除しました。", "destroy_confirm" => "通知を削除しますか？", "pagination" => "通知管理のページ",
@@ -9207,13 +9510,16 @@ def configure_in_app_notifications
     en: {
       "notifications" => {
         "title" => "Notification history", "description" => "Review published notifications.", "open" => "Mark as read", "open_all" => "Mark all as read",
-        "more" => "View more", "empty" => "There are no notifications.", "pagination" => "Notification history pages", "unread_status" => "Unread notifications",
+        "more" => "View more", "personal_empty" => "There are no notifications for you.", "announcements_empty" => "There are no announcements.",
+        "personal_pagination" => "Personal notification pages", "announcements_pagination" => "Announcement pages", "unread_status" => "Unread notifications",
+        "tab_unread_status" => "%{tab} has unread items", "announcement_read_failed" => "The announcement read state could not be updated.",
         "popover_label" => "Notifications", "loading" => "Loading notifications.", "load_failed" => "Notifications could not be loaded.", "retry" => "Retry",
+        "tabs" => { "personal" => "For you", "announcements" => "Announcements" },
         "audiences" => { "all_users" => "All users", "selected_users" => "Selected users" },
         "admin" => {
           "title" => "Notifications", "new" => "New notification", "edit" => "Edit notification", "show" => "Notification details", "message" => "Message",
           "message_hint" => "Enter up to 140 plain-text characters, excluding formatting.",
-          "state" => "State", "audience" => "Audience", "published_at" => "Publish at", "deliveries" => "Deliveries", "draft" => "Draft",
+          "state" => "State", "audience" => "Audience", "published_at" => "Publish at", "recipients_count" => "Recipients", "all_users" => "All users", "draft" => "Draft",
           "recipients" => "Selected recipients", "recipient_search" => "Search by display name", "recipient_search_hint" => "Enter a profile display name to show up to 20 users.", "selected_recipients" => "Selected",
           "no_recipients" => "No users matched.", "add_recipient" => "Add", "remove_recipient" => "Remove", "created" => "Notification created.",
           "updated" => "Notification updated.", "destroyed" => "Notification deleted.", "destroy_confirm" => "Delete this notification?", "pagination" => "Notification administration pages",
@@ -9247,6 +9553,11 @@ def configure_in_app_notifications
       draft: true
       audience: selected_users
 
+    published_selected:
+      published_at: <%= 1.hour.ago %>
+      draft: false
+      audience: selected_users
+
     future:
       published_at: <%= 1.day.from_now %>
       draft: false
@@ -9265,6 +9576,11 @@ def configure_in_app_notifications
       name: message
       body: <p>Selected draft</p>
 
+    notification_published_selected_message:
+      record: published_selected (Notification)
+      name: message
+      body: <p>Published for selected users</p>
+
     notification_future_message:
       record: future (Notification)
       name: message
@@ -9273,12 +9589,12 @@ def configure_in_app_notifications
 
   create_file "test/fixtures/notification_deliveries.yml", <<~YAML, force: true
     one_published:
-      notification: published_all
+      notification: published_selected
       user: one
       opened_at:
 
     two_published:
-      notification: published_all
+      notification: published_selected
       user: two
       opened_at:
   YAML
@@ -9324,22 +9640,33 @@ def configure_in_app_notifications
         assert_equal retained.opened_at, retained.reload.opened_at
       end
 
-      test "all users create no draft rows and synchronize only on publish and republish" do
+      test "published selected users require at least one existing recipient" do
+        notification = Notification.new(message: "Selected", published_at: 1.hour.from_now,
+          draft: false, audience: :selected_users)
+
+        assert_raises(ActiveRecord::RecordInvalid) do
+          notification.save_with_delivery_synchronization!
+        end
+        assert_raises(ActiveRecord::RecordInvalid) do
+          notification.save_with_delivery_synchronization!(recipient_ids: [User.maximum(:id).to_i + 1])
+        end
+        assert notification.save_with_delivery_synchronization!(recipient_ids: [users(:one).id])
+      end
+
+      test "all users never create delivery rows and switching to all users deletes existing rows" do
         notification = Notification.new(message: "All", published_at: Time.current, draft: true, audience: :all_users)
         notification.save_with_delivery_synchronization!
         assert_empty notification.notification_deliveries
 
         notification.draft = false
         notification.save_with_delivery_synchronization!
-        assert_equal User.count, notification.notification_deliveries.count
-        new_user = User.create!
-        notification.save_with_delivery_synchronization!
-        assert_not notification.notification_deliveries.exists?(user: new_user)
+        assert_empty notification.notification_deliveries
 
-        notification.update!(draft: true)
-        notification.draft = false
-        notification.save_with_delivery_synchronization!
-        assert notification.notification_deliveries.exists?(user: new_user)
+        selected = notifications(:published_selected)
+        assert_not_empty selected.notification_deliveries
+        selected.audience = :all_users
+        selected.save_with_delivery_synchronization!
+        assert_empty selected.notification_deliveries
       end
     end
   RUBY
@@ -9360,6 +9687,13 @@ def configure_in_app_notifications
         end
         assert_equal opened_at, delivery.reload.opened_at
       end
+
+      test "rejects delivery rows for all-user announcements" do
+        delivery = NotificationDelivery.new(notification: notifications(:published_all), user: users(:one))
+
+        assert_not delivery.valid?
+        assert delivery.errors.added?(:notification, :invalid)
+      end
     end
   RUBY
 
@@ -9367,12 +9701,102 @@ def configure_in_app_notifications
     require "test_helper"
 
     class NotificationDeliverySynchronizationTest < ActiveSupport::TestCase
-      test "uses a bulk insert protected by the database unique index" do
-        notification = Notification.create!(message: "Bulk", published_at: Time.current, draft: false, audience: :all_users)
-        NotificationDeliverySynchronization.call(notification:)
+      test "uses a bulk insert protected by the database unique index for selected users" do
+        notification = notifications(:selected_draft)
+        recipient_ids = [users(:one).id, users(:two).id]
+        NotificationDeliverySynchronization.call(notification:, recipient_ids:)
         assert_no_difference("NotificationDelivery.count") do
-          NotificationDeliverySynchronization.call(notification:)
+          NotificationDeliverySynchronization.call(notification:, recipient_ids:)
         end
+      end
+    end
+  RUBY
+
+  create_file "test/models/user_notification_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class UserNotificationTest < ActiveSupport::TestCase
+      test "initializes the announcement cursor to the exact creation timestamp" do
+        user = User.create!
+
+        assert_equal user.created_at, user.global_notifications_read_at
+        assert_equal user.created_at.to_fs(:usec), user.global_notifications_read_at.to_fs(:usec)
+      end
+
+      test "shows old announcements to later users without marking them unread" do
+        announcement = notifications(:published_all)
+        user = travel_to(announcement.published_at + 1.hour) { User.create! }
+
+        assert_includes Notification.published.announcements, announcement
+        assert_not user.has_unread_announcements?
+      end
+
+      test "distinguishes personal and announcement unread state" do
+        user = users(:one)
+        delivery = notification_deliveries(:one_published)
+        user.update!(global_notifications_read_at: Time.current)
+
+        assert user.has_unread_personal_notifications?
+        assert_not user.has_unread_announcements?
+
+        announcement = Notification.create!(message: "New announcement", published_at: 1.second.from_now,
+          draft: false, audience: :all_users)
+        travel 2.seconds do
+          assert user.has_unread_personal_notifications?
+          assert user.has_unread_announcements?
+          assert user.has_unread_notifications?
+
+          delivery.open!
+          assert_not user.has_unread_personal_notifications?
+          assert user.has_unread_announcements?
+
+          user.mark_announcements_read_through!(cutoff: Time.current)
+          assert_not user.has_unread_notifications?
+        end
+        assert_empty announcement.notification_deliveries
+      end
+
+      test "backdated publication and message edits do not create announcement unread state" do
+        user = users(:one)
+        cursor = Time.current
+        user.update!(global_notifications_read_at: cursor)
+        notification = Notification.create!(message: "Backdated", published_at: 1.day.ago,
+          draft: false, audience: :all_users)
+
+        assert_not user.has_unread_announcements?
+        notification.update!(message: "Edited without changing publication time")
+        assert_not user.has_unread_announcements?
+
+        notification.update!(draft: true)
+        notification.update!(draft: false)
+        assert_not user.has_unread_announcements?
+
+        notification.audience = :selected_users
+        notification.save_with_delivery_synchronization!(recipient_ids: [user.id])
+        notification.audience = :all_users
+        notification.save_with_delivery_synchronization!
+        assert_empty notification.notification_deliveries
+        assert_not user.has_unread_announcements?
+
+        notification.update!(published_at: cursor + 1.second)
+        travel 2.seconds do
+          assert user.has_unread_announcements?
+        end
+      end
+
+      test "moves the announcement cursor monotonically and reloads a newer concurrent value" do
+        user = users(:one)
+        older = 2.minutes.ago
+        newer = 1.minute.ago
+        user.update!(global_notifications_read_at: 3.minutes.ago)
+        newer_request = User.find(user.id)
+        stale_older_request = User.find(user.id)
+
+        newer_request.mark_announcements_read_through!(cutoff: newer)
+        assert_equal newer.to_fs(:usec), newer_request.global_notifications_read_at.to_fs(:usec)
+
+        stale_older_request.mark_announcements_read_through!(cutoff: older)
+        assert_equal newer.to_fs(:usec), stale_older_request.global_notifications_read_at.to_fs(:usec)
       end
     end
   RUBY
@@ -9401,30 +9825,73 @@ def configure_in_app_notifications
         sign_in @user
       end
 
-      test "lists only the current user's published deliveries" do
+      test "defaults to personal deliveries and separates announcements" do
         get notifications_url
         assert_response :success
         assert_select "turbo-frame#notifications_history" do
-          published_message = Regexp.escape(notifications(:published_all).message_plain_text)
-          future_message = Regexp.escape(notifications(:future).message_plain_text)
-          assert_select "li", text: /\#{published_message}/, count: 1
-          assert_select "li", text: /\#{future_message}/, count: 0
+          assert_select "a.tab-active", text: /\#{Regexp.escape(I18n.t('notifications.tabs.personal'))}/
+          assert_select "li", text: /\#{Regexp.escape(notifications(:published_selected).message_plain_text)}/, count: 1
+          assert_select "li", text: /\#{Regexp.escape(notifications(:published_all).message_plain_text)}/, count: 0
+        end
+
+        get notifications_url(tab: "announcements")
+        assert_response :success
+        assert_select "turbo-frame#notifications_history" do
+          assert_select "a.tab-active", text: /\#{Regexp.escape(I18n.t('notifications.tabs.announcements'))}/
+          assert_select "li", text: /\#{Regexp.escape(notifications(:published_all).message_plain_text)}/, count: 1
+          assert_select "li", text: /\#{Regexp.escape(notifications(:future).message_plain_text)}/, count: 0
         end
       end
 
-      test "opens only an owned published delivery and replaces two regions" do
+      test "GET requests do not move the announcement cursor and invalid tabs are rejected" do
+        assert_no_changes -> { @user.reload.global_notifications_read_at } do
+          get notifications_url(tab: "announcements")
+          assert_response :success
+          get popover_notifications_url(tab: "announcements")
+          assert_response :success
+        end
+
+        get notifications_url(tab: "unknown")
+        assert_response :bad_request
+        get popover_notifications_url(tab: "unknown")
+        assert_response :bad_request
+      end
+
+      test "renders personal, announcement, combined, and empty unread indicators" do
+        delivery = notification_deliveries(:one_published)
+        states = [
+          { personal: true, announcements: true },
+          { personal: true, announcements: false },
+          { personal: false, announcements: true },
+          { personal: false, announcements: false }
+        ]
+
+        states.each do |state|
+          delivery.update!(opened_at: state.fetch(:personal) ? nil : Time.current)
+          @user.update!(global_notifications_read_at: state.fetch(:announcements) ? 2.days.ago : Time.current)
+          get notifications_url
+          assert_response :success
+          assert_select "#history_personal_unread_status .status", count: (state.fetch(:personal) ? 1 : 0)
+          assert_select "#history_announcements_unread_status .status", count: (state.fetch(:announcements) ? 1 : 0)
+          assert_select "#notification_unread_status .status",
+            count: (state.fetch(:personal) || state.fetch(:announcements) ? 1 : 0)
+        end
+      end
+
+      test "opens only an owned published delivery and refreshes unread regions" do
         delivery = notification_deliveries(:one_published)
         patch open_notification_url(delivery.notification),
-          params: { origin_frame: "popover_notification_\#{delivery.notification_id}" },
+          params: { origin_frame: "popover_personal_notification_\#{delivery.notification_id}" },
           as: :turbo_stream
         assert_response :success
         assert delivery.reload.opened?
-        assert_select 'turbo-stream[action="replace"]', count: 2
+        assert_select 'turbo-stream[action="replace"]', count: 3
         assert_select 'turbo-stream[target="notification_unread_status"]', count: 1
+        assert_select 'turbo-stream[target="popover_personal_unread_status"]', count: 1
 
         delivery.update!(user: User.create!, opened_at: nil)
         patch open_notification_url(delivery.notification),
-          params: { origin_frame: "popover_notification_\#{delivery.notification_id}" },
+          params: { origin_frame: "popover_personal_notification_\#{delivery.notification_id}" },
           as: :turbo_stream
         assert_response :not_found
       end
@@ -9432,7 +9899,10 @@ def configure_in_app_notifications
       test "open all updates only the current user's published unread rows" do
         owned = notification_deliveries(:one_published)
         other = notification_deliveries(:two_published)
-        future_delivery = NotificationDelivery.create!(notification: notifications(:future), user: @user)
+        future_notification = Notification.new(message: "Future personal", published_at: 1.day.from_now,
+          draft: false, audience: :selected_users)
+        future_notification.save_with_delivery_synchronization!(recipient_ids: [@user.id])
+        future_delivery = future_notification.notification_deliveries.sole
         patch open_all_notifications_url,
           params: { origin_frame: "notifications_popover" }, as: :turbo_stream
         assert_response :success
@@ -9440,6 +9910,72 @@ def configure_in_app_notifications
         assert_not other.reload.opened?
         assert_not future_delivery.reload.opened?
         assert_select 'turbo-stream[action="replace"]', count: 2
+      end
+
+      test "marks only announcements through the displayed cutoff" do
+        personal = notification_deliveries(:one_published)
+        cutoff = 1.minute.ago
+        @user.update!(global_notifications_read_at: 2.days.ago)
+        newer = Notification.create!(message: "After display", published_at: 30.seconds.ago,
+          draft: false, audience: :all_users)
+
+        patch read_announcements_notifications_url,
+          params: { cutoff: cutoff.iso8601(6), surface: "history" }, as: :turbo_stream
+
+        assert_response :success
+        assert_equal cutoff.to_fs(:usec), @user.reload.global_notifications_read_at.to_fs(:usec)
+        assert @user.has_unread_announcements?
+        assert_not personal.reload.opened?
+        assert_empty newer.notification_deliveries
+        assert_select 'turbo-stream[target="notification_unread_status"]', count: 1
+        assert_select 'turbo-stream[target="history_announcements_unread_status"]', count: 1
+      end
+
+      test "keeps unread indicators and returns a retryable stream when the cursor update fails" do
+        connection = ActiveRecord::Base.connection
+        connection.execute(<<~SQL.squish)
+          CREATE TRIGGER reject_announcement_cursor_update
+          BEFORE UPDATE OF global_notifications_read_at ON users
+          BEGIN
+            SELECT RAISE(ABORT, 'cursor update failed');
+          END;
+        SQL
+
+        assert_no_changes -> { @user.reload.global_notifications_read_at } do
+          patch read_announcements_notifications_url,
+            params: { cutoff: Time.current.iso8601(6), surface: "history" }, as: :turbo_stream
+          assert_response :unprocessable_content
+        end
+        assert_select 'turbo-stream[action="replace"]', count: 1
+        assert_select 'turbo-stream[target="history_announcement_read_error"]', count: 1
+        assert_select 'turbo-stream[target="notification_unread_status"]', count: 0
+        assert_select 'turbo-stream[target="history_announcements_unread_status"]', count: 0
+      ensure
+        connection&.execute("DROP TRIGGER IF EXISTS reject_announcement_cursor_update")
+      end
+
+      test "rejects a malformed announcement cutoff without changing the cursor" do
+        assert_no_changes -> { @user.reload.global_notifications_read_at } do
+          patch read_announcements_notifications_url,
+            params: { cutoff: "not-a-time", surface: "popover" }, as: :turbo_stream
+          assert_response :bad_request
+        end
+      end
+
+      test "rejects a future announcement cutoff without changing the cursor" do
+        assert_no_changes -> { @user.reload.global_notifications_read_at } do
+          patch read_announcements_notifications_url,
+            params: { cutoff: 1.hour.from_now.iso8601(6), surface: "popover" }, as: :turbo_stream
+          assert_response :bad_request
+        end
+      end
+
+      test "rejects an unknown announcement surface without changing the cursor" do
+        assert_no_changes -> { @user.reload.global_notifications_read_at } do
+          patch read_announcements_notifications_url,
+            params: { cutoff: Time.current.iso8601(6), surface: "unknown" }, as: :turbo_stream
+          assert_response :bad_request
+        end
       end
 
       test "rejects invalid origin frames before changing opened state" do
@@ -9494,10 +10030,42 @@ def configure_in_app_notifications
         rich_text = ActionText::RichText.find_by!(record: notification, name: "message")
 
         assert_difference("NotificationDelivery.count", -1) do
-          delete admin_notification_url(notification)
+          patch admin_notification_url(notification), params: {
+            notification: {
+              message: "<p>Announcement</p>",
+              audience: "all_users",
+              published_at: Time.current,
+              draft: "0",
+              recipient_ids: [users(:two).id]
+            }
+          }
         end
+        assert_redirected_to admin_notification_url(notification)
+        assert notification.reload.all_users?
+        assert_empty notification.notification_deliveries
+
+        delete admin_notification_url(notification)
         assert_not Notification.exists?(notification.id)
         assert_not ActionText::RichText.exists?(rich_text.id)
+      end
+
+      test "rejects a published selected notification without recipients" do
+        admin = users(:one)
+        admin.grant_role!(:admin)
+        sign_in admin
+
+        assert_no_difference("Notification.count") do
+          post admin_notifications_url, params: {
+            notification: {
+              message: "<p>Missing recipient</p>",
+              audience: "selected_users",
+              published_at: 1.hour.from_now,
+              draft: "0",
+              recipient_ids: []
+            }
+          }
+        end
+        assert_response :unprocessable_content
       end
     end
   RUBY
@@ -9544,13 +10112,14 @@ def configure_in_app_notifications
       end
 
       test "loads the popover on first open and keeps it open after marking read" do
+        @user.update!(global_notifications_read_at: Time.current)
         visit account_path
         assert_no_match(%r{/notifications/popover}, resource_names.join("\n"))
         assert_selector "#notifications_popover .skeleton", count: 3, visible: :all
 
         find('button[popovertarget="notifications-popover"]').click
         assert_selector "#notifications-popover:popover-open"
-        assert_text notifications(:published_all).message_plain_text
+        assert_text notifications(:published_selected).message_plain_text
         assert_match(%r{/notifications/popover}, resource_names.join("\n"))
 
         within("#notifications-popover") { click_on I18n.t("notifications.open"), match: :first }
@@ -9558,9 +10127,62 @@ def configure_in_app_notifications
         assert_no_selector "#notification_unread_status .status"
       end
 
+      test "shows announcements without personal read controls and marks the displayed cutoff" do
+        notification_deliveries(:one_published).open!
+        @user.update!(global_notifications_read_at: 2.days.ago)
+        visit account_path
+
+        find('button[popovertarget="notifications-popover"]').click
+        within("#notifications-popover") { click_link I18n.t("notifications.tabs.announcements") }
+        assert_text notifications(:published_all).message_plain_text
+        within("#notifications-popover") do
+          assert_no_button I18n.t("notifications.open")
+          assert_no_selector "#popover_announcements_unread_status .status"
+          assert_link I18n.t("notifications.more"), href: notifications_path(tab: "announcements")
+        end
+        assert_no_selector "#notification_unread_status .status"
+
+        popover_requests = resource_names.count { |name| name.match?(%r{/notifications/popover}) }
+        find('button[popovertarget="notifications-popover"]').click
+        find('button[popovertarget="notifications-popover"]').click
+        assert_selector "#notifications-popover:popover-open a.tab-active",
+          text: /\#{Regexp.escape(I18n.t('notifications.tabs.personal'))}/
+        assert_operator resource_names.count { |name| name.match?(%r{/notifications/popover}) }, :>, popover_requests
+      end
+
+      test "keeps unread state on a failed announcement update and retries in place" do
+        notification_deliveries(:one_published).open!
+        @user.update!(global_notifications_read_at: 2.days.ago)
+        original_cursor = @user.global_notifications_read_at
+        cdp = page.driver.with_playwright_page do |playwright_page|
+          playwright_page.context.new_cdp_session(playwright_page)
+        end
+        cdp.send_message("Network.enable")
+        cdp.send_message("Network.setBlockedURLs", params: { urls: ["*notifications/global-read*"] })
+
+        visit account_path
+        find('button[popovertarget="notifications-popover"]').click
+        within("#notifications-popover") { click_link I18n.t("notifications.tabs.announcements") }
+
+        assert_selector "#popover_announcement_read_error.alert.alert-error.alert-soft",
+          text: I18n.t("notifications.announcement_read_failed")
+        assert_equal original_cursor, @user.reload.global_notifications_read_at
+        assert_selector "#notification_unread_status .status"
+        assert_selector "#popover_announcements_unread_status .status"
+
+        cdp.send_message("Network.setBlockedURLs", params: { urls: [] })
+        within("#popover_announcement_read_error") { click_button I18n.t("notifications.retry") }
+        assert_no_selector "#popover_announcement_read_error", visible: :visible
+        assert_no_selector "#notification_unread_status .status"
+        assert_no_selector "#popover_announcements_unread_status .status"
+      ensure
+        cdp&.send_message("Network.setBlockedURLs", params: { urls: [] })
+        cdp&.detach
+      end
+
       test "advances notification history pagination and searches recipients in its frame" do
         30.times do |index|
-          notification = Notification.create!(message: "History \#{index}", published_at: index.minutes.ago,
+          notification = Notification.new(message: "History \#{index}", published_at: index.minutes.ago,
             draft: false, audience: :selected_users)
           notification.save_with_delivery_synchronization!(recipient_ids: [@user.id])
         end
@@ -9570,9 +10192,23 @@ def configure_in_app_notifications
         end
         assert_current_path notifications_path(page: 2), ignore_query: false
 
+        30.times do |index|
+          Notification.create!(message: "Announcement history \#{index}", published_at: index.minutes.ago,
+            draft: false, audience: :all_users)
+        end
+        visit notifications_path(tab: "announcements")
+        within("turbo-frame#notifications_history") do
+          find("a[aria-label='\#{I18n.t('common.next')}']").click
+        end
+        assert_current_path %r{^/notifications[?](?:page=2&tab=announcements|tab=announcements&page=2)$},
+          ignore_query: false
+
         @user.grant_role!(:admin)
         visit new_admin_notification_path
         assert_selector "lexxy-editor"
+        assert_selector '[data-notification-recipients-target="selector"][hidden]', visible: :all
+        select I18n.t("notifications.audiences.selected_users"), from: I18n.t("notifications.admin.audience")
+        assert_no_selector '[data-notification-recipients-target="selector"][hidden]', visible: :all
         display_name = T.must(@user.profile).display_name
         fill_in I18n.t("notifications.admin.recipient_search"), with: display_name
         assert_text display_name
@@ -14276,9 +14912,27 @@ def configure_evidence_capture
             notification.save_with_delivery_synchronization!(recipient_ids: [@user.id])
             @evidence_notification = notification if index.zero?
           end
+          3.times do |index|
+            message = "Evidence announcement #{index + 1}"
+            rich_text = ActionText::RichText.find_by(
+              record_type: "Notification",
+              name: "message",
+              body: message
+            )
+            announcement = rich_text ? Notification.find(rich_text.record_id) : Notification.new(message:)
+            announcement.assign_attributes(
+              published_at: (index + 1).minutes.ago,
+              draft: false,
+              audience: :all_users
+            )
+            announcement.save_with_delivery_synchronization!
+            raise "全体通知に個別配信行が作成されました" if announcement.notification_deliveries.exists?
+            @evidence_announcement = announcement if index.zero?
+          end
           @user.notification_deliveries.find_each do |delivery|
             delivery.update!(opened_at: nil)
           end
+          @user.update!(global_notifications_read_at: 10.minutes.ago)
         end
 
         def prepare_job_operations_data
@@ -14478,7 +15132,15 @@ def configure_evidence_capture
           assert_selector "#notifications-popover:popover-open"
           assert_text "Evidence notification 1"
           assert_selector "#notification_unread_status .status", count: 1
+          assert_selector "#popover_personal_unread_status .status", count: 1
+          assert_selector "#popover_announcements_unread_status .status", count: 1
           capture_current_page("notifications-popover-unread", "通知popover（未読）", viewport)
+
+          within("#notifications-popover") { click_link translate("notifications.tabs.announcements") }
+          assert_text "Evidence announcement 1"
+          assert_no_selector "#popover_announcements_unread_status .status"
+          within("#notifications-popover") { assert_no_button translate("notifications.open") }
+          capture_current_page("notifications-popover-announcements", "通知popover（お知らせ）", viewport)
 
           capture_page(
             "notifications-history",
@@ -14488,6 +15150,16 @@ def configure_evidence_capture
             viewport
           )
           assert_button translate("notifications.open"), minimum: 1
+
+          capture_page(
+            "notifications-announcements",
+            "通知履歴（お知らせ）",
+            notifications_path(tab: "announcements"),
+            translate("notifications.title"),
+            viewport
+          )
+          assert_text "Evidence announcement 1"
+          assert_no_button translate("notifications.open")
 
           visit root_path
           find('button[popovertarget="notifications-popover"]').click
@@ -14518,6 +15190,7 @@ def configure_evidence_capture
           visit new_admin_notification_path
           assert_selector "h1", text: translate("notifications.admin.new"), count: 1
           assert_selector "lexxy-editor"
+          select translate("notifications.audiences.selected_users"), from: translate("notifications.admin.audience")
           display_name = T.must(@regular_user.profile).display_name
           fill_in translate("notifications.admin.recipient_search"), with: display_name
           assert_text display_name
@@ -14536,32 +15209,71 @@ def configure_evidence_capture
             find('button[popovertarget="notifications-popover"]').click
             assert_selector "#notifications-popover:popover-open"
             assert_text "Evidence notification 1"
-            geometry = page.driver.with_playwright_page do |playwright_page|
-              playwright_page.evaluate(<<~JAVASCRIPT)
-                () => {
-                  const header = document.querySelector("header").getBoundingClientRect()
-                  const popover = document.querySelector("#notifications-popover").getBoundingClientRect()
-                  return {
-                    documentWidth: document.documentElement.scrollWidth,
-                    viewportWidth: window.innerWidth,
-                    headerLeft: header.left,
-                    headerRight: header.right,
-                    popoverLeft: popover.left,
-                    popoverRight: popover.right
-                  }
-                }
-              JAVASCRIPT
-            end
-            assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
-              "Notification header overflow at #{width}px"
-            assert_operator geometry.fetch("headerLeft"), :>=, 0
-            assert_operator geometry.fetch("headerRight"), :<=, geometry.fetch("viewportWidth")
-            assert_operator geometry.fetch("popoverLeft"), :>=, 0
-            assert_operator geometry.fetch("popoverRight"), :<=, geometry.fetch("viewportWidth")
+            assert_notification_tab_geometry("#notifications-popover", width)
+
+            within("#notifications-popover") { click_link translate("notifications.tabs.announcements") }
+            assert_text "Evidence announcement 1"
+            assert_notification_tab_geometry("#notifications-popover", width)
+
+            visit notifications_path
+            assert_text "Evidence notification 1"
+            assert_notification_tab_geometry("#notifications_history", width)
+
+            visit notifications_path(tab: "announcements")
+            assert_text "Evidence announcement 1"
+            assert_notification_tab_geometry("#notifications_history", width)
           end
         ensure
+          @user&.update!(global_notifications_read_at: 10.minutes.ago)
           desktop = VIEWPORTS.fetch("desktop")
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
+        def assert_notification_tab_geometry(surface_selector, width)
+          geometry = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const surface = document.querySelector(#{surface_selector.to_json}).getBoundingClientRect()
+                const tablist = document.querySelector(#{(surface_selector + " [role='tablist']").to_json})
+                const tabs = Array.from(tablist.querySelectorAll(":scope > [role='tab']"))
+                  .map((tab) => tab.getBoundingClientRect())
+                const activeElement = tablist.querySelector(":scope > .tab-active")
+                const activeTab = activeElement.getBoundingClientRect()
+                const tabpanelElement = tablist.querySelector(":scope > [role='tabpanel']")
+                const tabpanel = tabpanelElement.getBoundingClientRect()
+                const zIndex = (element) => {
+                  const value = Number.parseInt(getComputedStyle(element).zIndex, 10)
+                  return Number.isNaN(value) ? 0 : value
+                }
+                return {
+                  documentWidth: document.documentElement.scrollWidth,
+                  viewportWidth: window.innerWidth,
+                  surfaceLeft: surface.left,
+                  surfaceRight: surface.right,
+                  tabTopDelta: Math.max(...tabs.map((tab) => tab.top)) - Math.min(...tabs.map((tab) => tab.top)),
+                  tabConnectionDelta: Math.abs(activeTab.bottom - tabpanel.top),
+                  activeTabCoversSharedEdge: document.elementFromPoint(
+                    activeTab.left + activeTab.width / 2,
+                    tabpanel.top + 0.5
+                  ) === activeElement,
+                  activeZIndex: zIndex(activeElement),
+                  tabpanelZIndex: zIndex(tabpanelElement)
+                }
+              }
+            JAVASCRIPT
+          end
+          assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
+            "Notification surface overflow at #{width}px: #{surface_selector}"
+          assert_operator geometry.fetch("surfaceLeft"), :>=, 0
+          assert_operator geometry.fetch("surfaceRight"), :<=, geometry.fetch("viewportWidth")
+          assert_operator geometry.fetch("tabTopDelta"), :<=, 1,
+            "Notification tabs wrapped at #{width}px"
+          assert_operator geometry.fetch("tabConnectionDelta"), :<=, 2,
+            "Active notification tab is detached from its panel at #{width}px"
+          assert geometry.fetch("activeTabCoversSharedEdge"),
+            "Active notification tab does not cover the shared edge at #{width}px: #{surface_selector}"
+          assert_operator geometry.fetch("activeZIndex"), :>, geometry.fetch("tabpanelZIndex"),
+            "Active notification tab does not cover the shared border at #{width}px: #{surface_selector}"
         end
 
         def assert_account_menu_visual_state

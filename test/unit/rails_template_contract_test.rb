@@ -501,8 +501,8 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes notification_item, "local_assigns.fetch(:compact, false)"
     assert_includes notification_item,
       'class: (compact ? "btn btn-ghost btn-sm" : action_button_classes(:quiet))'
-    assert_includes notification_popover, 'frame_prefix: "popover_notification", compact: true'
-    assert_includes notification_history, 'frame_prefix: "history_notification", compact: false'
+    assert_includes notification_popover, 'frame_prefix: "popover_personal_notification", compact: true'
+    assert_includes notification_history, 'frame_prefix: "history_personal_notification", compact: false'
     assert_includes notification_open, "locals: { delivery: @delivery, frame_prefix:, compact: }"
 
     [passkey_new, admin_page_edit, admin_faq_form, footer_setting, profile_form, api_form,
@@ -973,37 +973,88 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'set_evidence_web_push_mode("unsupported")'
   end
 
-  def test_generates_always_on_in_app_notifications_with_transactional_delivery_sync
+  def test_generates_always_on_in_app_notifications_with_global_cursor_and_personal_delivery_sync
     notifications = source_between("def configure_in_app_notifications", "def configure_default_views")
     model = generated_file_source("app/models/notification.rb")
+    delivery_model = generated_file_source("app/models/notification_delivery.rb")
     header = generated_file_source("app/views/shared/_header.html.erb")
     unread_status = generated_file_source("app/views/notifications/_unread_status.html.erb")
+    tab_unread_status = generated_file_source("app/views/notifications/_tab_unread_status.html.erb")
+    announcement_item = generated_file_source("app/views/notifications/_announcement.html.erb")
+    announcements_panel = generated_file_source("app/views/notifications/_announcements_panel.html.erb")
+    announcement_read_error = generated_file_source("app/views/notifications/_announcement_read_error.html.erb")
     popover = generated_file_source("app/views/notifications/_popover.html.erb")
     history = generated_file_source("app/views/notifications/index.html.erb")
+    read_announcements = generated_file_source("app/views/notifications/read_announcements.turbo_stream.erb")
     admin_index = generated_file_source("app/views/admin/notifications/index.html.erb")
     admin_form = generated_file_source("app/views/admin/notifications/_form.html.erb")
     recipient_controller = generated_file_source("app/javascript/controllers/notification_recipients_controller.js")
+    popover_controller = generated_file_source("app/javascript/controllers/notification_popover_controller.js")
+    announcements_controller = generated_file_source("app/javascript/controllers/notification_announcements_controller.js")
     notification_item = generated_file_source("app/views/notifications/_notification.html.erb")
     controller = generated_file_source("app/controllers/notifications_controller.rb")
     service = generated_file_source("app/services/notification_delivery_synchronization.rb")
     recipients = generated_file_source("app/controllers/admin/notification_recipients_controller.rb")
     recipient_results = generated_file_source("app/views/admin/notification_recipients/index.html.erb")
+    notification_test = generated_file_source("test/models/notification_test.rb")
+    delivery_test = generated_file_source("test/models/notification_delivery_test.rb")
+    user_notification_test = generated_file_source("test/models/user_notification_test.rb")
+    controller_test = generated_file_source("test/controllers/notifications_controller_test.rb")
+    admin_controller_test = generated_file_source("test/controllers/admin/notifications_controller_test.rb")
+    system_test = generated_file_source("test/system/notifications_test.rb")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
 
     assert_includes notifications, 'add_check_constraint :notifications'
     refute_includes notifications, "t.string :message"
+    assert_includes notifications, 'add_index :notifications, [:audience, :draft, :published_at, :id]'
+    assert_includes notifications, 'generate "migration", "AddGlobalNotificationsReadAtToUsers"'
+    assert_includes notifications, 'add_column :users, :global_notifications_read_at, :datetime, null: false'
+    refute_match(/add_column :users, :global_notifications_read_at.*default:/, notifications)
     assert_includes model, "has_rich_text :message, store_if_blank: false"
     assert_includes model, "message.to_plain_text.strip"
     assert_includes model, "errors.add(:message, :too_long, count: 140)"
+    assert_includes model, 'scope :published, ->(cutoff = Time.current)'
+    assert_includes model, 'where(draft: false).where(published_at: ..cutoff)'
+    assert_includes model, 'scope :announcements, -> { where(audience: "all_users") }'
+    assert_includes model, 'validate :published_selected_notification_has_recipient'
     assert_includes notifications, 'add_index :notification_deliveries, [:notification_id, :user_id], unique: true'
     assert_includes notifications, 'foreign_key: { on_delete: :cascade }'
-    assert_includes notifications, 'scope :published, -> { where(draft: false).where(published_at: ..Time.current) }'
+    assert_includes delivery_model, 'validate :notification_targets_selected_users'
+    assert_includes delivery_model, 'errors.add(:notification, :invalid) unless notification&.selected_users?'
+    assert_includes delivery_model, '.where(notification: { published_at: ..cutoff })'
     assert_includes notifications, 'save_with_delivery_synchronization!'
     assert_includes service, 'NotificationDelivery.insert_all(rows, unique_by:'
     assert_includes service, 'notification.notification_deliveries.where.not(user_id: recipient_ids).delete_all'
+    assert_includes model, 'after_update :delete_deliveries_for_announcement, if: :changed_to_announcement?'
+    assert_includes model, 'saved_change_to_audience? && all_users?'
+    assert_includes model, 'notification_deliveries.delete_all'
+    refute_includes service, "User.ids"
+    refute_includes service, "all_users"
+    assert_includes notifications, 'before_create :initialize_global_notifications_read_at'
+    assert_match(/inject_into_class "app\/models\/user\.rb", "User", <<~RUBY\n\s+extend T::Sig/, notifications)
+    refute_includes notifications, 'self.created_at ||= Time.current'
+    assert_includes notifications, 'self.global_notifications_read_at = T.must(created_at)'
+    assert_includes notifications, 'def has_unread_personal_notifications?(cutoff: Time.current)'
+    assert_includes notifications, 'def has_unread_announcements?(cutoff: Time.current)'
+    assert_includes notifications, 'def has_unread_notifications?(cutoff: Time.current)'
+    assert_includes notifications, '.exists?(["published_at > ?", global_notifications_read_at])'
+    assert_includes notifications, 'has_unread_personal_notifications?(cutoff:) || has_unread_announcements?(cutoff:)'
+    assert_includes notifications, 'def mark_announcements_read_through!(cutoff:)'
+    assert_includes notifications, '.where(id:, global_notifications_read_at: ...cutoff)'
+    assert_includes notifications, '.update_all(global_notifications_read_at: cutoff, updated_at: now)'
+    assert_match(/def mark_announcements_read_through!\(cutoff:\).*?reload/m, notifications)
     assert_includes controller, 'find_by!(notification_id: params.expect(:id))'
     assert_includes controller, 'deliveries_scope.where(opened_at: nil).update_all'
     assert_includes notifications, 'patch "open-all", action: :open_all'
+    assert_includes notifications, 'patch "global-read", action: :read_announcements, as: :read_announcements'
+    assert_includes controller, 'TABS = %w[personal announcements].freeze'
+    assert_includes controller, '@tab = params.fetch(:tab, "personal")'
+    assert_includes controller, 'raise ActionController::BadRequest unless TABS.include?(@tab)'
+    assert_includes controller, 'Notification.published(cutoff).announcements.ordered.with_rich_text_message_and_embeds'
+    assert_includes controller, 'raise ActionController::BadRequest if @cutoff > Time.current'
+    assert_includes controller, 'T.must(current_user).mark_announcements_read_through!(cutoff: @cutoff)'
+    assert_includes controller, 'rescue ActiveRecord::ActiveRecordError'
+    assert_equal 1, controller.scan("mark_announcements_read_through!").size
     assert_includes recipients, '.limit(20)'
     assert_includes recipients, 'profiles.display_name LIKE :query'
     refute_includes recipients, "integer_query"
@@ -1016,17 +1067,74 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes header, 'src: application_routes.popover_notifications_path'
     assert_includes header, 'class="skeleton h-4'
     assert_includes unread_status, 'class="status status-primary status-sm"'
+    assert_includes unread_status, "current_user.has_unread_notifications?"
+    assert_includes tab_unread_status, 'class="status status-primary status-xs"'
     assert_includes popover, 'open_all_notifications_path'
+    assert_includes popover, "with_tab(tabs:, size: :sm)"
+    assert_includes popover, 'popover_notifications_path(tab: "personal")'
+    assert_includes popover, 'popover_notifications_path(tab: "announcements")'
+    assert_includes popover, "notifications_path(tab:)"
     assert_includes notification_item, "delivery.notification.message"
+    assert_includes announcement_item, "announcement.message"
+    refute_includes announcement_item, "open_notification_path"
+    assert_includes announcements_panel, "read_announcements_notifications_path"
+    assert_includes announcements_panel, "form.hidden_field :cutoff"
+    assert_includes announcements_panel, "form.hidden_field :surface"
+    assert_includes announcements_panel, 'render "notifications/announcement_read_error"'
+    assert_includes announcement_read_error, 'class="alert alert-error alert-soft'
     assert_includes history, 'turbo_action: "advance"'
+    assert_includes history, "with_tab(tabs:)"
+    assert_includes history, 'notifications_path(tab: "personal")'
+    assert_includes history, 'notifications_path(tab: "announcements")'
+    assert_includes read_announcements, 'turbo_stream.replace "notification_unread_status"'
+    assert_includes read_announcements, 'status_target = "\#{@surface}_announcements_unread_status"'
+    assert_includes read_announcements, 'if @read_failed'
+    assert_includes read_announcements, 'partial: "notifications/announcement_read_error"'
+    assert_includes popover_controller, 'if (event.newState !== "open") return'
+    refute_includes popover_controller, "|| this.frameTarget.src"
+    assert_includes popover_controller, 'this.frameTarget.removeAttribute("complete")'
+    assert_includes popover_controller, "this.frameTarget.reload()"
+    assert_includes announcements_controller, 'document.documentElement.hasAttribute("data-turbo-preview")'
+    assert_includes announcements_controller, "this.formTarget.requestSubmit()"
+    assert_includes announcements_controller, "if (event.detail.success) return"
+    assert_includes announcements_controller, "failed(event)"
+    assert_includes announcements_controller, "event.stopPropagation()"
+    assert_includes announcements_controller, 'this.errorTarget.classList.remove("hidden")'
     assert_includes admin_index, 'table table-sm table-pin-rows min-w-max'
     assert_includes admin_index, "notification.message_plain_text"
+    assert_includes admin_index, 'notification.all_users? ? t("notifications.admin.all_users")'
     assert_includes admin_form, "form.rich_text_area :message"
     assert_includes admin_form, "T.must(user.profile).display_name"
     assert_includes admin_form, "notification_recipients_remove_label_value"
+    assert_includes admin_form, 'notification_recipients_target: "audience"'
+    assert_includes admin_form, 'data-notification-recipients-target="selector"'
     refute_includes admin_form, "form.text_area :message"
     assert_includes recipient_controller, "remove(event)"
+    assert_includes recipient_controller, 'this.selectorTarget.hidden = !selectedUsers'
+    assert_includes recipient_controller, 'input.disabled = this.audienceTarget.value !== "selected_users"'
     assert_includes recipient_controller, 'button.dataset.action = "notification-recipients#remove"'
+    assert_includes notification_test, 'test "published selected users require at least one existing recipient"'
+    assert_includes notification_test, 'test "all users never create delivery rows and switching to all users deletes existing rows"'
+    assert_includes delivery_test, 'test "rejects delivery rows for all-user announcements"'
+    assert_includes user_notification_test, 'user.created_at.to_fs(:usec), user.global_notifications_read_at.to_fs(:usec)'
+    assert_includes user_notification_test, 'test "shows old announcements to later users without marking them unread"'
+    assert_includes user_notification_test, 'test "distinguishes personal and announcement unread state"'
+    assert_includes user_notification_test, 'test "backdated publication and message edits do not create announcement unread state"'
+    assert_includes user_notification_test, 'test "moves the announcement cursor monotonically and reloads a newer concurrent value"'
+    assert_includes controller_test, 'test "defaults to personal deliveries and separates announcements"'
+    assert_includes controller_test, 'test "GET requests do not move the announcement cursor and invalid tabs are rejected"'
+    assert_includes controller_test, 'test "marks only announcements through the displayed cutoff"'
+    assert_includes controller_test, 'test "keeps unread indicators and returns a retryable stream when the cursor update fails"'
+    assert_includes controller_test, 'test "rejects a malformed announcement cutoff without changing the cursor"'
+    assert_includes controller_test, 'test "rejects a future announcement cutoff without changing the cursor"'
+    assert_includes controller_test, 'test "rejects an unknown announcement surface without changing the cursor"'
+    assert_includes admin_controller_test, 'test "rejects a published selected notification without recipients"'
+    assert_includes system_test, 'test "shows announcements without personal read controls and marks the displayed cutoff"'
+    assert_includes system_test, 'assert_no_button I18n.t("notifications.open")'
+    assert_includes system_test, "popover_requests = resource_names.count"
+    assert_includes system_test, 'assert_operator resource_names.count { |name| name.match?(%r{/notifications/popover}) }, :>, popover_requests'
+    assert_includes system_test, '(?:page=2&tab=announcements|tab=announcements&page=2)'
+    assert_includes system_test, 'assert_selector \'[data-notification-recipients-target="selector"][hidden]\''
     assert_operator after_bundle.index("configure_lexxy"), :<, after_bundle.index("configure_in_app_notifications")
     assert_match(/configure_profile\n  configure_in_app_notifications\n  configure_api/m, after_bundle)
   end
@@ -1213,6 +1321,7 @@ class RailsTemplateContractTest < Minitest::Test
       "btn btn-ghost btn-xs" => 1,
       "btn btn-primary btn-outline btn-rapid" => 1,
       "btn btn-rapid" => 1,
+      "<%= compact ? 'btn btn-sm' : action_button_classes(:secondary) %>" => 1,
       "btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>" => 1,
       "btn join-item" => 3,
       "btn mt-3 w-full" => 1
@@ -1881,10 +1990,19 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'assert_button "Cancel"'
     assert_includes evidence, '"admin-notifications"'
     assert_includes evidence, '"admin-notification-show"'
+    assert_includes evidence, 'raise "全体通知に個別配信行が作成されました" if announcement.notification_deliveries.exists?'
+    assert_includes evidence, '"notifications-popover-announcements"'
+    assert_includes evidence, '"notifications-announcements"'
     assert_source_order(evidence,
+      '"notifications-popover-unread"',
+      '"notifications-popover-announcements"',
       '"notifications-history"',
+      '"notifications-announcements"',
       'within("#notifications-popover") { click_button translate("notifications.open_all") }',
       '"notifications-popover-opened"')
+    assert_includes evidence, "[320, 390, 640, 960, 961].each do |width|"
+    assert_includes evidence, '"Notification tabs wrapped at #{width}px"'
+    assert_includes evidence, '"Active notification tab is detached from its panel at #{width}px"'
     assert_includes evidence, '"admin-overview"'
     assert_includes evidence, "def assert_admin_overview_geometry"
     assert_includes evidence, 'document.querySelector("[data-admin-overview-stats]")'

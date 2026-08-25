@@ -68,7 +68,7 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 | --- | --- | --- |
 | `:primary` | `btn btn-primary btn-rapid` | 作成、保存、登録など、その画面の主操作 |
 | `:secondary` | `btn btn-rapid` | 編集、詳細、同格の代替操作 |
-| `:quiet` | `btn btn-ghost btn-rapid` | 戻る、キャンセルなどの低強調操作 |
+| `:quiet` | `btn btn-outline btn-rapid` | 戻る、キャンセルなどの低強調操作 |
 | `:warning` | `btn btn-outline btn-warning btn-rapid` | pause、retryなど注意を伴う実行操作 |
 | `:destructive` | `btn btn-outline btn-error btn-rapid` | 削除・解除への導線、または別の確認を挟む危険操作 |
 | `:destructive_confirm` | `btn btn-error btn-rapid` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
@@ -76,6 +76,8 @@ field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnois
 theme tokenの`secondary`はprimary色のhover・press用の色、button roleの`:secondary`は副操作の見た目、`page_actions_secondary`は補助的なページ操作の配置先を表します。同じ`secondary`という語を含みますが別の契約であり、slot名からbuttonの色を決めたり、`:secondary`へtheme tokenの`secondary`色を適用したりしません。
 
 `:warning`は注意を促すsemantic colorを維持しつつ、画面内でオレンジ色の占有面積が過度に大きくならないよう`btn-outline`を必須とします。通常のコンテンツ操作へ塗りつぶしの`btn-warning`は使用しません。
+
+文字付きのbuttonとbutton相当のlinkは、hoverしていない通常時にも背景または輪郭で操作可能な要素だと判別できる表示を必須とし、`btn-ghost`を使用しません。この規約は通知popover、受信者selector・badge、header、menu、dropdownなど`action_button_classes`を使用しないcompact用途にも適用します。`btn-ghost`は、accessible nameを持つベルやアバターなど、文字を持たない慣例的な操作triggerだけに限定します。色modifierを持たない`btn-outline`は、文字色を`base-content`のまま維持し、通常時のborderだけを`base-300`へ上書きします。`btn-primary`、`btn-secondary`、`btn-accent`、`btn-neutral`、`btn-info`、`btn-success`、`btn-warning`、`btn-error`のいずれかを併用するoutlineには適用せず、各semantic colorのborderを維持します。
 
 daisyUIのAlertは、`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合に`alert-soft`を必須とし、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。静的View、flash、JavaScriptによる状態切り替え、engineの上書きViewを同じ契約に含めます。JavaScriptで状態色を切り替える場合も`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはこのAlert固有の規約の対象外です。
 
@@ -110,7 +112,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
 - ページ全体に作用する追加、単一controlの簡易絞り込み、一括操作はViewから`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ渡す。primaryは基本操作、secondaryは簡易絞り込みやapplication/server選択などの補助操作とする。slotは配置する操作群だけを表し、buttonのroleや配色を決定しないため、primary側へ置く一括削除も`:primary`ではなく操作の意味に対応するroleを使用する。複数fieldまたは複数行になる複雑な検索formはpage actionsへ入れず、content areaの`card-rapid`内へ配置する。個別model・table row・formに属する編集、削除、pause、run、保存、戻る操作は移動しない。共通rendererは未指定slotを出力せず、複数回設定されたfragmentを各列内で縦に並べる。640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列とする。
 - card、form、modal、row内のaction groupは右寄せし、狭幅では折り返せるようにする。DOM順は低強調から高影響の`:quiet`、`:secondary`、`:warning`、`:primary`または`:destructive`とし、その画面の最終操作を右端へ置く。専用の確認・再認証画面では`:destructive_confirm`を最終操作とする。daisyUIの`card-actions`・`modal-action`を優先し、通常の文字付き操作をtable row内だけ小さくする`btn-sm`は使用しない。
-- `action_button_classes`のcompact例外は、通知popover、受信者selector・badge、inputへ連結するCopy操作、header、menu、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuに限定する。これらは該当するdaisyUI componentとmodifierを直接使用し、例外を通常のcontent actionへ広げない。
+- `action_button_classes`のcompact例外は、通知popover、受信者selector・badge、inputへ連結するCopy操作、header、menu、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuに限定する。これらは該当するdaisyUI componentとmodifierを直接使用し、文字付き操作には通常時から操作面が分かるmodifierを指定する。例外を通常のcontent actionへ広げない。
 - `with_menu`は本文blockを先にcaptureしてタブ有無を確定し、タブなしのpage actionsだけを主見出し直下の`card-rapid`と`card-body p-3`へ配置する。タブなしページの最外周表示面となる標準`card-rapid > .card-body`も`p-3`とし、activeな`tab-content`と内部余白を0.75remへ統一する。入れ子のcard、error variant、tableを端まで表示する意図的な`p-0`、`with_menu`外のcardは対象外とする。`with_tab`はactiveな`tab-content`の先頭へpage actionsをcardなしで配置して内部markerを設定し、`with_menu`による二重出力を防ぐ。両slotが空ならcardもaction containerも生成しない。
 - account sub-layoutの左ペインにはユーザー向けmenuと、`UserPolicy#overview?`を満たすUserだけに表示する単一の管理画面bridge linkを末尾へ置き、個別の管理項目は混在させない。admin sub-layoutの左ペインには見出し「管理画面」と管理menuを表示し、全管理項目の後の末尾にだけマイページへのbridge linkを置く。現在のControllerに対応する管理linkは`menu-active`と`aria-current="page"`で示す。
 - 複数Viewで共通する階層メニューは個別Viewへ複製せず、その画面群の機能単位nested layoutで1回だけ定義する。`with_menu`が主見出しを描画してからnested layoutを本文blockとして受け取るため、表示順は主見出し、subnavigation、本文となる。

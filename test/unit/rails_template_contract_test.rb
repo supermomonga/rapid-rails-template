@@ -78,7 +78,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "ACTION_BUTTON_CLASSES = {"
     assert_includes helper, 'primary: "btn btn-primary btn-rapid"'
     assert_includes helper, 'secondary: "btn btn-rapid"'
-    assert_includes helper, 'quiet: "btn btn-ghost btn-rapid"'
+    assert_includes helper, 'quiet: "btn btn-outline btn-rapid"'
     assert_includes helper, 'warning: "btn btn-outline btn-warning btn-rapid"'
     assert_includes helper, 'destructive: "btn btn-outline btn-error btn-rapid"'
     assert_includes helper, 'destructive_confirm: "btn btn-error btn-rapid"'
@@ -99,7 +99,7 @@ class RailsTemplateContractTest < Minitest::Test
     {
       primary: "btn btn-primary btn-rapid",
       secondary: "btn btn-rapid",
-      quiet: "btn btn-ghost btn-rapid",
+      quiet: "btn btn-outline btn-rapid",
       warning: "btn btn-outline btn-warning btn-rapid",
       destructive: "btn btn-outline btn-error btn-rapid",
       destructive_confirm: "btn btn-error btn-rapid"
@@ -234,6 +234,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, ".card-rapid {"
     assert_includes @source, "@apply card card-border bg-base-100 shadow-none;"
     assert_includes @source, "@apply border-base-300;"
+    assert_includes @source, "@layer utilities {"
+    assert_includes @source,
+      ".btn-outline:not(:is(.btn-neutral, .btn-primary, .btn-secondary, .btn-accent, .btn-info, .btn-success, .btn-warning, .btn-error)) {"
+    assert_includes @source, "--btn-border: var(--color-base-300);"
     legacy_card_classes = class_attributes(@source).select do |classes|
       (%w[card card-border border-base-300 bg-base-100 shadow-none] - classes).empty?
     end
@@ -279,6 +283,19 @@ class RailsTemplateContractTest < Minitest::Test
     end
     assert_includes agents, "`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合は、常に`alert-soft`"
     assert_includes stack, "`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合に`alert-soft`を必須"
+  end
+
+  def test_default_outline_buttons_use_a_quiet_border_without_overriding_semantic_colors
+    agents = File.binread(File.expand_path("../../AGENTS.md", __dir__)).force_encoding(Encoding::UTF_8)
+    stack = File.binread(File.expand_path("../../docs/stack.md", __dir__)).force_encoding(Encoding::UTF_8)
+
+    assert_includes @source,
+      ".btn-outline:not(:is(.btn-neutral, .btn-primary, .btn-secondary, .btn-accent, .btn-info, .btn-success, .btn-warning, .btn-error)) {"
+    assert_includes @source, "--btn-border: var(--color-base-300);"
+    assert_includes agents, "色modifierを持たない`btn-outline`"
+    assert_includes agents, "各semantic colorのborderを維持"
+    assert_includes stack, "色modifierを持たない`btn-outline`"
+    assert_includes stack, "各semantic colorのborderを維持"
   end
 
   def test_default_views_use_daisyui_components_and_semantic_colors
@@ -502,7 +519,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes notification_item, "local_assigns.fetch(:compact)"
     refute_includes notification_item, "local_assigns.fetch(:compact, false)"
     assert_includes notification_item,
-      'class: (compact ? "btn btn-ghost btn-sm" : action_button_classes(:quiet))'
+      'class: (compact ? "btn btn-outline btn-sm" : action_button_classes(:quiet))'
     assert_includes notification_popover, 'frame_prefix: "popover_personal_notification", compact: true'
     assert_includes notification_history, 'frame_prefix: "history_personal_notification", compact: false'
     assert_includes notification_open, "locals: { delivery: @delivery, frame_prefix:, compact: }"
@@ -1082,6 +1099,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes unread_status, "current_user.has_unread_notifications?"
     assert_includes tab_unread_status, 'class="status status-primary status-xs"'
     assert_includes popover, 'open_all_notifications_path'
+    assert_includes popover, 'class: "btn btn-outline btn-sm"'
     assert_includes popover, "with_tab(tabs:, size: :sm)"
     assert_includes popover, 'popover_notifications_path(tab: "personal")'
     assert_includes popover, 'popover_notifications_path(tab: "announcements")'
@@ -1125,6 +1143,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes recipient_controller, 'this.selectorTarget.hidden = !selectedUsers'
     assert_includes recipient_controller, 'input.disabled = this.audienceTarget.value !== "selected_users"'
     assert_includes recipient_controller, 'button.dataset.action = "notification-recipients#remove"'
+    assert_includes recipient_controller, 'button.className = "btn btn-outline btn-xs"'
     assert_includes notification_test, 'test "published selected users require at least one existing recipient"'
     assert_includes notification_test, 'test "all users never create delivery rows and switching to all users deletes existing rows"'
     assert_includes delivery_test, 'test "rejects delivery rows for all-user announcements"'
@@ -1332,11 +1351,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_equal({
       "btn" => 1,
       "btn btn-circle btn-ghost" => 1,
-      "btn btn-ghost" => 2,
       "btn btn-ghost btn-circle" => 1,
-      "btn btn-ghost btn-rapid" => 1,
-      "btn btn-ghost btn-sm" => 2,
-      "btn btn-ghost btn-xs" => 1,
+      "btn btn-outline" => 2,
+      "btn btn-outline btn-rapid" => 1,
+      "btn btn-outline btn-sm" => 2,
+      "btn btn-outline btn-xs" => 1,
       "btn btn-primary btn-outline btn-rapid" => 1,
       "btn btn-rapid" => 1,
       "<%= compact ? 'btn btn-sm' : action_button_classes(:secondary) %>" => 1,
@@ -1990,6 +2009,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"/users/sign_in/siwe/challenge"'
     assert_includes evidence, "credentials: 'same-origin'"
     assert_includes evidence, 'page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))'
+    assert_includes evidence, 'assert_default_outline_button_colors("#notifications-popover .btn.btn-outline")'
+    assert_includes evidence, 'borderProbe.style.border = "1px solid var(--color-base-300)"'
+    assert_includes evidence, 'textProbe.style.color = "var(--color-base-content)"'
+    assert_includes evidence, 'assert_equal colors.fetch("expectedBorder"), colors.fetch("border")'
+    assert_includes evidence, 'assert_equal colors.fetch("expectedText"), colors.fetch("text")'
     assert_includes evidence, 'login_as(@user, scope: :user)'
     assert_includes evidence, '"passkey-registration-risk-warning"'
     assert_includes evidence, '"passkeys-multiple"'
@@ -2186,7 +2210,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens header, "navbar", "mx-auto", "w-full", "max-w-6xl", "px-5"
     assert_class_tokens header, "dropdown", "dropdown-end", "dropdown-hover"
     assert_class_tokens header, "menu", "menu-sm", "dropdown-content"
-    assert_class_tokens header, "btn", "btn-ghost"
+    ghost_controls = header.scan(/<(?:button|summary)\b[^>]*class="[^"]*\bbtn-ghost\b[^"]*"[^>]*>/)
+    assert_equal 1, ghost_controls.size
+    ghost_controls.each { |control| assert_includes control, "aria-label=" }
+    assert_includes @source, '<summary class="btn btn-circle btn-ghost" aria-label='
+    assert_includes header, 'class="btn btn-outline"'
     assert_class_tokens @source, "avatar"
     refute class_attributes(@source).any? { |classes| classes.include?("avatar-placeholder") }
     mobile_menu_classes = class_attributes(header).find { |classes| classes.include?("dropdown-content") }
@@ -2336,6 +2364,7 @@ class RailsTemplateContractTest < Minitest::Test
     )
 
     assert_equal 2, guest_navigation.scan("<<~ERB").size
+    assert_includes guest_navigation, 'class: "btn btn-outline btn-rapid"'
     refute_includes guest_navigation, "\\\\n'"
   end
 

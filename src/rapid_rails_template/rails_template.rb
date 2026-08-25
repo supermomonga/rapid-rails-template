@@ -755,6 +755,12 @@ def install_daisyui
       }
     }
 
+    @layer utilities {
+      .btn-outline:not(:is(.btn-neutral, .btn-primary, .btn-secondary, .btn-accent, .btn-info, .btn-success, .btn-warning, .btn-error)) {
+        --btn-border: var(--color-base-300);
+      }
+    }
+
     @utility input-rapid {
       --input-color: var(--color-base-300);
       font-size: 1rem;
@@ -9636,7 +9642,7 @@ def configure_in_app_notifications
           input.disabled = this.audienceTarget.value !== "selected_users"
           const button = document.createElement("button")
           button.type = "button"
-          button.className = "btn btn-ghost btn-xs"
+          button.className = "btn btn-outline btn-xs"
           button.textContent = this.removeLabelValue
           button.dataset.userId = id
           button.dataset.action = "notification-recipients#remove"
@@ -9679,7 +9685,7 @@ def configure_in_app_notifications
         </div>
         <% unless delivery.opened? %>
           <%= button_to t("notifications.open"), open_notification_path(delivery.notification), method: :patch,
-            params: { origin_frame: frame_id }, class: (compact ? "btn btn-ghost btn-sm" : action_button_classes(:quiet)),
+            params: { origin_frame: frame_id }, class: (compact ? "btn btn-outline btn-sm" : action_button_classes(:quiet)),
             form: { data: { turbo_stream: true } } %>
         <% end %>
       </li>
@@ -9752,7 +9758,7 @@ def configure_in_app_notifications
             <% if deliveries.any? { |delivery| !delivery.opened? } %>
               <div class="mb-2 flex justify-end">
                 <%= button_to t("notifications.open_all"), open_all_notifications_path, method: :patch,
-                  params: { origin_frame: "notifications_popover" }, class: "btn btn-ghost btn-sm",
+                  params: { origin_frame: "notifications_popover" }, class: "btn btn-outline btn-sm",
                   form: { data: { turbo_stream: true } } %>
               </div>
             <% end %>
@@ -9773,7 +9779,7 @@ def configure_in_app_notifications
         <% end %>
       </div>
       <div class="border-t border-base-300 p-2 text-center">
-        <%= link_to t("notifications.more"), notifications_path(tab:), class: "btn btn-ghost btn-sm", data: { turbo_frame: "_top" } %>
+        <%= link_to t("notifications.more"), notifications_path(tab:), class: "btn btn-outline btn-sm", data: { turbo_frame: "_top" } %>
       </div>
     <% end %>
   ERB
@@ -10944,7 +10950,7 @@ def configure_default_views
   profile_owner = "current_user.profile"
   logout_path = "application_routes.destroy_user_session_path"
   guest_desktop_navigation = <<~ERB
-    <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-ghost btn-rapid" %>
+    <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-outline btn-rapid" %>
     <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
   ERB
   guest_mobile_navigation = <<~ERB
@@ -10997,7 +11003,7 @@ def configure_default_views
     ERB
   else
     <<~ERB
-      <summary class="btn btn-ghost">
+      <summary class="btn btn-outline">
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
         </svg>
@@ -11095,7 +11101,7 @@ def configure_default_views
       ACTION_BUTTON_CLASSES = {
         primary: "btn btn-primary btn-rapid",
         secondary: "btn btn-rapid",
-        quiet: "btn btn-ghost btn-rapid",
+        quiet: "btn btn-outline btn-rapid",
         warning: "btn btn-outline btn-warning btn-rapid",
         destructive: "btn btn-outline btn-error btn-rapid",
         destructive_confirm: "btn btn-error btn-rapid"
@@ -11358,7 +11364,7 @@ def configure_default_views
         expected = {
           primary: "btn btn-primary btn-rapid",
           secondary: "btn btn-rapid",
-          quiet: "btn btn-ghost btn-rapid",
+          quiet: "btn btn-outline btn-rapid",
           warning: "btn btn-outline btn-warning btn-rapid",
           destructive: "btn btn-outline btn-error btn-rapid",
           destructive_confirm: "btn btn-error btn-rapid"
@@ -11824,7 +11830,7 @@ def configure_default_views
     #{guest_desktop_navigation.lines.map { |line| "        #{line}" }.join}      </div>
           <div class="navbar-end min-[961px]:hidden">
             <details class="dropdown dropdown-end">
-              <summary class="btn btn-ghost"><%= t("common.menu") %></summary>
+              <summary class="btn btn-outline"><%= t("common.menu") %></summary>
               <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow-elevation-2">
     #{guest_mobile_navigation.lines.map { |line| "            #{line}" }.join}          </ul>
             </details>
@@ -12034,7 +12040,7 @@ def configure_default_views
     RUBY
   else
     <<~RUBY.lines.map { |line| "      #{line}" }.join
-      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-ghost', text: I18n.t("common.menu"), count: 1 do
+      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-outline', text: I18n.t("common.menu"), count: 1 do
         assert_select 'svg[data-slot="icon"]', count: 1
       end
     RUBY
@@ -15790,6 +15796,7 @@ def configure_evidence_capture
             find('button[popovertarget="notifications-popover"]').click
             assert_selector "#notifications-popover:popover-open"
             assert_text "Evidence notification 1"
+            assert_default_outline_button_colors("#notifications-popover .btn.btn-outline")
             assert_notification_tab_geometry("#notifications-popover", width)
 
             within("#notifications-popover") { click_link translate("notifications.tabs.announcements") }
@@ -15808,6 +15815,32 @@ def configure_evidence_capture
           @user&.update!(global_notifications_read_at: 10.minutes.ago)
           desktop = VIEWPORTS.fetch("desktop")
           page.current_window.resize_to(desktop.fetch("width"), desktop.fetch("height"))
+        end
+
+        def assert_default_outline_button_colors(selector)
+          colors = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const button = document.querySelector(#{selector.to_json})
+                const borderProbe = document.createElement("div")
+                const textProbe = document.createElement("div")
+                borderProbe.style.border = "1px solid var(--color-base-300)"
+                textProbe.style.color = "var(--color-base-content)"
+                document.body.append(borderProbe, textProbe)
+                const colors = {
+                  border: getComputedStyle(button).borderTopColor,
+                  expectedBorder: getComputedStyle(borderProbe).borderTopColor,
+                  text: getComputedStyle(button).color,
+                  expectedText: getComputedStyle(textProbe).color
+                }
+                borderProbe.remove()
+                textProbe.remove()
+                return colors
+              }
+            JAVASCRIPT
+          end
+          assert_equal colors.fetch("expectedBorder"), colors.fetch("border")
+          assert_equal colors.fetch("expectedText"), colors.fetch("text")
         end
 
         def assert_notification_tab_geometry(surface_selector, width)

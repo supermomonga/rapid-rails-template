@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `db8b1290aaed51bdd097679077c6f24a7c0ff372eef3f2746f0835f068daf3a8`
-- Base commit: `e05fe4933732110f03b398e926edef3f05353407`
+- Source fingerprint: `75a54ac712af645130124a14da5cb8d0c96a1d0d49f56458f2e961b464cba3c8`
+- Base commit: `a3c1c2375b552f2494846ea4f00dc2c2daf5eded`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -385,11 +385,11 @@
 |![Ethereumでログイン (desktop)](siwe-login-option--desktop.png)|![Ethereumでログイン (mobile)](siwe-login-option--mobile.png)|
 |![Ethereumでログイン (desktop)](siwe-login-existing-user--desktop.png)|![Ethereumでログイン (mobile)](siwe-login-existing-user--mobile.png)|
 
-## 未登録ウォレットのログインエラー
+## 未登録EVMウォレットのログインエラー
 
 |Desktop|Mobile|
 |---|---|
-|![未登録ウォレットのログインエラー (desktop)](siwe-login-unregistered-wallet--desktop.png)|![未登録ウォレットのログインエラー (mobile)](siwe-login-unregistered-wallet--mobile.png)|
+|![未登録EVMウォレットのログインエラー (desktop)](siwe-login-unregistered-wallet--desktop.png)|![未登録EVMウォレットのログインエラー (mobile)](siwe-login-unregistered-wallet--mobile.png)|
 
 ## EVMウォレットログイン
 
@@ -404,11 +404,11 @@
 |---|---|
 |![EVMウォレットを登録 (desktop)](siwe-identity-new--desktop.png)|![EVMウォレットを登録 (mobile)](siwe-identity-new--mobile.png)|
 
-## ウォレット選択
+## EVMウォレット選択
 
 |Desktop|Mobile|
 |---|---|
-|![ウォレット選択 (desktop)](siwe-provider-picker--desktop.png)|![ウォレット選択 (mobile)](siwe-provider-picker--mobile.png)|
+|![EVMウォレット選択 (desktop)](siwe-provider-picker--desktop.png)|![EVMウォレット選択 (mobile)](siwe-provider-picker--mobile.png)|
 
 ## EVMウォレットログインを編集
 
@@ -422,11 +422,11 @@
 |---|---|
 |![EVMウォレットログインを解除 (desktop)](siwe-identity-unlink--desktop.png)|![EVMウォレットログインを解除 (mobile)](siwe-identity-unlink--mobile.png)|
 
-## ウォレット名を更新しました。
+## EVMウォレット名を更新しました。
 
 |Desktop|Mobile|
 |---|---|
-|![ウォレット名を更新しました。 (desktop)](siwe-identity-renamed--desktop.png)|![ウォレット名を更新しました。 (mobile)](siwe-identity-renamed--mobile.png)|
+|![EVMウォレット名を更新しました。 (desktop)](siwe-identity-renamed--desktop.png)|![EVMウォレット名を更新しました。 (mobile)](siwe-identity-renamed--mobile.png)|
 
 ## アバター（ホーム）
 

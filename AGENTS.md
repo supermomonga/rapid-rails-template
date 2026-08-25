@@ -35,12 +35,12 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 
 | role | class | 用途 |
 | --- | --- | --- |
-| `:primary` | `btn btn-primary btn-rapid` | 作成、保存、登録など、その画面の主操作 |
-| `:secondary` | `btn btn-rapid` | 編集、詳細、同格の代替操作 |
-| `:quiet` | `btn btn-outline btn-rapid` | 戻る、キャンセルなどの低強調操作 |
-| `:warning` | `btn btn-outline btn-warning btn-rapid` | pause、retryなど注意を伴う実行操作 |
-| `:destructive` | `btn btn-outline btn-error btn-rapid` | 削除・解除への導線、または別の確認を挟む危険操作 |
-| `:destructive_confirm` | `btn btn-error btn-rapid` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
+| `:primary` | `btn btn-primary` | 作成、保存、登録など、その画面の主操作 |
+| `:secondary` | `btn` | 編集、詳細、同格の代替操作 |
+| `:quiet` | `btn btn-outline` | 戻る、キャンセルなどの低強調操作 |
+| `:warning` | `btn btn-outline btn-warning` | pause、retryなど注意を伴う実行操作 |
+| `:destructive` | `btn btn-outline btn-error` | 削除・解除への導線、または別の確認を挟む危険操作 |
+| `:destructive_confirm` | `btn btn-error` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
 
 - card、form、modal、row内のaction groupは右寄せし、狭幅で折り返せるようにします。DOM順は低強調から高影響の`quiet`、`secondary`、`warning`、`primary`または`destructive`とし、専用確認画面では`destructive_confirm`を最終操作として右端へ置きます。daisyUIの`card-actions`・`modal-action`が使える場合はそれを使用し、同じ配置を独自utilityの集合で再実装しません。
 - `:warning`は注意を促しつつ画面内で色の占有面積を抑えるため、常に`btn-outline`と組み合わせます。通常のコンテンツ操作へ塗りつぶしの`btn-warning`を使用しません。
@@ -48,12 +48,12 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 - 色modifierを持たない`btn-outline`は、文字色を`base-content`のまま維持し、通常時のborderだけを`base-300`へ上書きします。`btn-primary`、`btn-secondary`、`btn-accent`、`btn-neutral`、`btn-info`、`btn-success`、`btn-warning`、`btn-error`のいずれかを併用するoutlineには適用せず、各semantic colorのborderを維持してください。
 - daisyUIのAlertで`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合は、常に`alert-soft`と組み合わせ、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。この規約は静的Viewだけでなく、flash、JavaScriptによる状態切り替え、engineの上書きViewにも適用し、状態色を切り替えるときも`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはAlertではないため対象外です。
 - `action_button_classes`の対象外は、通知popover、受信者selector・badge、inputへ連結するCopy操作、header、menu、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuです。これらは該当するdaisyUI componentと必要なmodifierを直接使用します。table rowを理由に`btn-sm`へ縮小することは例外に含めません。
-- paginationは通常の操作buttonではなく、共通の`ApplicationHelper#with_pagination`と`pagination_item_classes`で`join`、active・disabled状態、正方形の前後操作を一括生成します。pagination itemにも`btn-rapid`を含め、個別Viewでpagination buttonを組み立てません。
+- paginationは通常の操作buttonではなく、共通の`ApplicationHelper#with_pagination`と`pagination_item_classes`で`join`、`btn join-item`、active・disabled状態、正方形の前後操作を一括生成します。個別Viewでpagination buttonを組み立てません。
 - buttonまたはpaginationの規約を変更するときは、生成Viewのcontract testとdesktop・mobileの証跡を同時に更新してください。compact用途などの例外を追加する場合は、理由と対象範囲を`docs/`へ記録し、その境界をtestで固定してください。
 - ページ全体に作用する追加・絞り込み・一括操作は、Viewで`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ設定し、任意の場所へ直接配置しません。基本操作はprimary、絞り込みやapplication/server選択などの補助操作はsecondaryを使用します。個別model・table row・formに属する編集、削除、pause、run、保存、戻る操作は対象のcard、row、form内に残します。
 - `page_actions_primary`と`page_actions_secondary`は配置先を表し、buttonのroleや配色を表しません。たとえば一括削除をprimary側へ配置しても`action_button_classes(:primary)`にはせず、操作の意味に対応するroleを使用します。生成する`lib/templates/erb/scaffold`のindex、new、editにあるheader actionだけはpage actionsへ移さず、standalone scaffold固有の配置として維持します。この例外を他のViewへ一般化しません。
-- page actionsは共通layout/helperが、640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列で配置します。タブなしではページ名直下の`card-rapid`内、tabpanelを伴うタブではactiveな`tab-content`内の上部へcardを重ねず配置し、View側で同じresponsive layoutやcard shellを再構築しません。
-- 標準card surfaceは`card-rapid`を使用します。これは`card card-border border-base-300 bg-base-100 shadow-none`をTailwind CSSの`@apply`で集約した生成アプリ共通classです。`with_menu`配下でタブなしページの最外周表示面となる`card-rapid > .card-body`は、`tab-content`と内部余白を揃えるため`p-3`を明示します。入れ子のcard、error variant、tableを端まで表示する意図的な`p-0`、`with_menu`外のcardには適用せず、それぞれのdaisyUI classと余白を維持してください。
+- page actionsは共通layout/helperが、640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列で配置します。タブなしではページ名直下の`card card-border bg-base-100`内、tabpanelを伴うタブではactiveな`tab-content`内の上部へcardを重ねず配置し、View側で同じresponsive layoutやcard shellを再構築しません。
+- 標準card surfaceはdaisyUIの`card card-border bg-base-100`を使用します。`.card-border`は幅と線種をdaisyUIの既定値に任せ、`@layer utilities`内の`:where(.card-border)`で境界色だけを`var(--color-base-300)`へ変更します。`border-error`などのsemantic color modifierはこの低specificityな規則より優先させてください。`with_menu`配下でタブなしページの最外周表示面となる`.card.card-border > .card-body`は、`tab-content`と内部余白を揃えるため`p-3`を明示します。入れ子のcard、error variant、tableを端まで表示する意図的な`p-0`、`with_menu`外のcardには適用せず、それぞれのdaisyUI classと余白を維持してください。
 - タブ付きコンテンツは生成アプリの`ApplicationHelper#with_tab`を使用し、Viewやlayoutで`tab`と`tab-content`を直接組み立てません。active判定は各tabの`path`によるprefix判定、またはoptionalな`is_active` lambdaで指定し、block本文はhelperがactive tab直後へ配置します。横スクロール用の`overflow-x-auto`、1段表示用の`min-w-max`、tabpanel用の`sticky`もhelperが一括して生成し、個別Viewでは重複させません。tabpanelを伴わないtab形式selectorは対象外です。
 - native dialogを使うdaisyUI modalは生成アプリの`ApplicationHelper#with_modal`を使用し、Viewやlayoutで`modal`、`modal-box`、`modal-action`、`modal-backdrop`を直接組み立てません。helperは共通DOM、見出し、説明、actions、ARIA参照、backdrop close formだけを担当し、開閉triggerや個別Stimulus controllerの処理を持ちません。`form[method=dialog]`を通常formへ入れ子にしないよう、modal helperの出力は通常formの外へ配置してください。
 - `tabs-lift`と`tab-content`を組み合わせる画面では、DOM上の隣接だけでなく、証跡画像上でもactive tabとtabpanelが視覚的に接続していることを確認します。active tabとtabpanelの間に別行のtabが入る折り返し、孤立したtab、borderの分断・重複、tabpanelの上borderがactive tabの下へ透ける表示は不合格です。全体画像だけで判断せず、共有境界を等倍以上で確認し、computed border幅に加えてstacking order上もactive tabが共有境界を覆うことを検証します。

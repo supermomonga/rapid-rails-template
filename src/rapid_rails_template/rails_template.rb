@@ -736,44 +736,14 @@ def install_daisyui
       }
     }
 
-    @utility shadow-elevation-1 {
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-    }
-
-    @utility shadow-elevation-2 {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    @utility shadow-elevation-3 {
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    }
-
-    @layer components {
-      .card-rapid {
-        @apply card card-border bg-base-100 shadow-none;
-        @apply border-base-300;
-      }
-    }
-
     @layer utilities {
+      :where(.card-border) {
+        border-color: var(--color-base-300);
+      }
+
       .btn-outline:not(:is(.btn-neutral, .btn-primary, .btn-secondary, .btn-accent, .btn-info, .btn-success, .btn-warning, .btn-error)) {
         --btn-border: var(--color-base-300);
       }
-    }
-
-    @utility input-rapid {
-      --input-color: var(--color-base-300);
-      font-size: 1rem;
-
-      &:focus,
-      &:focus-within {
-        --input-color: var(--color-primary);
-      }
-    }
-
-    @utility btn-rapid {
-      font-size: 1rem;
-      font-weight: 700;
     }
   CSS
   append_to_file ".gitignore", "\n/node_modules\n" unless File.read(".gitignore").lines.map(&:strip).include?("/node_modules")
@@ -866,12 +836,12 @@ def configure_generator_templates
     <% if attribute.password_digest? -%>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%%= form.label :password %></legend>
-        <%%= form.password_field :password, class: "input input-rapid w-full" %>
+        <%%= form.password_field :password, class: "input w-full" %>
       </fieldset>
 
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%%= form.label :password_confirmation %></legend>
-        <%%= form.password_field :password_confirmation, class: "input input-rapid w-full" %>
+        <%%= form.password_field :password_confirmation, class: "input w-full" %>
       </fieldset>
     <% elsif attribute.field_type == :checkbox -%>
       <fieldset class="fieldset">
@@ -885,7 +855,7 @@ def configure_generator_templates
     <% field_class = case attribute.field_type
        when :textarea, :rich_textarea then "textarea w-full"
        when :file_field then "file-input w-full"
-       else "input input-rapid w-full"
+       else "input w-full"
        end -%>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%%= form.label :<%= attribute.column_name %> %></legend>
@@ -913,7 +883,7 @@ def configure_generator_templates
         <%%= link_to "New <%= human_name.downcase %>", <%= new_helper(type: :path) %>, class: action_button_classes(:primary) %>
       </header>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table table-sm table-pin-rows min-w-max">
@@ -987,7 +957,7 @@ def configure_generator_templates
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <%%= render @<%= singular_table_name %> %>
           <div class="card-actions flex-wrap justify-end">
@@ -1009,7 +979,7 @@ def configure_generator_templates
         <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: action_button_classes(:quiet) %>
       </header>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
         </div>
@@ -1029,7 +999,7 @@ def configure_generator_templates
         </div>
       </header>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
         </div>
@@ -1041,7 +1011,7 @@ def configure_generator_templates
     <%% content_for :page_title, "<%= class_name %>#<%= @action %>" %>
 
     <div class="mx-auto w-full max-w-[820px] px-5 py-10 md:py-14">
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <h1 class="card-title text-2xl leading-[1.5]"><%%= content_for(:page_title) %></h1>
           <p class="text-neutral">Find me in <%= @path %></p>
@@ -2234,7 +2204,7 @@ def install_passkey_views
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :name, t("passkeys.name") %></legend>
-        <%= form.text_field :name, required: true, maxlength: 50, class: "input input-rapid w-full" %>
+        <%= form.text_field :name, required: true, maxlength: 50, class: "input w-full" %>
       </fieldset>
       <div class="card-actions flex-wrap justify-end">
         <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
@@ -3600,7 +3570,7 @@ def install_siwe
         <% end %>
         <fieldset class="fieldset">
           <legend class="fieldset-legend"><%= form.label :name, t("siwe.identities.name") %></legend>
-          <%= form.text_field :name, required: true, maxlength: 50, class: "input input-rapid w-full" %>
+          <%= form.text_field :name, required: true, maxlength: 50, class: "input w-full" %>
         </fieldset>
         <div class="card-actions flex-wrap justify-end">
           <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
@@ -4564,7 +4534,7 @@ def configure_roles
           [t("admin.overview.statistics.published_faqs"), @published_faqs],
           [t("admin.overview.statistics.managed_pages"), @managed_pages]
         ].each do |title, value| %>
-          <article class="card-rapid">
+          <article class="card card-border bg-base-100">
             <div class="card-body p-3">
               <div class="stats w-full">
                 <div class="stat">
@@ -4586,7 +4556,7 @@ def configure_roles
         <p class="text-sm text-neutral"><%= t("admin.users.description") %></p>
       </header>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <div class="overflow-x-auto">
             <table class="table table-sm table-pin-rows min-w-max">
@@ -4961,7 +4931,7 @@ def configure_roles
           admin_navigation_links = css_select('[data-layout="with-menu"] nav a')
           assert_equal account_path, admin_navigation_links.last["href"]
           assert_equal I18n.t("navigation.dashboard"), admin_navigation_links.last.text.strip
-          assert_select '[data-admin-overview-stats] > article.card-rapid', count: 5
+          assert_select '[data-admin-overview-stats] > article.card.card-border.bg-base-100', count: 5
           statistics = css_select("[data-admin-overview-stats] .stat")
           assert_equal 5, statistics.size
           expected.each do |title, value|
@@ -6109,7 +6079,7 @@ def configure_content_management
       <header>
         <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       </header>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body"><%= @page.content %></div>
       </section>
     </div>
@@ -6145,7 +6115,7 @@ def configure_content_management
   create_file "app/views/admin/pages/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.pages.title") %>
     <div class="space-y-6">
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <div class="overflow-x-auto">
             <table class="table min-w-max">
@@ -6172,7 +6142,7 @@ def configure_content_management
       <header>
         <p class="text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
       </header>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <%= form_with model: [:admin, @page], class: "space-y-5" do |form| %>
             <fieldset class="fieldset">
@@ -6198,7 +6168,7 @@ def configure_content_management
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :question, t("content_management.admin.faqs.question") %></legend>
-        <%= form.text_field :question, class: "input input-rapid w-full", required: true %>
+        <%= form.text_field :question, class: "input w-full", required: true %>
       </fieldset>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :answer, t("content_management.admin.faqs.answer") %></legend>
@@ -6206,7 +6176,7 @@ def configure_content_management
       </fieldset>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :position, t("content_management.admin.faqs.position") %></legend>
-        <%= form.number_field :position, class: "input input-rapid w-full", min: 0, required: true %>
+        <%= form.number_field :position, class: "input w-full", min: 0, required: true %>
       </fieldset>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= t("content_management.admin.faqs.publication") %></legend>
@@ -6228,7 +6198,7 @@ def configure_content_management
       <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: action_button_classes(:primary) %>
     <% end %>
     <div class="space-y-6">
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <% if @faqs.any? %>
             <div class="overflow-x-auto">
@@ -6262,14 +6232,14 @@ def configure_content_management
   create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.add") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card-rapid"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
+      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.edit") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card-rapid"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
+      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
     </div>
   ERB
 
@@ -6279,7 +6249,7 @@ def configure_content_management
       <header>
         <p class="text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
       </header>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <%= form_with model: [:admin, @footer_setting], url: admin_footer_setting_path, class: "space-y-5" do |form| %>
             <% if @footer_setting.errors.any? %>
@@ -6289,11 +6259,11 @@ def configure_content_management
             <% end %>
             <fieldset class="fieldset">
               <legend class="fieldset-legend"><%= form.label :x_url, "X(Twitter)" %></legend>
-              <%= form.url_field :x_url, class: "input input-rapid w-full", placeholder: "https://example.com/x-account" %>
+              <%= form.url_field :x_url, class: "input w-full", placeholder: "https://example.com/x-account" %>
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend"><%= form.label :github_url, "GitHub" %></legend>
-              <%= form.url_field :github_url, class: "input input-rapid w-full", placeholder: "https://example.com/github-account" %>
+              <%= form.url_field :github_url, class: "input w-full", placeholder: "https://example.com/github-account" %>
             </fieldset>
             <div class="card-actions flex-wrap justify-end"><%= form.submit t("common.update"), class: action_button_classes(:primary) %></div>
           <% end %>
@@ -8127,7 +8097,7 @@ def configure_profile
     form_fields << <<~ERB
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :screen_name %></legend>
-        <%= form.text_field :screen_name, class: "input input-rapid w-full", pattern: "[a-z0-9_]+", autocomplete: "username", required: true %>
+        <%= form.text_field :screen_name, class: "input w-full", pattern: "[a-z0-9_]+", autocomplete: "username", required: true %>
         <p class="label"><%= t("profiles.screen_name_hint") %></p>
       </fieldset>
     ERB
@@ -8136,7 +8106,7 @@ def configure_profile
     form_fields << <<~ERB
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :display_name %></legend>
-        <%= form.text_field :display_name, class: "input input-rapid w-full", autocomplete: "name", required: true %>
+        <%= form.text_field :display_name, class: "input w-full", autocomplete: "name", required: true %>
       </fieldset>
     ERB
   end
@@ -8261,7 +8231,7 @@ def configure_profile
     <<~ERB
 
       <% if @profile.avatar.attached? %>
-        <section class="card card-border border-error bg-base-100 shadow-none">
+        <section class="card card-border border-error bg-base-100">
           <div class="card-body">
             <h2 class="card-title text-base leading-[1.5]"><%= t("profiles.avatar_delete_title") %></h2>
             <p class="text-sm text-neutral"><%= t("profiles.avatar_delete_description") %></p>
@@ -8278,7 +8248,7 @@ def configure_profile
   create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("profiles.title") %>
     <div class="space-y-6">
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <ul class="list">
     #{profile_rows}      </ul>
@@ -8293,7 +8263,7 @@ def configure_profile
   create_file "app/views/profiles/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("profiles.edit_title") %>
     <div class="space-y-6">
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <%= render "form", profile: @profile %>
         </div>
@@ -8608,7 +8578,7 @@ def configure_api
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= form.label :name %></legend>
-        <%= form.text_field :name, required: true, autocomplete: "off", class: "input input-rapid w-full" %>
+        <%= form.text_field :name, required: true, autocomplete: "off", class: "input w-full" %>
         <p class="label"><%= t("api_credentials.name_hint") %></p>
       </fieldset>
       <div class="card-actions flex-wrap justify-end">
@@ -8626,7 +8596,7 @@ def configure_api
     <div class="space-y-6">
       <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <% if @api_credentials.any? %>
             <div class="overflow-x-auto">
@@ -8673,7 +8643,7 @@ def configure_api
         </div>
       <% end %>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <h2 class="card-title text-base leading-[1.5]"><%= t("api_credentials.information") %></h2>
           <div class="mt-3 grid gap-4">
@@ -8702,14 +8672,14 @@ def configure_api
   create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.new") %>
     <div class="space-y-6">
-      <section class="card-rapid"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
   create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.edit") %>
     <div class="space-y-6">
-      <section class="card-rapid"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
+      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
     </div>
   ERB
 
@@ -8807,7 +8777,7 @@ def configure_api
         get api_credentials_url
         assert_response :success
         assert_select "table.table", count: 0
-        assert_select '[data-page-actions-container="card"].card-rapid [data-page-actions-column="primary"] a[href=?]',
+        assert_select '[data-page-actions-container="card"].card.card-border.bg-base-100 [data-page-actions-column="primary"] a[href=?]',
           new_api_credential_path, count: 1
         assert_select '[data-page-actions-container="tab"]', count: 0
 
@@ -9796,7 +9766,7 @@ def configure_in_app_notifications
         <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
         <p class="text-sm text-neutral"><%= t("notifications.description") %></p>
       </header>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <%= turbo_frame_tag "notifications_history", data: { turbo_action: "advance" } do %>
             <% personal_label = t("notifications.tabs.personal") %>
@@ -9878,7 +9848,7 @@ def configure_in_app_notifications
     <% content_for :page_actions_primary do %>
       <%= link_to t("notifications.admin.new"), new_admin_notification_path, class: action_button_classes(:primary) %>
     <% end %>
-    <section class="card-rapid">
+    <section class="card card-border bg-base-100">
       <div class="card-body p-3">
         <div class="overflow-x-auto">
           <table class="table table-sm table-pin-rows min-w-max">
@@ -9943,7 +9913,7 @@ def configure_in_app_notifications
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend"><%= form.label :published_at, t("notifications.admin.published_at") %></legend>
-          <%= form.datetime_local_field :published_at, required: true, class: "input input-rapid w-full" %>
+          <%= form.datetime_local_field :published_at, required: true, class: "input w-full" %>
         </fieldset>
       </div>
       <label class="label cursor-pointer justify-start gap-3">
@@ -9952,7 +9922,7 @@ def configure_in_app_notifications
       </label>
       <fieldset class="fieldset" data-notification-recipients-target="selector">
         <legend class="fieldset-legend"><%= t("notifications.admin.recipients") %></legend>
-        <input type="search" class="input input-rapid w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
+        <input type="search" class="input w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
           data-notification-recipients-target="search" data-action="input->notification-recipients#search">
         <p class="label"><%= t("notifications.admin.recipient_search_hint") %></p>
         <p class="text-sm font-medium"><%= t("notifications.admin.selected_recipients") %></p>
@@ -9969,17 +9939,17 @@ def configure_in_app_notifications
 
   create_file "app/views/admin/notifications/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("notifications.admin.new") %>
-    <section class="card-rapid"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
+    <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
   ERB
 
   create_file "app/views/admin/notifications/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("notifications.admin.edit") %>
-    <section class="card-rapid"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
+    <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
   ERB
 
   create_file "app/views/admin/notifications/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("notifications.admin.show") %>
-    <section class="card-rapid">
+    <section class="card card-border bg-base-100">
       <div class="card-body p-3">
         <div class="break-words"><%= @notification.message %></div>
         <dl class="grid gap-3 sm:grid-cols-2">
@@ -10950,8 +10920,8 @@ def configure_default_views
   profile_owner = "current_user.profile"
   logout_path = "application_routes.destroy_user_session_path"
   guest_desktop_navigation = <<~ERB
-    <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-outline btn-rapid" %>
-    <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline btn-rapid" %>
+    <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-outline" %>
+    <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline" %>
   ERB
   guest_mobile_navigation = <<~ERB
     <li><%= link_to t("navigation.sign_in"), application_routes.new_user_session_path %></li>
@@ -11099,12 +11069,12 @@ def configure_default_views
       end
 
       ACTION_BUTTON_CLASSES = {
-        primary: "btn btn-primary btn-rapid",
-        secondary: "btn btn-rapid",
-        quiet: "btn btn-outline btn-rapid",
-        warning: "btn btn-outline btn-warning btn-rapid",
-        destructive: "btn btn-outline btn-error btn-rapid",
-        destructive_confirm: "btn btn-error btn-rapid"
+        primary: "btn btn-primary",
+        secondary: "btn",
+        quiet: "btn btn-outline",
+        warning: "btn btn-outline btn-warning",
+        destructive: "btn btn-outline btn-error",
+        destructive_confirm: "btn btn-error"
       }.freeze
       private_constant :ACTION_BUTTON_CLASSES
 
@@ -11155,7 +11125,7 @@ def configure_default_views
       end
       def pagination_item_classes(active: false, disabled: false, square: false)
         class_names(
-          "btn btn-rapid join-item",
+          "btn join-item",
           "btn-active": active,
           "btn-disabled": disabled,
           "btn-square": square
@@ -11288,7 +11258,7 @@ def configure_default_views
         actions = tag.div(safe_join(columns), class: "grid min-w-0 gap-4 sm:grid-cols-2", data: { page_actions: true })
         return actions unless card
 
-        tag.div(tag.div(actions, class: "card-body p-3"), class: "card-rapid mb-6",
+        tag.div(tag.div(actions, class: "card-body p-3"), class: "card card-border bg-base-100 mb-6",
           data: { page_actions_container: "card" })
       end
       private :page_actions
@@ -11362,12 +11332,12 @@ def configure_default_views
 
       test "maps semantic action button roles without a fallback" do
         expected = {
-          primary: "btn btn-primary btn-rapid",
-          secondary: "btn btn-rapid",
-          quiet: "btn btn-outline btn-rapid",
-          warning: "btn btn-outline btn-warning btn-rapid",
-          destructive: "btn btn-outline btn-error btn-rapid",
-          destructive_confirm: "btn btn-error btn-rapid"
+          primary: "btn btn-primary",
+          secondary: "btn",
+          quiet: "btn btn-outline",
+          warning: "btn btn-outline btn-warning",
+          destructive: "btn btn-outline btn-error",
+          destructive_confirm: "btn btn-error"
         }
 
         expected.each do |role, classes|
@@ -11395,10 +11365,10 @@ def configure_default_views
         assert_equal "2 / 8", inner.element_children.first.text
         assert_equal "2", inner.at_css(".join > .btn-active").text
         assert_includes inner.at_css(".join > .btn-disabled")["class"].split, "btn-square"
-        assert_equal 2, inner.css(".join > .join-item.btn.btn-rapid").size
-        assert_equal "btn btn-rapid join-item btn-active",
+        assert_equal 2, inner.css(".join > .join-item.btn").size
+        assert_equal "btn join-item btn-active",
           inner.at_css(".join > .btn-active")["class"]
-        assert_equal "btn btn-rapid join-item btn-disabled btn-square",
+        assert_equal "btn join-item btn-disabled btn-square",
           inner.at_css(".join > .btn-disabled")["class"]
         assert_raises(ArgumentError) { with_pagination(aria_label: " ") { "items" } }
       end
@@ -11412,7 +11382,7 @@ def configure_default_views
         items = nav.css(".join > .join-item.btn")
 
         assert_equal 9, items.size
-        assert items.all? { |item| item["class"].split.include?("btn-rapid") }
+        assert items.all? { |item| %w[btn join-item].all? { |name| item["class"].split.include?(name) } }
         assert_equal %w[1 … 7 8 9 … 16], items.drop(1).take(7).map(&:text)
         assert_equal "8", nav.at_css(".join-item.btn-active[aria-current=page]").text
         assert_equal 2, nav.css('.join-item.btn-disabled[role="separator"]').size
@@ -11490,7 +11460,7 @@ def configure_default_views
 
         html = send(:page_actions, card: true)
         fragment = Nokogiri::HTML5.fragment(T.must(html))
-        card = T.must(fragment.at_css('[data-page-actions-container="card"].card-rapid'))
+        card = T.must(fragment.at_css('[data-page-actions-container="card"].card.card-border.bg-base-100'))
         card_body = T.must(card.at_css(".card-body"))
 
         assert card_body.element_children.first["data-page-actions"]
@@ -11541,7 +11511,7 @@ def configure_default_views
         assert actions_container.at_css("[data-page-actions]")
         assert_includes tab_content["class"].split, "p-3"
         assert_equal "Tab content", tab_content.element_children.find { |node| node.name == "p" }.text
-        assert_nil tab_content.at_css(".card-rapid")
+        assert_nil tab_content.at_css(".card.card-border")
         assert content_for?(:page_actions_in_tab)
       end
 
@@ -11673,13 +11643,13 @@ def configure_default_views
     <% content_for :content do %>
       <section class="hero mx-auto w-full max-w-md px-5 py-10 md:py-16" data-layout="authentication">
         <div class="hero-content w-full max-w-none flex-col gap-4 p-0">
-          <div class="card-rapid w-full">
+          <div class="card card-border bg-base-100 w-full">
             <div class="card-body p-6 sm:p-8">
               <%= yield %>
             </div>
           </div>
           <% if content_for?(:authentication_switch) %>
-            <div class="card-rapid w-full">
+            <div class="card card-border bg-base-100 w-full">
               <div class="card-body p-6 sm:p-8">
                 <%= yield :authentication_switch %>
               </div>
@@ -11784,7 +11754,7 @@ def configure_default_views
                 </svg>
               </span>
             </button>
-            <div id="notifications-popover" popover class="dropdown dropdown-end z-20 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-box border border-base-300 bg-base-100 shadow-elevation-2"
+            <div id="notifications-popover" popover class="dropdown dropdown-end z-20 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-box border border-base-300 bg-base-100 shadow"
               style="position-anchor: --notifications-anchor" data-controller="notification-popover"
               data-notification-popover-url-value="<%= application_routes.popover_notifications_path %>"
               data-action="toggle->notification-popover#load">
@@ -11806,7 +11776,7 @@ def configure_default_views
               </template>
             </div>
             <details class="dropdown dropdown-end dropdown-hover">
-    #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow-elevation-2">
+    #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow">
     #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if #{admin_controller_condition} %>
                 <li class="menu-title"><%= application_translate("navigation.admin") %></li>
                 <%= render "shared/admin_navigation" %>
@@ -11831,7 +11801,7 @@ def configure_default_views
           <div class="navbar-end min-[961px]:hidden">
             <details class="dropdown dropdown-end">
               <summary class="btn btn-outline"><%= t("common.menu") %></summary>
-              <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow-elevation-2">
+              <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow">
     #{guest_mobile_navigation.lines.map { |line| "            #{line}" }.join}          </ul>
             </details>
           </div>
@@ -11921,7 +11891,7 @@ def configure_default_views
         </div>
         <div class="grid gap-4 min-[961px]:grid-cols-3">
           <% [["01", t("home.features.rails.title"), t("home.features.rails.description")], ["02", t("home.features.ui.title"), t("home.features.ui.description")], ["03", t("home.features.production.title"), t("home.features.production.description")]].each do |number, title, description| %>
-            <article class="card-rapid transition-shadow hover:shadow-elevation-1">
+            <article class="card card-border bg-base-100 transition-shadow hover:shadow-sm">
               <div class="card-body gap-3 p-5">
                 <span class="text-xs font-bold text-primary"><%= number %></span>
                 <h3 class="card-title text-base leading-[1.5]"><%= title %></h3>
@@ -11941,7 +11911,7 @@ def configure_default_views
         <p class="text-sm text-neutral">#{account_page_description}</p>
       </header>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.show.next_step") %></h2>
           <p class="text-sm text-neutral">#{account_page_action}</p>
@@ -11977,7 +11947,7 @@ def configure_default_views
   create_file "app/views/accounts/delete.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("accounts.delete.title") %>
 
-    <section class="card card-border border-error bg-base-100 shadow-none">
+    <section class="card card-border border-error bg-base-100">
       <div class="card-body">
         <p class="text-base-content/70"><%= t("accounts.delete.description") %></p>
         <div class="card-actions flex-wrap justify-end">
@@ -12317,10 +12287,10 @@ def configure_default_views
           assert_select 'input[type="password"]', count: 0
           assert_select 'input[name*="login_id"]', count: 0
           assert_select '[data-layout="authentication"] > .hero-content' do
-            assert_select '> .card-rapid', count: 2
-            assert_select '> .card-rapid:first-child [data-controller="passkey"]', count: 1
-            assert_select '> .card-rapid:last-child p.text-sm.text-base-content\\/70', text: switch_prompt, count: 1
-            assert_select '> .card-rapid:last-child a[href=?]', switch_path, text: switch_text, count: 1
+            assert_select '> .card.card-border.bg-base-100', count: 2
+            assert_select '> .card.card-border.bg-base-100:first-child [data-controller="passkey"]', count: 1
+            assert_select '> .card.card-border.bg-base-100:last-child p.text-sm.text-base-content\\/70', text: switch_prompt, count: 1
+            assert_select '> .card.card-border.bg-base-100:last-child a[href=?]', switch_path, text: switch_text, count: 1
           end
         end
       end
@@ -13030,7 +13000,7 @@ def configure_web_push
         <p class="text-sm text-neutral"><%= t("web_push.page.description") %></p>
       </header>
 
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body p-3">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -13525,7 +13495,7 @@ def install_job_operations
 
           <% if selectable_applications.any? %>
             <div class="dropdown dropdown-end">
-              <button type="button" tabindex="0" class="btn btn-rapid">
+              <button type="button" tabindex="0" class="btn">
                 <%= MissionControl::Jobs::Current.application.name %>
               </button>
               <ul tabindex="0" class="dropdown-content menu z-10 mt-2 w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow">
@@ -13583,7 +13553,7 @@ def install_job_operations
     <% if @queues.empty? %>
       <div class="alert" role="status"><span>There are no queues.</span></div>
     <% else %>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table min-w-max">
@@ -13642,7 +13612,7 @@ def install_job_operations
     <% if @jobs_page.empty? %>
       <div class="alert" role="status"><span>The queue is empty.</span></div>
     <% else %>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table min-w-max">
@@ -13673,27 +13643,27 @@ def install_job_operations
     <span class="badge <%= job_operation_status_class(jobs_status) %>"><%= jobs_status %></span>
 
     <% unless @jobs_page.empty? && !active_filters? %>
-      <section class="card-rapid" aria-label="Job filters">
+      <section class="card card-border bg-base-100" aria-label="Job filters">
         <div class="card-body">
           <%= form_for :filter, url: application_jobs_path(MissionControl::Jobs::Current.application, jobs_status), method: :get,
             html: { class: "grid gap-4 md:grid-cols-2" },
             data: { controller: "form", action: "input->form#debouncedSubmit" } do |form| %>
             <fieldset class="fieldset">
               <%= form.label :job_class_name, class: "fieldset-legend" %>
-              <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: "input input-rapid w-full", list: "job-classes", placeholder: "Filter by job class...", autocomplete: "off" %>
+              <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: "input w-full", list: "job-classes", placeholder: "Filter by job class...", autocomplete: "off" %>
             </fieldset>
             <fieldset class="fieldset">
               <%= form.label :queue_name, class: "fieldset-legend" %>
-              <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: "input input-rapid w-full", list: "queue-names", placeholder: "Filter by queue name...", autocomplete: "off" %>
+              <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: "input w-full", list: "queue-names", placeholder: "Filter by queue name...", autocomplete: "off" %>
             </fieldset>
             <% if jobs_status == "finished" %>
               <fieldset class="fieldset">
                 <%= form.label :finished_at_start, class: "fieldset-legend" %>
-                <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: "input input-rapid w-full" %>
+                <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: "input w-full" %>
               </fieldset>
               <fieldset class="fieldset">
                 <%= form.label :finished_at_end, class: "fieldset-legend" %>
-                <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: "input input-rapid w-full" %>
+                <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: "input w-full" %>
               </fieldset>
             <% end %>
             <%= hidden_field_tag :server_id, MissionControl::Jobs::Current.server.id %>
@@ -13726,7 +13696,7 @@ def install_job_operations
         <span><%= active_filters? ? "No #{jobs_status.dasherize} jobs found with the given filters." : "There are no #{jobs_status.dasherize} jobs #{blank_status_emoji(jobs_status)}" %></span>
       </div>
     <% else %>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table min-w-max">
@@ -13789,7 +13759,7 @@ def install_job_operations
       </div>
     </header>
 
-    <section class="card-rapid" aria-labelledby="job-information">
+    <section class="card card-border bg-base-100" aria-labelledby="job-information">
       <div class="card-body p-0">
         <div class="overflow-x-auto">
           <h2 id="job-information" class="sr-only leading-[1.5]">Job information</h2>
@@ -13826,7 +13796,7 @@ def install_job_operations
       </section>
     <% end %>
 
-    <details class="collapse collapse-arrow card-rapid">
+    <details class="collapse collapse-arrow card card-border bg-base-100">
       <summary class="collapse-title text-lg font-semibold">Raw data</summary>
       <div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@job.raw_data.without("backtrace")) %></code></pre></div></div>
     </details>
@@ -13839,7 +13809,7 @@ def install_job_operations
     <% if @recurring_tasks.empty? %>
       <div class="alert" role="status"><span>There are no recurring tasks.</span></div>
     <% else %>
-      <section class="card-rapid">
+      <section class="card card-border bg-base-100">
         <div class="card-body">
           <div class="overflow-x-auto">
             <table class="table min-w-max">
@@ -13871,7 +13841,7 @@ def install_job_operations
       <% if @recurring_task.runnable? %><%= button_to "Run now", application_recurring_task_path(@application, @recurring_task.id), class: action_button_classes(:warning), method: :put %><% end %>
     </div>
 
-    <section class="card-rapid">
+    <section class="card card-border bg-base-100">
       <div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><tbody>
         <% if @recurring_task.job_class_name.present? %><tr><th>Job class</th><td><%= @recurring_task.job_class_name %></td></tr><tr><th>Arguments</th><td class="font-mono text-sm"><%= @recurring_task.arguments.join(",") %></td></tr><% elsif @recurring_task.command.present? %><tr><th>Command</th><td class="font-mono text-sm"><%= @recurring_task.command %></td></tr><% end %>
         <tr><th>Schedule</th><td><%= @recurring_task.schedule %></td></tr>
@@ -13884,7 +13854,7 @@ def install_job_operations
       <div class="alert" role="status"><span>No jobs found for this recurring task.</span></div>
     <% else %>
       <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]"><%= pluralize @recurring_task.jobs.count, "job" %></h2>
-        <div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
+        <div class="card card-border bg-base-100"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
           <% @jobs_page.records.each do |job| %><tr><td><%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "link link-hover font-semibold" %><div class="text-sm text-base-content/70">Enqueued <%= time_distance_in_words_with_title(job.enqueued_at.to_datetime) %> ago</div></td><td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td><td><span class="badge <%= job_operation_status_class(job.status) %>"><%= job.status %></span></td></tr><% end %>
         </tbody></table></div></div></div>
         <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param, aria_label: "Recurring task jobs pagination" %>
@@ -13899,7 +13869,7 @@ def install_job_operations
     <% if @workers_page.empty? %>
       <div class="alert" role="status"><span>There are no workers.</span></div>
     <% else %>
-      <div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Worker</th><th>Hostname</th><th>Jobs</th><th>Last heartbeat</th></tr></thead><tbody>
+      <div class="card card-border bg-base-100"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Worker</th><th>Hostname</th><th>Jobs</th><th>Last heartbeat</th></tr></thead><tbody>
         <% @workers_page.records.each do |worker| %><tr><td><%= link_to "worker #{worker.id}", application_worker_path(@application, worker.id), class: "link link-hover font-semibold" %><br><%= worker.name %></td><td><%= worker.hostname %></td><td><% worker.jobs.each do |job| %><div><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover" %><% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %></div><% end %></td><td class="text-base-content/70"><%= time_distance_in_words_with_title(worker.last_heartbeat_at) %> ago</td></tr><% end %>
       </tbody></table></div></div></div>
       <%= render "mission_control/jobs/shared/pagination_toolbar", page: @workers_page, filter_param: {}, aria_label: "Workers pagination" %>
@@ -13912,17 +13882,17 @@ def install_job_operations
 
     <p class="text-base-content/70"><%= @worker.name %> · <%= @worker.hostname %></p>
 
-    <details class="collapse collapse-arrow card-rapid" open><summary class="collapse-title text-lg font-semibold">Configuration</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.configuration) %></code></pre></div></div></details>
+    <details class="collapse collapse-arrow card card-border bg-base-100" open><summary class="collapse-title text-lg font-semibold">Configuration</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.configuration) %></code></pre></div></div></details>
 
     <% if @worker.jobs.empty? %>
       <div class="alert" role="status"><span>This worker is idle.</span></div>
     <% else %>
-      <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]">Running <%= pluralize @worker.jobs.size, "job" %></h2><div class="card-rapid"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
+      <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]">Running <%= pluralize @worker.jobs.size, "job" %></h2><div class="card card-border bg-base-100"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th>Job</th><th>Arguments</th><th>Status</th></tr></thead><tbody>
         <% @worker.jobs.each do |job| %><tr><td><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover font-semibold" %></td><td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td><td><span class="badge <%= job_operation_status_class(job.status) %>"><%= job.status %></span></td></tr><% end %>
       </tbody></table></div></div></div></section>
     <% end %>
 
-    <details class="collapse collapse-arrow card-rapid"><summary class="collapse-title text-lg font-semibold">Raw data</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.raw_data) %></code></pre></div></div></details>
+    <details class="collapse collapse-arrow card card-border bg-base-100"><summary class="collapse-title text-lg font-semibold">Raw data</summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.raw_data) %></code></pre></div></div></details>
   ERB
 
   create_locale_pair(
@@ -14041,11 +14011,8 @@ def install_job_operations
         assert_select 'meta[property="og:title"][content=?]', "Queues | \#{app_name}", count: 1
         assert_select 'a[role="tab"].tab.tab-active.z-10', minimum: 1
         assert_select 'section[aria-label="Application selection"]', count: 0
-        assert_select '[data-mission-control-jobs-root] > .card-rapid > .card-body > .overflow-x-auto > table.table.min-w-max', minimum: 1
+        assert_select '[data-mission-control-jobs-root] > .card.card-border.bg-base-100 > .card-body > .overflow-x-auto > table.table.min-w-max', minimum: 1
         assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
-        assert_select '[data-mission-control-jobs-root] .btn' do |buttons|
-          buttons.each { |button| assert_includes button["class"].split, "btn-rapid" }
-        end
         assert_not_includes response.body, "bulma.min.css"
         assert_not_includes response.body, "is-boxed"
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', host_translate("navigation.admin_menu"), count: 1
@@ -14120,18 +14087,18 @@ def install_job_operations
         assert_response :success
         assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"]', count: 0
         assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"]', count: 1 do
-          assert_select "form button.btn.btn-outline.btn-warning.btn-rapid", text: /Retry all/, count: 1
-          assert_select "form button.btn.btn-outline.btn-error.btn-rapid", text: /Discard all/, count: 1
+          assert_select "form button.btn.btn-outline.btn-warning", text: /Retry all/, count: 1
+          assert_select "form button.btn.btn-outline.btn-error", text: /Discard all/, count: 1
         end
-        assert_select '.tab-content > [data-mission-control-jobs-root] > section.card-rapid[aria-label="Job filters"] > .card-body > form.grid', count: 1
-        assert_select '[aria-label="Job filters"] .card-actions.flex-wrap.justify-end a.btn.btn-rapid', text: "Clear filters", count: 1
-        assert_select '[data-mission-control-jobs-root] > .card-rapid > .card-body > .overflow-x-auto > table.table.min-w-max', count: 1
+        assert_select '.tab-content > [data-mission-control-jobs-root] > section.card.card-border.bg-base-100[aria-label="Job filters"] > .card-body > form.grid', count: 1
+        assert_select '[aria-label="Job filters"] .card-actions.flex-wrap.justify-end a.btn', text: "Clear filters", count: 1
+        assert_select '[data-mission-control-jobs-root] > .card.card-border.bg-base-100 > .card-body > .overflow-x-auto > table.table.min-w-max', count: 1
         assert_select '[data-mission-control-jobs-root] table .flex.flex-wrap.justify-end.gap-2', count: 1 do
-          assert_select 'form button.btn.btn-outline.btn-warning.btn-rapid', text: "Retry", count: 1
-          assert_select 'form button.btn.btn-outline.btn-error.btn-rapid', text: "Discard", count: 1
+          assert_select 'form button.btn.btn-outline.btn-warning', text: "Retry", count: 1
+          assert_select 'form button.btn.btn-outline.btn-error', text: "Discard", count: 1
         end
         assert_select 'nav[aria-label="Failed jobs pagination"].overflow-x-auto > .flex.min-w-full.justify-end > .join', count: 1 do
-          assert_select '.join-item.btn.btn-rapid', count: 2
+          assert_select '.join-item.btn', count: 2
         end
         assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
         assert_select '[data-page-actions-container="card"]', count: 0
@@ -14345,15 +14312,15 @@ def install_maintenance_tasks
 
           case form_builder.object.class.attribute_types[parameter_name]
           when ActiveModel::Type::Integer
-            form_builder.number_field(parameter_name, class: "input input-rapid w-full")
+            form_builder.number_field(parameter_name, class: "input w-full")
           when ActiveModel::Type::Decimal, ActiveModel::Type::Float
-            form_builder.number_field(parameter_name, step: "any", class: "input input-rapid w-full")
+            form_builder.number_field(parameter_name, step: "any", class: "input w-full")
           when ActiveModel::Type::DateTime
-            form_builder.datetime_field(parameter_name, class: "input input-rapid w-full sm:w-fit") + datetime_field_help_text
+            form_builder.datetime_field(parameter_name, class: "input w-full sm:w-fit") + datetime_field_help_text
           when ActiveModel::Type::Date
-            form_builder.date_field(parameter_name, class: "input input-rapid w-full sm:w-fit")
+            form_builder.date_field(parameter_name, class: "input w-full sm:w-fit")
           when ActiveModel::Type::Time
-            form_builder.time_field(parameter_name, class: "input input-rapid w-full sm:w-fit")
+            form_builder.time_field(parameter_name, class: "input w-full sm:w-fit")
           when ActiveModel::Type::Boolean
             form_builder.check_box(parameter_name, class: "checkbox")
           else
@@ -14389,7 +14356,7 @@ def install_maintenance_tasks
 
     <%= tag.div(data: { refresh: (defined?(@refresh) && @refresh) || "" }, class: "space-y-8") do %>
       <% if @available_tasks.empty? %>
-        <section class="card card-border border-base-300 bg-base-100">
+        <section class="card card-border bg-base-100">
           <div class="card-body">
             <h2 class="card-title leading-[1.5]">The MaintenanceTasks gem has been successfully installed!</h2>
             <p>Any new Tasks will show up here. To start writing your first Task, run <code>bin/rails generate maintenance_tasks:task my_task</code>.</p>
@@ -14411,7 +14378,7 @@ def install_maintenance_tasks
   ERB
 
   create_file "app/views/maintenance_tasks/tasks/_task.html.erb", <<~ERB, force: true
-    <article class="card card-border min-w-0 border-base-300 bg-base-100">
+    <article class="card card-border min-w-0 bg-base-100">
       <div class="card-body min-w-0">
         <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <h3 class="card-title min-w-0 text-base leading-[1.5]">
@@ -14445,7 +14412,7 @@ def install_maintenance_tasks
   create_file "app/views/maintenance_tasks/tasks/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, @task %>
 
-    <section class="card card-border border-base-300 bg-base-100">
+    <section class="card card-border bg-base-100">
       <div class="card-body">
         <%= form_with url: admin_maintenance_tasks.task_runs_path(@task), method: :post, class: "space-y-6" do |form| %>
           <% if @task.csv_task? %>
@@ -14483,7 +14450,7 @@ def install_maintenance_tasks
     </section>
 
     <% if (code = @task.code) %>
-      <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100">
+      <details class="collapse collapse-arrow card card-border bg-base-100">
         <summary class="collapse-title text-lg font-semibold">Source code</summary>
         <div class="collapse-content">
           <div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= highlight_code(code) %></code></pre></div>
@@ -14514,7 +14481,7 @@ def install_maintenance_tasks
   ERB
 
   create_file "app/views/maintenance_tasks/runs/_run.html.erb", <<~ERB, force: true
-    <details class="collapse collapse-arrow card card-border border-base-300 bg-base-100" open id="run_<%= run.id %>">
+    <details class="collapse collapse-arrow card card-border bg-base-100" open id="run_<%= run.id %>">
       <summary class="collapse-title pr-12">
         <span class="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <span class="flex min-w-0 flex-wrap items-center gap-3">
@@ -14833,7 +14800,7 @@ def install_maintenance_tasks
         assert_select "input.input[type=time][name=?]", "task[starts_at]", count: 1
         assert_select "select.select[name=?]", "task[mode]", count: 1
         assert_select "input.checkbox[name=?]", "task[notify]", count: 1
-        assert_select "input.btn.btn-primary.btn-rapid[type=submit]", value: "Run", count: 1
+        assert_select "input.btn.btn-primary[type=submit]", value: "Run", count: 1
         assert_select "form[action=?]", MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 1
         assert_select "details.collapse.collapse-arrow", minimum: 1
         assert_select ".mockup-code", count: 1
@@ -14900,9 +14867,9 @@ def install_maintenance_tasks
         assert_select ".badge.badge-warning", text: "Paused", count: 1
         assert_select "progress.progress-warning", count: 1
         assert_select ".card-actions.flex-wrap.justify-end", minimum: 3
-        assert_select "form[action$='/resume'] .btn.btn-rapid", text: "Resume", count: 2
-        assert_select "form[action$='/pause'] .btn.btn-outline.btn-warning.btn-rapid", text: "Pause", count: 1
-        assert_select "form[action$='/cancel'] .btn.btn-outline.btn-error.btn-rapid", text: "Cancel", count: 2
+        assert_select "form[action$='/resume'] .btn", text: "Resume", count: 2
+        assert_select "form[action$='/pause'] .btn.btn-outline.btn-warning", text: "Pause", count: 1
+        assert_select "form[action$='/cancel'] .btn.btn-outline.btn-error", text: "Cancel", count: 2
         assert_select ".btn-sm, .btn-xs", count: 0
         assert_select ".badge.badge-error", text: "Errored", count: 1
         assert_select ".alert.alert-error.alert-soft", text: /Something went wrong/, count: 1
@@ -14925,7 +14892,7 @@ def install_maintenance_tasks
 
         assert_response :success
         assert_select 'nav[aria-label="Previous runs pagination"].overflow-x-auto > .flex.min-w-full.justify-end > .join', count: 1 do
-          assert_select "a.join-item.btn.btn-rapid", text: "Next page", count: 1
+          assert_select "a.join-item.btn", text: "Next page", count: 1
         end
       end
 
@@ -15793,6 +15760,10 @@ def configure_evidence_capture
           [320, 390, 640, 960, 961].each do |width|
             page.current_window.resize_to(width, 900)
             visit root_path
+            if width == 320
+              assert_standard_button_size_modifiers
+              assert_standard_card_border_colors
+            end
             find('button[popovertarget="notifications-popover"]').click
             assert_selector "#notifications-popover:popover-open"
             assert_text "Evidence notification 1"
@@ -15841,6 +15812,80 @@ def configure_evidence_capture
           end
           assert_equal colors.fetch("expectedBorder"), colors.fetch("border")
           assert_equal colors.fetch("expectedText"), colors.fetch("text")
+        end
+
+        def assert_standard_button_size_modifiers
+          sizes = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const classNames = {
+                  default: "btn",
+                  small: "btn btn-sm",
+                  extraSmall: "btn btn-xs"
+                }
+                const buttons = Object.fromEntries(
+                  Object.entries(classNames).map(([name, className]) => {
+                    const button = document.createElement("button")
+                    button.className = className
+                    button.textContent = name
+                    document.body.append(button)
+                    return [name, button]
+                  })
+                )
+                const sizes = Object.fromEntries(
+                  Object.entries(buttons).map(([name, button]) => [
+                    name,
+                    parseFloat(getComputedStyle(button).fontSize)
+                  ])
+                )
+                Object.values(buttons).forEach((button) => button.remove())
+                return sizes
+              }
+            JAVASCRIPT
+          end
+          assert_operator sizes.fetch("default"), :>, sizes.fetch("small")
+          assert_operator sizes.fetch("small"), :>, sizes.fetch("extraSmall")
+        end
+
+        def assert_standard_card_border_colors
+          styles = page.driver.with_playwright_page do |playwright_page|
+            playwright_page.evaluate(<<~JAVASCRIPT)
+              () => {
+                const normal = document.createElement("div")
+                const error = document.createElement("div")
+                const baseProbe = document.createElement("div")
+                const errorProbe = document.createElement("div")
+                normal.className = "card card-border bg-base-100"
+                error.className = "card card-border border-error bg-base-100"
+                baseProbe.style.borderColor = "var(--color-base-300)"
+                errorProbe.style.borderColor = "var(--color-error)"
+                document.body.append(normal, error, baseProbe, errorProbe)
+                const normalStyle = getComputedStyle(normal)
+                const errorStyle = getComputedStyle(error)
+                const styles = {
+                  normalColor: normalStyle.borderTopColor,
+                  expectedNormalColor: getComputedStyle(baseProbe).borderTopColor,
+                  errorColor: errorStyle.borderTopColor,
+                  expectedErrorColor: getComputedStyle(errorProbe).borderTopColor,
+                  normalStyle: normalStyle.borderTopStyle,
+                  errorStyle: errorStyle.borderTopStyle,
+                  normalWidth: parseFloat(normalStyle.borderTopWidth),
+                  errorWidth: parseFloat(errorStyle.borderTopWidth)
+                }
+                normal.remove()
+                error.remove()
+                baseProbe.remove()
+                errorProbe.remove()
+                return styles
+              }
+            JAVASCRIPT
+          end
+          assert_equal styles.fetch("expectedNormalColor"), styles.fetch("normalColor")
+          assert_equal styles.fetch("expectedErrorColor"), styles.fetch("errorColor")
+          assert_equal "solid", styles.fetch("normalStyle")
+          assert_equal "solid", styles.fetch("errorStyle")
+          assert_operator styles.fetch("normalWidth"), :>, 0
+          assert_equal styles.fetch("normalWidth"), styles.fetch("errorWidth")
         end
 
         def assert_notification_tab_geometry(surface_selector, width)
@@ -16420,7 +16465,7 @@ def configure_evidence_capture
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
                 const grid = document.querySelector("[data-admin-overview-stats]")
-                const cards = Array.from(grid.querySelectorAll(":scope > .card-rapid"))
+                const cards = Array.from(grid.querySelectorAll(":scope > .card.card-border.bg-base-100"))
                 return {
                   documentWidth: document.documentElement.scrollWidth,
                   viewportWidth: window.innerWidth,
@@ -16490,7 +16535,7 @@ def configure_evidence_capture
                     const sidebarElement = layout.querySelector(':scope > aside')
                     const sidebar = sidebarElement.getBoundingClientRect()
                     const content = layout.querySelector(':scope > div').getBoundingClientRect()
-                    const surfaceBody = layout.querySelector(':scope > div .card-rapid > .card-body')
+                    const surfaceBody = layout.querySelector(':scope > div .card.card-border.bg-base-100 > .card-body')
                     const surfaceStyle = getComputedStyle(surfaceBody)
                     const mobileCategory = sidebarElement.querySelector('[data-with-menu-mobile-category]')
                     const scroll = sidebarElement.querySelector('[data-with-menu-scroll]')
@@ -16631,7 +16676,7 @@ def configure_evidence_capture
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
                     containerIsFirst: panel.firstElementChild === container,
-                    cardCount: container.querySelectorAll('.card-rapid').length,
+                    cardCount: container.querySelectorAll('.card.card-border.bg-base-100').length,
                     primaryCount: grid.querySelectorAll('[data-page-actions-column="primary"]').length,
                     secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length,
                     padding: [
@@ -16678,7 +16723,6 @@ def configure_evidence_capture
                     viewportWidth: window.innerWidth,
                     directItemCount: items.length,
                     childCount: join.children.length,
-                    rapidItemCount: join.querySelectorAll(':scope > .join-item.btn.btn-rapid').length,
                     rowCount: new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size,
                     fontSizes: [...new Set(items.map((item) => getComputedStyle(item).fontSize))],
                     activeText: active.textContent.trim(),
@@ -16696,9 +16740,8 @@ def configure_evidence_capture
               "pagination should not overflow the document at #{width}px"
             assert_equal geometry.fetch("childCount"), geometry.fetch("directItemCount")
             assert_equal 5, geometry.fetch("directItemCount")
-            assert_equal geometry.fetch("directItemCount"), geometry.fetch("rapidItemCount")
             assert_equal 1, geometry.fetch("rowCount")
-            assert_equal ["16px"], geometry.fetch("fontSizes")
+            assert_equal 1, geometry.fetch("fontSizes").length
             assert_equal "1", geometry.fetch("activeText")
             assert_equal 2, geometry.fetch("iconCount")
             assert_equal "auto", geometry.fetch("navOverflowX")
@@ -16733,7 +16776,7 @@ def configure_evidence_capture
                   const activeTabRect = activeTab.getBoundingClientRect()
                   const tabContentRect = tabContent.getBoundingClientRect()
                   const root = document.querySelector("[data-mission-control-jobs-root]")
-                  const tableScroller = root.querySelector(".card-rapid > .card-body > .overflow-x-auto")
+                  const tableScroller = root.querySelector(".card.card-border.bg-base-100 > .card-body > .overflow-x-auto")
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
@@ -16838,8 +16881,8 @@ def configure_evidence_capture
                   const primary = actions.querySelector('[data-page-actions-column="primary"]')
                   const actionButtons = Array.from(actions.querySelectorAll(".btn"))
                   const filter = root.querySelector(':scope > section[aria-label="Job filters"]')
-                  const tableCard = root.querySelector(':scope > .card-rapid:has(table)')
-                  const tableScroller = root.querySelector(".card-rapid > .card-body > .overflow-x-auto")
+                  const tableCard = root.querySelector(':scope > .card.card-border.bg-base-100:has(table)')
+                  const tableScroller = root.querySelector(".card.card-border.bg-base-100 > .card-body > .overflow-x-auto")
                   return {
                     activeTabBottom: activeTabRect.bottom,
                     activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
@@ -16860,10 +16903,14 @@ def configure_evidence_capture
                     actionContainerIsFirst: tabContent.firstElementChild === actionsContainer,
                     actionColumnCount: getComputedStyle(actions).gridTemplateColumns.split(" ").length,
                     secondaryCount: actions.querySelectorAll('[data-page-actions-column="secondary"]').length,
-                    actionButtonsUseRapid: actionButtons.every((button) => button.classList.contains("btn-rapid")),
+                    actionButtonsUseDefaultSize: actionButtons.every((button) =>
+                      !button.classList.contains("btn-sm") && !button.classList.contains("btn-xs")
+                    ),
                     actionButtonFontSizes: [...new Set(actionButtons.map((button) => getComputedStyle(button).fontSize))],
                     filterInsideContent: filter.parentElement === root,
-                    filterUsesCardShell: filter.classList.contains("card-rapid") && filter.firstElementChild.classList.contains("card-body"),
+                    filterUsesCardShell: ["card", "card-border", "bg-base-100"].every((className) =>
+                      filter.classList.contains(className)
+                    ) && filter.firstElementChild.classList.contains("card-body"),
                     filterTop: filter.getBoundingClientRect().top,
                     tableCardTop: tableCard.getBoundingClientRect().top,
                     tableScrollerScrollWidth: tableScroller.scrollWidth,
@@ -16896,10 +16943,10 @@ def configure_evidence_capture
               "Mission Control Jobs middle tab content should contain its body at #{width}px"
             assert failed_geometry.fetch("actionContainerIsFirst"),
               "Mission Control Jobs page actions should lead the tab content at #{width}px"
-            assert failed_geometry.fetch("actionButtonsUseRapid"),
-              "Mission Control Jobs page action buttons should use btn-rapid at #{width}px"
-            assert_equal ["16px"], failed_geometry.fetch("actionButtonFontSizes"),
-              "Mission Control Jobs page action buttons should use the shared font size at #{width}px"
+            assert failed_geometry.fetch("actionButtonsUseDefaultSize"),
+              "Mission Control Jobs page action buttons should use the standard default size at #{width}px"
+            assert_equal 1, failed_geometry.fetch("actionButtonFontSizes").length,
+              "Mission Control Jobs page action buttons should use one standard default size at #{width}px"
             assert_equal 0, failed_geometry.fetch("secondaryCount"),
               "Mission Control Jobs complex filters should stay out of secondary page actions at #{width}px"
             assert failed_geometry.fetch("filterInsideContent"),

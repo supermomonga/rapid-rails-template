@@ -195,11 +195,11 @@ create_file "app/views/articles/index.html.erb", <<~'ERB', force: true
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       <% if user_signed_in? %>
-        <%= link_to "New article", new_article_path, class: "btn btn-primary btn-rapid" %>
+        <%= link_to "New article", new_article_path, class: "btn btn-primary" %>
       <% end %>
     </header>
 
-    <section class="card card-border border-base-300 bg-base-100 shadow-none">
+    <section class="card card-border bg-base-100">
       <div class="card-body">
         <div class="overflow-x-auto">
           <table class="table table-sm table-pin-rows min-w-[780px]">
@@ -224,7 +224,7 @@ create_file "app/views/articles/index.html.erb", <<~'ERB', force: true
                     </span>
                   </td>
                   <td class="whitespace-nowrap text-right">
-                    <%= link_to "Show this article", article, class: "btn btn-rapid" %>
+                    <%= link_to "Show this article", article, class: "btn" %>
                   </td>
                 </tr>
               <% end %>
@@ -271,15 +271,15 @@ create_file "app/views/articles/show.html.erb", <<~'ERB', force: true
   <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
     <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
 
-    <section class="card card-border border-base-300 bg-base-100 shadow-none">
+    <section class="card card-border bg-base-100">
       <div class="card-body">
         <%= render @article %>
         <div class="card-actions justify-end">
           <% if allowed_to?(:update?, @article) %>
-            <%= link_to "Edit this article", edit_article_path(@article), class: "btn btn-rapid" %>
-            <%= button_to "Destroy this article", @article, method: :delete, class: "btn btn-outline btn-error btn-rapid" %>
+            <%= link_to "Edit this article", edit_article_path(@article), class: "btn" %>
+            <%= button_to "Destroy this article", @article, method: :delete, class: "btn btn-outline btn-error" %>
           <% end %>
-          <%= link_to "Back to articles", articles_path, class: "btn btn-rapid" %>
+          <%= link_to "Back to articles", articles_path, class: "btn" %>
         </div>
       </div>
     </section>

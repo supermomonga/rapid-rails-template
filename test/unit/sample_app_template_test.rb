@@ -50,6 +50,18 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, 'td class="min-w-64"'
   end
 
+  def test_uses_standard_daisyui_and_tailwind_classes
+    removed_classes = %w[btn card input].map { |component| [component, "rapid"].join("-") }
+    removed_classes.concat((1..3).map { |level| ["shadow", "elevation", level].join("-") })
+
+    removed_classes.each do |css_class|
+      refute_includes @source, css_class
+    end
+
+    assert_equal 2, @source.scan('class="card card-border bg-base-100"').size
+    refute_includes @source, 'card card-border border-base-300 bg-base-100 shadow-none'
+  end
+
   def test_seeds_non_admin_sample_users_and_leaves_initial_admin_assignment_for_the_next_signup
     assert_includes @source, "sample_users = 10.times.map"
     assert_includes @source, "50.times do |article_index|"

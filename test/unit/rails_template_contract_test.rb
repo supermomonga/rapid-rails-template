@@ -335,6 +335,7 @@ class RailsTemplateContractTest < Minitest::Test
     end
 
     views = ([generated_file_source("app/views/layouts/application.html.erb")] + view_sources.values).join("\n")
+    devise_views = source_between("def configure_devise_views", "def configure_in_app_notifications")
     account_settings_layout = generated_file_source("app/views/layouts/account_settings.html.erb")
     assert_includes account_settings_layout, "with_tab(tabs:"
     assert_includes @source, "path: account_passkeys_path"
@@ -348,9 +349,10 @@ class RailsTemplateContractTest < Minitest::Test
     end
     avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
     views += profile_configuration.sub(avatar_helper, "")
-    %w[navbar menu dropdown avatar hero card fieldset input file-input checkbox btn alert footer badge divider list table collapse].each do |component|
+    %w[navbar menu dropdown avatar hero card fieldset input file-input checkbox btn alert footer badge list table collapse].each do |component|
       assert class_attributes(views).any? { |classes| classes.include?(component) }, component
     end
+    assert_equal 2, devise_views.scan('<div class="divider"><%= t("authentication.or") %></div>').size
     %w[bg-base-100 bg-base-200 border-base-300 text-base-content].each { |utility| assert_includes views, utility }
     assert_includes views, "action_button_classes(:primary)"
     refute_match(/(?:bg|text|border)-(?:blue|gray|slate|red|green|yellow)-\d+/, views)
@@ -2304,14 +2306,25 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes header, "min-h-11 items-center gap"
 
     assert_class_tokens authentication_layout, "hero"
-    assert_class_tokens authentication_layout, "hero-content"
+    assert_class_tokens authentication_layout, "hero-content", "flex-col", "gap-4"
+    assert_equal 2, authentication_layout.scan('<div class="card-rapid w-full">').size
+    assert_equal 2, authentication_layout.scan('<div class="card-body p-6 sm:p-8">').size
+    assert_includes authentication_layout, "content_for?(:authentication_switch)"
+    assert_includes authentication_layout, "<%= yield :authentication_switch %>"
     assert_class_tokens home, "hero"
     assert_class_tokens home, "hero-content"
     assert_class_tokens login, "checkbox"
     [login, registration].each do |view|
       assert_includes view, 'class_names(action_button_classes(:primary), "btn-block")'
       assert_includes view, 'class_names(action_button_classes(:secondary), "btn-block")'
+      assert_includes view, "content_for :authentication_switch"
+      assert_class_tokens view, "mb-4", "text-sm", "text-base-content/70"
+      refute_includes view, '<div class="divider"></div>'
     end
+    assert_includes login, 't("authentication.new_account_prompt")'
+    assert_includes registration, 't("authentication.existing_account_prompt")'
+    assert_includes login, 'link_to t("authentication.create_account"), new_user_registration_path'
+    assert_includes registration, 'link_to t("authentication.back_to_sign_in"), new_user_session_path'
     assert_includes login, 'data-controller="passkey"'
     assert_includes registration, 'data-controller="passkey"'
   end

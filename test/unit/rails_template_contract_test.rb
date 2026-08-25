@@ -1153,12 +1153,23 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_form, "notification_recipients_remove_label_value"
     assert_includes admin_form, 'notification_recipients_target: "audience"'
     assert_includes admin_form, 'data-notification-recipients-target="selector"'
+    assert_includes admin_form, 'class="list rounded-box border border-base-300" data-notification-recipients-target="hidden" hidden'
+    assert_includes admin_form, 'data-notification-recipients-target="count"'
+    assert_includes admin_form, 'data-notification-recipients-target="empty"'
     refute_includes admin_form, "form.text_area :message"
+    assert_includes recipients, ".where.not(id: @selected_ids)"
     assert_includes recipient_controller, "remove(event)"
     assert_includes recipient_controller, 'this.selectorTarget.hidden = !selectedUsers'
     assert_includes recipient_controller, 'input.disabled = this.audienceTarget.value !== "selected_users"'
+    assert_includes recipient_controller, "this.countTarget.textContent = entries.length"
+    assert_includes recipient_controller, 'row.className = "list-row items-center"'
+    assert_includes recipient_controller, "row.append(name, button, input)"
     assert_includes recipient_controller, 'button.dataset.action = "notification-recipients#remove"'
-    assert_includes recipient_controller, 'button.className = "btn btn-outline btn-xs"'
+    assert_includes recipient_controller, 'button.className = "btn btn-outline btn-sm"'
+    refute_includes recipient_controller, 'wrapper.className = "badge'
+    assert_includes recipient_results, 'class="list rounded-box border border-base-300"'
+    assert_includes recipient_results, 'class="btn btn-outline btn-sm"'
+    refute_includes recipient_results, "btn-active"
     assert_includes notification_test, 'test "published selected users require at least one existing recipient"'
     assert_includes notification_test, 'test "all users never create delivery rows and switching to all users deletes existing rows"'
     assert_includes delivery_test, 'test "rejects delivery rows for all-user announcements"'
@@ -1414,11 +1425,9 @@ class RailsTemplateContractTest < Minitest::Test
       "btn btn-circle btn-ghost" => 1,
       "btn btn-ghost btn-circle" => 1,
       "btn btn-outline" => 3,
-      "btn btn-outline btn-sm" => 2,
-      "btn btn-outline btn-xs" => 1,
+      "btn btn-outline btn-sm" => 4,
       "btn btn-primary btn-outline" => 1,
       "<%= compact ? 'btn btn-sm' : action_button_classes(:secondary) %>" => 1,
-      "btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>" => 1,
       "btn join-item" => 3,
       "btn mt-3 w-full" => 1
     }, button_classes.tally)

@@ -279,6 +279,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/helpers/admin/job_operations_helper.rb"
     assert_includes plan.artifacts, "app/views/layouts/mission_control/jobs/*.html.erb"
     assert_includes plan.artifacts, "app/views/mission_control/jobs/**/*.html.erb"
+    assert_includes plan.artifacts, "test/helpers/admin/job_operations_helper_test.rb"
     assert_includes plan.artifacts, "test/models/solid_queue_cleanup_test.rb"
     assert_equal %w[web worker], plan.processes
     assert_equal 1, plan.processes.count("worker")
@@ -304,6 +305,7 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "app/helpers/admin/job_operations_helper.rb"
     refute_includes plan.artifacts, "app/views/layouts/mission_control/jobs/*.html.erb"
     refute_includes plan.artifacts, "app/views/mission_control/jobs/**/*.html.erb"
+    refute_includes plan.artifacts, "test/helpers/admin/job_operations_helper_test.rb"
     refute_includes plan.artifacts, "test/models/solid_queue_cleanup_test.rb"
     assert_includes plan.production_requirements, "finished jobs retained for 1 day; failed jobs retained until retry/discard"
   end

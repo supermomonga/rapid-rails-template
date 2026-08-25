@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `81c69f0933bce4ef41543d129b84ebfdb5d00f349db0f731097f74caced7ca06`
-- Base commit: `08feab95806db260a17ddc04120e8471a289c482`
+- Source fingerprint: `04e9c88f00a8987bcce65612720efbee4d38bfd2275cb74fad11c39861c08911`
+- Base commit: `2223627e84508e9b21ef7e8394b738d7454b7813`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -258,17 +258,17 @@
 |---|---|
 |![APIキー一覧（登録済み） (desktop)](api-credentials-populated--desktop.png)|![APIキー一覧（登録済み） (mobile)](api-credentials-populated--mobile.png)|
 
-## Queues
+## キュー
 
 |Desktop|Mobile|
 |---|---|
-|![Queues (desktop)](admin-job-operations--desktop.png)|![Queues (mobile)](admin-job-operations--mobile.png)|
+|![キュー (desktop)](admin-job-operations--desktop.png)|![キュー (mobile)](admin-job-operations--mobile.png)|
 
-## Failed jobs
+## 失敗したジョブ
 
 |Desktop|Mobile|
 |---|---|
-|![Failed jobs (desktop)](admin-job-operations-failed--desktop.png)|![Failed jobs (mobile)](admin-job-operations-failed--mobile.png)|
+|![失敗したジョブ (desktop)](admin-job-operations-failed--desktop.png)|![失敗したジョブ (mobile)](admin-job-operations-failed--mobile.png)|
 
 ## 運用タスク
 
@@ -360,11 +360,11 @@
 
 ![モバイルメニュー（未ログイン） (mobile)](navigation-guest-open--mobile.png)
 
-## Queuesのモバイルメニュー
+## キューのモバイルメニュー
 
 ### Mobile
 
-![Queuesのモバイルメニュー (mobile)](admin-job-operations-navigation-open--mobile.png)
+![キューのモバイルメニュー (mobile)](admin-job-operations-navigation-open--mobile.png)
 
 ## 運用タスクのモバイルメニュー
 

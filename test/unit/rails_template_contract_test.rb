@@ -76,18 +76,18 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "pagy.data_hash(data_keys: [:series])"
     assert_includes helper, "pagy.page_url(item)"
     assert_includes helper, "ACTION_BUTTON_CLASSES = {"
-    assert_includes helper, 'primary: "btn btn-primary btn-rapid"'
-    assert_includes helper, 'secondary: "btn btn-rapid"'
-    assert_includes helper, 'quiet: "btn btn-outline btn-rapid"'
-    assert_includes helper, 'warning: "btn btn-outline btn-warning btn-rapid"'
-    assert_includes helper, 'destructive: "btn btn-outline btn-error btn-rapid"'
-    assert_includes helper, 'destructive_confirm: "btn btn-error btn-rapid"'
+    assert_includes helper, 'primary: "btn btn-primary"'
+    assert_includes helper, 'secondary: "btn"'
+    assert_includes helper, 'quiet: "btn btn-outline"'
+    assert_includes helper, 'warning: "btn btn-outline btn-warning"'
+    assert_includes helper, 'destructive: "btn btn-outline btn-error"'
+    assert_includes helper, 'destructive_confirm: "btn btn-error"'
     assert_includes helper, "private_constant :ACTION_BUTTON_CLASSES"
     assert_includes helper, "sig { params(role: Symbol).returns(String) }"
     assert_includes helper, "def action_button_classes(role)"
     assert_includes helper, 'Kernel.raise ArgumentError, "unsupported action button role: #{role.inspect}"'
     assert_includes helper, "def pagination_item_classes(active: false, disabled: false, square: false)"
-    assert_includes helper, '"btn btn-rapid join-item"'
+    assert_includes helper, '"btn join-item"'
     assert_includes helper, '"btn-active": active'
     assert_includes helper, '"btn-disabled": disabled'
     assert_includes helper, '"btn-square": square'
@@ -97,12 +97,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, 'tag.nav(inner, class: "overflow-x-auto", aria: { label: aria_label })'
     assert_includes helper, "with_pagination(aria_label:) { safe_join(items) }"
     {
-      primary: "btn btn-primary btn-rapid",
-      secondary: "btn btn-rapid",
-      quiet: "btn btn-outline btn-rapid",
-      warning: "btn btn-outline btn-warning btn-rapid",
-      destructive: "btn btn-outline btn-error btn-rapid",
-      destructive_confirm: "btn btn-error btn-rapid"
+      primary: "btn btn-primary",
+      secondary: "btn",
+      quiet: "btn btn-outline",
+      warning: "btn btn-outline btn-warning",
+      destructive: "btn btn-outline btn-error",
+      destructive_confirm: "btn btn-error"
     }.each do |role, classes|
       assert_includes helper_test, %(#{role}: "#{classes}")
     end
@@ -230,18 +230,21 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, "--radius-field: 0.5rem;"
     assert_includes @source, "--radius-box: 0.75rem;"
     assert_includes @source, "--depth: 0;"
-    assert_includes @source, "@layer components {"
-    assert_includes @source, ".card-rapid {"
-    assert_includes @source, "@apply card card-border bg-base-100 shadow-none;"
-    assert_includes @source, "@apply border-base-300;"
     assert_includes @source, "@layer utilities {"
+    assert_includes @source, ":where(.card-border) {"
+    assert_includes @source, "border-color: var(--color-base-300);"
     assert_includes @source,
       ".btn-outline:not(:is(.btn-neutral, .btn-primary, .btn-secondary, .btn-accent, .btn-info, .btn-success, .btn-warning, .btn-error)) {"
     assert_includes @source, "--btn-border: var(--color-base-300);"
-    legacy_card_classes = class_attributes(@source).select do |classes|
-      (%w[card card-border border-base-300 bg-base-100 shadow-none] - classes).empty?
+    standard_cards = class_attributes(@source).select { |classes| classes.include?("card-border") }
+    refute_empty standard_cards
+    standard_cards.each do |classes|
+      assert_includes classes, "card"
+      assert_includes classes, "bg-base-100"
+      refute_includes classes, "border-base-300"
+      refute_includes classes, "shadow-none"
     end
-    assert_empty legacy_card_classes
+    assert standard_cards.any? { |classes| classes.include?("border-error") }
     assert_includes @source, 'font-family: -apple-system, system-ui, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;'
     assert_includes @source, "font-size: 1rem;"
     assert_includes @source, "line-height: 1.8;"
@@ -300,37 +303,37 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_default_views_use_daisyui_components_and_semantic_colors
     component_expectations = {
-      "app/views/layouts/authentication.html.erb" => %w[hero hero-content card-rapid card-body],
+      "app/views/layouts/authentication.html.erb" => %w[hero hero-content card card-border bg-base-100 card-body],
       "app/views/layouts/_account_shell.html.erb" => %w[menu menu-title],
       "app/views/layouts/admin.html.erb" => %w[menu menu-title],
       "app/views/shared/_header.html.erb" => %w[navbar dropdown menu btn],
       "app/views/shared/_flash.html.erb" => %w[alert],
       "app/views/shared/_footer.html.erb" => %w[footer footer-vertical footer-title link link-hover],
-      "app/views/home/index.html.erb" => %w[hero hero-content badge btn card-rapid card-body card-title],
-      "app/views/accounts/show.html.erb" => %w[card-rapid card-body card-title btn],
+      "app/views/home/index.html.erb" => %w[hero hero-content badge btn card card-border bg-base-100 card-body card-title],
+      "app/views/accounts/show.html.erb" => %w[card card-border bg-base-100 card-body card-title btn],
       "app/views/account/siwe_identities/index.html.erb" => %w[list list-row badge btn alert],
       "app/views/account/siwe_identities/new.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/show.html.erb" => %w[btn alert],
       "app/views/account/siwe_identities/edit.html.erb" => %w[fieldset fieldset-legend input btn alert],
-      "app/views/web_push_settings/show.html.erb" => %w[card-rapid card-body card-title card-actions toggle btn alert],
-      "app/views/notifications/index.html.erb" => %w[card-rapid card-body list],
+      "app/views/web_push_settings/show.html.erb" => %w[card card-border bg-base-100 card-body card-title card-actions toggle btn alert],
+      "app/views/notifications/index.html.erb" => %w[card card-border bg-base-100 card-body list],
       "app/views/notifications/_popover.html.erb" => %w[list btn],
-      "app/views/admin/notifications/index.html.erb" => %w[card-rapid card-body table badge btn],
+      "app/views/admin/notifications/index.html.erb" => %w[card card-border bg-base-100 card-body table badge btn],
       "app/views/admin/notifications/_form.html.erb" => %w[alert fieldset fieldset-legend label select input checkbox btn],
-      "app/views/admin/overview/show.html.erb" => %w[card-rapid card-body stats stat stat-title stat-value],
-      "app/views/admin/users/index.html.erb" => %w[card-rapid card-body table badge btn],
-      "app/views/pages/_page.html.erb" => %w[card-rapid card-body],
+      "app/views/admin/overview/show.html.erb" => %w[card card-border bg-base-100 card-body stats stat stat-title stat-value],
+      "app/views/admin/users/index.html.erb" => %w[card card-border bg-base-100 card-body table badge btn],
+      "app/views/pages/_page.html.erb" => %w[card card-border bg-base-100 card-body],
       "app/views/faqs/index.html.erb" => %w[collapse collapse-arrow collapse-title collapse-content alert],
-      "app/views/admin/pages/index.html.erb" => %w[card-rapid card-body table btn],
-      "app/views/admin/pages/edit.html.erb" => %w[card-rapid card-body btn],
-      "app/views/admin/faqs/index.html.erb" => %w[card-rapid card-body table badge btn],
+      "app/views/admin/pages/index.html.erb" => %w[card card-border bg-base-100 card-body table btn],
+      "app/views/admin/pages/edit.html.erb" => %w[card card-border bg-base-100 card-body btn],
+      "app/views/admin/faqs/index.html.erb" => %w[card card-border bg-base-100 card-body table badge btn],
       "app/views/admin/faqs/_form.html.erb" => %w[alert fieldset fieldset-legend input checkbox btn],
-      "app/views/admin/footer_settings/edit.html.erb" => %w[card-rapid card-body alert fieldset fieldset-legend input btn],
+      "app/views/admin/footer_settings/edit.html.erb" => %w[card card-border bg-base-100 card-body alert fieldset fieldset-legend input btn],
       "app/views/api_credentials/_form.html.erb" => %w[alert fieldset fieldset-legend input btn],
-      "app/views/api_credentials/index.html.erb" => %w[card-rapid card-body table join join-item input alert btn],
-      "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card-rapid card-body card-title btn],
-      "app/views/api_credentials/new.html.erb" => %w[card-rapid card-body],
-      "app/views/api_credentials/edit.html.erb" => %w[card-rapid card-body],
+      "app/views/api_credentials/index.html.erb" => %w[card card-border bg-base-100 card-body table join join-item input alert btn],
+      "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card card-border bg-base-100 card-body card-title btn],
+      "app/views/api_credentials/new.html.erb" => %w[card card-border bg-base-100 card-body],
+      "app/views/api_credentials/edit.html.erb" => %w[card card-border bg-base-100 card-body],
       "app/views/users/passkey_sessions/new.html.erb" => %w[checkbox btn alert],
       "app/views/users/passkey_registrations/new.html.erb" => %w[btn alert],
       "app/views/account/passkeys/index.html.erb" => %w[list list-row btn badge],
@@ -412,7 +415,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes form, "attribute.attachments?"
     assert_includes form, 'when :textarea, :rich_textarea then "textarea w-full"'
     assert_includes form, 'when :file_field then "file-input w-full"'
-    assert_includes form, 'else "input input-rapid w-full"'
+    assert_includes form, 'else "input w-full"'
     assert_includes form, 'class: "checkbox"'
     assert_class_tokens(form, "alert", "alert-error", "alert-soft")
     assert_class_tokens(form, "fieldset")
@@ -436,7 +439,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes index, '<%%= pagination(@pagy, aria_label: "<%= human_name.pluralize %> pagination") %>'
     refute_includes index, "notice"
 
-    assert_class_tokens(show, "card-rapid")
+    assert_class_tokens(show, "card", "card-border", "bg-base-100")
     assert_includes show, '<div class="card-actions flex-wrap justify-end">'
     assert_includes show, 'method: :delete, class: action_button_classes(:destructive)'
     assert_operator show.index('Back to <%= human_name.pluralize.downcase %>'), :<,
@@ -463,7 +466,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens(partial, "list")
     assert_class_tokens(partial, "list-row")
     assert_includes partial, "<%%= dom_id <%= singular_name %> %>"
-    assert_class_tokens(controller_view, "card-rapid")
+    assert_class_tokens(controller_view, "card", "card-border", "bg-base-100")
     assert_includes controller_view, "<%= class_name %>#<%= @action %>"
     assert_includes controller_view, "Find me in <%= @path %>"
 
@@ -744,18 +747,18 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes application_selection, 'class="flex flex-wrap items-center justify-end gap-3"'
     assert_includes application_selection, '<% if @application.servers.many? || selectable_applications.any? %>'
     assert_includes application_selection, 'class="tabs tabs-lift"'
-    assert_includes application_selection, 'class="btn btn-rapid"'
+    assert_includes application_selection, 'class="btn"'
     refute_includes application_selection, "tabs-sm"
     refute_includes application_selection, "btn-sm"
     refute_includes application_selection, "card-body"
     refute_includes application_selection, "Back to main app"
     refute_includes application_selection, "main_app.root_path"
-    assert_includes jobs_index, 'class="card-rapid"'
+    assert_includes jobs_index, 'class="card card-border bg-base-100"'
     assert_includes jobs_index, 'class="card-body"'
     assert_includes jobs_index, 'class="overflow-x-auto"'
     assert_includes jobs_index, '<% content_for :page_title, "#{jobs_status.titleize} jobs" %>'
     assert_includes jobs_index, 'class="table min-w-max"'
-    assert_includes jobs_index, '<section class="card-rapid" aria-label="Job filters">'
+    assert_includes jobs_index, '<section class="card card-border bg-base-100" aria-label="Job filters">'
     assert_includes jobs_index, '<div class="card-body">'
     refute_includes jobs_index, "content_for :page_actions_secondary"
     assert_includes jobs_index, '<div class="card-actions flex-wrap justify-end md:col-span-2">'
@@ -770,7 +773,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes jobs_index, '<section class="card card-border border-base-300 bg-base-100" aria-label="Job filters">'
     assert_includes job_show, 'class="mockup-code overflow-x-auto"'
     assert_includes job_show, '<% content_for :page_title, job_title(@job) %>'
-    assert_includes job_show, 'class="collapse collapse-arrow card-rapid"'
+    assert_includes job_show, 'class="collapse collapse-arrow card card-border bg-base-100"'
     assert_includes job_show, 'class="tabs tabs-box justify-end"'
     assert_includes job_show, '<div class="flex flex-wrap justify-end gap-2">'
     assert_includes job_show, "class: action_button_classes(:warning)"
@@ -797,7 +800,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_equal 2, pagination.scan("pagination_item_classes(disabled: true)").size
     assert_equal 2, pagination.scan("class: pagination_item_classes %>").size
     refute_includes pagination, 'class="join"'
-    refute_includes pagination, 'class: "btn btn-rapid join-item"'
+    refute_includes pagination, 'class: "btn join-item"'
     refute_includes pagination, "btn-sm"
     assert_includes queue_show, 'aria_label: "Queue jobs pagination"'
     assert_includes jobs_index, 'aria_label: "#{jobs_status.titleize} jobs pagination"'
@@ -812,12 +815,12 @@ class RailsTemplateContractTest < Minitest::Test
     %w[tabs-xs tabs-sm btn-xs btn-sm].each do |small_modifier|
       refute_includes job_operation_views, small_modifier
     end
-    refute_includes job_operation_views, "card card-border"
+    assert_includes job_operation_views, "card card-border bg-base-100"
     job_operation_views.scan(/<table class="([^"]*)">/).flatten.each do |table_class|
       assert_includes table_class.split, "min-w-max", table_class
     end
     job_operation_views.scan(/class(?::|=)\s*["']([^"']*\bbtn\b[^"']*)["']/).flatten.each do |button_class|
-      assert_includes button_class.split, "btn-rapid", button_class
+      assert_includes button_class.split, "btn", button_class
     end
     %w[is-boxed is-active navbar-item navbar-menu message-body is-hoverable is-fullwidth].each do |bulma_class|
       refute_includes [layout, navigation, application_selection, jobs_index, job_show, queues_index, pagination].join, bulma_class
@@ -909,7 +912,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes task_show, '<%= with_pagination(aria_label: "Previous runs pagination") do %>'
     assert_includes task_show, 'class: pagination_item_classes %>'
     refute_includes task_show, 'class="join justify-end"'
-    refute_includes task_show, 'class: "btn btn-rapid join-item"'
+    refute_includes task_show, 'class: "btn join-item"'
     assert_includes run, '<div class="card-actions flex-wrap justify-end">'
     assert_includes run, "class: action_button_classes(:secondary)"
     assert_includes run, "class: action_button_classes(:warning)"
@@ -1239,15 +1242,15 @@ class RailsTemplateContractTest < Minitest::Test
     local_seed = generated_file_source("db/seeds.local.rb.example")
     helper = generated_file_source("app/helpers/application_helper.rb")
 
-    assert_class_tokens view, "card-rapid"
+    assert_class_tokens view, "card", "card-border", "bg-base-100"
     assert_class_tokens view, "overflow-x-auto"
     assert_class_tokens view, "table", "table-sm", "table-pin-rows", "min-w-max"
     assert_class_tokens view, "badge"
-    assert_includes helper, 'destructive: "btn btn-outline btn-error btn-rapid"'
+    assert_includes helper, 'destructive: "btn btn-outline btn-error"'
     assert_includes view, "class: action_button_classes(:destructive)"
     assert_includes view, 'pagination(@pagy, aria_label: t("admin.users.pagination"))'
     assert_class_tokens helper, "join"
-    assert_includes helper, '"btn btn-rapid join-item"'
+    assert_includes helper, '"btn join-item"'
     assert_includes view, 'admin_user_roles_path(user)'
     assert_includes view, 'admin_user_role_path(user, "admin")'
     refute_includes view, '@pagy.page_url(:previous)'
@@ -1327,21 +1330,26 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes @source, 'include ActionPolicy::TestHelper'
   end
 
-  def test_generated_form_controls_and_cards_keep_design_system_dimensions_and_borders
-    @source.scan(/class: "input[^"]*"/).each do |input_class|
-      assert_includes input_class, "input-rapid"
+  def test_generated_form_controls_cards_and_buttons_use_daisyui_defaults
+    input_classes = @source.scan(/class: "input[^"]*"/)
+    refute_empty input_classes
+    input_classes.each do |input_class|
       refute_includes input_class, "min-h-11"
     end
 
-    @source.scan(/class="[^"]*card-border[^"]*"/).each do |card_class|
-      assert card_class.include?("border-base-300") || card_class.include?("border-error"), card_class
+    card_classes = class_attributes(@source).select { |classes| classes.include?("card-border") }
+    refute_empty card_classes
+    card_classes.each do |classes|
+      assert_includes classes, "card"
+      assert_includes classes, "bg-base-100"
+      refute_includes classes, "border-base-300"
+      refute_includes classes, "shadow-none"
     end
 
-    input_utility = @source[/@utility input-rapid \{.*?^    \}/m]
-    refute_nil input_utility
-    assert_includes input_utility, "--input-color: var(--color-base-300)"
-    assert_includes input_utility, "--input-color: var(--color-primary)"
-    assert_includes input_utility, "font-size: 1rem"
+    custom_suffix = "rapid"
+    removed_classes = %w[btn card input].map { |component| "#{component}-#{custom_suffix}" }
+    removed_classes.concat((1..3).map { |level| "shadow-elevation-#{level}" })
+    removed_classes.each { |class_name| refute_includes @source, class_name }
 
     helper_button_classes = @source.scan(/class: "([^"]*\bbtn\b[^"]*)"/).flatten
     html_button_classes = @source.scan(/class="([^"]*\bbtn\b[^"]*)"/).flatten
@@ -1349,15 +1357,13 @@ class RailsTemplateContractTest < Minitest::Test
     button_classes = helper_button_classes + html_button_classes + javascript_button_classes
     button_classes.each { |button_class| refute_includes button_class, "min-h-11" }
     assert_equal({
-      "btn" => 1,
+      "btn" => 2,
       "btn btn-circle btn-ghost" => 1,
       "btn btn-ghost btn-circle" => 1,
-      "btn btn-outline" => 2,
-      "btn btn-outline btn-rapid" => 1,
+      "btn btn-outline" => 3,
       "btn btn-outline btn-sm" => 2,
       "btn btn-outline btn-xs" => 1,
-      "btn btn-primary btn-outline btn-rapid" => 1,
-      "btn btn-rapid" => 1,
+      "btn btn-primary btn-outline" => 1,
       "<%= compact ? 'btn btn-sm' : action_button_classes(:secondary) %>" => 1,
       "btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>" => 1,
       "btn join-item" => 3,
@@ -1365,11 +1371,7 @@ class RailsTemplateContractTest < Minitest::Test
     }, button_classes.tally)
     refute_match(/\bclass(?:=|:\s*)'[^']*\bbtn\b/, @source)
 
-    button_utility = @source[/@utility btn-rapid \{.*?^    \}/m]
-    refute_nil button_utility
-    assert_includes button_utility, "font-size: 1rem"
-    assert_includes button_utility, "font-weight: 700"
-    assert_includes @source, 'primary: "btn btn-primary btn-rapid"'
+    assert_includes @source, 'primary: "btn btn-primary"'
     assert_operator @source.scan("action_button_classes(:primary)").length, :>=, 2
   end
 
@@ -2096,9 +2098,23 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '@pagination_users = 48.times.map { User.create! } if @pagination_users.nil?'
     assert_includes evidence, 'const nav = document.querySelector(\'nav[aria-label="#{translate("admin.users.pagination")}"]\')'
     assert_includes evidence, 'assert_equal 5, geometry.fetch("directItemCount")'
-    assert_includes evidence, 'assert_equal geometry.fetch("directItemCount"), geometry.fetch("rapidItemCount")'
+    assert_includes evidence, 'assert_equal geometry.fetch("childCount"), geometry.fetch("directItemCount")'
     assert_includes evidence, 'assert_equal 1, geometry.fetch("rowCount")'
-    assert_includes evidence, 'assert_equal ["16px"], geometry.fetch("fontSizes")'
+    assert_includes evidence, 'assert_equal 1, geometry.fetch("fontSizes").length'
+    assert_includes evidence, "def assert_standard_button_size_modifiers"
+    assert_includes evidence, 'default: "btn"'
+    assert_includes evidence, 'small: "btn btn-sm"'
+    assert_includes evidence, 'extraSmall: "btn btn-xs"'
+    assert_includes evidence, 'assert_operator sizes.fetch("default"), :>, sizes.fetch("small")'
+    assert_includes evidence, 'assert_operator sizes.fetch("small"), :>, sizes.fetch("extraSmall")'
+    assert_includes evidence, "def assert_standard_card_border_colors"
+    assert_includes evidence, 'normal.className = "card card-border bg-base-100"'
+    assert_includes evidence, 'error.className = "card card-border border-error bg-base-100"'
+    assert_includes evidence, 'assert_equal styles.fetch("expectedNormalColor"), styles.fetch("normalColor")'
+    assert_includes evidence, 'assert_equal styles.fetch("expectedErrorColor"), styles.fetch("errorColor")'
+    assert_includes evidence, 'actionButtonsUseDefaultSize:'
+    assert_includes evidence, 'assert failed_geometry.fetch("actionButtonsUseDefaultSize")'
+    assert_includes evidence, 'assert_equal 1, failed_geometry.fetch("actionButtonFontSizes").length'
     assert_includes evidence, 'assert_equal 2, geometry.fetch("iconCount")'
     assert_includes evidence, 'assert_equal "auto", geometry.fetch("navOverflowX")'
     assert_includes evidence, 'assert_in_delta geometry.fetch("navRight"), geometry.fetch("toolbarRight"), 1'
@@ -2335,7 +2351,7 @@ class RailsTemplateContractTest < Minitest::Test
 
     assert_class_tokens authentication_layout, "hero"
     assert_class_tokens authentication_layout, "hero-content", "flex-col", "gap-4"
-    assert_equal 2, authentication_layout.scan('<div class="card-rapid w-full">').size
+    assert_equal 2, authentication_layout.scan('<div class="card card-border bg-base-100 w-full">').size
     assert_equal 2, authentication_layout.scan('<div class="card-body p-6 sm:p-8">').size
     assert_includes authentication_layout, "content_for?(:authentication_switch)"
     assert_includes authentication_layout, "<%= yield :authentication_switch %>"
@@ -2364,7 +2380,7 @@ class RailsTemplateContractTest < Minitest::Test
     )
 
     assert_equal 2, guest_navigation.scan("<<~ERB").size
-    assert_includes guest_navigation, 'class: "btn btn-outline btn-rapid"'
+    assert_includes guest_navigation, 'class: "btn btn-outline"'
     refute_includes guest_navigation, "\\\\n'"
   end
 
@@ -2402,7 +2418,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, 'data: { page_actions_column: "secondary" }'
     assert_includes helper, 'data: { page_actions_column: "primary" }'
     assert_includes helper, 'class: "grid min-w-0 gap-4 sm:grid-cols-2"'
-    assert_includes helper, 'class: "card-rapid mb-6"'
+    assert_includes helper, 'class: "card card-border bg-base-100 mb-6"'
     assert_includes helper, 'class: "card-body p-3"'
     assert_includes helper, 'content_for(:page_actions_in_tab, "true", flush: true)'
     assert_operator helper.index("tab_content = capture(&block)"), :<, helper.index("page_actions(card: false)")
@@ -2456,7 +2472,7 @@ class RailsTemplateContractTest < Minitest::Test
     job_show = generated_file_source("app/views/mission_control/jobs/jobs/show.html.erb")
     public_page = generated_file_source("app/views/pages/_page.html.erb")
 
-    assert_includes account_delete, '<section class="card card-border border-error bg-base-100 shadow-none">'
+    assert_includes account_delete, '<section class="card card-border border-error bg-base-100">'
     assert_includes account_delete, '<div class="card-body">'
     assert_includes job_show, '<div class="card-body p-0">'
     assert_includes public_page, '<div class="card-body"><%= @page.content %></div>'

@@ -9750,7 +9750,7 @@ def configure_in_app_notifications
 
         sig { void }
         def edit
-          authorize! @notification
+          authorize! @notification, to: :update?
           @recipient_ids = @notification.notification_deliveries.pluck(:user_id)
         end
 
@@ -9815,6 +9815,7 @@ def configure_in_app_notifications
           @users = if query.present?
             User.joins(:profile)
               .where("profiles.display_name LIKE :query", query: like_query)
+              .where.not(id: @selected_ids)
               .order("profiles.display_name ASC", "users.id ASC")
               .limit(20)
           else
@@ -9915,7 +9916,7 @@ def configure_in_app_notifications
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
-      static targets = ["audience", "frame", "hidden", "search", "selector"]
+      static targets = ["audience", "count", "empty", "frame", "hidden", "search", "selector"]
       static values = { removeLabel: String, selected: Object, url: String }
 
       connect() {
@@ -9938,11 +9939,7 @@ def configure_in_app_notifications
       select(event) {
         const { userId, userLabel } = event.currentTarget.dataset
         const selected = { ...this.selectedValue }
-        if (selected[userId]) {
-          delete selected[userId]
-        } else {
-          selected[userId] = userLabel
-        }
+        selected[userId] = userLabel
         this.selectedValue = selected
         this.renderHiddenInputs()
         this.loadResults()
@@ -9964,23 +9961,29 @@ def configure_in_app_notifications
       }
 
       renderHiddenInputs() {
-        this.hiddenTarget.replaceChildren(...Object.entries(this.selectedValue).map(([id, label]) => {
-          const wrapper = document.createElement("span")
-          wrapper.className = "badge badge-outline gap-1"
-          wrapper.textContent = label
+        const entries = Object.entries(this.selectedValue)
+        this.countTarget.textContent = entries.length
+        this.emptyTarget.hidden = entries.length > 0
+        this.hiddenTarget.hidden = entries.length === 0
+        this.hiddenTarget.replaceChildren(...entries.map(([id, label]) => {
+          const row = document.createElement("li")
+          row.className = "list-row items-center"
           const input = document.createElement("input")
           input.type = "hidden"
           input.name = "notification[recipient_ids][]"
           input.value = id
           input.disabled = this.audienceTarget.value !== "selected_users"
+          const name = document.createElement("span")
+          name.className = "list-col-grow min-w-0 break-words"
+          name.textContent = label
           const button = document.createElement("button")
           button.type = "button"
-          button.className = "btn btn-outline btn-xs"
+          button.className = "btn btn-outline btn-sm"
           button.textContent = this.removeLabelValue
           button.dataset.userId = id
           button.dataset.action = "notification-recipients#remove"
-          wrapper.append(input, button)
-          return wrapper
+          row.append(name, button, input)
+          return row
         }))
       }
     }
@@ -10254,7 +10257,8 @@ def configure_in_app_notifications
   ERB
 
   create_file "app/views/admin/notifications/_form.html.erb", <<~ERB, force: true
-    <% selected_users = User.includes(:profile).where(id: @recipient_ids).index_with { |user| T.must(user.profile).display_name } %>
+    <% selected_users = User.includes(:profile).where(id: @recipient_ids)
+      .to_h { |user| [user.id, T.must(user.profile).display_name] } %>
     <%= form_with model: [:admin, notification], class: "space-y-6",
       data: { controller: "notification-recipients", notification_recipients_url_value: admin_notification_recipients_path,
         notification_recipients_selected_value: selected_users.to_json,
@@ -10285,11 +10289,16 @@ def configure_in_app_notifications
       </label>
       <fieldset class="fieldset" data-notification-recipients-target="selector">
         <legend class="fieldset-legend"><%= t("notifications.admin.recipients") %></legend>
-        <input type="search" class="input w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
+        <div class="flex items-center gap-2">
+          <p class="text-sm font-medium"><%= t("notifications.admin.selected_recipients") %></p>
+          <span class="badge badge-sm" data-notification-recipients-target="count">0</span>
+        </div>
+        <p class="text-sm text-neutral" data-notification-recipients-target="empty"><%= t("notifications.admin.no_selected_recipients") %></p>
+        <ul class="list rounded-box border border-base-300" data-notification-recipients-target="hidden" hidden></ul>
+        <label class="text-sm font-medium" for="notification_recipient_search"><%= t("notifications.admin.add_recipients") %></label>
+        <input id="notification_recipient_search" type="search" class="input w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
           data-notification-recipients-target="search" data-action="input->notification-recipients#search">
         <p class="label"><%= t("notifications.admin.recipient_search_hint") %></p>
-        <p class="text-sm font-medium"><%= t("notifications.admin.selected_recipients") %></p>
-        <div class="flex flex-wrap gap-2" data-notification-recipients-target="hidden"></div>
         <%= turbo_frame_tag "notification_recipient_results", data: { notification_recipients_target: "frame" } do %>
         <% end %>
       </fieldset>
@@ -10331,17 +10340,18 @@ def configure_in_app_notifications
 
   create_file "app/views/admin/notification_recipients/index.html.erb", <<~ERB, force: true
     <%= turbo_frame_tag "notification_recipient_results" do %>
+      <p class="text-sm font-medium"><%= t("notifications.admin.recipient_search_results") %></p>
       <% if @users.empty? %>
         <p class="text-sm text-neutral"><%= t("notifications.admin.no_recipients") %></p>
       <% else %>
-        <ul class="list">
+        <ul class="list rounded-box border border-base-300">
           <% @users.each do |user| %>
             <% label = T.must(user.profile).display_name %>
             <li class="list-row items-center">
               <span class="list-col-grow"><%= label %></span>
-              <button type="button" class="btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>"
+              <button type="button" class="btn btn-outline btn-sm"
                 data-user-id="<%= user.id %>" data-user-label="<%= label %>" data-action="notification-recipients#select">
-                <%= @selected_ids.include?(user.id) ? t("notifications.admin.remove_recipient") : t("notifications.admin.add_recipient") %>
+                <%= t("notifications.admin.add_recipient") %>
               </button>
             </li>
           <% end %>
@@ -10365,7 +10375,8 @@ def configure_in_app_notifications
           "message_hint" => "装飾を除いた本文を140文字以内で入力してください。",
           "state" => "状態", "audience" => "通知先", "published_at" => "公開日時", "recipients_count" => "対象", "all_users" => "全ユーザー", "draft" => "下書き",
           "recipients" => "個別受信者", "recipient_search" => "表示名で検索", "recipient_search_hint" => "プロフィールの表示名を入力すると最大20件を表示します。", "selected_recipients" => "選択済み",
-          "no_recipients" => "該当するユーザーはいません。", "add_recipient" => "追加", "remove_recipient" => "解除", "created" => "通知を作成しました。",
+          "no_selected_recipients" => "まだ選択されていません。", "add_recipients" => "受信者を追加", "recipient_search_results" => "検索結果",
+          "no_recipients" => "追加できるユーザーはいません。", "add_recipient" => "追加", "remove_recipient" => "解除", "created" => "通知を作成しました。",
           "updated" => "通知を更新しました。", "destroyed" => "通知を削除しました。", "destroy_confirm" => "通知を削除しますか？", "pagination" => "通知管理のページ",
           "states" => { "draft" => "下書き", "scheduled" => "公開待ち", "published" => "公開済み" }
         }
@@ -10385,7 +10396,8 @@ def configure_in_app_notifications
           "message_hint" => "Enter up to 140 plain-text characters, excluding formatting.",
           "state" => "State", "audience" => "Audience", "published_at" => "Publish at", "recipients_count" => "Recipients", "all_users" => "All users", "draft" => "Draft",
           "recipients" => "Selected recipients", "recipient_search" => "Search by display name", "recipient_search_hint" => "Enter a profile display name to show up to 20 users.", "selected_recipients" => "Selected",
-          "no_recipients" => "No users matched.", "add_recipient" => "Add", "remove_recipient" => "Remove", "created" => "Notification created.",
+          "no_selected_recipients" => "No recipients selected yet.", "add_recipients" => "Add recipients", "recipient_search_results" => "Search results",
+          "no_recipients" => "No users are available to add.", "add_recipient" => "Add", "remove_recipient" => "Remove", "created" => "Notification created.",
           "updated" => "Notification updated.", "destroyed" => "Notification deleted.", "destroy_confirm" => "Delete this notification?", "pagination" => "Notification administration pages",
           "states" => { "draft" => "Draft", "scheduled" => "Scheduled", "published" => "Published" }
         }
@@ -10871,6 +10883,33 @@ def configure_in_app_notifications
         sign_in users(:two)
         get admin_notifications_url
         assert_response :forbidden
+
+        get edit_admin_notification_url(notifications(:published_selected))
+        assert_response :forbidden
+      end
+
+      test "renders all-user and selected-user edit forms for an administrator" do
+        admin = users(:one)
+        admin.grant_role!(:admin)
+        sign_in admin
+
+        get edit_admin_notification_url(notifications(:published_all))
+        assert_response :success
+        assert_select "form[data-notification-recipients-selected-value]" do |forms|
+          selected = JSON.parse(T.must(forms.first)["data-notification-recipients-selected-value"])
+          assert_empty selected
+        end
+
+        notification = notifications(:published_selected)
+        get edit_admin_notification_url(notification)
+        assert_response :success
+        assert_select "form[action=?][data-notification-recipients-selected-value]", admin_notification_path(notification) do |forms|
+          selected = JSON.parse(T.must(forms.first)["data-notification-recipients-selected-value"])
+          expected = notification.recipients.includes(:profile).to_h do |user|
+            [user.id.to_s, T.must(user.profile).display_name]
+          end
+          assert_equal expected, selected
+        end
       end
 
       test "creates updates and hard deletes a notification with deliveries" do
@@ -10931,6 +10970,30 @@ def configure_in_app_notifications
         end
         assert_response :unprocessable_content
       end
+
+      test "updates a selected notification without dropping unchanged recipients" do
+        admin = users(:one)
+        admin.grant_role!(:admin)
+        sign_in admin
+        notification = notifications(:published_selected)
+        delivery = notification_deliveries(:one_published)
+        delivery.open!
+        recipient_ids = notification.notification_deliveries.order(:user_id).pluck(:user_id)
+
+        patch admin_notification_url(notification), params: {
+          notification: {
+            message: "<p>Updated selected notification</p>",
+            audience: "selected_users",
+            published_at: notification.published_at,
+            draft: "0",
+            recipient_ids:
+          }
+        }
+
+        assert_redirected_to admin_notification_url(notification)
+        assert_equal recipient_ids, notification.notification_deliveries.reload.order(:user_id).pluck(:user_id)
+        assert_equal delivery.opened_at, delivery.reload.opened_at
+      end
     end
   RUBY
 
@@ -10946,20 +11009,26 @@ def configure_in_app_notifications
         sign_in @admin
       end
 
-      test "searches profile display name while preserving selected state" do
-        display_name = T.must(users(:two).profile).display_name
+      test "searches profile display name while excluding selected users" do
+        selected_user = users(:two)
+        candidate = users(:one)
+        T.must(selected_user.profile).update!(display_name: "Match Selected")
+        T.must(candidate.profile).update!(display_name: "Match Candidate")
+
         get admin_notification_recipients_url,
-          params: { q: display_name, selected_ids: [users(:two).id] },
+          params: { q: "Match", selected_ids: [selected_user.id] },
           headers: { "Turbo-Frame" => "notification_recipient_results" }
         assert_response :success
         assert_select "turbo-frame#notification_recipient_results" do
-          assert_select "li", text: /\#{Regexp.escape(display_name)}/, count: 1
+          assert_select "li", text: /Match Candidate/, count: 1
           assert_select "li", text: /ID:/, count: 0
-          assert_select "button.btn-active[data-user-id=?]", users(:two).id.to_s, count: 1
+          assert_select "button.btn-outline[data-user-id=?]", candidate.id.to_s,
+            text: I18n.t("notifications.admin.add_recipient"), count: 1
+          assert_select "button[data-user-id=?]", selected_user.id.to_s, count: 0
         end
 
         get admin_notification_recipients_url,
-          params: { q: users(:two).id.to_s },
+          params: { q: selected_user.id.to_s },
           headers: { "Turbo-Frame" => "notification_recipient_results" }
         assert_select "turbo-frame#notification_recipient_results li", count: 0
       end
@@ -11073,6 +11142,8 @@ def configure_in_app_notifications
         assert_selector '[data-notification-recipients-target="selector"][hidden]', visible: :all
         select I18n.t("notifications.audiences.selected_users"), from: I18n.t("notifications.admin.audience")
         assert_no_selector '[data-notification-recipients-target="selector"][hidden]', visible: :all
+        assert_selector '[data-notification-recipients-target="count"]', text: "0"
+        assert_text I18n.t("notifications.admin.no_selected_recipients")
         display_name = T.must(@user.profile).display_name
         fill_in I18n.t("notifications.admin.recipient_search"), with: display_name
         assert_text display_name
@@ -11080,11 +11151,40 @@ def configure_in_app_notifications
         within("turbo-frame#notification_recipient_results") do
           click_button I18n.t("notifications.admin.add_recipient")
         end
+        assert_selector '[data-notification-recipients-target="count"]', text: "1"
+        assert_no_text I18n.t("notifications.admin.no_selected_recipients")
+        assert_no_selector "turbo-frame#notification_recipient_results button[data-user-id='\#{@user.id}']"
         within('[data-notification-recipients-target="hidden"]') do
-          assert_text display_name
+          assert_selector "li.list-row", text: display_name
           click_button I18n.t("notifications.admin.remove_recipient")
         end
+        assert_selector '[data-notification-recipients-target="count"]', text: "0"
+        assert_text I18n.t("notifications.admin.no_selected_recipients")
+        assert_selector "turbo-frame#notification_recipient_results button[data-user-id='\#{@user.id}']"
         assert_no_selector "input[name='notification[recipient_ids][]'][value='\#{@user.id}']"
+      end
+
+      test "edits a selected notification without losing existing recipients" do
+        @user.grant_role!(:admin)
+        notification = notifications(:published_selected)
+        delivery = notification_deliveries(:one_published)
+        delivery.open!
+        expected_recipient_ids = notification.notification_deliveries.order(:user_id).pluck(:user_id)
+
+        visit edit_admin_notification_path(notification)
+        assert_selector "lexxy-editor"
+        assert_selector '[data-notification-recipients-target="count"]', text: expected_recipient_ids.size.to_s
+        expected_recipient_ids.each do |user_id|
+          display_name = T.must(User.find(user_id).profile).display_name
+          assert_selector '[data-notification-recipients-target="hidden"] li.list-row', text: display_name
+          assert_selector "input[name='notification[recipient_ids][]'][value='\#{user_id}']", visible: :all
+        end
+
+        find("input[type='submit']").click
+
+        assert_current_path admin_notification_path(notification)
+        assert_equal expected_recipient_ids, notification.notification_deliveries.reload.order(:user_id).pluck(:user_id)
+        assert_equal delivery.opened_at, delivery.reload.opened_at
       end
 
       private
@@ -16136,6 +16236,18 @@ def configure_evidence_capture
           )
           assert_admin_navigation_active(translate("navigation.admin_notifications"))
 
+          notification = T.must(@evidence_notification)
+          visit edit_admin_notification_path(notification)
+          assert_selector "h1", text: translate("notifications.admin.edit"), count: 1
+          assert_selector "lexxy-editor"
+          recipient = T.must(@user)
+          display_name = T.must(recipient.profile).display_name
+          assert_selector '[data-notification-recipients-target="count"]', text: "1"
+          assert_selector '[data-notification-recipients-target="hidden"] li.list-row', text: display_name
+          assert_selector "input[name='notification[recipient_ids][]'][value='#{recipient.id}']", visible: :all
+          assert_admin_navigation_active(translate("navigation.admin_notifications"))
+          capture_current_page("admin-notification-edit", "通知編集", viewport)
+
           visit new_admin_notification_path
           assert_selector "h1", text: translate("notifications.admin.new"), count: 1
           assert_selector "lexxy-editor"
@@ -16147,7 +16259,9 @@ def configure_evidence_capture
           within("turbo-frame#notification_recipient_results") do
             click_button translate("notifications.admin.add_recipient")
           end
-          assert_selector '[data-notification-recipients-target="hidden"] .badge', text: display_name
+          assert_selector '[data-notification-recipients-target="count"]', text: "1"
+          assert_selector '[data-notification-recipients-target="hidden"] li.list-row', text: display_name
+          assert_no_selector "turbo-frame#notification_recipient_results button[data-user-id='#{@regular_user.id}']"
           capture_current_page("admin-notification-recipients", "通知の個別受信者選択", viewport)
         end
 

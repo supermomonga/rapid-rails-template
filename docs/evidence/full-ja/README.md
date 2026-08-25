@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `55d5f3e322430fa6c06ba6d78aee0f3f4f8ca22e721101a4acc70992f4edf971`
-- Base commit: `9af94230256e18809dc09d413bc779343f65153e`
+- Source fingerprint: `81c69f0933bce4ef41543d129b84ebfdb5d00f349db0f731097f74caced7ca06`
+- Base commit: `08feab95806db260a17ddc04120e8471a289c482`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -95,6 +95,12 @@
 |Desktop|Mobile|
 |---|---|
 |![通知詳細 (desktop)](admin-notification-show--desktop.png)|![通知詳細 (mobile)](admin-notification-show--mobile.png)|
+
+## 通知編集
+
+|Desktop|Mobile|
+|---|---|
+|![通知編集 (desktop)](admin-notification-edit--desktop.png)|![通知編集 (mobile)](admin-notification-edit--mobile.png)|
 
 ## 通知の個別受信者選択
 

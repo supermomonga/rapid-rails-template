@@ -84,7 +84,7 @@ databaseとannotationを確定し、config DSLのreceiverをRuby本体の`T.bind
 
 generatorの成果物、必要な設定、コマンドの終了状態を検証します。生成アプリケーションの通常テストには`bin/annotaterb models --frozen`に加え、Gem RBIとtest環境のRails DSL RBIの鮮度、shim重複、`bundle exec srb tc`を検査するtestを含めます。`dsl --verify`はRails DSL生成物だけ、`check-shims`は生成RBIとの重複、`srb tc`はinline signatureとRuby本体を含む全体整合性を担当します。既存の`bin/rails test`、`bin/ci`、GitHub Actionsは同じtestを実行します。検証失敗を成功として扱うフォールバックは設けず、失敗した処理、理由、更新commandを表示します。
 
-通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。`rake evidence:update`はアプリ内通知、SIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mailを有効にしたKamal対応の日本語sampleを1回だけ生成します。同じアプリで全Rails test、Sorbet・RBI検証、RuboCop、Thruster cacheの`miss`から`hit`への遷移を検証し、通知popoverの読込中、「あなたへの通知」と「お知らせ」の未読状態・既読後、両タブの通知履歴、通知管理、個別受信者選択、Passkey、SIWE、avatarのシナリオを撮影して整合性検証が成功した場合だけ`docs/evidence/`を置換します。全体通知の配信行が0件であることも撮影前に検査します。通知headerとpopoverは320、390、640、960、961pxでviewport内へ収まり、page全体に横overflowがないこともcomputed geometryで検査します。
+通常のアプリ生成ではブラウザを起動しませんが、test用の`evidence:capture` Rake taskと撮影runnerを生成します。`rake evidence:update`はアプリ内通知、SIWE、PWA、Web Push、Solid Queue、管理者向け運用画面、全Profile機能、API、Solid Cable、mailを有効にしたKamal対応の日本語sampleを1回だけ生成します。同じアプリで全Rails test、Sorbet・RBI検証、RuboCop、Thruster cacheの`miss`から`hit`への遷移を検証し、通知popoverの読込中、「あなたへの通知」と「お知らせ」の未読状態・既読後、両タブの通知履歴、通知管理、通知編集、個別受信者選択、Passkey、SIWE、avatarのシナリオを撮影して整合性検証が成功した場合だけ`docs/evidence/`を置換します。全体通知の配信行が0件であることも撮影前に検査します。通知headerとpopoverは320、390、640、960、961pxでviewport内へ収まり、page全体に横overflowがないこともcomputed geometryで検査します。
 
 ### 初回Git commit
 

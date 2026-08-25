@@ -1033,6 +1033,7 @@ class RailsTemplateContractTest < Minitest::Test
     announcements_controller = generated_file_source("app/javascript/controllers/notification_announcements_controller.js")
     notification_item = generated_file_source("app/views/notifications/_notification.html.erb")
     controller = generated_file_source("app/controllers/notifications_controller.rb")
+    admin_controller = generated_file_source("app/controllers/admin/notifications_controller.rb")
     service = generated_file_source("app/services/notification_delivery_synchronization.rb")
     recipients = generated_file_source("app/controllers/admin/notification_recipients_controller.rb")
     recipient_results = generated_file_source("app/views/admin/notification_recipients/index.html.erb")
@@ -1144,17 +1145,31 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_index, 'table table-sm table-pin-rows min-w-max'
     assert_includes admin_index, "notification.message_plain_text"
     assert_includes admin_index, 'notification.all_users? ? t("notifications.admin.all_users")'
+    assert_includes admin_controller, "authorize! @notification, to: :update?"
     assert_includes admin_form, "form.rich_text_area :message"
+    assert_includes admin_form, "[user.id, T.must(user.profile).display_name]"
     assert_includes admin_form, "T.must(user.profile).display_name"
+    refute_includes admin_form, "index_with"
     assert_includes admin_form, "notification_recipients_remove_label_value"
     assert_includes admin_form, 'notification_recipients_target: "audience"'
     assert_includes admin_form, 'data-notification-recipients-target="selector"'
+    assert_includes admin_form, 'class="list rounded-box border border-base-300" data-notification-recipients-target="hidden" hidden'
+    assert_includes admin_form, 'data-notification-recipients-target="count"'
+    assert_includes admin_form, 'data-notification-recipients-target="empty"'
     refute_includes admin_form, "form.text_area :message"
+    assert_includes recipients, ".where.not(id: @selected_ids)"
     assert_includes recipient_controller, "remove(event)"
     assert_includes recipient_controller, 'this.selectorTarget.hidden = !selectedUsers'
     assert_includes recipient_controller, 'input.disabled = this.audienceTarget.value !== "selected_users"'
+    assert_includes recipient_controller, "this.countTarget.textContent = entries.length"
+    assert_includes recipient_controller, 'row.className = "list-row items-center"'
+    assert_includes recipient_controller, "row.append(name, button, input)"
     assert_includes recipient_controller, 'button.dataset.action = "notification-recipients#remove"'
-    assert_includes recipient_controller, 'button.className = "btn btn-outline btn-xs"'
+    assert_includes recipient_controller, 'button.className = "btn btn-outline btn-sm"'
+    refute_includes recipient_controller, 'wrapper.className = "badge'
+    assert_includes recipient_results, 'class="list rounded-box border border-base-300"'
+    assert_includes recipient_results, 'class="btn btn-outline btn-sm"'
+    refute_includes recipient_results, "btn-active"
     assert_includes notification_test, 'test "published selected users require at least one existing recipient"'
     assert_includes notification_test, 'test "all users never create delivery rows and switching to all users deletes existing rows"'
     assert_includes delivery_test, 'test "rejects delivery rows for all-user announcements"'
@@ -1171,7 +1186,10 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes controller_test, 'test "rejects a future announcement cutoff without changing the cursor"'
     assert_includes controller_test, 'test "rejects an unknown announcement surface without changing the cursor"'
     assert_includes admin_controller_test, 'test "rejects a published selected notification without recipients"'
+    assert_includes admin_controller_test, 'test "renders all-user and selected-user edit forms for an administrator"'
+    assert_includes admin_controller_test, 'test "updates a selected notification without dropping unchanged recipients"'
     assert_includes system_test, 'test "shows announcements without personal read controls and marks the displayed cutoff"'
+    assert_includes system_test, 'test "edits a selected notification without losing existing recipients"'
     assert_includes system_test, 'assert_no_button I18n.t("notifications.open")'
     assert_includes system_test, "popover_requests = resource_names.count"
     assert_includes system_test, 'assert_operator resource_names.count { |name| name.match?(%r{/notifications/popover}) }, :>, popover_requests'
@@ -1407,11 +1425,9 @@ class RailsTemplateContractTest < Minitest::Test
       "btn btn-circle btn-ghost" => 1,
       "btn btn-ghost btn-circle" => 1,
       "btn btn-outline" => 3,
-      "btn btn-outline btn-sm" => 2,
-      "btn btn-outline btn-xs" => 1,
+      "btn btn-outline btn-sm" => 4,
       "btn btn-primary btn-outline" => 1,
       "<%= compact ? 'btn btn-sm' : action_button_classes(:secondary) %>" => 1,
-      "btn btn-sm <%= 'btn-active' if @selected_ids.include?(user.id) %>" => 1,
       "btn join-item" => 3,
       "btn mt-3 w-full" => 1
     }, button_classes.tally)
@@ -2101,6 +2117,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'assert_button "Cancel"'
     assert_includes evidence, '"admin-notifications"'
     assert_includes evidence, '"admin-notification-show"'
+    assert_includes evidence, '"admin-notification-edit"'
     assert_includes evidence, 'raise "全体通知に個別配信行が作成されました" if announcement.notification_deliveries.exists?'
     assert_includes evidence, '"notifications-popover-announcements"'
     assert_includes evidence, '"notifications-announcements"'

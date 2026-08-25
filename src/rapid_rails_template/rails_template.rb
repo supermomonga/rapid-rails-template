@@ -9750,7 +9750,7 @@ def configure_in_app_notifications
 
         sig { void }
         def edit
-          authorize! @notification
+          authorize! @notification, to: :update?
           @recipient_ids = @notification.notification_deliveries.pluck(:user_id)
         end
 
@@ -10254,7 +10254,8 @@ def configure_in_app_notifications
   ERB
 
   create_file "app/views/admin/notifications/_form.html.erb", <<~ERB, force: true
-    <% selected_users = User.includes(:profile).where(id: @recipient_ids).index_with { |user| T.must(user.profile).display_name } %>
+    <% selected_users = User.includes(:profile).where(id: @recipient_ids)
+      .to_h { |user| [user.id, T.must(user.profile).display_name] } %>
     <%= form_with model: [:admin, notification], class: "space-y-6",
       data: { controller: "notification-recipients", notification_recipients_url_value: admin_notification_recipients_path,
         notification_recipients_selected_value: selected_users.to_json,
@@ -10871,6 +10872,33 @@ def configure_in_app_notifications
         sign_in users(:two)
         get admin_notifications_url
         assert_response :forbidden
+
+        get edit_admin_notification_url(notifications(:published_selected))
+        assert_response :forbidden
+      end
+
+      test "renders all-user and selected-user edit forms for an administrator" do
+        admin = users(:one)
+        admin.grant_role!(:admin)
+        sign_in admin
+
+        get edit_admin_notification_url(notifications(:published_all))
+        assert_response :success
+        assert_select "form[data-notification-recipients-selected-value]" do |forms|
+          selected = JSON.parse(T.must(forms.first)["data-notification-recipients-selected-value"])
+          assert_empty selected
+        end
+
+        notification = notifications(:published_selected)
+        get edit_admin_notification_url(notification)
+        assert_response :success
+        assert_select "form[action=?][data-notification-recipients-selected-value]", admin_notification_path(notification) do |forms|
+          selected = JSON.parse(T.must(forms.first)["data-notification-recipients-selected-value"])
+          expected = notification.recipients.includes(:profile).to_h do |user|
+            [user.id.to_s, T.must(user.profile).display_name]
+          end
+          assert_equal expected, selected
+        end
       end
 
       test "creates updates and hard deletes a notification with deliveries" do
@@ -10930,6 +10958,30 @@ def configure_in_app_notifications
           }
         end
         assert_response :unprocessable_content
+      end
+
+      test "updates a selected notification without dropping unchanged recipients" do
+        admin = users(:one)
+        admin.grant_role!(:admin)
+        sign_in admin
+        notification = notifications(:published_selected)
+        delivery = notification_deliveries(:one_published)
+        delivery.open!
+        recipient_ids = notification.notification_deliveries.order(:user_id).pluck(:user_id)
+
+        patch admin_notification_url(notification), params: {
+          notification: {
+            message: "<p>Updated selected notification</p>",
+            audience: "selected_users",
+            published_at: notification.published_at,
+            draft: "0",
+            recipient_ids:
+          }
+        }
+
+        assert_redirected_to admin_notification_url(notification)
+        assert_equal recipient_ids, notification.notification_deliveries.reload.order(:user_id).pluck(:user_id)
+        assert_equal delivery.opened_at, delivery.reload.opened_at
       end
     end
   RUBY
@@ -11085,6 +11137,28 @@ def configure_in_app_notifications
           click_button I18n.t("notifications.admin.remove_recipient")
         end
         assert_no_selector "input[name='notification[recipient_ids][]'][value='\#{@user.id}']"
+      end
+
+      test "edits a selected notification without losing existing recipients" do
+        @user.grant_role!(:admin)
+        notification = notifications(:published_selected)
+        delivery = notification_deliveries(:one_published)
+        delivery.open!
+        expected_recipient_ids = notification.notification_deliveries.order(:user_id).pluck(:user_id)
+
+        visit edit_admin_notification_path(notification)
+        assert_selector "lexxy-editor"
+        expected_recipient_ids.each do |user_id|
+          display_name = T.must(User.find(user_id).profile).display_name
+          assert_selector '[data-notification-recipients-target="hidden"] .badge', text: display_name
+          assert_selector "input[name='notification[recipient_ids][]'][value='\#{user_id}']", visible: :all
+        end
+
+        find("input[type='submit']").click
+
+        assert_current_path admin_notification_path(notification)
+        assert_equal expected_recipient_ids, notification.notification_deliveries.reload.order(:user_id).pluck(:user_id)
+        assert_equal delivery.opened_at, delivery.reload.opened_at
       end
 
       private
@@ -16135,6 +16209,17 @@ def configure_evidence_capture
             viewport
           )
           assert_admin_navigation_active(translate("navigation.admin_notifications"))
+
+          notification = T.must(@evidence_notification)
+          visit edit_admin_notification_path(notification)
+          assert_selector "h1", text: translate("notifications.admin.edit"), count: 1
+          assert_selector "lexxy-editor"
+          recipient = T.must(@user)
+          display_name = T.must(recipient.profile).display_name
+          assert_selector '[data-notification-recipients-target="hidden"] .badge', text: display_name
+          assert_selector "input[name='notification[recipient_ids][]'][value='#{recipient.id}']", visible: :all
+          assert_admin_navigation_active(translate("navigation.admin_notifications"))
+          capture_current_page("admin-notification-edit", "通知編集", viewport)
 
           visit new_admin_notification_path
           assert_selector "h1", text: translate("notifications.admin.new"), count: 1

@@ -50,23 +50,20 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, 'td class="min-w-64"'
   end
 
-  def test_seeds_ten_users_and_fifty_articles_each
+  def test_seeds_non_admin_sample_users_and_leaves_initial_admin_assignment_for_the_next_signup
     assert_includes @source, "sample_users = 10.times.map"
     assert_includes @source, "50.times do |article_index|"
     assert_includes @source, 'screen_name = format("sample_user_%02d", number)'
-    assert_includes @source, "profile = Profile.find_by(screen_name: screen_name)"
     assert_includes @source, "user = T.must(profile.user)"
-    assert_includes @source, "user = User.create!"
-    assert_includes @source, 'user.passkey_credentials.find_or_create_by!(webauthn_id: "sample-passkey-#{screen_name}")'
-    assert_includes @source, "article = profile.articles.find_or_initialize_by("
-    assert_includes @source, 'article.draft = article_number > 40'
+    assert_includes @source, "User.create!(skip_initial_admin_role: true)"
+    assert_includes @source, "assert_not user.has_role?(:admin)"
+    assert_includes @source, "signed_up_user = User.create!"
+    assert_includes @source, "assert signed_up_user.has_role?(:admin)"
+    assert_includes @source, '2.times { load Rails.root.join("db/seeds.rb").to_s }'
     assert_includes @source, "assert_equal 500, Article.where"
-    assert_includes @source, "sample_profiles = Profile.where(screen_name: screen_names).includes(:user).order(:screen_name).to_a"
-    assert_includes @source, "sample_users = sample_profiles.map { |profile| T.must(profile.user) }"
     assert_includes @source, 'puts "Sample users (seeded Passkeys are display-only and cannot authenticate):"'
     refute_includes @source, "password123"
     refute_includes @source, "user.login_id"
-    assert_includes @source, '2.times { load Rails.root.join("db/seeds.rb").to_s }'
     assert_includes @source, "assert_equal 3, seed_notifications.count"
     assert_includes @source, "assert_not user.has_unread_announcements?"
     assert_includes @source, "Notification.published.announcements.where(id: seed_notifications).ids.sort"

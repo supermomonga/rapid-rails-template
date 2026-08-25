@@ -492,7 +492,7 @@ append_to_file "db/seeds.rb", <<~'RUBY'
     if profile
       user = T.must(profile.user)
     else
-      user = User.create!
+      user = User.create!(skip_initial_admin_role: true)
       profile = T.must(user.profile)
     end
     profile.update!(screen_name: screen_name, display_name: format("Sample User %02d", number))
@@ -530,44 +530,59 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
   require "test_helper"
 
   class SampleSeedTest < ActiveSupport::TestCase
-    test "creates ten users with fifty articles each without duplication" do
-      2.times { load Rails.root.join("db/seeds.rb").to_s }
+    test "creates non-admin sample users and global notifications without duplication" do
+      with_rails_environment("development") do
+        2.times { load Rails.root.join("db/seeds.rb").to_s }
 
-      seed_notifications = Notification.published.all_users.where(
-        published_at: [
-          Time.zone.parse("2026-01-01 09:00:00"),
-          Time.zone.parse("2026-01-02 09:00:00"),
-          Time.zone.parse("2026-01-03 09:00:00")
+        seed_notifications = Notification.published.all_users.where(
+          published_at: [
+            Time.zone.parse("2026-01-01 09:00:00"),
+            Time.zone.parse("2026-01-02 09:00:00"),
+            Time.zone.parse("2026-01-03 09:00:00")
+          ]
+        )
+        seed_notification_messages = [
+          "新しいお知らせがあります。",
+          "サービスの使い方を確認できます。",
+          "最新情報をお届けします。"
         ]
-      )
-      seed_notification_messages = [
-        "新しいお知らせがあります。",
-        "サービスの使い方を確認できます。",
-        "最新情報をお届けします。"
-      ]
-      screen_names = (1..10).map { |number| format("sample_user_%02d", number) }
-      sample_profiles = Profile.where(screen_name: screen_names).includes(:user).order(:screen_name).to_a
-      assert_equal 10, sample_profiles.count
-      sample_users = sample_profiles.map { |profile| T.must(profile.user) }
+        screen_names = (1..10).map { |number| format("sample_user_%02d", number) }
+        sample_profiles = Profile.where(screen_name: screen_names).includes(:user).order(:screen_name).to_a
+        assert_equal 10, sample_profiles.count
+        sample_users = sample_profiles.map { |profile| T.must(profile.user) }
 
-      sample_users.each do |user|
-        assert_equal 1, user.passkey_credentials.count
-        assert_not user.has_unread_announcements?
-        articles = T.must(user.profile).articles
-        assert_equal 50, articles.count
-        assert_equal 10, articles.where(draft: true).count
-        assert_equal 40, articles.where(draft: false).count
+        sample_users.each do |user|
+          assert_not user.has_role?(:admin)
+          assert_equal 1, user.passkey_credentials.count
+          assert_not user.has_unread_announcements?
+          articles = T.must(user.profile).articles
+          assert_equal 50, articles.count
+          assert_equal 10, articles.where(draft: true).count
+          assert_equal 40, articles.where(draft: false).count
+        end
+        assert_equal 3, seed_notifications.count
+        assert seed_notifications.all? { |notification|
+          sample_users.all? { |user| T.must(notification.published_at) < user.created_at }
+        }
+        assert_equal seed_notifications.ids.sort,
+          Notification.published.announcements.where(id: seed_notifications).ids.sort
+        assert_equal 0, NotificationDelivery.where(notification: seed_notifications).count
+        assert_equal seed_notification_messages.sort, seed_notifications.map(&:message_plain_text).sort
+        assert_equal 500, Article.where(profile: sample_profiles).count
+
+        signed_up_user = User.create!
+        assert signed_up_user.has_role?(:admin)
       end
-      assert_equal 3, seed_notifications.count
-      assert seed_notifications.all? { |notification|
-        sample_users.all? { |user| T.must(notification.published_at) < user.created_at }
-      }
-      assert_equal seed_notifications.ids.sort,
-        Notification.published.announcements.where(id: seed_notifications).ids.sort
-      assert_equal 0, NotificationDelivery.where(notification: seed_notifications).count
-      assert_equal seed_notification_messages.sort, seed_notifications.map(&:message_plain_text).sort
-      assert_equal 500, Article.where(profile: sample_profiles).count
     end
+
+    private
+      def with_rails_environment(environment)
+        previous_environment = Rails.env
+        Rails.env = environment
+        yield
+      ensure
+        Rails.env = previous_environment
+      end
   end
 RUBY
 

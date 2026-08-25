@@ -141,7 +141,7 @@ Thrusterのcache既定値は全体64 MiB、1 responseあたり1 MiBです。proc
 
 Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
 
-公開固定ページは`/about`、`/corp`、`/manual`、`/terms`、`/privacy`、`/transaction-law`とし、routeごとの固定slugを共通の`PagesController#show`へ渡します。`Page`のslugはこの6値へ限定し、titleとともにseedで冪等作成します。管理者は本文だけを更新でき、固定ページの作成、削除、slug、titleの変更は提供しません。存在しない固定recordや未知slugを別ページへ戻すfallbackは設けません。
+公開固定ページは`/about`、`/corp`、`/manual`、`/terms`、`/privacy`、`/transaction-law`とし、routeごとの固定slugを共通の`PagesController#show`へ渡します。`Page`のslugはこの6値へ限定し、titleとともにseedで冪等作成します。`terms`、`privacy`、`transaction-law`には、生成時のdefault localeに対応する汎用的な日本語または英語の本文を初回作成時だけseedします。本文は運営者が公開前に実態へ合わせて編集するひな形であることと、置換が必要な項目を明示し、seed再実行時に既存本文を上書きしません。管理者は本文だけを更新でき、固定ページの作成、削除、slug、titleの変更は提供しません。存在しない固定recordや未知slugを別ページへ戻すfallbackは設けません。
 
 `Faq`は質問、表示順、公開状態、Action Text回答を持ちます。新規recordは非公開とし、公開画面`/faq`は公開済みrecordだけを表示順とIDの昇順で表示します。管理画面はCRUD、公開切替、表示順変更を提供します。
 
@@ -225,7 +225,7 @@ PushNotifier.deliver_later(
 
 `User`は`has_role?`、`grant_role!`、`revoke_role!`を公開し、role付与を冪等にします。一般の登録・アカウント更新parameterへroleを含めず、role変更はAction Policyで保護された管理画面に限定します。複数roleの権限は許可を加算し、role階層と明示denyは持ちません。
 
-管理画面は`/admin/users`に数値IDと常設Profileの表示名をページング表示し、`admin`の付与と解除を提供します。`login_id`やwallet addressは表示しません。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。最初のadminは`users.id`を引数に取る`roles:grant_admin[user_id]` taskで既存Userへ付与し、local seedは`ADMIN_USER_ID`を使用します。
+管理画面は`/admin/users`に数値IDと常設Profileの表示名をページング表示し、`admin`の付与と解除を提供します。`login_id`やwallet addressは表示しません。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。developmentでは既存のadminが0人の場合に新しく作成されたUserへadmin roleを自動付与し、全部入りsampleのseed Userだけは明示的に除外します。既存Userへの手動付与には`users.id`を引数に取る`roles:grant_admin[user_id]` taskを使用し、local seedは`ADMIN_USER_ID`を使用します。
 
 ## テスト用Gem
 
@@ -264,7 +264,7 @@ model、policy、service、job、mailer、validator、application-owned `lib`は
 
 `sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`はTapioca専有の生成物として手動編集しません。アプリがRubyで定義するmethodは元の`.rb`へinline signatureを書きます。手書きRBIは、Devise、Action Policy、Action View、route helper、fixture DSLなどのruntime wiringを表す`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIがRails binding内で参照する型aliasを補う`sorbet/rbi/shims/boring_avatars.rbi`、FFIまたはHTTPXのGem RBIが参照するRuby同梱Bundlerのfork hookを表す`sorbet/rbi/shims/bundler_connection_pool.rbi`に分離します。Bundler shimは認証optionに依存せず常に生成します。同じ定義が生成RBIへ追加された場合は`bin/tapioca check-shims`が重複として検出します。反復的な独自macroが複数classへmethodを生成するようになった場合だけcustom DSL compilerへ昇格します。
 
-生成時に`# typed: true`以上を付ける対象はcontroller、concern、helper、model、policy、service、job、mailer、validator、application-owned `lib`、config、test、`db/seeds.rb`です。configではPuma、Importmap、Rails CI、Maintenance Tasksが`instance_eval`するreceiverをRuby本体の`T.bind`で明示し、RailsがApplication subclassへ動的に委譲する`config_for`だけを`framework_bindings.rbi`で表現します。migration、schemaはRails DSLと実行順依存が強いため`typed: false`に留めます。`.rake`内にapplication logicを置かず、`roles:grant_admin`は`typed: strict`な`AdminRoleGrant`を呼び出します。
+生成時に`# typed: true`以上を付ける対象はcontroller、concern、helper、model、policy、service、job、mailer、task、validator、application-owned `lib`、config、test、`db/seeds.rb`です。configではPuma、Importmap、Rails CI、Maintenance Tasksが`instance_eval`するreceiverをRuby本体の`T.bind`で明示し、RailsがApplication subclassへ動的に委譲する`config_for`だけを`framework_bindings.rbi`で表現します。migration、schemaはRails DSLと実行順依存が強いため`typed: false`に留めます。`.rake`内にapplication logicを置かず、`roles:grant_admin`は`typed: strict`な`AdminRoleGrant`を呼び出します。
 
 生成時と通常のRails testで、`bin/tapioca gems --verify`、`RAILS_ENV=test bin/tapioca dsl --verify --environment=test`、`bin/tapioca check-shims`、`bundle exec srb tc`を実行します。`dsl --verify`はRails DSL生成物の鮮度、`check-shims`は手書き定義の重複、`srb tc`はRuby本体・inline signature・全RBIを合わせた整合性をそれぞれ保証します。Gem更新時は`bin/tapioca gems`、model、migration、routeなどRails DSL変更時はtest database準備後に`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、更新されたRBIをcommitします。検証失敗時に古いRBIや型エラーを許容するfallbackは設けません。
 
@@ -321,6 +321,8 @@ engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksC
 engineのroute、controller、helper API、Run操作は2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。Bulma stylesheetは読み込まず、Bulma classを出力するtask、run、errorのViewと表示helperをhost側でshadowして、既存Tailwind CSS 4／daisyUI 5のcard、badge、collapse、form、alert componentへ統一します。3秒ごとの`data-refresh`更新はhostのStimulus controllerで行い、外部stylesheet用CSP例外やinline scriptは追加しません。
 
 Maintenance TaskはKamalの既存Solid Queue `worker` roleで実行し、専用roleを追加しません。
+
+生成アプリには`Maintenance::CountdownTask`をサンプルとして含めます。Taskのcollectionは10から1までの整数を降順で返し、各iterationは対象の数値をapplication logへ記録します。これにより永続データを変更せず、queue、進捗、一時停止、再開、完了の流れを確認できます。
 
 ## Action CableとSolid Cable
 

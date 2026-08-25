@@ -200,7 +200,7 @@ WebAuthnとSIWEのchallengeはdatabaseへtoken digest、purpose、User、browser
 
 ## プロフィール（常設）
 
-Profileは質問・CLI引数を持たず、全構成でUserとの1対1 association、表示／編集／更新画面、`screen_name`、`display_name`、`avatar`を生成します。ProfileはUser作成時に同時作成し、User削除時に従属削除します。
+Profileは質問・CLI引数を持たず、全構成でUserとの1対1 association、表示／編集／更新画面、`screen_name`、`display_name`、`avatar`を生成します。ProfileはUser作成時に同時作成し、User削除時に従属削除します。管理者向けユーザー詳細・編集画面も同じProfileと画像policyを使用し、User本体や認証credentialを更新せずに3項目を管理します。
 
 `screen_name`はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`は自動生成した`screen_name`をCamelCaseへ変換した値を初期値とし、必須かつ一意な公開表示名として扱います。databaseには両columnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
 

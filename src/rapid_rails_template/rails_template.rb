@@ -4267,9 +4267,8 @@ def install_siwe
   RUBY
 end
 def configure_roles
-  user_scope = "User.includes(:user_roles, :profile)"
+  user_scope = "User.includes(:user_roles, profile: { avatar_attachment: :blob })"
   profile_header = '<th scope="col"><%= t("admin.users.profile_name") %></th>'
-  profile_cell = "<td><%= T.must(user.profile).display_name %></td>"
 
   generate "action_policy:install"
   inject_into_class "app/policies/application_policy.rb", "ApplicationPolicy", <<~RUBY
@@ -4414,6 +4413,21 @@ def configure_roles
       end
 
       T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def show?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def edit?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def update?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
       def manage_roles?
         admin?
       end
@@ -4456,12 +4470,69 @@ def configure_roles
       class UsersController < BaseController
         extend T::Sig
 
+        before_action :set_user, only: %i[show edit update]
+
         sig { void }
         def index
           authorize! User, to: :index?
           users = authorized_scope(#{user_scope}).order(:id)
           @pagy, @users = pagy(:offset, users, limit: 25)
         end
+
+        sig { void }
+        def show
+          authorize! @user, to: :show?
+          @profile = T.must(@user.profile)
+        end
+
+        sig { void }
+        def edit
+          authorize! @user, to: :edit?
+          @profile = T.must(@user.profile)
+        end
+
+        sig { void }
+        def update
+          authorize! @user, to: :update?
+          @profile = T.must(@user.profile)
+          if @profile.update(profile_params)
+            redirect_to admin_user_path(@user), notice: I18n.t("admin.users.update.notice"), status: :see_other
+          else
+            render :edit, status: :unprocessable_content
+          end
+        end
+
+        private
+          def set_user
+            @user = #{user_scope}.find(params.expect(:id))
+          end
+
+          def profile_params
+            params.expect(profile: %i[screen_name display_name avatar_upload])
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/admin/user_avatars_controller.rb", <<~RUBY, force: true
+    module Admin
+      class UserAvatarsController < BaseController
+        extend T::Sig
+
+        before_action :set_user
+
+        sig { void }
+        def destroy
+          authorize! @user, to: :update?
+          profile = T.must(@user.profile)
+          profile.avatar.purge if profile.avatar.attached?
+          redirect_to admin_user_path(@user), notice: I18n.t("admin.users.avatar.destroy.notice"), status: :see_other
+        end
+
+        private
+          def set_user
+            @user = User.includes(:profile).find(params.expect(:user_id))
+          end
       end
     end
   RUBY
@@ -4477,7 +4548,7 @@ def configure_roles
         def create
           authorize! @user, to: :manage_roles?
           @user.grant_role!(role_param)
-          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.create.notice"), status: :see_other
+          redirect_to admin_user_path(@user), notice: I18n.t("admin.user_roles.create.notice"), status: :see_other
         rescue KeyError, ActiveRecord::RecordInvalid
           head :unprocessable_content
         end
@@ -4486,16 +4557,16 @@ def configure_roles
         def destroy
           authorize! @user, to: :manage_roles?
           if @user == authorization_user
-            redirect_to admin_users_path, alert: I18n.t("admin.user_roles.destroy.self_forbidden"), status: :see_other
+            redirect_to admin_user_path(@user), alert: I18n.t("admin.user_roles.destroy.self_forbidden"), status: :see_other
             return
           end
 
           @user.revoke_role!(role_param)
-          redirect_to admin_users_path, notice: I18n.t("admin.user_roles.destroy.notice"), status: :see_other
+          redirect_to admin_user_path(@user), notice: I18n.t("admin.user_roles.destroy.notice"), status: :see_other
         rescue KeyError
           head :unprocessable_content
         rescue ActiveRecord::RecordNotDestroyed => error
-          redirect_to admin_users_path, alert: error.record.errors.full_messages.to_sentence, status: :see_other
+          redirect_to admin_user_path(@user), alert: error.record.errors.full_messages.to_sentence, status: :see_other
         end
 
         private
@@ -4513,7 +4584,8 @@ def configure_roles
   route <<~RUBY
     namespace :admin do
       root "overview#show"
-      resources :users, only: :index do
+      resources :users, only: %i[index show edit update] do
+        resource :avatar, only: :destroy, controller: "user_avatars"
         resources :roles, only: %i[create destroy], controller: "user_roles", param: :role
       end
     end
@@ -4565,33 +4637,28 @@ def configure_roles
                   <th scope="col">ID</th>
                   #{profile_header}
                   <th scope="col"><%= t("admin.users.role") %></th>
-                  <th scope="col"><span class="sr-only"><%= t("common.actions") %></span></th>
                 </tr>
               </thead>
               <tbody>
                 <% @users.each do |user| %>
                   <tr>
                     <td><%= user.id %></td>
-                    #{profile_cell}
+                    <td>
+                      <%= link_to admin_user_path(user), class: "link link-hover inline-flex items-center gap-3" do %>
+                        <span class="avatar">
+                          <span class="w-10 rounded-full">
+                            <%= profile_avatar(T.must(user.profile), size: 40, alt: "") %>
+                          </span>
+                        </span>
+                        <span><%= T.must(user.profile).display_name %></span>
+                      <% end %>
+                    </td>
                     <td>
                       <% if user.has_role?(:admin) %>
                         <span class="badge"><%= t("admin.users.admin") %></span>
                       <% else %>
                         <span class="text-sm text-neutral"><%= t("common.none") %></span>
                       <% end %>
-                    </td>
-                    <td>
-                      <div class="flex flex-wrap justify-end gap-2">
-                        <% if user.has_role?(:admin) %>
-                          <% if user == authorization_user %>
-                            <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-disabled") %>" disabled><%= t("admin.users.self_forbidden") %></button>
-                          <% else %>
-                            <%= button_to t("admin.users.revoke"), admin_user_role_path(user, "admin"), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("admin.users.revoke_confirm") } %>
-                          <% end %>
-                        <% else %>
-                          <%= button_to t("admin.users.grant"), admin_user_roles_path(user), params: { role: "admin" }, class: action_button_classes(:secondary) %>
-                        <% end %>
-                      </div>
                     </td>
                   </tr>
                 <% end %>
@@ -4602,6 +4669,101 @@ def configure_roles
       </section>
 
       <%= pagination(@pagy, aria_label: t("admin.users.pagination")) %>
+    </div>
+  ERB
+
+  create_file "app/views/admin/users/show.html.erb", <<~ERB, force: true
+    <% profile = T.must(@user.profile) %>
+    <% content_for :page_title, t("admin.users.show_title", name: profile.display_name) %>
+    <div class="space-y-6">
+      <header>
+        <p class="text-sm text-neutral"><%= t("admin.users.show_description") %></p>
+      </header>
+
+      <section class="card card-border bg-base-100">
+        <div class="card-body p-3">
+          <h2 class="card-title text-base leading-[1.5]"><%= t("admin.users.user_information") %></h2>
+          <ul class="list">
+            <li class="list-row">
+              <span class="text-sm text-neutral"><%= t("admin.users.user_id") %></span>
+              <strong><%= @user.id %></strong>
+            </li>
+            <li class="list-row">
+              <span class="text-sm text-neutral"><%= t("admin.users.webauthn_id") %></span>
+              <code class="break-all"><%= @user.webauthn_id %></code>
+            </li>
+            <li class="list-row">
+              <span class="text-sm text-neutral"><%= t("admin.users.registered_at") %></span>
+              <time datetime="<%= @user.created_at.iso8601 %>"><%= @user.created_at.to_fs(:long) %></time>
+            </li>
+          </ul>
+          <div class="card-actions flex-wrap justify-end">
+            <%= link_to t("common.back"), admin_users_path, class: action_button_classes(:quiet) %>
+            <%= link_to t("admin.users.edit"), edit_admin_user_path(@user), class: action_button_classes(:secondary) %>
+          </div>
+        </div>
+      </section>
+
+      <section class="card card-border bg-base-100">
+        <div class="card-body p-3">
+          <h2 class="card-title text-base leading-[1.5]"><%= t("admin.users.profile_information") %></h2>
+          <ul class="list">
+            <li class="list-row">
+              <span class="text-sm text-neutral"><%= t("profiles.avatar_label") %></span>
+              <span class="avatar">
+                <span class="w-16 rounded-full">
+                  <%= profile_avatar(profile, size: 64, alt: t("profiles.current_avatar")) %>
+                </span>
+              </span>
+            </li>
+            <li class="list-row">
+              <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:display_name) %></span>
+              <strong><%= profile.display_name %></strong>
+            </li>
+            <li class="list-row">
+              <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:screen_name) %></span>
+              <strong>@<%= profile.screen_name %></strong>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card card-border bg-base-100">
+        <div class="card-body p-3">
+          <h2 class="card-title text-base leading-[1.5]"><%= t("admin.users.role_information") %></h2>
+          <p class="text-sm text-neutral"><%= t("admin.users.role_description") %></p>
+          <div>
+            <% if @user.has_role?(:admin) %>
+              <span class="badge"><%= t("admin.users.admin") %></span>
+            <% else %>
+              <span class="text-sm text-neutral"><%= t("common.none") %></span>
+            <% end %>
+          </div>
+          <div class="card-actions flex-wrap justify-end">
+            <% if @user.has_role?(:admin) %>
+              <% if @user == authorization_user %>
+                <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-disabled") %>" disabled><%= t("admin.users.self_forbidden") %></button>
+              <% else %>
+                <%= button_to t("admin.users.revoke"), admin_user_role_path(@user, "admin"), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("admin.users.revoke_confirm", name: profile.display_name) } %>
+              <% end %>
+            <% else %>
+              <%= button_to t("admin.users.grant"), admin_user_roles_path(@user), params: { role: "admin" }, class: action_button_classes(:warning), data: { turbo_confirm: t("admin.users.grant_confirm", name: profile.display_name) } %>
+            <% end %>
+          </div>
+        </div>
+      </section>
+    </div>
+  ERB
+
+  create_file "app/views/admin/users/edit.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("admin.users.edit_title", name: @profile.display_name) %>
+    <div class="space-y-6">
+      <section class="card card-border bg-base-100">
+        <div class="card-body p-3">
+          <%= render "profiles/form", profile: @profile, form_url: admin_user_path(@user), cancel_path: admin_user_path(@user) %>
+        </div>
+      </section>
+      <%= render "profiles/avatar_delete", profile: @profile, avatar_path: admin_user_avatar_path(@user) %>
     </div>
   ERB
 
@@ -4655,7 +4817,14 @@ def configure_roles
           "description" => "アプリケーションの現在の状態を確認できます。",
           "statistics" => { "label" => "基本統計", "total_users" => "ユーザー数", "administrators" => "管理者数", "new_users_last_30_days" => "直近30日の新規ユーザー", "published_faqs" => "公開FAQ数", "managed_pages" => "管理対象ページ数" }
         },
-        "users" => { "title" => "ユーザー管理", "description" => "内部ユーザーIDを基準に固定roleを付与または解除します。", "profile_name" => "表示名", "role" => "Role", "admin" => "管理者", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "管理者roleを解除しますか？", "grant" => "管理者にする", "pagination" => "ユーザー一覧のページング" },
+        "users" => {
+          "title" => "ユーザー管理", "description" => "ユーザー情報、プロフィール、管理者roleを管理します。", "profile_name" => "表示名", "role" => "Role", "admin" => "管理者",
+          "show_title" => "%{name}の詳細", "show_description" => "ユーザー情報とプロフィールを確認できます。", "edit_title" => "%{name}を編集", "edit" => "ユーザーを編集",
+          "user_information" => "ユーザー情報", "profile_information" => "プロフィール情報", "role_information" => "Role", "user_id" => "ユーザーID", "webauthn_id" => "WebAuthn ID", "registered_at" => "登録日時",
+          "role_description" => "管理者roleはアプリケーション全体の管理権限を付与します。", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "「%{name}」の管理者roleを解除しますか？",
+          "grant" => "管理者にする", "grant_confirm" => "「%{name}」を管理者にしますか？", "pagination" => "ユーザー一覧のページング", "update" => { "notice" => "ユーザーのプロフィールを更新しました" },
+          "avatar" => { "destroy" => { "notice" => "ユーザーのアバター画像を削除しました" } }
+        },
         "user_roles" => { "create" => { "notice" => "管理者roleを付与しました" }, "destroy" => { "notice" => "管理者roleを解除しました", "self_forbidden" => "自分自身の管理者roleは解除できません" } }
       },
       "accounts" => { "destroy" => { "last_admin" => "最後の管理者はアカウントを削除できません" } }
@@ -4668,7 +4837,14 @@ def configure_roles
           "description" => "View the current state of the application.",
           "statistics" => { "label" => "Core statistics", "total_users" => "Users", "administrators" => "Administrators", "new_users_last_30_days" => "New users in the last 30 days", "published_faqs" => "Published FAQs", "managed_pages" => "Managed pages" }
         },
-        "users" => { "title" => "User management", "description" => "Grant or revoke fixed roles by internal user ID.", "profile_name" => "Display name", "role" => "Role", "admin" => "Administrator", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role?", "grant" => "Make administrator", "pagination" => "User list pagination" },
+        "users" => {
+          "title" => "User management", "description" => "Manage user information, profiles, and administrator roles.", "profile_name" => "Display name", "role" => "Role", "admin" => "Administrator",
+          "show_title" => "%{name} details", "show_description" => "Review user information and profile details.", "edit_title" => "Edit %{name}", "edit" => "Edit user",
+          "user_information" => "User information", "profile_information" => "Profile information", "role_information" => "Role", "user_id" => "User ID", "webauthn_id" => "WebAuthn ID", "registered_at" => "Registered at",
+          "role_description" => "The administrator role grants application-wide management access.", "self_forbidden" => "You cannot revoke your own role", "revoke" => "Revoke administrator", "revoke_confirm" => "Revoke the administrator role from %{name}?",
+          "grant" => "Make administrator", "grant_confirm" => "Make %{name} an administrator?", "pagination" => "User list pagination", "update" => { "notice" => "The user profile was updated." },
+          "avatar" => { "destroy" => { "notice" => "The user avatar image was deleted." } }
+        },
         "user_roles" => { "create" => { "notice" => "Administrator role granted" }, "destroy" => { "notice" => "Administrator role revoked", "self_forbidden" => "You cannot revoke your own administrator role" } }
       },
       "accounts" => { "destroy" => { "last_admin" => "The final administrator cannot delete their account" } }
@@ -4823,9 +4999,15 @@ def configure_roles
 
         assert UserPolicy.new(User, user: admin).apply(:overview?)
         assert UserPolicy.new(User, user: admin).apply(:index?)
+        assert UserPolicy.new(regular, user: admin).apply(:show?)
+        assert UserPolicy.new(regular, user: admin).apply(:edit?)
+        assert UserPolicy.new(regular, user: admin).apply(:update?)
         assert UserPolicy.new(regular, user: admin).apply(:manage_roles?)
         assert_not UserPolicy.new(User, user: regular).apply(:overview?)
         assert_not UserPolicy.new(User, user: regular).apply(:index?)
+        assert_not UserPolicy.new(admin, user: regular).apply(:show?)
+        assert_not UserPolicy.new(admin, user: regular).apply(:edit?)
+        assert_not UserPolicy.new(admin, user: regular).apply(:update?)
         assert_not UserPolicy.new(admin, user: regular).apply(:manage_roles?)
       end
 
@@ -4948,16 +5130,43 @@ def configure_roles
     require "test_helper"
 
     class Admin::UsersControllerTest < ActionDispatch::IntegrationTest
+      include ActiveJob::TestHelper
     #{controller_test_support}
       test "requires authentication" do
+        original_display_name = T.must(@regular.profile).display_name
         get admin_users_url
 
         assert_redirected_to new_user_session_url
+
+        get admin_user_url(@regular)
+
+        assert_redirected_to new_user_session_url
+
+        get edit_admin_user_url(@regular)
+
+        assert_redirected_to new_user_session_url
+
+        patch admin_user_url(@regular), params: { profile: { display_name: "Unauthenticated" } }
+
+        assert_redirected_to new_user_session_url
+        assert_equal original_display_name, T.must(@regular.profile).reload.display_name
       end
 
       test "denies regular users" do
         sign_in_as(@regular)
         get admin_users_url
+
+        assert_response :forbidden
+
+        get admin_user_url(@admin)
+
+        assert_response :forbidden
+
+        get edit_admin_user_url(@admin)
+
+        assert_response :forbidden
+
+        patch admin_user_url(@admin), params: { profile: { display_name: "Forbidden" } }
 
         assert_response :forbidden
       end
@@ -4977,7 +5186,101 @@ def configure_roles
         assert_select 'a[href=?]', account_path, text: I18n.t("navigation.dashboard"), count: 2
         assert_select "table.table.table-sm.table-pin-rows"
         assert_select ".badge", text: I18n.t("admin.users.admin"), minimum: 1
+        assert_select 'a.link.link-hover[href=?]', admin_user_path(@regular), text: T.must(@regular.profile).display_name, count: 1 do
+          assert_select '.avatar svg[width="40"][height="40"][aria-hidden="true"]', count: 1
+        end
+        assert_select 'form[action=?]', admin_user_roles_path(@regular), count: 0
+        assert_select 'form[action=?]', admin_user_role_path(@admin, "admin"), count: 0
         assert_select ".join", count: 0
+      end
+
+      test "renders user profile and role details" do
+        profile = T.must(@regular.profile)
+        profile.update!(screen_name: "managed_user", display_name: "Managed User")
+        sign_in_as(@admin)
+
+        get admin_user_url(@regular)
+
+        assert_response :success
+        assert_select 'section.card.card-border.bg-base-100', count: 3
+        assert_select 'a[href=?]', edit_admin_user_path(@regular), text: I18n.t("admin.users.edit"), count: 1
+        assert_select '.list .avatar svg[width="64"][height="64"]', count: 1
+        assert_select 'code', text: @regular.webauthn_id, count: 1
+        assert_select 'button.btn.btn-outline.btn-warning[data-turbo-confirm=?]',
+          I18n.t("admin.users.grant_confirm", name: profile.display_name), text: I18n.t("admin.users.grant"), count: 1
+
+        get edit_admin_user_url(@regular)
+
+        assert_response :success
+        assert_select 'form[action=?] input[name="profile[display_name]"]', admin_user_path(@regular), count: 1
+
+        @regular.grant_role!(:admin)
+        get admin_user_url(@regular)
+
+        assert_response :success
+        assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm=?]',
+          I18n.t("admin.users.revoke_confirm", name: profile.display_name), text: I18n.t("admin.users.revoke"), count: 1
+
+        get admin_user_url(@admin)
+
+        assert_response :success
+        assert_select 'button.btn-disabled[disabled]', text: I18n.t("admin.users.self_forbidden"), count: 1
+      end
+
+      test "updates only the users profile" do
+        profile = T.must(@regular.profile)
+        original_webauthn_id = @regular.webauthn_id
+        sign_in_as(@admin)
+
+        patch admin_user_url(@regular), params: {
+          profile: { screen_name: "updated_user", display_name: "Updated User" },
+          user: { webauthn_id: "replacement" },
+          role: "admin"
+        }
+
+        assert_redirected_to admin_user_url(@regular)
+        assert_equal ["updated_user", "Updated User"], profile.reload.values_at(:screen_name, :display_name)
+        assert_equal original_webauthn_id, @regular.reload.webauthn_id
+        assert_not @regular.has_role?(:admin)
+      end
+
+      test "renders validation errors without changing the profile" do
+        profile = T.must(@regular.profile)
+        conflicting = T.must(@admin.profile)
+        original_names = profile.values_at(:screen_name, :display_name)
+        sign_in_as(@admin)
+
+        patch admin_user_url(@regular), params: {
+          profile: { screen_name: conflicting.screen_name, display_name: conflicting.display_name }
+        }
+
+        assert_response :unprocessable_content
+        assert_select '.alert.alert-error.alert-soft[role="alert"] ul.list-disc', count: 1
+        assert_select 'form[action=?]', admin_user_path(@regular), count: 1
+        assert_equal original_names, profile.reload.values_at(:screen_name, :display_name)
+      end
+
+      test "updates an avatar through the existing profile policy" do
+        profile = T.must(@regular.profile)
+        sign_in_as(@admin)
+
+        assert_enqueued_jobs 2, only: ActiveStorage::TransformJob do
+          patch admin_user_url(@regular), params: { profile: { avatar_upload: AvatarTestImage.upload } }
+        end
+
+        assert_redirected_to admin_user_url(@regular)
+        assert_predicate profile.reload.avatar, :attached?
+        assert_empty profile.avatar.blob.variant_records
+
+        original_blob = profile.avatar.blob
+        patch admin_user_url(@regular), params: { profile: { avatar_upload: AvatarTestImage.corrupt_png_upload } }
+
+        assert_response :unprocessable_content
+        error_text = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.undecodable")
+        assert_select '.alert.alert-error.alert-soft[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
+        assert_equal original_blob, profile.reload.avatar.blob
+      ensure
+        profile&.avatar&.purge
       end
 
 
@@ -4998,23 +5301,79 @@ def configure_roles
     end
   RUBY
 
+  create_file "test/controllers/admin/user_avatars_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::UserAvatarsControllerTest < ActionDispatch::IntegrationTest
+    #{controller_test_support}
+      setup do
+        @profile = T.must(@regular.profile)
+        @profile.avatar.attach(AvatarTestImage.upload)
+      end
+
+      teardown do
+        @profile.avatar.purge if @profile.avatar.attached?
+      end
+
+      test "requires authentication" do
+        delete admin_user_avatar_url(@regular)
+
+        assert_redirected_to new_user_session_url
+        assert_predicate @profile.reload.avatar, :attached?
+      end
+
+      test "denies regular users" do
+        sign_in_as(@regular)
+
+        delete admin_user_avatar_url(@regular)
+
+        assert_response :forbidden
+        assert_predicate @profile.reload.avatar, :attached?
+      end
+
+      test "allows an admin to delete another users avatar" do
+        sign_in_as(@admin)
+
+        delete admin_user_avatar_url(@regular)
+
+        assert_redirected_to admin_user_url(@regular)
+        assert_not @profile.reload.avatar.attached?
+        follow_redirect!
+        assert_select '.alert.alert-success.alert-soft', text: I18n.t("admin.users.avatar.destroy.notice"), count: 1
+      end
+    end
+  RUBY
+
   create_file "test/controllers/admin/user_roles_controller_test.rb", <<~RUBY, force: true
     require "test_helper"
 
     class Admin::UserRolesControllerTest < ActionDispatch::IntegrationTest
     #{controller_test_support}
+      test "requires authentication" do
+        assert_no_difference("UserRole.count") do
+          post admin_user_roles_url(@regular), params: { role: "admin" }
+        end
+        assert_redirected_to new_user_session_url
+
+        assert_no_difference("UserRole.count") do
+          delete admin_user_role_url(@admin, "admin")
+        end
+        assert_redirected_to new_user_session_url
+        assert @admin.reload.has_role?(:admin)
+      end
+
       test "allows an admin to grant and revoke another users role" do
         sign_in_as(@admin)
 
         assert_difference("UserRole.count", 1) do
           post admin_user_roles_url(@regular), params: { role: "admin" }
         end
-        assert_redirected_to admin_users_url
+        assert_redirected_to admin_user_url(@regular)
 
         assert_difference("UserRole.count", -1) do
           delete admin_user_role_url(@regular, "admin")
         end
-        assert_redirected_to admin_users_url
+        assert_redirected_to admin_user_url(@regular)
       end
 
       test "denies role changes by regular users" do
@@ -5024,6 +5383,12 @@ def configure_roles
           post admin_user_roles_url(@regular), params: { role: "admin" }
         end
         assert_response :forbidden
+
+        assert_no_difference("UserRole.count") do
+          delete admin_user_role_url(@admin, "admin")
+        end
+        assert_response :forbidden
+        assert @admin.reload.has_role?(:admin)
       end
 
       test "refuses self revocation" do
@@ -5032,7 +5397,7 @@ def configure_roles
         assert_no_difference("UserRole.count") do
           delete admin_user_role_url(@admin, "admin")
         end
-        assert_redirected_to admin_users_url
+        assert_redirected_to admin_user_url(@admin)
         assert @admin.reload.has_role?(:admin)
       end
 
@@ -8178,7 +8543,7 @@ def configure_profile
     ""
   end
   create_file "app/views/profiles/_form.html.erb", <<~ERB, force: true
-    #{form_wrapper_open}  <%= form_with model: profile, url: profile_path, class: "space-y-5" do |form| %>
+    #{form_wrapper_open}  <%= form_with model: profile, url: form_url, class: "space-y-5" do |form| %>
         <% if profile.errors.any? %>
           <div class="alert alert-error alert-soft" role="alert">
             <ul class="list-disc pl-5">
@@ -8190,7 +8555,7 @@ def configure_profile
         <% end %>
 
     #{form_fields.lines.map { |line| "  #{line}" }.join}    <div class="card-actions flex-wrap justify-end">
-          <%= link_to t("common.cancel"), profile_path, class: action_button_classes(:quiet) %>
+          <%= link_to t("common.cancel"), cancel_path, class: action_button_classes(:quiet) %>
           <%= form.submit t("common.save"), class: action_button_classes(:primary) %>
         </div>
       <% end %>
@@ -8227,23 +8592,20 @@ def configure_profile
     ERB
   end
   profile_rows = profile_rows.join("\n").lines.map { |line| "        #{line}" }.join
-  avatar_delete_section = if avatar_enabled
-    <<~ERB
-
-      <% if @profile.avatar.attached? %>
+  if avatar_enabled
+    create_file "app/views/profiles/_avatar_delete.html.erb", <<~ERB, force: true
+      <% if profile.avatar.attached? %>
         <section class="card card-border border-error bg-base-100">
           <div class="card-body">
             <h2 class="card-title text-base leading-[1.5]"><%= t("profiles.avatar_delete_title") %></h2>
             <p class="text-sm text-neutral"><%= t("profiles.avatar_delete_description") %></p>
             <div class="card-actions flex-wrap justify-end">
-              <%= button_to t("profiles.avatar_delete"), profile_avatar_path, method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("profiles.avatar_delete_confirm") } %>
+              <%= button_to t("profiles.avatar_delete"), avatar_path, method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("profiles.avatar_delete_confirm") } %>
             </div>
           </div>
         </section>
       <% end %>
     ERB
-  else
-    ""
   end
   create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("profiles.title") %>
@@ -8265,10 +8627,11 @@ def configure_profile
     <div class="space-y-6">
       <section class="card card-border bg-base-100">
         <div class="card-body p-3">
-          <%= render "form", profile: @profile %>
+          <%= render "form", profile: @profile, form_url: profile_path, cancel_path: profile_path %>
         </div>
       </section>
-    #{avatar_delete_section}</div>
+      <%= render "avatar_delete", profile: @profile, avatar_path: profile_avatar_path %>
+    </div>
   ERB
 end
 
@@ -15669,6 +16032,38 @@ def configure_evidence_capture
           verify_pagination_geometry if viewport == "desktop"
           capture_page("admin-users", "ユーザー管理", admin_users_path, translate("admin.users.title"), viewport)
           assert_admin_navigation_active(translate("navigation.users"))
+
+          managed_profile = T.must(@regular_user.profile)
+          managed_profile.update!(screen_name: "managed_user", display_name: "Managed User")
+          capture_page(
+            "admin-user-show",
+            "ユーザー詳細",
+            admin_user_path(@regular_user),
+            translate("admin.users.show_title", name: managed_profile.display_name),
+            viewport
+          )
+          assert_selector '.avatar svg[width="64"][height="64"]', count: 1
+          assert_button translate("admin.users.grant")
+          capture_page(
+            "admin-user-edit",
+            "ユーザー編集",
+            edit_admin_user_path(@regular_user),
+            translate("admin.users.edit_title", name: managed_profile.display_name),
+            viewport
+          )
+          assert_selector "form[action='#{admin_user_path(@regular_user)}'] input[name='profile[display_name]']", count: 1
+          assert_selector "form[action='#{admin_user_path(@regular_user)}'] input[name='profile[screen_name]']", count: 1
+          assert_selector "form[action='#{admin_user_path(@regular_user)}'] input[name='profile[avatar_upload]']", count: 1
+
+          visit admin_user_path(@regular_user)
+          dismiss_confirm { click_button translate("admin.users.grant") }
+          assert_not @regular_user.reload.has_role?(:admin)
+          accept_confirm { click_button translate("admin.users.grant") }
+          assert_current_path admin_user_path(@regular_user)
+          assert @regular_user.reload.has_role?(:admin)
+          accept_confirm { click_button translate("admin.users.revoke") }
+          assert_current_path admin_user_path(@regular_user)
+          assert_not @regular_user.reload.has_role?(:admin)
         end
 
         def capture_notification_scenarios(viewport)

@@ -227,7 +227,7 @@ PushNotifier.deliver_later(
 
 `User`は`has_role?`、`grant_role!`、`revoke_role!`を公開し、role付与を冪等にします。一般の登録・アカウント更新parameterへroleを含めず、role変更はAction Policyで保護された管理画面に限定します。複数roleの権限は許可を加算し、role階層と明示denyは持ちません。
 
-管理画面は`/admin/users`に数値IDと常設Profileの表示名をページング表示し、`admin`の付与と解除を提供します。`login_id`やwallet addressは表示しません。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。developmentでは既存のadminが0人の場合に新しく作成されたUserへadmin roleを自動付与し、全部入りsampleのseed Userだけは明示的に除外します。既存Userへの手動付与には`users.id`を引数に取る`roles:grant_admin[user_id]` taskを使用し、local seedは`ADMIN_USER_ID`を使用します。
+管理画面は`/admin/users`に数値ID、常設Profileの40×40アバターと詳細画面への表示名リンク、roleをページング表示します。一覧にはrole操作を置かず、`/admin/users/:id`でUser ID、WebAuthn ID、登録日時、Profile、roleを表示し、確認付きの`admin`付与・解除を行います。付与はwarning、解除はdestructiveのbutton roleを使用し、対象の表示名を確認文へ含めます。`/admin/users/:id/edit`では既存Profileフォームと画像policyを再利用し、表示名、スクリーンネーム、アバターを更新できます。User本体とPasskey・walletは参照または管理対象に含めず、更新parameterにも受け入れません。自分自身の`admin`解除と最後の`admin`解除・削除を拒否します。developmentでは既存のadminが0人の場合に新しく作成されたUserへadmin roleを自動付与し、全部入りsampleのseed Userだけは明示的に除外します。既存Userへの手動付与には`users.id`を引数に取る`roles:grant_admin[user_id]` taskを使用し、local seedは`ADMIN_USER_ID`を使用します。
 
 ## テスト用Gem
 

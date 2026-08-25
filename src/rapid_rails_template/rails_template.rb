@@ -4345,7 +4345,8 @@ def configure_roles
       extend T::Sig
 
       has_many :user_roles, dependent: :destroy
-      after_create :grant_admin_role_to_first_development_user
+      attr_accessor :skip_initial_admin_role
+      after_create :grant_initial_admin_role_in_development
 
       sig { params(role: T.any(String, Symbol)).returns(T::Boolean) }
       def has_role?(role)
@@ -4380,8 +4381,11 @@ def configure_roles
       end
 
       sig { void }
-      def grant_admin_role_to_first_development_user
-        grant_role!(:admin) if Rails.env.development? && User.count == 1
+      def grant_initial_admin_role_in_development
+        return unless Rails.env.development?
+        return if skip_initial_admin_role
+
+        grant_role!(:admin) if UserRole.admin.none?
       end
 
   RUBY
@@ -4696,7 +4700,7 @@ def configure_roles
     require "test_helper"
 
     class UserRoleTest < ActiveSupport::TestCase
-      test "grants admin to the first user created in development" do
+      test "grants admin when no administrator exists in development" do
         with_rails_environment("development") do
           User.destroy_all
 
@@ -4707,16 +4711,31 @@ def configure_roles
         end
       end
 
-      test "does not grant admin to later users created in development" do
+      test "does not grant admin when an administrator already exists in development" do
         with_rails_environment("development") do
           User.destroy_all
-          first_user = User.create!
-          assert first_user.has_role?(:admin)
+          administrator = User.create!
+          assert administrator.has_role?(:admin)
 
           later_user = T.let(nil, T.nilable(User))
           assert_no_difference("UserRole.count") { later_user = User.create! }
 
           assert_not T.must(later_user).has_role?(:admin)
+        end
+      end
+
+      test "skips sample users and grants admin to the next created user" do
+        with_rails_environment("development") do
+          User.destroy_all
+          sample_users = 10.times.map { User.create!(skip_initial_admin_role: true) }
+
+          assert sample_users.none? { |user| user.has_role?(:admin) }
+          assert_equal 10, User.count
+          assert_equal 0, UserRole.admin.count
+
+          signed_up_user = User.create!
+          assert signed_up_user.has_role?(:admin)
+          assert_equal 1, UserRole.admin.count
         end
       end
 
@@ -13019,7 +13038,39 @@ def install_maintenance_tasks
   authentication_route_bridge = ""
 
   generate "maintenance_tasks:install"
+  generate "maintenance_tasks:task", "countdown"
   configure_maintenance_tasks_route
+
+  create_file "app/tasks/maintenance/countdown_task.rb", <<~RUBY, force: true
+    module Maintenance
+      class CountdownTask < MaintenanceTasks::Task
+        extend T::Sig
+
+        sig { returns(T::Array[Integer]) }
+        def collection
+          10.downto(1).to_a
+        end
+
+        sig { params(number: Integer).void }
+        def process(number)
+          Rails.logger.info("Countdown: \#{number}")
+        end
+      end
+    end
+  RUBY
+
+  create_file "test/tasks/maintenance/countdown_task_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Maintenance::CountdownTaskTest < ActiveSupport::TestCase
+      test "counts down from ten to one" do
+        numbers = Maintenance::CountdownTask.collection
+
+        assert_equal 10.downto(1).to_a, numbers
+        numbers.each { |number| Maintenance::CountdownTask.process(number) }
+      end
+    end
+  RUBY
 
   create_file "config/initializers/maintenance_tasks.rb", <<~RUBY, force: true
     MaintenanceTasks.parent_controller = "Admin::MaintenanceTasksController"
@@ -13461,7 +13512,7 @@ def install_maintenance_tasks
 
     ## Taskの追加
 
-    `bin/rails generate maintenance_tasks:task NAME`を実行し、`app/tasks/maintenance/`へ生成されたTaskへ、再実行可能で小さな単位の処理を実装してください。ブラウザから任意のRubyコードを入力・実行する機能はありません。
+    生成直後は`app/tasks/maintenance/countdown_task.rb`に、10から1までを順番に処理してapplication logへ記録するサンプルがあります。不要になったら削除し、`bin/rails generate maintenance_tasks:task NAME`で用途ごとのTaskを追加してください。各Taskは、同じ要素が再処理されても結果が壊れない小さな単位で実装します。ブラウザから任意のRubyコードを入力・実行する機能はありません。
 
     実行履歴、status、cursor、job ID、arguments、metadata、error class/message/backtraceは`maintenance_tasks_runs`へGem標準形式で保存されます。実行者はRun metadataの`triggered_by_user_id`へ実行時点の内部User IDをスナップショットとして保存します。User recordとの関連は持たないため、User削除後も履歴は維持されます。
 
@@ -13589,7 +13640,8 @@ def install_maintenance_tasks
         assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
         assert_select '[data-layout="with-menu"] .tab-content', count: 0
         assert_select ".card.card-border", minimum: 1
-        assert_select ".badge.badge-neutral", text: "New", count: 2
+        assert_select ".badge.badge-neutral", text: "New", count: 3
+        assert_select "a", text: "Maintenance::CountdownTask", count: 1
         assert_select 'link[href*="bulma"]', count: 0
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
         assert_select '[data-layout="with-menu"] a[href=?]', Rails.application.routes.url_helpers.admin_users_path,
@@ -15892,6 +15944,7 @@ def configure_sorbet
         app/services/**/*.rb
         app/jobs/**/*.rb
         app/mailers/**/*.rb
+        app/tasks/**/*.rb
         app/validators/**/*.rb
         config/**/*.rb
         lib/**/*.rb
@@ -16013,6 +16066,7 @@ def configure_application_typechecking
     app/services/**/*.rb
     app/jobs/**/*.rb
     app/mailers/**/*.rb
+    app/tasks/**/*.rb
     app/validators/**/*.rb
     config/**/*.rb
     lib/**/*.rb

@@ -837,10 +837,13 @@ class RailsTemplateContractTest < Minitest::Test
     error = generated_file_source("app/views/maintenance_tasks/runs/info/_errored.html.erb")
     refresh = generated_file_source("app/javascript/controllers/maintenance_tasks_refresh_controller.js")
     controller_test = generated_file_source("test/controllers/admin/maintenance_tasks_controller_test.rb")
+    countdown_task = generated_file_source("app/tasks/maintenance/countdown_task.rb")
+    countdown_test = generated_file_source("test/tasks/maintenance/countdown_task_test.rb")
     after_bundle = @source.byteslice(@source.index("after_bundle do")..)
 
     assert_includes @source, 'gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"'
     assert_includes maintenance, 'generate "maintenance_tasks:install"'
+    assert_includes maintenance, 'generate "maintenance_tasks:task", "countdown"'
     assert_includes route, "Prism.parse(source)"
     assert_includes route, 'actual == \'mount MaintenanceTasks::Engine, at: "/maintenance_tasks"\''
     assert_includes route, 'mount MaintenanceTasks::Engine, at: "/admin/maintenance_tasks", as: :admin_maintenance_tasks'
@@ -919,6 +922,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes refresh, "this.abortController?.abort()"
     assert_includes maintenance, 'create_file "docs/maintenance_tasks.md"'
     assert_includes controller_test, "assert_enqueued_with(job: MaintenanceTasks::TaskJob)"
+    assert_includes controller_test, 'assert_select ".badge.badge-neutral", text: "New", count: 3'
+    assert_includes controller_test, 'assert_select "a", text: "Maintenance::CountdownTask", count: 1'
     assert_includes controller_test, 'assert_equal "succeeded", run.reload.status'
     assert_includes controller_test, 'assert_equal "pausing", pausing_run.reload.status'
     assert_includes controller_test, 'assert_equal "enqueued", resumable_run.reload.status'
@@ -933,7 +938,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes maintenance, "attribute :due_on, :date"
     assert_includes maintenance, "attribute :starts_at, :time"
     assert_includes maintenance, "def process"
-    refute_match(/create_file "app\/tasks\/maintenance\//, maintenance)
+    assert_includes countdown_task, "class CountdownTask < MaintenanceTasks::Task"
+    assert_includes countdown_task, "10.downto(1).to_a"
+    assert_includes countdown_task, 'Rails.logger.info("Countdown: \#{number}")'
+    assert_includes countdown_test, "numbers = Maintenance::CountdownTask.collection"
+    assert_includes countdown_test, "assert_equal 10.downto(1).to_a, numbers"
+    assert_includes countdown_test, "numbers.each { |number| Maintenance::CountdownTask.process(number) }"
     refute_includes maintenance, '.keep'
     assert_operator after_bundle.index("install_solid_components"), :<,
       after_bundle.index('install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"')
@@ -1050,15 +1060,18 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes model, 'validates :role, uniqueness: { scope: :user_id }'
     assert_includes model, 'before_destroy :ensure_admin_remains, if: :admin?'
     assert_includes roles, 'has_many :user_roles, dependent: :destroy'
-    assert_includes roles, 'after_create :grant_admin_role_to_first_development_user'
+    assert_includes roles, 'attr_accessor :skip_initial_admin_role'
+    assert_includes roles, 'after_create :grant_initial_admin_role_in_development'
     assert_includes roles, 'def has_role?(role)'
     assert_includes roles, 'def grant_role!(role)'
     assert_includes roles, 'find_or_create_by!(role: normalized_role)'
     assert_includes roles, 'def revoke_role!(role)'
     assert_includes roles, 'def last_admin?'
-    assert_includes roles, 'def grant_admin_role_to_first_development_user'
-    assert_includes roles, 'grant_role!(:admin) if Rails.env.development? && User.count == 1'
-    refute_includes roles, 'after_commit :grant_admin_role_to_first_development_user'
+    assert_includes roles, 'def grant_initial_admin_role_in_development'
+    assert_includes roles, 'return if skip_initial_admin_role'
+    assert_includes roles, 'grant_role!(:admin) if UserRole.admin.none?'
+    refute_includes roles, 'User.count == 1'
+    refute_includes roles, 'after_commit :grant_initial_admin_role_in_development'
 
     assert_includes roles, 'authorize :user, through: :authorization_user'
     assert_includes roles, 'helper_method :authorization_user'
@@ -1153,8 +1166,11 @@ class RailsTemplateContractTest < Minitest::Test
     task_test = generated_file_source("test/tasks/roles_task_test.rb")
 
     assert_includes model_test, 'assert_not invalid.valid?'
-    assert_includes model_test, 'test "grants admin to the first user created in development"'
-    assert_includes model_test, 'test "does not grant admin to later users created in development"'
+    assert_includes model_test, 'test "grants admin when no administrator exists in development"'
+    assert_includes model_test, 'test "does not grant admin when an administrator already exists in development"'
+    assert_includes model_test, 'test "skips sample users and grants admin to the next created user"'
+    assert_includes model_test, '10.times.map { User.create!(skip_initial_admin_role: true) }'
+    assert_includes model_test, 'assert_equal 0, UserRole.admin.count'
     assert_includes model_test, 'test "does not grant initial admin outside development"'
     assert_includes model_test, 'with_rails_environment("development")'
     assert_includes model_test, '%w[test production].each do |environment_name|'
@@ -1762,7 +1778,7 @@ class RailsTemplateContractTest < Minitest::Test
       assert_includes sorbet_test, %Q{"#{dsl_rbi}" =>}
     end
     assert_includes sorbet_test, 'assert_path_exists Rails.root.join("sorbet/rbi/dsl/#{name}.rbi")'
-    %w[app/controllers app/helpers app/models app/policies app/services app/jobs app/mailers app/validators config lib test].each do |directory|
+    %w[app/controllers app/helpers app/models app/policies app/services app/jobs app/mailers app/tasks app/validators config lib test].each do |directory|
       assert_includes application_typechecking, "#{directory}/**/*.rb"
     end
     assert_includes application_typechecking, "db/seeds.rb"

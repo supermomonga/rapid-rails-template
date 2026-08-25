@@ -1309,12 +1309,16 @@ class RailsTemplateContractTest < Minitest::Test
     service = generated_file_source("app/services/admin_role_grant.rb")
     local_seed = generated_file_source("db/seeds.local.rb.example")
     helper = generated_file_source("app/helpers/application_helper.rb")
+    agents = File.binread(File.expand_path("../../AGENTS.md", __dir__)).force_encoding(Encoding::UTF_8)
 
     assert_class_tokens view, "card", "card-border", "bg-base-100"
     assert_class_tokens view, "overflow-x-auto"
     assert_class_tokens view, "table", "table-sm", "table-pin-rows", "min-w-max"
     assert_class_tokens view, "avatar"
-    assert_class_tokens view, "link", "link-hover"
+    assert_class_tokens view, "link"
+    refute_includes view, "link-hover"
+    assert_includes agents, "hover時だけ下線を表示する`link-hover`は使用しません"
+    assert_includes agents, "header・footerなどのnavigation内やdaisyUIの`menu` component内"
     assert_class_tokens view, "badge"
     assert_includes helper, 'destructive: "btn btn-outline btn-error"'
     assert_includes helper, 'warning: "btn btn-outline btn-warning"'

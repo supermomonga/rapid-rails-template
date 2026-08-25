@@ -37,13 +37,15 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 | --- | --- | --- |
 | `:primary` | `btn btn-primary btn-rapid` | 作成、保存、登録など、その画面の主操作 |
 | `:secondary` | `btn btn-rapid` | 編集、詳細、同格の代替操作 |
-| `:quiet` | `btn btn-ghost btn-rapid` | 戻る、キャンセルなどの低強調操作 |
+| `:quiet` | `btn btn-outline btn-rapid` | 戻る、キャンセルなどの低強調操作 |
 | `:warning` | `btn btn-outline btn-warning btn-rapid` | pause、retryなど注意を伴う実行操作 |
 | `:destructive` | `btn btn-outline btn-error btn-rapid` | 削除・解除への導線、または別の確認を挟む危険操作 |
 | `:destructive_confirm` | `btn btn-error btn-rapid` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
 
 - card、form、modal、row内のaction groupは右寄せし、狭幅で折り返せるようにします。DOM順は低強調から高影響の`quiet`、`secondary`、`warning`、`primary`または`destructive`とし、専用確認画面では`destructive_confirm`を最終操作として右端へ置きます。daisyUIの`card-actions`・`modal-action`が使える場合はそれを使用し、同じ配置を独自utilityの集合で再実装しません。
 - `:warning`は注意を促しつつ画面内で色の占有面積を抑えるため、常に`btn-outline`と組み合わせます。通常のコンテンツ操作へ塗りつぶしの`btn-warning`を使用しません。
+- 文字付きのbuttonとbutton相当のlinkは、hoverしていない通常時にも背景または輪郭で操作可能な要素だと判別できる表示にし、`btn-ghost`を使用しません。この規約は通知popover、受信者selector・badge、header、menu、dropdownなど`action_button_classes`の対象外にも適用します。`btn-ghost`は、accessible nameを持つベルやアバターなど、文字を持たない慣例的な操作triggerだけに限定します。
+- 色modifierを持たない`btn-outline`は、文字色を`base-content`のまま維持し、通常時のborderだけを`base-300`へ上書きします。`btn-primary`、`btn-secondary`、`btn-accent`、`btn-neutral`、`btn-info`、`btn-success`、`btn-warning`、`btn-error`のいずれかを併用するoutlineには適用せず、各semantic colorのborderを維持してください。
 - daisyUIのAlertで`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合は、常に`alert-soft`と組み合わせ、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。この規約は静的Viewだけでなく、flash、JavaScriptによる状態切り替え、engineの上書きViewにも適用し、状態色を切り替えるときも`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはAlertではないため対象外です。
 - `action_button_classes`の対象外は、通知popover、受信者selector・badge、inputへ連結するCopy操作、header、menu、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuです。これらは該当するdaisyUI componentと必要なmodifierを直接使用します。table rowを理由に`btn-sm`へ縮小することは例外に含めません。
 - paginationは通常の操作buttonではなく、共通の`ApplicationHelper#with_pagination`と`pagination_item_classes`で`join`、active・disabled状態、正方形の前後操作を一括生成します。pagination itemにも`btn-rapid`を含め、個別Viewでpagination buttonを組み立てません。

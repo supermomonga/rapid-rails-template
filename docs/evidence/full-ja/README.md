@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `ceec6f7d4820e729fa4d9b58ec4976d7f1a418cf712675532d053435bf4844f8`
-- Base commit: `f5b05cb8c31b23cb41ccbf6adb6e3ce6d5c631d4`
+- Source fingerprint: `a9458c07178ce26b7399d95e73719ac349b55777c88ac0be82b84508dadfdcf2`
+- Base commit: `6947adb94db43b57060c25ce5f681eb69665d691`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -60,11 +60,23 @@
 |---|---|
 |![通知popover（未読） (desktop)](notifications-popover-unread--desktop.png)|![通知popover（未読） (mobile)](notifications-popover-unread--mobile.png)|
 
+## 通知popover（お知らせ）
+
+|Desktop|Mobile|
+|---|---|
+|![通知popover（お知らせ） (desktop)](notifications-popover-announcements--desktop.png)|![通知popover（お知らせ） (mobile)](notifications-popover-announcements--mobile.png)|
+
 ## 通知履歴
 
 |Desktop|Mobile|
 |---|---|
 |![通知履歴 (desktop)](notifications-history--desktop.png)|![通知履歴 (mobile)](notifications-history--mobile.png)|
+
+## 通知履歴（お知らせ）
+
+|Desktop|Mobile|
+|---|---|
+|![通知履歴（お知らせ） (desktop)](notifications-announcements--desktop.png)|![通知履歴（お知らせ） (mobile)](notifications-announcements--mobile.png)|
 
 ## 通知popover（全件既読後）
 

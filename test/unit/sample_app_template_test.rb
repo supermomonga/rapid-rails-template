@@ -64,6 +64,13 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, 'puts "Sample users (seeded Passkeys are display-only and cannot authenticate):"'
     refute_includes @source, "password123"
     refute_includes @source, "user.login_id"
+    assert_includes @source, "assert_equal 3, seed_notifications.count"
+    assert_includes @source, "assert_not user.has_unread_announcements?"
+    assert_includes @source, "Notification.published.announcements.where(id: seed_notifications).ids.sort"
+    assert_includes @source, "assert_equal 0, NotificationDelivery.where(notification: seed_notifications).count"
+    assert_includes @source, "seed_notifications.map(&:message_plain_text)"
+    refute_includes @source, "NotificationDeliverySynchronization.call(notification:)"
+    refute_includes @source, "notification: { message: seed_notification_messages }"
     assert_includes @source, "created = T.must(Article.order(:id).last)"
   end
 

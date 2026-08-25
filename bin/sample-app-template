@@ -518,10 +518,6 @@ append_to_file "db/seeds.rb", <<~'RUBY'
     user
   end
 
-  Notification.published.all_users.find_each do |notification|
-    NotificationDeliverySynchronization.call(notification:)
-  end
-
   puts "Sample users (seeded Passkeys are display-only and cannot authenticate):"
   sample_users.each do |user|
     puts "  #{T.must(user.profile).screen_name}: user_id=#{user.id}"
@@ -534,7 +530,7 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
   require "test_helper"
 
   class SampleSeedTest < ActiveSupport::TestCase
-    test "creates non-admin sample users and leaves initial admin assignment for the next signup" do
+    test "creates non-admin sample users and global notifications without duplication" do
       with_rails_environment("development") do
         2.times { load Rails.root.join("db/seeds.rb").to_s }
 
@@ -558,15 +554,19 @@ create_file "test/models/sample_seed_test.rb", <<~'RUBY', force: true
         sample_users.each do |user|
           assert_not user.has_role?(:admin)
           assert_equal 1, user.passkey_credentials.count
-          seeded_deliveries = user.notification_deliveries.published.unopened.where(
-            notification: seed_notifications
-          )
-          assert_equal 3, seeded_deliveries.count
+          assert_not user.has_unread_announcements?
           articles = T.must(user.profile).articles
           assert_equal 50, articles.count
           assert_equal 10, articles.where(draft: true).count
           assert_equal 40, articles.where(draft: false).count
         end
+        assert_equal 3, seed_notifications.count
+        assert seed_notifications.all? { |notification|
+          sample_users.all? { |user| T.must(notification.published_at) < user.created_at }
+        }
+        assert_equal seed_notifications.ids.sort,
+          Notification.published.announcements.where(id: seed_notifications).ids.sort
+        assert_equal 0, NotificationDelivery.where(notification: seed_notifications).count
         assert_equal seed_notification_messages.sort, seed_notifications.map(&:message_plain_text).sort
         assert_equal 500, Article.where(profile: sample_profiles).count
 

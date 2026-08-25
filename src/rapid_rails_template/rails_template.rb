@@ -4345,6 +4345,7 @@ def configure_roles
       extend T::Sig
 
       has_many :user_roles, dependent: :destroy
+      after_create :grant_admin_role_to_first_development_user
 
       sig { params(role: T.any(String, Symbol)).returns(T::Boolean) }
       def has_role?(role)
@@ -4376,6 +4377,11 @@ def configure_roles
       sig { returns(T::Boolean) }
       def last_admin?
         has_role?(:admin) && UserRole.admin.where.not(user_id: id).none?
+      end
+
+      sig { void }
+      def grant_admin_role_to_first_development_user
+        grant_role!(:admin) if Rails.env.development? && User.count == 1
       end
 
   RUBY
@@ -4690,6 +4696,43 @@ def configure_roles
     require "test_helper"
 
     class UserRoleTest < ActiveSupport::TestCase
+      test "grants admin to the first user created in development" do
+        with_rails_environment("development") do
+          User.destroy_all
+
+          user = T.let(nil, T.nilable(User))
+          assert_difference("UserRole.count", 1) { user = User.create! }
+
+          assert T.must(user).has_role?(:admin)
+        end
+      end
+
+      test "does not grant admin to later users created in development" do
+        with_rails_environment("development") do
+          User.destroy_all
+          first_user = User.create!
+          assert first_user.has_role?(:admin)
+
+          later_user = T.let(nil, T.nilable(User))
+          assert_no_difference("UserRole.count") { later_user = User.create! }
+
+          assert_not T.must(later_user).has_role?(:admin)
+        end
+      end
+
+      test "does not grant initial admin outside development" do
+        %w[test production].each do |environment_name|
+          with_rails_environment(environment_name) do
+            User.destroy_all
+
+            user = T.let(nil, T.nilable(User))
+            assert_no_difference("UserRole.count") { user = User.create! }
+
+            assert_not T.must(user).has_role?(:admin)
+          end
+        end
+      end
+
       test "rejects invalid and duplicate roles" do
         user = users(:one)
         invalid = user.user_roles.build(role: "unknown")
@@ -4757,6 +4800,15 @@ def configure_roles
         assert first.destroy
         assert_not UserRole.exists?(role_id)
       end
+
+      private
+        def with_rails_environment(environment)
+          previous_environment = Rails.env
+          Rails.env = environment
+          yield
+        ensure
+          Rails.env = previous_environment
+        end
     end
   RUBY
 

@@ -135,9 +135,12 @@ module RapidRailsTemplate
         app/controllers/admin/base_controller.rb
         app/controllers/admin/overview_controller.rb
         app/controllers/admin/users_controller.rb
+        app/controllers/admin/user_avatars_controller.rb
         app/controllers/admin/user_roles_controller.rb
         app/views/admin/overview/show.html.erb
         app/views/admin/users/index.html.erb
+        app/views/admin/users/show.html.erb
+        app/views/admin/users/edit.html.erb
         app/services/admin_role_grant.rb
         app/models/page.rb
         app/models/faq.rb
@@ -176,6 +179,7 @@ module RapidRailsTemplate
         test/policies/user_policy_test.rb
         test/controllers/admin/overview_controller_test.rb
         test/controllers/admin/users_controller_test.rb
+        test/controllers/admin/user_avatars_controller_test.rb
         test/controllers/admin/user_roles_controller_test.rb
         test/models/page_test.rb
         test/models/faq_test.rb
@@ -246,6 +250,7 @@ module RapidRailsTemplate
         app/views/profiles/show.html.erb
         app/views/profiles/edit.html.erb
         app/views/profiles/_form.html.erb
+        app/views/profiles/_avatar_delete.html.erb
         config/locales/profiles.ja.yml
         config/locales/profiles.en.yml
         test/models/profile_test.rb

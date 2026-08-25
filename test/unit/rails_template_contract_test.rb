@@ -321,7 +321,9 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/admin/notifications/index.html.erb" => %w[card card-border bg-base-100 card-body table badge btn],
       "app/views/admin/notifications/_form.html.erb" => %w[alert fieldset fieldset-legend label select input checkbox btn],
       "app/views/admin/overview/show.html.erb" => %w[card card-border bg-base-100 card-body stats stat stat-title stat-value],
-      "app/views/admin/users/index.html.erb" => %w[card card-border bg-base-100 card-body table badge btn],
+      "app/views/admin/users/index.html.erb" => %w[card card-border bg-base-100 card-body table avatar link badge],
+      "app/views/admin/users/show.html.erb" => %w[card card-border bg-base-100 card-body card-title list list-row avatar badge btn],
+      "app/views/admin/users/edit.html.erb" => %w[card card-border bg-base-100 card-body],
       "app/views/pages/_page.html.erb" => %w[card card-border bg-base-100 card-body],
       "app/views/faqs/index.html.erb" => %w[collapse collapse-arrow collapse-title collapse-content alert],
       "app/views/admin/pages/index.html.erb" => %w[card card-border bg-base-100 card-body table btn],
@@ -334,6 +336,7 @@ class RailsTemplateContractTest < Minitest::Test
       "app/views/api_credentials/show.html.erb" => %w[alert fieldset fieldset-legend join join-item input card card-border bg-base-100 card-body card-title btn],
       "app/views/api_credentials/new.html.erb" => %w[card card-border bg-base-100 card-body],
       "app/views/api_credentials/edit.html.erb" => %w[card card-border bg-base-100 card-body],
+      "app/views/profiles/_avatar_delete.html.erb" => %w[card card-border bg-base-100 card-body card-title card-actions btn],
       "app/views/users/passkey_sessions/new.html.erb" => %w[checkbox btn alert],
       "app/views/users/passkey_registrations/new.html.erb" => %w[btn alert],
       "app/views/account/passkeys/index.html.erb" => %w[list list-row btn badge],
@@ -480,6 +483,7 @@ class RailsTemplateContractTest < Minitest::Test
   def test_content_actions_use_semantic_roles_wrapping_action_groups_and_stable_dom_order
     passkey_new = generated_file_source("app/views/account/passkeys/new.html.erb")
     admin_users = generated_file_source("app/views/admin/users/index.html.erb")
+    admin_user_show = generated_file_source("app/views/admin/users/show.html.erb")
     admin_pages_index = generated_file_source("app/views/admin/pages/index.html.erb")
     admin_page_edit = generated_file_source("app/views/admin/pages/edit.html.erb")
     admin_faqs = generated_file_source("app/views/admin/faqs/index.html.erb")
@@ -498,12 +502,16 @@ class RailsTemplateContractTest < Minitest::Test
     notification_open = generated_file_source("app/views/notifications/open.turbo_stream.erb")
     account_delete = generated_file_source("app/views/accounts/delete.html.erb")
 
-    assert_includes admin_users, '<div class="flex flex-wrap justify-end gap-2">'
-    assert_includes admin_users, 'class_names(action_button_classes(:secondary), "btn-disabled")'
-    assert_includes admin_users, "class: action_button_classes(:destructive)"
-    assert_includes admin_users, "class: action_button_classes(:secondary)"
+    assert_includes admin_user_show, '<div class="card-actions flex-wrap justify-end">'
+    assert_includes admin_user_show, 'class_names(action_button_classes(:secondary), "btn-disabled")'
+    assert_includes admin_user_show, "class: action_button_classes(:destructive)"
+    assert_includes admin_user_show, "class: action_button_classes(:warning)"
+    assert_includes admin_user_show, "class: action_button_classes(:secondary)"
 
-    [admin_users, admin_pages_index, admin_faqs, api_index, notifications].each do |view|
+    assert_class_tokens(admin_users, "table", "min-w-max")
+    refute_includes admin_users, "admin_user_roles_path"
+    refute_includes admin_users, "admin_user_role_path"
+    [admin_pages_index, admin_faqs, api_index, notifications].each do |view|
       assert_class_tokens(view, "table", "min-w-max")
       assert_includes view, '<div class="flex flex-wrap justify-end gap-2">'
     end
@@ -1180,6 +1188,7 @@ class RailsTemplateContractTest < Minitest::Test
     overview_controller = generated_file_source("app/controllers/admin/overview_controller.rb")
     overview_view = generated_file_source("app/views/admin/overview/show.html.erb")
     users_controller = generated_file_source("app/controllers/admin/users_controller.rb")
+    avatars_controller = generated_file_source("app/controllers/admin/user_avatars_controller.rb")
     roles_controller = generated_file_source("app/controllers/admin/user_roles_controller.rb")
 
     assert_includes roles, 'generate "action_policy:install"'
@@ -1213,6 +1222,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes roles, 'include Pagy::Method'
     assert_includes policy, 'def overview?'
     assert_includes policy, 'def index?'
+    assert_includes policy, 'def show?'
+    assert_includes policy, 'def edit?'
+    assert_includes policy, 'def update?'
     assert_includes policy, 'def manage_roles?'
     assert_includes policy, 'relation_scope do |relation|'
     assert_includes overview_controller, 'authorize! User, to: :overview?'
@@ -1228,15 +1240,25 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes users_controller, 'authorize! User, to: :index?'
     assert_includes users_controller, 'authorized_scope(#{user_scope})'
     assert_includes users_controller, 'pagy(:offset, users, limit: 25)'
+    assert_includes users_controller, 'authorize! @user, to: :show?'
+    assert_includes users_controller, 'authorize! @user, to: :edit?'
+    assert_includes users_controller, 'authorize! @user, to: :update?'
+    assert_includes users_controller, 'params.expect(profile: %i[screen_name display_name avatar_upload])'
+    assert_includes avatars_controller, 'authorize! @user, to: :update?'
+    assert_includes avatars_controller, 'profile.avatar.purge if profile.avatar.attached?'
     assert_includes roles_controller, 'authorize! @user, to: :manage_roles?'
     assert_includes roles_controller, '@user == authorization_user'
     assert_includes roles_controller, 'head :unprocessable_content'
+    assert_includes roles, 'resources :users, only: %i[index show edit update] do'
+    assert_includes roles, 'resource :avatar, only: :destroy, controller: "user_avatars"'
     assert_includes roles, 'resources :roles, only: %i[create destroy], controller: "user_roles", param: :role'
   end
 
   def test_generates_admin_role_ui_bootstrap_task_and_local_seed_hook
     roles = source_between("def configure_roles", "def configure_profile")
     view = generated_file_source("app/views/admin/users/index.html.erb")
+    show = generated_file_source("app/views/admin/users/show.html.erb")
+    edit = generated_file_source("app/views/admin/users/edit.html.erb")
     task = generated_file_source("lib/tasks/roles.rake")
     service = generated_file_source("app/services/admin_role_grant.rb")
     local_seed = generated_file_source("db/seeds.local.rb.example")
@@ -1245,14 +1267,25 @@ class RailsTemplateContractTest < Minitest::Test
     assert_class_tokens view, "card", "card-border", "bg-base-100"
     assert_class_tokens view, "overflow-x-auto"
     assert_class_tokens view, "table", "table-sm", "table-pin-rows", "min-w-max"
+    assert_class_tokens view, "avatar"
+    assert_class_tokens view, "link", "link-hover"
     assert_class_tokens view, "badge"
     assert_includes helper, 'destructive: "btn btn-outline btn-error"'
-    assert_includes view, "class: action_button_classes(:destructive)"
+    assert_includes helper, 'warning: "btn btn-outline btn-warning"'
+    assert_includes view, 'admin_user_path(user)'
+    assert_includes view, 'profile_avatar(T.must(user.profile), size: 40, alt: "")'
+    refute_includes view, 'admin_user_roles_path'
+    refute_includes view, 'admin_user_role_path'
+    assert_includes show, "class: action_button_classes(:destructive)"
+    assert_includes show, "class: action_button_classes(:warning)"
+    assert_includes show, 'data: { turbo_confirm: t("admin.users.grant_confirm", name: profile.display_name) }'
+    assert_includes show, 'data: { turbo_confirm: t("admin.users.revoke_confirm", name: profile.display_name) }'
+    assert_includes edit, 'render "profiles/form", profile: @profile, form_url: admin_user_path(@user), cancel_path: admin_user_path(@user)'
+    assert_includes edit, 'render "profiles/avatar_delete", profile: @profile, avatar_path: admin_user_avatar_path(@user)'
+    assert_includes roles, "class Admin::UsersControllerTest < ActionDispatch::IntegrationTest\n      include ActiveJob::TestHelper"
     assert_includes view, 'pagination(@pagy, aria_label: t("admin.users.pagination"))'
     assert_class_tokens helper, "join"
     assert_includes helper, '"btn join-item"'
-    assert_includes view, 'admin_user_roles_path(user)'
-    assert_includes view, 'admin_user_role_path(user, "admin")'
     refute_includes view, '@pagy.page_url(:previous)'
     refute_includes view, '@pagy.page_url(:next)'
     refute_match(/(?:bg|text|border)-(?:blue|gray|slate|red|green|yellow)-\d+/, view)
@@ -1295,6 +1328,7 @@ class RailsTemplateContractTest < Minitest::Test
     policy_test = generated_file_source("test/policies/user_policy_test.rb")
     users_controller_test = generated_file_source("test/controllers/admin/users_controller_test.rb")
     roles_controller_test = generated_file_source("test/controllers/admin/user_roles_controller_test.rb")
+    avatars_controller_test = generated_file_source("test/controllers/admin/user_avatars_controller_test.rb")
     task_test = generated_file_source("test/tasks/roles_task_test.rb")
 
     assert_includes model_test, 'assert_not invalid.valid?'
@@ -1314,13 +1348,25 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes model_test, 'assert_raises(ActiveRecord::RecordNotDestroyed)'
     assert_includes model_test, 'assert_not user.destroy'
     assert_includes policy_test, 'apply(:index?)'
+    assert_includes policy_test, 'apply(:show?)'
+    assert_includes policy_test, 'apply(:edit?)'
+    assert_includes policy_test, 'apply(:update?)'
     assert_includes policy_test, 'apply_scope(User.all, type: :active_record_relation)'
     assert_includes users_controller_test, 'assert_have_authorized_scope(type: :active_record_relation, with: UserPolicy)'
     assert_includes users_controller_test, 'assert_response :forbidden'
     assert_includes users_controller_test, 'create_additional_users(25)'
     assert_includes users_controller_test, 'I18n.t("admin.users.pagination")'
+    assert_includes users_controller_test, 'test "updates only the users profile"'
+    assert_includes users_controller_test, 'test "updates an avatar through the existing profile policy"'
+    assert_includes users_controller_test, 'get edit_admin_user_url(@regular)'
+    assert_includes users_controller_test, 'patch admin_user_url(@regular), params: { profile: { display_name: "Unauthenticated" } }'
+    assert_includes users_controller_test, 'assert_not @regular.has_role?(:admin)'
+    assert_includes avatars_controller_test, 'test "allows an admin to delete another users avatar"'
+    assert_includes avatars_controller_test, 'assert_response :forbidden'
     assert_includes roles_controller_test, 'assert_no_difference("UserRole.count")'
     assert_includes roles_controller_test, 'assert_response :unprocessable_content'
+    assert_includes roles_controller_test, 'assert_redirected_to new_user_session_url'
+    assert_includes roles_controller_test, 'delete admin_user_role_url(@admin, "admin")'
     assert_includes @source, 'test "refuses deletion of the last admin account"'
     assert_includes task_test, 'assert_no_difference("User.count")'
     assert_includes task_test, '@task.reenable'
@@ -1446,6 +1492,9 @@ class RailsTemplateContractTest < Minitest::Test
     crop_system_test = generated_file_source("test/system/profile_avatar_crop_test.rb")
     avatar_helper = generated_file_source("app/helpers/avatar_helper.rb")
     avatar_helper_test = generated_file_source("test/helpers/avatar_helper_test.rb")
+    profile_form = generated_file_source("app/views/profiles/_form.html.erb")
+    profile_edit = generated_file_source("app/views/profiles/edit.html.erb")
+    avatar_delete = generated_file_source("app/views/profiles/_avatar_delete.html.erb")
     profile_configuration = source_between("def configure_profile", "def configure_api")
 
     assert_includes @source, "  configure_profile\n"
@@ -1475,6 +1524,11 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes profile_configuration, 'required: true'
     assert_includes controller, 'params.expect(profile: ['
     assert_includes controller, 'I18n.t("profiles.update.notice")'
+    assert_includes profile_form, 'form_with model: profile, url: form_url'
+    assert_includes profile_form, 'link_to t("common.cancel"), cancel_path'
+    assert_includes profile_edit, 'render "form", profile: @profile, form_url: profile_path, cancel_path: profile_path'
+    assert_includes profile_edit, 'render "avatar_delete", profile: @profile, avatar_path: profile_avatar_path'
+    assert_includes avatar_delete, 'button_to t("profiles.avatar_delete"), avatar_path'
     assert_includes profile_configuration, '<fieldset class="fieldset min-w-0 grid-cols-1">'
     assert_includes profile_configuration, 'form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp"'
     assert_includes profile_configuration, 'data: { image_crop_target: "input", action: "change->image-crop#select" }'
@@ -2061,6 +2115,13 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"Notification tabs wrapped at #{width}px"'
     assert_includes evidence, '"Active notification tab is detached from its panel at #{width}px"'
     assert_includes evidence, '"admin-overview"'
+    assert_includes evidence, '"admin-users"'
+    assert_includes evidence, '"admin-user-show"'
+    assert_includes evidence, '"admin-user-edit"'
+    assert_includes evidence, "form[action='\#{admin_user_path(@regular_user)}'] input[name='profile[display_name]']"
+    assert_includes evidence, 'dismiss_confirm { click_button translate("admin.users.grant") }'
+    assert_includes evidence, 'accept_confirm { click_button translate("admin.users.grant") }'
+    assert_includes evidence, 'accept_confirm { click_button translate("admin.users.revoke") }'
     assert_includes evidence, "def assert_admin_overview_geometry"
     assert_includes evidence, 'document.querySelector("[data-admin-overview-stats]")'
     assert_includes evidence, 'assert_equal(viewport == "mobile" ? 1 : 3, geometry.fetch("columnCount"))'
@@ -2388,6 +2449,7 @@ class RailsTemplateContractTest < Minitest::Test
     ordinary_views = %w[
       app/views/accounts/show.html.erb
       app/views/admin/users/index.html.erb
+      app/views/admin/users/edit.html.erb
       app/views/admin/pages/index.html.erb
       app/views/mission_control/jobs/queues/index.html.erb
       app/views/maintenance_tasks/tasks/index.html.erb

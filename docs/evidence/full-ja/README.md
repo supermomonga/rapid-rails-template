@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `d309c0e8c6f229d79433cfd02606c8a3e4a71430c22109ed3daa10babbf54a68`
-- Base commit: `34ba0657b34f8e67c4429d426542b3af7842df75`
+- Source fingerprint: `55d5f3e322430fa6c06ba6d78aee0f3f4f8ca22e721101a4acc70992f4edf971`
+- Base commit: `9af94230256e18809dc09d413bc779343f65153e`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -329,6 +329,18 @@
 |Desktop|Mobile|
 |---|---|
 |![ユーザー管理 (desktop)](admin-users--desktop.png)|![ユーザー管理 (mobile)](admin-users--mobile.png)|
+
+## ユーザー詳細
+
+|Desktop|Mobile|
+|---|---|
+|![ユーザー詳細 (desktop)](admin-user-show--desktop.png)|![ユーザー詳細 (mobile)](admin-user-show--mobile.png)|
+
+## ユーザー編集
+
+|Desktop|Mobile|
+|---|---|
+|![ユーザー編集 (desktop)](admin-user-edit--desktop.png)|![ユーザー編集 (mobile)](admin-user-edit--mobile.png)|
 
 ## 一般Userのナビゲーション
 

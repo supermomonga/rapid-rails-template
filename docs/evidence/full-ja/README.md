@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `8f3c07dafcf8232fcf251e69248ec96e2f2b95e1b4ae199d593b28911261e459`
-- Base commit: `ed6770ef9923c70e4b9aa453c6902c6c40ebf4e3`
+- Source fingerprint: `db8b1290aaed51bdd097679077c6f24a7c0ff372eef3f2746f0835f068daf3a8`
+- Base commit: `e05fe4933732110f03b398e926edef3f05353407`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -17,6 +17,12 @@
 |Desktop|Mobile|
 |---|---|
 |![アプリについて (desktop)](about--desktop.png)|![アプリについて (mobile)](about--mobile.png)|
+
+## 運営者情報
+
+|Desktop|Mobile|
+|---|---|
+|![運営者情報 (desktop)](corp--desktop.png)|![運営者情報 (mobile)](corp--mobile.png)|
 
 ## よくある質問
 

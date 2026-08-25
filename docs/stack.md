@@ -103,7 +103,7 @@ component内部の高さ、padding、配置はdaisyUIの既定値を優先しま
 - 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、themeのbase-100、primary、base-200、secondary、base-300に対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
 - `haikunator`を常設し、User作成と同時に必須かつ一意な`screen_name`を生成し、そのCamelCaseを`display_name`の初期値とする。
 - API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
-- Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。認証画面ではPasskeyを既定の認証方法として`:primary`、SIWEを選択した場合のWallet署名を代替手段として`:secondary`で表示し、この優先順位を画面ごとに変えない。
+- Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。認証画面ではPasskeyを既定の認証方法として`:primary`、SIWEを選択した場合のWallet署名を代替手段として`:secondary`で表示し、この優先順位を画面ごとに変えない。loginとaccount登録を切り替える案内文とlinkは`content_for :authentication_switch`へ渡し、認証方法をまとめる主cardとは1rem離した同幅の別cardに表示する。案内文は主cardの説明文と同じ`text-sm text-base-content/70`とし、切替cardは主cardと同じ`p-6 sm:p-8`を使用する。認証方法間ではない空のdividerを置かない。
 - ブラウザ側はWebAuthn Level 3の`parseCreationOptionsFromJSON`、`parseRequestOptionsFromJSON`、credentialの`toJSON`を使用する。未対応ブラウザは利用不可を明示し、独自変換のfallbackは追加しない。
 - SIWE選択時だけsignup・login画面へ明示的な署名buttonを追加する。全SIWE操作でEIP-6963 Providerを収集し、複数Providerの場合は共通`with_modal`による名前一覧から選択したProviderだけを接続・署名に使用する。EIP-6963非対応時だけ`window.ethereum`を使用する。「アカウント設定」の`tabs-lift`でPasskeys、EVMウォレット、アカウント削除を切り替え、解除・削除は操作ごとの別資格情報による再認証画面へ分離する。
 - bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。

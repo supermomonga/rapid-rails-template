@@ -8904,8 +8904,11 @@ def configure_devise_views
     </div>
 
     #{siwe_login}
-    <div class="divider"></div>
-    <%= link_to t("authentication.create_account"), new_user_registration_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+
+    <% content_for :authentication_switch do %>
+      <p class="mb-4 text-sm text-base-content/70"><%= t("authentication.new_account_prompt") %></p>
+      <%= link_to t("authentication.create_account"), new_user_registration_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+    <% end %>
   ERB
 
   create_file "app/views/users/passkey_registrations/new.html.erb", <<~ERB, force: true
@@ -8926,8 +8929,11 @@ def configure_devise_views
     </div>
 
     #{siwe_signup}
-    <div class="divider"></div>
-    <%= link_to t("authentication.back_to_sign_in"), new_user_session_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+
+    <% content_for :authentication_switch do %>
+      <p class="mb-4 text-sm text-base-content/70"><%= t("authentication.existing_account_prompt") %></p>
+      <%= link_to t("authentication.back_to_sign_in"), new_user_session_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+    <% end %>
   ERB
 
   create_locale_pair(
@@ -8939,7 +8945,8 @@ def configure_devise_views
         "sign_in_with_passkey" => "Passkeyでログイン", "sign_up_with_passkey" => "Passkeyでアカウントを作成",
         "sign_in_with_wallet" => "ウォレットでログイン", "sign_up_with_wallet" => "ウォレットでアカウントを作成",
         "remember_me" => "ログイン状態を保持する", "or" => "または", "create_account" => "アカウントを作成",
-        "back_to_sign_in" => "ログイン画面へ"
+        "back_to_sign_in" => "ログイン画面へ", "new_account_prompt" => "新規にアカウント登録を行う場合はこちら",
+        "existing_account_prompt" => "既にアカウント登録済みの場合はこちら"
       }
     },
     en: {
@@ -8949,7 +8956,8 @@ def configure_devise_views
         "sign_in_with_passkey" => "Sign in with passkey", "sign_up_with_passkey" => "Create account with passkey",
         "sign_in_with_wallet" => "Sign in with wallet", "sign_up_with_wallet" => "Create account with wallet",
         "remember_me" => "Keep me signed in", "or" => "or", "create_account" => "Create account",
-        "back_to_sign_in" => "Back to sign in"
+        "back_to_sign_in" => "Back to sign in", "new_account_prompt" => "To create a new account, continue here.",
+        "existing_account_prompt" => "If you already have an account, continue here."
       }
     }
   )
@@ -11658,12 +11666,19 @@ def configure_default_views
   create_file "app/views/layouts/authentication.html.erb", <<~ERB, force: true
     <% content_for :content do %>
       <section class="hero mx-auto w-full max-w-md px-5 py-10 md:py-16" data-layout="authentication">
-        <div class="hero-content w-full max-w-none p-0">
+        <div class="hero-content w-full max-w-none flex-col gap-4 p-0">
           <div class="card-rapid w-full">
             <div class="card-body p-6 sm:p-8">
               <%= yield %>
             </div>
           </div>
+          <% if content_for?(:authentication_switch) %>
+            <div class="card-rapid w-full">
+              <div class="card-body p-6 sm:p-8">
+                <%= yield :authentication_switch %>
+              </div>
+            </div>
+          <% end %>
         </div>
       </section>
     <% end %>
@@ -12276,15 +12291,31 @@ def configure_default_views
         assert_select 'header a[href=?]', new_user_registration_path, count: 2
 
         {
-          new_user_session_url => I18n.t("authentication.sign_in_title"),
-          new_user_registration_url => I18n.t("authentication.sign_up_title")
-        }.each do |url, title|
+          new_user_session_url => [
+            I18n.t("authentication.sign_in_title"),
+            I18n.t("authentication.new_account_prompt"),
+            new_user_registration_path,
+            I18n.t("authentication.create_account")
+          ],
+          new_user_registration_url => [
+            I18n.t("authentication.sign_up_title"),
+            I18n.t("authentication.existing_account_prompt"),
+            new_user_session_path,
+            I18n.t("authentication.back_to_sign_in")
+          ]
+        }.each do |url, (title, switch_prompt, switch_path, switch_text)|
           get url
           assert_response :success
           assert_select "h1", text: title, count: 1
           assert_select '[data-controller="passkey"]', count: 1
           assert_select 'input[type="password"]', count: 0
           assert_select 'input[name*="login_id"]', count: 0
+          assert_select '[data-layout="authentication"] > .hero-content' do
+            assert_select '> .card-rapid', count: 2
+            assert_select '> .card-rapid:first-child [data-controller="passkey"]', count: 1
+            assert_select '> .card-rapid:last-child p.text-sm.text-base-content\\/70', text: switch_prompt, count: 1
+            assert_select '> .card-rapid:last-child a[href=?]', switch_path, text: switch_text, count: 1
+          end
         end
       end
 

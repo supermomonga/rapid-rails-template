@@ -141,7 +141,7 @@ Thrusterのcache既定値は全体64 MiB、1 responseあたり1 MiBです。proc
 
 Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRails標準の`rich_text_area`を使用し、Rails 8.1向けLexxy overrideでeditorを置き換えます。公開本文はAction Text content layoutを`lexxy-content`で包み、Lexxy stylesheetと同じ表示規則を適用します。
 
-公開固定ページは`/about`、`/corp`、`/manual`、`/terms`、`/privacy`、`/transaction-law`とし、routeごとの固定slugを共通の`PagesController#show`へ渡します。`Page`のslugはこの6値へ限定し、titleとともにseedで冪等作成します。管理者は本文だけを更新でき、固定ページの作成、削除、slug、titleの変更は提供しません。存在しない固定recordや未知slugを別ページへ戻すfallbackは設けません。
+公開固定ページは`/about`、`/corp`、`/manual`、`/terms`、`/privacy`、`/transaction-law`とし、routeごとの固定slugを共通の`PagesController#show`へ渡します。`Page`のslugはこの6値へ限定し、titleとともにseedで冪等作成します。`terms`、`privacy`、`transaction-law`には、生成時のdefault localeに対応する汎用的な日本語または英語の本文を初回作成時だけseedします。本文は運営者が公開前に実態へ合わせて編集するひな形であることと、置換が必要な項目を明示し、seed再実行時に既存本文を上書きしません。管理者は本文だけを更新でき、固定ページの作成、削除、slug、titleの変更は提供しません。存在しない固定recordや未知slugを別ページへ戻すfallbackは設けません。
 
 `Faq`は質問、表示順、公開状態、Action Text回答を持ちます。新規recordは非公開とし、公開画面`/faq`は公開済みrecordだけを表示順とIDの昇順で表示します。管理画面はCRUD、公開切替、表示順変更を提供します。
 

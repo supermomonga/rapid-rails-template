@@ -5537,8 +5537,492 @@ def configure_content_management
 
   append_to_file "db/seeds.rb", <<~RUBY
 
+    legal_page_contents = {
+      ja: {
+        "terms" => <<~HTML,
+          <p><strong>公開前に、【】内の項目を実際の内容へ置き換え、サービスの機能・料金・対象地域に合わせて全条項を確認してください。</strong></p>
+
+          <p>この利用規約（以下「本規約」といいます。）は、【運営者名】（以下「運営者」といいます。）が提供する【サービス名】（以下「本サービス」といいます。）の利用条件を定めるものです。利用者は、本規約の内容を確認し、同意したうえで本サービスを利用してください。</p>
+
+          <p>制定日：【YYYY年MM月DD日】</p>
+
+          <h2>第1条（適用）</h2>
+          <ol>
+            <li>本規約は、本サービスの利用に関する運営者と利用者との間の一切の関係に適用されます。</li>
+            <li>運営者が本サービス上で掲載する個別の利用条件や注意事項は、本規約の一部を構成します。</li>
+            <li>本規約と個別の利用条件が異なる場合は、個別の利用条件が適用される範囲に限り、その個別の利用条件が優先します。</li>
+          </ol>
+
+          <h2>第2条（利用登録等）</h2>
+          <ol>
+            <li>本サービスの利用に登録が必要な場合、利用者は、正確かつ最新の情報を提供し、運営者が定める方法により登録を申請してください。</li>
+            <li>法令上、法定代理人の同意が必要な利用者は、その同意を得たうえで本サービスを利用してください。</li>
+            <li>運営者は、申請内容に虚偽がある場合、過去に本規約への重大な違反がある場合、本人確認ができない場合その他登録を認めることが相当でない合理的な理由がある場合、登録を承認しないことがあります。</li>
+          </ol>
+
+          <h2>第3条（アカウントの管理）</h2>
+          <ol>
+            <li>利用者は、自己の責任でアカウント情報を適切に管理し、第三者へ譲渡、貸与または共有してはなりません。</li>
+            <li>利用者は、アカウントの不正利用またはそのおそれを知った場合、速やかに運営者へ連絡してください。</li>
+            <li>運営者は、アカウントを用いて行われた操作を、そのアカウントの利用者による操作として取り扱うことがあります。ただし、運営者に故意または過失がある場合その他法令上認められない場合を除きます。</li>
+          </ol>
+
+          <h2>第4条（本サービスの内容および料金）</h2>
+          <ol>
+            <li>本サービスの具体的な内容は、本サービス上で案内します。</li>
+            <li>有料の機能または商品を提供する場合、その料金、支払方法、提供時期、キャンセルその他の取引条件は、購入前の画面および特商法表記その他運営者が指定する場所に表示します。</li>
+            <li>通信料金その他本サービスを利用するために必要な費用は、利用者が負担します。</li>
+          </ol>
+
+          <h2>第5条（禁止事項）</h2>
+          <p>利用者は、本サービスの利用にあたり、次の行為をしてはなりません。</p>
+          <ul>
+            <li>法令、裁判所の判決、決定もしくは命令、または法令上拘束力のある行政措置に違反する行為</li>
+            <li>犯罪に関連する行為または公の秩序もしくは善良の風俗を害する行為</li>
+            <li>運営者または第三者の著作権、商標権、プライバシー、名誉その他の権利または利益を侵害する行為</li>
+            <li>虚偽の情報を提供する行為、他者になりすます行為、または他者のアカウントを不正に利用する行為</li>
+            <li>本サービスまたは関連するシステムへの不正アクセス、過度な負荷、妨害、解析またはセキュリティを損なう行為</li>
+            <li>有害なプログラムまたはデータを送信し、または提供する行為</li>
+            <li>正当な権限なく第三者の情報を収集、利用または開示する行為</li>
+            <li>運営者の許可なく広告、勧誘または営業を行う行為</li>
+            <li>反社会的勢力に利益を供与し、またはこれに関与する行為</li>
+            <li>前各号に準じ、本サービスの運営または他の利用者の利用を著しく妨げる行為</li>
+          </ul>
+
+          <h2>第6条（利用者が提供するコンテンツ）</h2>
+          <p><strong>投稿、画像アップロード等の機能がない場合は、本条を削除してください。</strong></p>
+          <ol>
+            <li>利用者は、本サービスへ投稿または送信する文章、画像その他のコンテンツについて、必要な権利を有し、第三者の権利を侵害しないことを確認するものとします。</li>
+            <li>利用者が提供したコンテンツの権利は、利用者または正当な権利者に留保されます。</li>
+            <li>利用者は運営者に対し、本サービスの提供、維持および改善に必要な範囲で、そのコンテンツを利用、複製、表示および形式変更するための非独占的な権利を許諾します。</li>
+            <li>運営者は、法令への対応、本規約違反の調査、権利侵害の防止または本サービスの安全な運営のため合理的に必要な場合、コンテンツの表示を制限し、または削除することがあります。</li>
+          </ol>
+
+          <h2>第7条（知的財産権）</h2>
+          <p>本サービスおよび運営者が提供する文章、画像、プログラムその他のコンテンツに関する知的財産権は、運営者または正当な権利者に帰属します。本規約は、利用者に対し、本サービスを通常利用するために必要な範囲を超える権利を許諾するものではありません。</p>
+
+          <h2>第8条（本サービスの変更、中断および終了）</h2>
+          <ol>
+            <li>運営者は、保守、障害対応、セキュリティ確保、法令への対応、天災その他合理的な理由がある場合、本サービスの全部または一部を一時的に中断することがあります。</li>
+            <li>運営者は、合理的な必要がある場合、本サービスの内容を変更し、または提供を終了することがあります。</li>
+            <li>利用者に重大な影響が生じる変更または終了については、緊急の場合を除き、合理的な期間を設けて本サービス上その他適切な方法で案内します。</li>
+          </ol>
+
+          <h2>第9条（利用制限および登録の取消し）</h2>
+          <ol>
+            <li>運営者は、利用者が本規約に重大に違反した場合、必要な料金を支払わない場合、他の利用者や第三者へ重大な損害を及ぼすおそれがある場合その他本サービスの安全な提供に必要な合理的理由がある場合、その利用を制限し、または登録を取り消すことがあります。</li>
+            <li>緊急の必要がある場合を除き、運営者は、可能な範囲で事前に理由を示し、是正の機会を設けます。</li>
+          </ol>
+
+          <h2>第10条（利用の終了）</h2>
+          <ol>
+            <li>利用者は、運営者が定める方法により、いつでも本サービスの利用を終了できます。</li>
+            <li>有料サービスの解約、返金その他の条件は、購入時に表示した条件および適用される法令に従います。</li>
+            <li>利用終了後の利用者情報の取扱いは、プライバシーポリシーおよび適用される法令に従います。</li>
+          </ol>
+
+          <h2>第11条（保証および責任）</h2>
+          <ol>
+            <li>運営者は、本サービスを安定して提供するため合理的な努力を行いますが、本サービスが中断せず、または不具合なく提供されることを保証するものではありません。</li>
+            <li>本サービスに関連して利用者に損害が生じた場合、運営者は、運営者に故意または過失がある範囲で、適用される法令に従って責任を負います。</li>
+            <li>本規約のいかなる規定も、消費者契約法その他の適用法令により制限または免除することのできない運営者の責任を制限または免除するものではありません。</li>
+            <li>利用者と第三者との間で生じた取引または紛争については、運営者の行為に起因する場合を除き、当事者間で解決するものとします。</li>
+          </ol>
+
+          <h2>第12条（個人情報の取扱い）</h2>
+          <p>運営者は、利用者の個人情報を、別途定めるプライバシーポリシーおよび適用される法令に従って取り扱います。</p>
+
+          <h2>第13条（本規約の変更）</h2>
+          <ol>
+            <li>運営者は、変更が利用者の一般の利益に適合する場合、または契約の目的に反せず、変更の必要性および内容の相当性その他の事情に照らして合理的な場合、本規約を変更することがあります。</li>
+            <li>運営者は、本規約を変更する場合、変更内容および効力発生日を、効力発生日までに本サービス上その他適切な方法で周知します。</li>
+            <li>法令上、利用者の個別の同意が必要となる変更については、運営者は適切な方法で同意を得ます。</li>
+          </ol>
+
+          <h2>第14条（連絡および通知）</h2>
+          <ol>
+            <li>本サービスに関する問い合わせ先は、【問い合わせ窓口URLまたはメールアドレス】です。</li>
+            <li>運営者から利用者への通知は、本サービス上への掲載、登録された連絡先への送信その他運営者が適切と判断する方法で行います。</li>
+          </ol>
+
+          <h2>第15条（準拠法および紛争解決）</h2>
+          <ol>
+            <li>本規約は、日本法に準拠し、日本法に従って解釈されます。</li>
+            <li>本サービスまたは本規約に関して紛争が生じた場合、当事者は誠実に協議し、その解決を図ります。</li>
+            <li>協議で解決しない場合、法令により管轄を有する日本の裁判所を第一審の管轄裁判所とします。</li>
+          </ol>
+        HTML
+        "privacy" => <<~HTML,
+          <p><strong>公開前に、【】内を実際の運営体制および本サービスの仕様に合わせて編集し、該当しない記載を削除してください。</strong></p>
+
+          <p>【運営者名】（以下「当社」といいます。）は、【サービス名】（以下「本サービス」といいます。）における利用者の個人情報を、個人情報の保護に関する法律その他の関係法令に従い、以下のとおり取り扱います。</p>
+
+          <h2>1. 事業者情報</h2>
+          <ul>
+            <li>氏名または名称：【運営者名】</li>
+            <li>住所：【住所】</li>
+            <li>代表者氏名：【法人の場合のみ記載】</li>
+          </ul>
+
+          <h2>2. 取得する情報</h2>
+          <p>当社は、本サービスの提供に必要な範囲で、次の情報のうち、本サービスの機能および設定に応じたものを取得します。公開前に、実際に取得する項目へ修正してください。</p>
+          <ul>
+            <li>アカウント登録、プロフィール設定その他の入力画面を通じて利用者が提供する情報</li>
+            <li>利用者が本サービス上で作成、送信または保存する情報</li>
+            <li>お問い合わせへの対応に必要な情報</li>
+            <li>外部サービスとの連携を利用する場合に、当該外部サービスから提供される識別子その他の情報</li>
+            <li>アクセス日時、IPアドレス、ブラウザや端末に関する情報、操作履歴、エラーログなど、本サービスの運用および安全確保のために記録される情報</li>
+          </ul>
+
+          <h2>3. 利用目的</h2>
+          <p>当社は、取得した個人情報を、次の目的のために必要な範囲で利用します。</p>
+          <ul>
+            <li>本サービスへの登録、本人確認、認証およびアカウント管理のため</li>
+            <li>利用者が選択した機能を提供するため</li>
+            <li>本サービスの保守、不具合の調査および安定した運用のため</li>
+            <li>不正アクセス、規約違反その他の不正利用を防止し、本サービスの安全を確保するため</li>
+            <li>お問い合わせへの回答および重要なお知らせの送付のため</li>
+            <li>法令上の義務を履行し、当社または第三者の権利を保護するため</li>
+            <li>取得時に個別に明示し、利用者の同意を得た目的のため</li>
+          </ul>
+          <p>上記の目的を超えて個人情報を利用する必要が生じた場合は、法令で認められる場合を除き、あらかじめ利用者の同意を得ます。</p>
+
+          <h2>4. Cookieおよび外部ツール</h2>
+          <p>本サービスは、ログイン状態の維持、セキュリティの確保その他のサービス提供に必要な目的で、Cookieまたはこれに類する技術を使用することがあります。ブラウザの設定によりCookieを無効にした場合、本サービスの一部を利用できないことがあります。</p>
+          <p>広告、アクセス解析、エラー監視その他の外部ツールの利用状況：【使用していない場合はその旨を記載してください。使用している場合は、ツール名、提供者、送信される情報、利用目的、停止方法および提供者のプライバシーポリシーを記載してください。】</p>
+
+          <h2>5. 第三者への提供</h2>
+          <p>当社は、次の場合を除き、個人データを第三者に提供しません。</p>
+          <ul>
+            <li>本人の同意がある場合</li>
+            <li>法令に基づく場合</li>
+            <li>その他、個人情報の保護に関する法律により認められる場合</li>
+          </ul>
+
+          <h2>6. 取扱いの委託および外国での取扱い</h2>
+          <p>個人データの取扱いを外部事業者へ委託する場合、当社は、委託する業務に必要な範囲に限って個人データを取り扱わせ、委託先を適切に選定および監督します。</p>
+          <p>委託の有無および主な委託業務：【実態に合わせて記載してください。】</p>
+          <p>外国における個人データの取扱い：【行っていない場合はその旨を記載してください。行っている場合は、国または地域、取扱内容、安全管理措置その他法令上必要な情報を記載してください。】</p>
+
+          <h2>7. 安全管理措置</h2>
+          <p>当社は、個人データの漏えい、滅失または毀損を防止するため、取扱状況およびリスクに応じた必要かつ適切な安全管理措置を講じます。</p>
+          <p>安全管理措置の概要：【実際に講じている組織的、人的、物理的および技術的な措置を記載してください。例として、取扱責任者と手順の整備、取扱者の限定、アクセス権限の管理、通信の暗号化、バックアップ、従業者教育などがあります。実施していない措置は記載しないでください。】</p>
+
+          <h2>8. 保存期間</h2>
+          <p>当社は、利用目的の達成に必要な期間または法令で定められた期間、個人情報を保存します。保存する必要がなくなった個人情報は、法令および当社の手順に従い、削除または個人を識別できない状態にします。</p>
+          <p>主な情報の保存期間または保存期間の決定基準：【実態に合わせて記載してください。】</p>
+
+          <h2>9. 開示、訂正、利用停止等の請求</h2>
+          <p>本人またはその代理人は、法令の定めに従い、当社が保有する本人の個人データについて、利用目的の通知、開示、訂正、追加、削除、利用停止、消去、第三者提供の停止または第三者提供記録の開示を請求できます。</p>
+          <p>請求を希望する場合は、下記のお問い合わせ窓口へ、請求内容および本人確認に必要な情報をお知らせください。当社は、本人確認を行ったうえで、法令に従って対応します。</p>
+          <p>手数料：【無料／手数料の金額および支払方法】</p>
+
+          <h2>10. 本ポリシーの変更</h2>
+          <p>当社は、法令の改正または本サービスの変更などに応じて、本ポリシーを変更することがあります。重要な変更を行う場合は、本サービス上での掲示その他の適切な方法によりお知らせします。変更後の内容は、別途定める場合を除き、本サービス上に掲載した時点から適用されます。</p>
+
+          <h2>11. お問い合わせ窓口</h2>
+          <ul>
+            <li>窓口名：【個人情報お問い合わせ窓口】</li>
+            <li>連絡方法：【お問い合わせフォームのURLまたはメールアドレス】</li>
+            <li>受付時間：【必要な場合のみ記載】</li>
+          </ul>
+
+          <p>制定日：【YYYY年MM月DD日】</p>
+          <p>最終改定日：【YYYY年MM月DD日】</p>
+        HTML
+        "transaction-law" => <<~HTML
+          <p><strong>公開前に必ずご確認ください。</strong>このページは初期テンプレートです。以下の【要入力】と記載された箇所を、実際の事業者情報および販売条件に合わせて更新してください。該当しない項目は、その旨が分かる内容に変更してください。</p>
+
+          <h2>販売事業者</h2>
+          <p>【要入力：法人の場合は登記上の法人名、個人事業者の場合は戸籍上の氏名または商業登記された商号】</p>
+
+          <h2>代表者または通信販売に関する業務の責任者</h2>
+          <p>【要入力：氏名】</p>
+
+          <h2>所在地</h2>
+          <p>【要入力：郵便番号、都道府県、市区町村、番地、建物名および部屋番号を含む、現に事業活動を行っている正確な住所】</p>
+
+          <h2>お問い合わせ先</h2>
+          <p>電話番号：【要入力：確実に連絡を受けられる電話番号】<br>メールアドレス：【要入力：お問い合わせ用メールアドレス】<br>受付時間：【要入力：受付曜日および時間。休業日がある場合は併記】</p>
+
+          <h2>販売価格または役務の対価</h2>
+          <p>【要入力：各商品・サービスの購入ページに表示する税込価格、または料金表への案内】</p>
+
+          <h2>販売価格以外に必要となる費用</h2>
+          <p>【要入力：送料、決済手数料、通信料その他、購入者が負担する費用の内容と具体的な金額。追加費用がない場合は、その旨を記載】</p>
+
+          <h2>支払方法</h2>
+          <p>【要入力：利用できるすべての支払方法】</p>
+
+          <h2>支払時期</h2>
+          <p>【要入力：各支払方法について、前払い・後払いの別や決済が行われる具体的な時期。継続課金の場合は初回および次回以降の課金時期】</p>
+
+          <h2>商品等の引渡しまたはサービスの提供時期</h2>
+          <p>【要入力：注文、入金確認または契約成立から発送・利用開始までの具体的な期間。予約商品や個別提供のサービスについて異なる条件がある場合は、その内容】</p>
+
+          <h2>申込みの有効期限</h2>
+          <p>【要入力：期間限定で申込みを受け付ける場合は、その期限と条件。申込み期間を設けない場合は、その旨】</p>
+
+          <h2>返品・交換、キャンセルおよび解約</h2>
+          <ul>
+            <li>商品：【要入力：購入者都合による返品・交換の可否、受付期間、手続方法、返送料その他の費用負担】</li>
+            <li>契約内容に適合しない商品：【要入力：連絡期限、返品・交換等の対応方法および送料負担】</li>
+            <li>サービスまたはデジタル商品：【要入力：提供開始前後のキャンセル・返金の可否、条件、期限および手続方法】</li>
+            <li>継続契約：【該当する場合は要入力：解約方法、申出期限、解約が適用される時期、違約金その他の不利益の有無と具体的内容】</li>
+          </ul>
+
+          <h2>ソフトウェアの利用環境</h2>
+          <p>【ソフトウェアを提供する場合は要入力：対応OS、対応ブラウザ、必要な端末・メモリ・空き容量その他の動作環境。該当しない場合は、その旨】</p>
+
+          <h2>その他の販売条件</h2>
+          <p>【要入力：販売数量、利用資格、提供地域その他の条件がある場合は、その内容。特別な条件がない場合は、その旨】</p>
+        HTML
+      },
+      en: {
+        "terms" => <<~HTML,
+          <p><strong>Before publication, replace all bracketed items and review every provision against the Service's actual features, fees, and target regions.</strong></p>
+
+          <p>These Terms of Use (the “Terms”) govern the use of [Service name] (the “Service”) provided by [Operator name] (the “Operator”). Users must review and agree to these Terms before using the Service.</p>
+
+          <p>Effective date: [Month DD, YYYY]</p>
+
+          <h2>1. Application of these Terms</h2>
+          <ol>
+            <li>These Terms apply to all matters between the Operator and users relating to the use of the Service.</li>
+            <li>Any additional conditions or notices posted by the Operator through the Service form part of these Terms.</li>
+            <li>If these Terms conflict with additional conditions, the additional conditions prevail only to the extent of that conflict and within their stated scope.</li>
+          </ol>
+
+          <h2>2. Registration and eligibility</h2>
+          <ol>
+            <li>If registration is required, users must provide accurate and current information and apply using the method specified by the Operator.</li>
+            <li>A user who is legally required to obtain consent from a parent, guardian, or other legal representative must obtain that consent before using the Service.</li>
+            <li>The Operator may reject an application where the information provided is false, the applicant has previously committed a material breach of these Terms, the Operator cannot verify the applicant's identity, or another reasonable ground makes acceptance inappropriate.</li>
+          </ol>
+
+          <h2>3. Account management</h2>
+          <ol>
+            <li>Users are responsible for safeguarding their account information and must not transfer, lend, or share their accounts with another person.</li>
+            <li>Users must promptly contact the Operator if they become aware of unauthorized account use or a risk of unauthorized use.</li>
+            <li>The Operator may treat actions performed through an account as actions of the account holder, except where the Operator acted intentionally or negligently or where applicable law does not permit such treatment.</li>
+          </ol>
+
+          <h2>4. Service features and fees</h2>
+          <ol>
+            <li>The specific features of the Service are described within the Service.</li>
+            <li>If paid features or products are offered, the price, payment method, delivery timing, cancellation terms, and other transaction conditions will be displayed before purchase and in the commercial transactions disclosure or another location specified by the Operator.</li>
+            <li>Users are responsible for internet access charges and other costs necessary to use the Service.</li>
+          </ol>
+
+          <h2>5. Prohibited conduct</h2>
+          <p>Users must not engage in any of the following conduct:</p>
+          <ul>
+            <li>Violating any law, court judgment, order, or legally binding administrative measure</li>
+            <li>Engaging in criminal activity or conduct contrary to public order or morals</li>
+            <li>Infringing the copyrights, trademarks, privacy, reputation, or other rights or interests of the Operator or any third party</li>
+            <li>Providing false information, impersonating another person, or using another person's account without authorization</li>
+            <li>Accessing the Service or related systems without authorization, imposing an excessive load, disrupting operations, attempting unauthorized analysis, or compromising security</li>
+            <li>Sending or making available malicious programs or data</li>
+            <li>Collecting, using, or disclosing another person's information without lawful authority</li>
+            <li>Advertising, soliciting, or conducting business through the Service without the Operator's permission</li>
+            <li>Providing benefits to or otherwise becoming involved with organized criminal groups or other antisocial forces</li>
+            <li>Engaging in conduct comparable to the above that materially interferes with operation of the Service or use by others</li>
+          </ul>
+
+          <h2>6. User content</h2>
+          <p><strong>Delete this section if the Service has no posting, image upload, or similar user-content feature.</strong></p>
+          <ol>
+            <li>Users must have all rights necessary for text, images, and other content they submit or transmit through the Service, and must not infringe any third-party rights.</li>
+            <li>Rights in user content remain with the user or the applicable rights holder.</li>
+            <li>Users grant the Operator a non-exclusive right to use, reproduce, display, and reformat user content only to the extent necessary to provide, maintain, and improve the Service.</li>
+            <li>The Operator may restrict access to or remove user content where reasonably necessary to comply with law, investigate a breach of these Terms, prevent infringement, or operate the Service safely.</li>
+          </ol>
+
+          <h2>7. Intellectual property</h2>
+          <p>Intellectual property rights in the Service and in text, images, software, and other content supplied by the Operator belong to the Operator or the applicable rights holder. These Terms do not grant users any rights beyond those necessary for ordinary use of the Service.</p>
+
+          <h2>8. Changes, suspension, and discontinuation</h2>
+          <ol>
+            <li>The Operator may temporarily suspend all or part of the Service where reasonably necessary for maintenance, incident response, security, compliance with law, natural disasters, or similar circumstances.</li>
+            <li>The Operator may change or discontinue all or part of the Service where there is a reasonable need to do so.</li>
+            <li>Except in an emergency, the Operator will give reasonable advance notice through the Service or another appropriate method of a change or discontinuation that materially affects users.</li>
+          </ol>
+
+          <h2>9. Restrictions and account termination</h2>
+          <ol>
+            <li>The Operator may restrict use or terminate an account if a user materially breaches these Terms, fails to pay required fees, creates a serious risk of harm to another user or third party, or if another reasonable ground makes the restriction necessary for safe operation of the Service.</li>
+            <li>Except where urgent action is necessary, the Operator will, where reasonably possible, explain the reason in advance and provide an opportunity to remedy the issue.</li>
+          </ol>
+
+          <h2>10. Ending use of the Service</h2>
+          <ol>
+            <li>Users may stop using the Service at any time by following the method specified by the Operator.</li>
+            <li>Cancellation, refunds, and other conditions for paid services are governed by the terms displayed at purchase and applicable law.</li>
+            <li>After use ends, user information will be handled in accordance with the Privacy Policy and applicable law.</li>
+          </ol>
+
+          <h2>11. Warranties and liability</h2>
+          <ol>
+            <li>The Operator will use reasonable efforts to provide the Service reliably, but does not guarantee that the Service will always be uninterrupted or error-free.</li>
+            <li>If a user suffers loss in connection with the Service, the Operator is responsible, in accordance with applicable law, to the extent that the loss was caused intentionally or negligently by the Operator.</li>
+            <li>Nothing in these Terms excludes or limits any liability that cannot be excluded or limited under the Consumer Contract Act or other applicable law.</li>
+            <li>Disputes or transactions between a user and a third party must be resolved between those parties, except to the extent caused by the Operator's conduct.</li>
+          </ol>
+
+          <h2>12. Personal information</h2>
+          <p>The Operator handles users' personal information in accordance with the separately published Privacy Policy and applicable law.</p>
+
+          <h2>13. Changes to these Terms</h2>
+          <ol>
+            <li>The Operator may change these Terms where the change is in users' general interests, or where the change is consistent with the purpose of the agreement and reasonable in light of its necessity, appropriateness, and other relevant circumstances.</li>
+            <li>Before a change takes effect, the Operator will announce the revised terms and their effective date through the Service or another appropriate method.</li>
+            <li>If applicable law requires individual consent to a change, the Operator will obtain that consent by an appropriate method.</li>
+          </ol>
+
+          <h2>14. Contact and notices</h2>
+          <ol>
+            <li>Questions about the Service may be sent to [Contact URL or email address].</li>
+            <li>The Operator may notify users by posting a notice within the Service, sending it to their registered contact details, or using another appropriate method.</li>
+          </ol>
+
+          <h2>15. Governing law and disputes</h2>
+          <ol>
+            <li>These Terms are governed by and construed in accordance with the laws of Japan.</li>
+            <li>If a dispute arises in connection with the Service or these Terms, the parties will first seek to resolve it through good-faith discussion.</li>
+            <li>If the dispute cannot be resolved through discussion, a court in Japan having jurisdiction under applicable law will serve as the court of first instance.</li>
+          </ol>
+        HTML
+        "privacy" => <<~HTML,
+          <p><strong>Before publishing this policy, replace every bracketed field with information that reflects the actual operation and features of the Service, and remove any provision that does not apply.</strong></p>
+
+          <p>[Operator name] (“we,” “us,” or “our”) handles personal information in connection with [Service name] (the “Service”) in accordance with Japan's Act on the Protection of Personal Information and other applicable laws, as described below.</p>
+
+          <h2>1. Business operator</h2>
+          <ul>
+            <li>Name: [Operator name]</li>
+            <li>Address: [Address]</li>
+            <li>Name of representative: [Complete this field if the operator is a corporation]</li>
+          </ul>
+
+          <h2>2. Personal information we collect</h2>
+          <p>We collect only the information necessary to provide the Service. Depending on the actual features and configuration of the Service, this may include the following. Revise this list before publication so that it accurately describes the information collected.</p>
+          <ul>
+            <li>Information that users provide through account registration, profile settings, or other input forms</li>
+            <li>Information that users create, submit, or store through the Service</li>
+            <li>Information necessary to respond to inquiries</li>
+            <li>Identifiers and other information received from an external service when a user chooses to connect that service</li>
+            <li>Information recorded to operate and secure the Service, such as access times, IP addresses, browser or device information, activity records, and error logs</li>
+          </ul>
+
+          <h2>3. Purposes of use</h2>
+          <p>We use personal information only as necessary for the following purposes:</p>
+          <ul>
+            <li>To register users, verify identity, authenticate access, and manage accounts</li>
+            <li>To provide the features selected by users</li>
+            <li>To maintain the Service, investigate faults, and ensure stable operation</li>
+            <li>To prevent unauthorized access, violations of the terms, and other misuse, and to protect the Service</li>
+            <li>To respond to inquiries and send important service notices</li>
+            <li>To comply with legal obligations and protect the rights of us or third parties</li>
+            <li>For another purpose separately disclosed to and consented to by the user</li>
+          </ul>
+          <p>If we need to use personal information beyond these purposes, we will obtain the user's prior consent unless applicable law permits otherwise.</p>
+
+          <h2>4. Cookies and external tools</h2>
+          <p>The Service may use cookies or similar technologies where necessary to maintain login sessions, protect the Service, or provide its functions. Disabling cookies in a browser may make some features unavailable.</p>
+          <p>Advertising, analytics, error monitoring, and other external tools: [State that none are used, or identify each tool, its provider, the information sent, its purpose, how users can disable it, and a link to the provider's privacy policy.]</p>
+
+          <h2>5. Disclosure to third parties</h2>
+          <p>We do not provide personal data to a third party except:</p>
+          <ul>
+            <li>with the individual's consent;</li>
+            <li>as required or permitted by law; or</li>
+            <li>in another case permitted under Japan's Act on the Protection of Personal Information.</li>
+          </ul>
+
+          <h2>6. Service providers and processing outside Japan</h2>
+          <p>If we engage a service provider to process personal data, we limit the processing to what is necessary for the entrusted work and appropriately select and supervise the service provider.</p>
+          <p>Use of service providers and the main services entrusted to them: [Describe the actual arrangements.]</p>
+          <p>Processing of personal data outside Japan: [State that there is no such processing, or identify the country or region, the nature of the processing, the relevant security measures, and any other information required by applicable law.]</p>
+
+          <h2>7. Security control measures</h2>
+          <p>We take necessary and appropriate security control measures, proportionate to the way personal data is handled and the related risks, to prevent leakage, loss, or damage.</p>
+          <p>Summary of the measures actually implemented: [Describe the actual organizational, personnel, physical, and technical measures. Possible examples include assigning responsibility and procedures, limiting authorized personnel, access control, encryption in transit, backups, and personnel training. Do not list a measure that has not been implemented.]</p>
+
+          <h2>8. Retention</h2>
+          <p>We retain personal information for the period necessary to fulfill the purposes described above or for a period required by law. When retention is no longer necessary, we delete the information or render it no longer identifiable in accordance with applicable law and our procedures.</p>
+          <p>Main retention periods or the criteria used to determine them: [Describe the actual retention rules.]</p>
+
+          <h2>9. Requests concerning retained personal data</h2>
+          <p>Subject to applicable law, an individual or the individual's authorized representative may request notification of purpose of use, disclosure, correction, addition, deletion, suspension of use, erasure, suspension of third-party provision, or disclosure of records of third-party provision concerning the individual's retained personal data.</p>
+          <p>To make a request, contact us using the details below and provide the nature of the request and the information necessary to verify identity. We will verify the requester's identity and respond in accordance with applicable law.</p>
+          <p>Fee: [No fee / amount and payment method]</p>
+
+          <h2>10. Changes to this policy</h2>
+          <p>We may amend this policy in response to changes in law or the Service. We will provide notice of material changes through the Service or by another appropriate method. Unless otherwise stated, an amended policy takes effect when it is posted on the Service.</p>
+
+          <h2>11. Contact</h2>
+          <ul>
+            <li>Contact point: [Privacy contact]</li>
+            <li>Contact method: [Contact form URL or email address]</li>
+            <li>Hours: [Complete if applicable]</li>
+          </ul>
+
+          <p>Effective date: [YYYY-MM-DD]</p>
+          <p>Last updated: [YYYY-MM-DD]</p>
+        HTML
+        "transaction-law" => <<~HTML
+          <p><strong>Please review this page before publication.</strong> This is an initial template. Replace every item marked “Required” with information that accurately reflects your business and actual sales terms. If an item does not apply, revise it to state that clearly.</p>
+
+          <h2>Seller or Service Provider</h2>
+          <p>[Required: Registered corporate name, or the legal name or registered trade name of the sole proprietor]</p>
+
+          <h2>Representative or Person Responsible for Mail-Order Sales</h2>
+          <p>[Required: Full name]</p>
+
+          <h2>Business Address</h2>
+          <p>[Required: Complete address where business activities are actually conducted, including postal code, prefecture, municipality, street number, building name, and unit number]</p>
+
+          <h2>Contact Information</h2>
+          <p>Telephone: [Required: A telephone number at which the business can reliably be reached]<br>Email: [Required: Customer inquiry email address]<br>Business hours: [Required: Business days and hours, including holidays or closure days]</p>
+
+          <h2>Price of Goods or Services</h2>
+          <p>[Required: Tax-inclusive prices shown on each product or service purchase page, or directions to the applicable price list]</p>
+
+          <h2>Additional Charges</h2>
+          <p>[Required: The nature and specific amount of shipping fees, payment fees, communication charges, and any other costs payable by the customer. If there are no additional charges, state that clearly.]</p>
+
+          <h2>Payment Methods</h2>
+          <p>[Required: All available payment methods]</p>
+
+          <h2>Payment Timing</h2>
+          <p>[Required: The specific payment timing for each payment method, including whether payment is made in advance or in arrears. For recurring payments, include the timing of the initial and subsequent charges.]</p>
+
+          <h2>Delivery or Service Commencement</h2>
+          <p>[Required: The specific period between the order, payment confirmation, or formation of the contract and shipment or commencement of the service. Include any different terms that apply to pre-orders or individually provided services.]</p>
+
+          <h2>Application Period</h2>
+          <p>[Required: If applications are accepted only for a limited period, specify the deadline and applicable conditions. If no application period applies, state that clearly.]</p>
+
+          <h2>Returns, Exchanges, Cancellations, and Termination</h2>
+          <ul>
+            <li>Goods: [Required: Whether returns or exchanges for the customer's convenience are accepted, the applicable period, procedure, and responsibility for return shipping and other costs]</li>
+            <li>Goods that do not conform to the contract: [Required: Notification deadline, available remedies such as return or replacement, and responsibility for shipping costs]</li>
+            <li>Services or digital products: [Required: Whether cancellation or refunds are available before and after service commencement, including conditions, deadlines, and procedures]</li>
+            <li>Recurring contracts: [Required if applicable: Termination method, notice deadline, effective date of termination, and the existence and specific amount of any cancellation fee or other disadvantage]</li>
+          </ul>
+
+          <h2>System Requirements</h2>
+          <p>[Required if software is provided: Supported operating systems and browsers, required devices, memory, storage capacity, and any other system requirements. If not applicable, state that clearly.]</p>
+
+          <h2>Other Conditions</h2>
+          <p>[Required: Any restrictions relating to quantity, eligibility, service area, or other sales conditions. If no special conditions apply, state that clearly.]</p>
+        HTML
+      }
+    }.fetch(I18n.default_locale)
+
     Page::TITLES.each do |slug, title|
       page = Page.find_or_initialize_by(slug: slug)
+      page.content = legal_page_contents.fetch(slug) if page.new_record? && legal_page_contents.key?(slug)
       page.title = title
       page.save!
     end
@@ -5859,12 +6343,26 @@ def configure_content_management
         # rubocop:enable Rails/SkipsModelValidations
       end
 
-      test "seeds fixed pages and footer setting idempotently" do
+      test "seeds localized legal page content once and keeps edited content" do
+        legal_slugs = %w[terms privacy transaction-law]
+        Page.where(slug: legal_slugs).destroy_all
         load Rails.root.join("db/seeds.rb").to_s
 
         assert_equal Page::TITLES, Page.order(:id).to_h { |page| [page.slug, page.title] }
+        legal_pages = Page.where(slug: legal_slugs).index_by(&:slug)
+        assert_equal legal_slugs.sort, legal_pages.keys.sort
+        assert legal_pages.values.all? { |page| page.content.present? }
+        assert_includes legal_pages.fetch("terms").content.to_plain_text, I18n.default_locale == :ja ? "禁止事項" : "Prohibited conduct"
+        assert_includes legal_pages.fetch("privacy").content.to_plain_text, I18n.default_locale == :ja ? "利用目的" : "Purposes of use"
+        assert_includes legal_pages.fetch("transaction-law").content.to_plain_text, I18n.default_locale == :ja ? "販売事業者" : "Seller or Service Provider"
         assert_equal FooterSetting::DEFAULT_KEY, FooterSetting.default_record.key
-        assert_no_difference(["Page.count", "FooterSetting.count"]) { load Rails.root.join("db/seeds.rb").to_s }
+
+        terms = legal_pages.fetch("terms")
+        terms.update!(content: "<p>管理者が編集した本文</p>")
+        assert_no_difference(["Page.count", "FooterSetting.count", "ActionText::RichText.count"]) do
+          load Rails.root.join("db/seeds.rb").to_s
+        end
+        assert_equal "管理者が編集した本文", terms.reload.content.to_plain_text
       end
     end
   RUBY

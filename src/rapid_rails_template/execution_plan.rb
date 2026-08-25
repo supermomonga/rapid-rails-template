@@ -407,6 +407,7 @@ module RapidRailsTemplate
           app/controllers/admin/maintenance_tasks_controller.rb
           app/helpers/admin/maintenance_tasks_helper.rb
           app/policies/maintenance_task_policy.rb
+          app/tasks/maintenance/countdown_task.rb
           app/views/layouts/maintenance_tasks/admin.html.erb
           app/views/maintenance_tasks/tasks/*.html.erb
           app/views/maintenance_tasks/runs/*.html.erb
@@ -418,6 +419,7 @@ module RapidRailsTemplate
           docs/maintenance_tasks.md
           test/policies/maintenance_task_policy_test.rb
           test/controllers/admin/maintenance_tasks_controller_test.rb
+          test/tasks/maintenance/countdown_task_test.rb
           test/support/maintenance_tasks/safe_test_task.rb
         ])
       end

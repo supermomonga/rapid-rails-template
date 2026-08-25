@@ -246,10 +246,12 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/controllers/admin/maintenance_tasks_controller.rb"
     assert_includes plan.artifacts, "app/helpers/admin/maintenance_tasks_helper.rb"
     assert_includes plan.artifacts, "app/policies/maintenance_task_policy.rb"
+    assert_includes plan.artifacts, "app/tasks/maintenance/countdown_task.rb"
     assert_includes plan.artifacts, "app/views/maintenance_tasks/tasks/*.html.erb"
     assert_includes plan.artifacts, "app/views/maintenance_tasks/runs/*.html.erb"
     assert_includes plan.artifacts, "app/views/maintenance_tasks/runs/info/_errored.html.erb"
     assert_includes plan.artifacts, "db/migrate/*_maintenance_tasks.rb"
+    assert_includes plan.artifacts, "test/tasks/maintenance/countdown_task_test.rb"
     assert_equal %w[web worker], plan.processes
     assert_equal 1, plan.processes.count("worker")
   end
@@ -316,9 +318,11 @@ class ExecutionPlanTest < Minitest::Test
     refute_includes plan.artifacts, "config/initializers/maintenance_tasks.rb"
     refute_includes plan.artifacts, "app/controllers/admin/maintenance_tasks_controller.rb"
     refute_includes plan.artifacts, "app/helpers/admin/maintenance_tasks_helper.rb"
+    refute_includes plan.artifacts, "app/tasks/maintenance/countdown_task.rb"
     refute_includes plan.artifacts, "app/views/maintenance_tasks/tasks/*.html.erb"
     refute_includes plan.artifacts, "app/views/maintenance_tasks/runs/*.html.erb"
     refute_includes plan.artifacts, "db/migrate/*_maintenance_tasks.rb"
+    refute_includes plan.artifacts, "test/tasks/maintenance/countdown_task_test.rb"
   end
 
   def test_profile_and_all_of_its_features_are_always_generated

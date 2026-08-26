@@ -1759,6 +1759,7 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_kamal_uses_a_litestream_accessory_and_confirmed_restore
     kamal = source_between("def configure_kamal", "after_bundle do")
+    dockerfile = source_between('create_file "Dockerfile"', 'create_file "bin/docker-entrypoint"')
     restore = source_between("def kamal_restore_cli_body", "def configure_kamal_restore")
     volume_helper = source_between("def configure_kamal_restore", "def configure_litestream_r2")
     r2 = source_between("def configure_litestream_r2", "def configure_kamal")
@@ -1780,6 +1781,18 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes kamal, 'cmd: bin/jobs --mode async'
     assert_includes kamal, 'GET /status HTTP/1.0'
     assert_includes kamal, 'CMD ["./bin/thrust", "./bin/rails", "server"]'
+    assert_includes kamal,
+      "docker_build_packages = %w[build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev]"
+    assert_includes kamal, 'if VALUES.fetch("additional_login_methods").include?("siwe")'
+    assert_includes kamal,
+      "docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])"
+    assert_includes kamal,
+      'format(<<~\'DOCKERFILE\', build_packages: docker_build_packages.join(" "))'
+    assert_includes dockerfile, "apt-get install --no-install-recommends -y %{build_packages}"
+    assert_operator dockerfile.index("%{build_packages}"), :<, dockerfile.rindex("FROM base")
+    %w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev].each do |package|
+      refute_includes dockerfile, package
+    end
     assert_includes kamal, 'create_file ".kamal/hooks/pre-deploy"'
     refute_includes kamal, "Procfile.prod"
     refute_includes kamal, "foreman"

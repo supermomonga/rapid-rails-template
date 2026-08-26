@@ -346,7 +346,7 @@ productionの`config/database.yml`には、常設のstorage databaseに加え、
 
 デプロイは全構成でKamal V2へ固定し、選択optionは設けません。Rails標準のDocker/Kamal生成を有効にしたうえで、Kamal `~> 2.11`と`minimum_version: 2.11.0`を固定します。対象topologyは単一Linux host・単一Web replicaです。
 
-`Dockerfile`はRails標準構成を基礎に、Ruby 4.0.0のmulti-stage build、Node.js/npmによるasset build、libvips、jemalloc、YJIT、Thrusterを維持します。LitestreamとForemanはアプリimageへ含めません。Webはprimary role、Solid Queue使用時だけ`worker` roleを生成します。
+`Dockerfile`はRails標準構成を基礎に、Ruby 4.0.0のmulti-stage build、Node.js/npmによるasset build、libvips、jemalloc、YJIT、Thrusterを維持します。SIWE選択時だけ、`rbsecp256k1`のネイティブ拡張のビルドに必要なAutotoolsと開発用パッケージをbuild stageへ追加し、最終runtime imageには含めません。LitestreamとForemanはアプリimageへ含めません。Webはprimary role、Solid Queue使用時だけ`worker` roleを生成します。
 
 production SQLiteは`<app_id>_<destination>_storage` named volumeの`/rails/storage`へ配置し、`production`と`staging`を分離します。Kamalはdestination指定を必須にします。
 

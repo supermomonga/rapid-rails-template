@@ -113,8 +113,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     )
 
     RubyVM::InstructionSequence.compile(files.fetch("bin/wait-for-litestream"))
-    RubyVM::InstructionSequence.compile(files.fetch("lib/litestream/r2_configurator.rb"))
-    RubyVM::InstructionSequence.compile(files.fetch("test/lib/litestream/r2_configurator_test.rb"))
+    RubyVM::InstructionSequence.compile(files.fetch("lib/deployment/configurator.rb"))
+    RubyVM::InstructionSequence.compile(files.fetch("test/lib/deployment/configurator_test.rb"))
   end
 
   def test_docker_build_packages_follow_siwe_selection
@@ -467,7 +467,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     refute files.key?(".kamal/secrets")
     assert_equal "--- {}\n", files.fetch("config/deploy.production.yml")
     assert_equal "--- {}\n", files.fetch("config/deploy.staging.yml")
-    assert_includes files.fetch("lib/tasks/litestream.rake"), "Litestream::R2Configurator.new(root: Rails.root).run!"
+    assert_includes files.fetch("lib/tasks/deployment.rake"), "Deployment::Configurator.new(root: Rails.root).run!"
 
     minimal_files = build_kamal_files(
       "active_job" => "skip",
@@ -484,979 +484,369 @@ class KamalRestoreTemplateTest < Minitest::Test
     end
   end
 
-  def test_r2_configurator_creates_only_missing_bucket_and_writes_id_based_secret_references
+  def test_deployment_configurator_artifacts_compile_and_use_environment_specific_names
     files = build_kamal_files(
       "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
 
-    Dir.mktmpdir("r2-configurator") do |directory|
-      root = Pathname(directory)
-      wrangler = root.join("node_modules/.bin/wrangler")
-      FileUtils.mkdir_p(wrangler.dirname)
-      wrangler.write("#!/bin/sh\n")
-      wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      responses = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-other", name: "Other Cloudflare" }, { id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "op-account", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "op-account"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
-        result.new(stdout: JSON.generate(name: "sample-db-staging"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate([
-          { id: "vault-production", name: "sample-production" },
-          { id: "vault-staging", name: "sample-staging" }
-        ]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate([{ id: "staging-item", title: "sample Litestream R2 staging" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "staging-item", title: "sample Litestream R2 staging", fields: []), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "created\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(fields: []), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "production-item"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "staging-item"), stderr: "", success: true, exitstatus: 0)
-      ]
-      runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
-        end
-
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: }
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(responses)
-      prompt = Class.new do
-        def initialize
-          @inputs = %w[sample-db-production sample-db-staging]
-        end
-
-        def choose(choices, header:, selected:, no_limit: false)
-          return choices if no_limit
-
-          header.to_s
-          choices.last || selected.fetch(0)
-        end
-
-        def input(**)
-          @inputs.shift
-        end
-
-        def confirm(*)
-          true
-        end
-      end.new
-      cloudflare_client = Class.new do
-        attr_reader :calls
-
-        def initialize
-          @calls = []
-        end
-
-        def permission_groups(account_id, name:)
-          @calls << { method: :permission_groups, account_id:, name: }
-          if name == "Account API Tokens Write"
-            [{ "id" => "account-token-write", "name" => name, "scopes" => ["com.cloudflare.api.account"] }]
-          else
-            [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
-          end
-        end
-
-        def verify_token(account_id)
-          @calls << { method: :verify_token, account_id: }
-          { "id" => "initial-token-id", "status" => "active" }
-        end
-
-        def token_details(account_id, token_id)
-          @calls << { method: :token_details, account_id:, token_id: }
-          {
-            "id" => token_id,
-            "status" => "active",
-            "policies" => [{
-              "effect" => "allow",
-              "resources" => { "com.cloudflare.api.account.#{account_id}" => "*" },
-              "permission_groups" => [{ "id" => "account-token-write" }]
-            }]
-          }
-        end
-
-        def tokens(account_id)
-          @calls << { method: :tokens, account_id: }
-          []
-        end
-
-        def create_token(account_id, name:, policy:)
-          @calls << { method: :create_token, account_id:, name:, policy: }
-          {
-            "id" => "#{name}-access",
-            "name" => name,
-            "status" => "active",
-            "policies" => [policy],
-            "value" => "#{name}-raw-token"
-          }
-        end
-      end.new
-
-      output = StringIO.new
-      Litestream::R2Configurator.new(
-        root:,
-        prompt:,
-        runner:,
-        output:,
-        environment: {
-          "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
-          "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
-        },
-        cloudflare_client:
-      ).run!
-
-      create_calls = runner.calls.select { |call| call.fetch(:command).include?("create") }
-      assert_equal 2, create_calls.length
-      assert create_calls.any? { |call| call.fetch(:command).include?("sample-db-production") }
-      refute create_calls.any? { |call| call.fetch(:command).include?("sample-db-staging") && call.fetch(:command).include?("bucket") }
-      refute create_calls.any? { |call| call.fetch(:command).first(3) == %w[op vault create] }
-      raw_tokens = %w[sample-r2-production-raw-token sample-r2-staging-raw-token]
-      assert runner.calls.grep_v(nil).all? do |call|
-        (call.fetch(:command) & raw_tokens).empty?
-      end
-      refute_match(/sample-r2-(production|staging)-raw-token/, output.string)
-      assert runner.calls.select { |call| call.fetch(:stdin_data)&.match?(/sample-r2-(production|staging)-raw-token/) }.all? do |call|
-        call.fetch(:command).first(2) == %w[op item]
-      end
-      item_writes = runner.calls.select do |call|
-        call.fetch(:command).first(2) == %w[op item] && call.fetch(:stdin_data)
-      end.map { |call| JSON.parse(call.fetch(:stdin_data)) }
-      assert_equal 2, item_writes.length
-      %w[production staging].each do |destination|
-        item = item_writes.find { |candidate| candidate.fetch("title").end_with?(destination) }
-        refute_nil item
-        fields = item.fetch("fields").to_h { |field| [field.fetch("label"), field] }
-        token_value = "sample-r2-#{destination}-raw-token"
-        assert_equal token_value, fields.fetch("CLOUDFLARE_R2_API_TOKEN").fetch("value")
-        assert_equal "sample-r2-#{destination}-access", fields.fetch("R2_ACCESS_KEY").fetch("value")
-        assert_equal Digest::SHA256.hexdigest(token_value), fields.fetch("R2_SECRET_KEY").fetch("value")
-        assert_equal "CONCEALED", fields.fetch("CLOUDFLARE_R2_API_TOKEN").fetch("type")
-        assert_equal "CONCEALED", fields.fetch("R2_ACCESS_KEY").fetch("type")
-        assert_equal "CONCEALED", fields.fetch("R2_SECRET_KEY").fetch("type")
-        assert_equal "cf-account", fields.fetch("CF_ACCOUNT_ID").fetch("value")
-        assert_equal "sample-db-#{destination}", fields.fetch("LITESTREAM_R2_BUCKET").fetch("value")
-      end
-      refute runner.calls.any? { |call| call.fetch(:stdin_data)&.include?("initial-token") }
-      refute_includes output.string, "initial-token"
-      assert_equal %w[sample-r2-production sample-r2-staging], cloudflare_client.calls
-        .select { |call| call.fetch(:method) == :create_token }
-        .map { |call| call.fetch(:name) }
-      cloudflare_client.calls.select { |call| call.fetch(:method) == :create_token }.each do |call|
-        policy = call.fetch(:policy)
-        destination = call.fetch(:name).delete_prefix("sample-r2-")
-        expected_resource = "com.cloudflare.edge.r2.bucket.cf-account_default_sample-db-#{destination}"
-        assert_equal({ expected_resource => "*" }, policy.fetch("resources"))
-        assert_equal [{ "id" => "r2-write" }], policy.fetch("permission_groups")
-      end
-      assert runner.calls.select { |call| call.fetch(:command).include?("bucket") }.all? do |call|
-        call.fetch(:environment) == { "CLOUDFLARE_ACCOUNT_ID" => "cf-account" }
-      end
-      assert runner.calls.any? { |call| call.fetch(:command) == %w[op account get --format=json --account=op-account] }
-      assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault list --format json --account op-account] }
-      production_secrets = root.join(".kamal/secrets.production").read
-      staging_secrets = root.join(".kamal/secrets.staging").read
-      assert_includes production_secrets, "vault-production/production-item"
-      assert_includes staging_secrets, "vault-staging/staging-item"
-      refute_match(/production-access|production-secret|staging-access|staging-secret/, production_secrets + staging_secrets)
-      refute_includes production_secrets + staging_secrets, "CLOUDFLARE_R2_API_TOKEN"
-      assert_equal 0o600, root.join(".kamal/secrets.production").stat.mode & 0o777
+    %w[
+      lib/deployment/command_runner.rb
+      lib/deployment/cloudflare_client.rb
+      lib/deployment/one_password_client.rb
+      lib/deployment/kamal_secrets_writer.rb
+      lib/deployment/configurator.rb
+      lib/tasks/deployment.rake
+      test/lib/deployment/configurator_test.rb
+    ].each do |path|
+      assert files.key?(path), "missing generated artifact: #{path}"
+      RubyVM::InstructionSequence.compile(files.fetch(path)) if path.end_with?(".rb")
     end
+
+    eval_deployment_files(files)
+    assert_equal "deploy:sample:production", Deployment::Configurator.service_account_name("Sample!", "production")
+    assert_equal "sample-staging", Deployment::Configurator.destination_vault_name("Sample!", "staging")
+    assert_includes files.fetch("lib/tasks/deployment.rake"), "namespace :deployment"
+    refute files.fetch("lib/tasks/deployment.rake").include?("litestream:configure:r2")
   ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
-  def test_r2_configurator_without_initial_token_prints_template_url_without_side_effects
+  def test_deployment_configurator_rejects_service_account_and_connect_authentication_before_commands
     files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+    eval_deployment_files(files)
+    runner = Class.new do
+      attr_reader :calls
 
-    Dir.mktmpdir("r2-missing-initial-token") do |directory|
-      root = Pathname(directory)
-      runner = Object.new
-      def runner.capture(*)
-        raise "runner must not be called"
-      end
-      output = StringIO.new
-
-      Litestream::R2Configurator.new(
-        root:,
-        prompt: Object.new,
-        runner:,
-        output:,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "   " }
-      ).run!
-
-      template_url = output.string.lines.find { |line| line.start_with?("https://dash.cloudflare.com/") }
-      refute_nil template_url
-      query = URI.decode_www_form(URI(template_url.strip).query).to_h
-      assert_equal "/:account/api-tokens", query.fetch("to")
-      assert_equal [{ "key" => "account_api_tokens", "type" => "edit" }], JSON.parse(query.fetch("permissionGroupKeys"))
-      assert_equal "sample-api-token-creator", query.fetch("name")
-      assert_includes output.string, "CLOUDFLARE_INITIAL_API_TOKEN"
-      assert_includes output.string, "account-owned-token-template"
-      assert_includes output.string, "Super Administrator"
-      assert_includes output.string, "Account API Tokens Write"
-      assert_empty Dir.children(root)
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_cloudflare_token_names_are_deterministic_and_bounded
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    assert_equal "my-app-r2-production", Litestream::R2Configurator.cloudflare_token_name("My App!", "production")
-    long_name = Litestream::R2Configurator.cloudflare_token_name("a" * 200, "staging")
-    assert_operator long_name.bytesize, :<=, 120
-    assert_match(/-[0-9a-f]{12}-r2-staging\z/, long_name)
-    assert_equal long_name, Litestream::R2Configurator.cloudflare_token_name("a" * 200, "staging")
-    refute_equal long_name, Litestream::R2Configurator.cloudflare_token_name("a" * 199 + "b", "staging")
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_cloudflare_client_uses_account_token_api_and_never_exposes_bearer_in_errors
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    response = Data.define(:code, :body)
-    responses = [
-      response.new("200", JSON.generate(success: true, result: { id: "initial-token-id", status: "active" })),
-      response.new("200", JSON.generate(success: true, result: { id: "initial-token-id", status: "active", policies: [] })),
-      response.new("200", JSON.generate(success: true, result: [{ id: "permission-id", name: "Workers R2 Storage Bucket Item Write", scopes: ["com.cloudflare.edge.r2.bucket"] }])),
-      response.new("200", JSON.generate(success: true, result: [{ id: "first-token" }], result_info: { total_count: 2 })),
-      response.new("200", JSON.generate(success: true, result: [{ id: "second-token" }], result_info: { total_count: 2 })),
-      response.new("200", JSON.generate(success: true, result: { id: "token-id", name: "sample-r2-production", status: "active", policies: [], value: "raw-token" }))
-    ]
-    http = Class.new do
-      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
-      attr_reader :requests
-
-      define_method(:initialize) do |scripted|
-        @scripted = scripted
-        @requests = []
+      def initialize
+        @calls = []
       end
 
-      define_method(:request) do |request|
-        @requests << request
-        @scripted.shift || raise("unexpected request")
-      end
-    end.new(responses)
-    client = Litestream::R2Configurator::CloudflareClient.new(
-      token: "initial-secret",
-      http_factory: ->(*) { http }
-    )
-
-    assert_equal "initial-token-id", client.verify_token("account-id").fetch("id")
-    assert_equal [], client.token_details("account-id", "initial-token-id").fetch("policies")
-    client.permission_groups("account-id", name: "Workers R2 Storage Bucket Item Write")
-    assert_equal %w[first-token second-token], client.tokens("account-id").map { |token| token.fetch("id") }
-    client.create_token("account-id", name: "sample-r2-production", policy: { "effect" => "allow" })
-
-    assert_equal 6, http.requests.length
-    assert_equal "/client/v4/accounts/account-id/tokens/verify", http.requests.fetch(0).uri.path
-    assert_equal "initial-secret", http.requests.fetch(0)["Authorization"].delete_prefix("Bearer ")
-    assert_equal "/client/v4/accounts/account-id/tokens/initial-token-id", http.requests.fetch(1).uri.path
-    assert_equal "/client/v4/accounts/account-id/tokens/permission_groups", http.requests.fetch(2).uri.path
-    assert_equal "/client/v4/accounts/account-id/tokens", http.requests.fetch(3).uri.path
-    assert_equal "page=1&per_page=50", http.requests.fetch(3).uri.query
-    assert_equal "page=2&per_page=50", http.requests.fetch(4).uri.query
-    body = JSON.parse(http.requests.fetch(5).body)
-    assert_equal "sample-r2-production", body.fetch("name")
-    assert_equal [{ "effect" => "allow" }], body.fetch("policies")
-
-    invalid_http = Class.new do
-      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
-
-      define_method(:request) do |_request|
-        Data.define(:code, :body).new("500", "not-json")
+      def capture(*)
+        @calls << true
+        raise "must stop before executing commands"
       end
     end.new
-    invalid_client = Litestream::R2Configurator::CloudflareClient.new(
-      token: "must-not-leak",
-      http_factory: ->(*) { invalid_http }
-    )
-    error = assert_raises(Litestream::R2Configurator::Error) do
-      invalid_client.tokens("account-id")
-    end
-    assert_includes error.message.dup.force_encoding(Encoding::UTF_8), "JSON応答が不正"
-    refute_includes error.message, "must-not-leak"
 
-    api_error_http = Class.new do
-      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
-
-      define_method(:request) do |_request|
-        Data.define(:code, :body).new(
-          "403",
-          JSON.generate(success: false, errors: [{ code: 10000, message: "Authentication error: api-error-secret" }])
-        )
-      end
-    end.new
-    api_error_client = Litestream::R2Configurator::CloudflareClient.new(
-      token: "api-error-secret",
-      http_factory: ->(*) { api_error_http }
-    )
-    error = assert_raises(Litestream::R2Configurator::Error) do
-      api_error_client.tokens("account-id")
-    end
-    assert_instance_of Litestream::R2Configurator::CloudflareClient::RequestError, error
-    assert_equal 403, error.status
-    assert_equal [10000], error.codes
-    assert_includes error.message, "HTTP 403"
-    assert_includes error.message, "Authentication error"
-    refute_includes error.message, "api-error-secret"
-    assert_includes error.message, "[REDACTED]"
-
-    network_error_http = Class.new do
-      attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
-
-      def request(_request)
-        raise IOError, "network unavailable: network-error-secret"
-      end
-    end.new
-    network_error_client = Litestream::R2Configurator::CloudflareClient.new(
-      token: "network-error-secret",
-      http_factory: ->(*) { network_error_http }
-    )
-    error = assert_raises(Litestream::R2Configurator::Error) do
-      network_error_client.tokens("account-id")
-    end
-    assert_includes error.message, "IOError: network unavailable"
-    refute_includes error.message, "network-error-secret"
-    assert_includes error.message, "[REDACTED]"
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_reports_permission_403_before_1password_or_bucket_mutations
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    Dir.mktmpdir("r2-initial-token-403") do |directory|
-      root = Pathname(directory)
-      wrangler = root.join("node_modules/.bin/wrangler")
-      FileUtils.mkdir_p(wrangler.dirname)
-      wrangler.write("#!/bin/sh\n")
-      wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      responses = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-account", name: "Cloudflare Account" }]), stderr: "", success: true, exitstatus: 0)
-      ]
-      runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
-        end
-
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: }
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(responses)
-      cloudflare_client = Class.new do
-        def verify_token(_account_id)
-          { "id" => "initial-token-id", "status" => "active" }
-        end
-
-        def permission_groups(_account_id, name:)
-          name
-          raise Litestream::R2Configurator::CloudflareClient::RequestError.new(
-            "Cloudflare API requestに失敗しました (HTTP 403): Unauthorized to access requested resource (code: 9109)",
-            status: 403,
-            codes: [9109]
-          )
-        end
-      end.new
-
-      error = assert_raises(Litestream::R2Configurator::Error) do
-        Litestream::R2Configurator.new(
-          root:,
-          prompt: Object.new,
+    %w[OP_SERVICE_ACCOUNT_TOKEN OP_CONNECT_HOST OP_CONNECT_TOKEN].each do |name|
+      error = assert_raises(Deployment::Error) do
+        Deployment::Configurator.new(
           runner:,
-          output: StringIO.new,
-          environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-secret" },
-          cloudflare_client:
+          environment: {
+            "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+            name => "configured"
+          }
         ).run!
       end
-
-      message = error.message.dup.force_encoding(Encoding::UTF_8)
-      assert_includes message, "Cloudflare Account (cf-account)"
-      assert_includes message, "HTTP 403, code: 9109"
-      assert_includes message, "Super Administrator"
-      assert_includes message, "Account API Tokens: Edit"
-      assert_includes message, "account_api_tokens"
-      refute_includes message, "initial-secret"
-      assert_equal 4, runner.calls.length
-      refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op user] }
-      refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
-      refute_path_exists root.join("mise.local.toml")
-      refute_path_exists root.join(".kamal")
+      assert_includes error.message, name
     end
+    assert_empty runner.calls
   ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
-  def test_r2_configurator_rejects_wrong_inactive_or_nonminimal_initial_tokens
+  def test_deployment_configurator_without_initial_token_has_no_external_side_effects
     files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    cases = {
-      wrong_account: "Cloudflare APIに拒否されました",
-      inactive: "tokenがactiveではない",
-      read_only: "Account API Tokens: Edit",
-      extra_permission: "Account API Tokens: Edit"
-    }
-    cases.each do |mode, expected_message|
-      Dir.mktmpdir("r2-initial-token-#{mode}") do |directory|
-        root = Pathname(directory)
-        wrangler = root.join("node_modules/.bin/wrangler")
-        FileUtils.mkdir_p(wrangler.dirname)
-        wrangler.write("#!/bin/sh\n")
-        wrangler.chmod(0o755)
-        result = Litestream::R2Configurator::Result
-        responses = [
-          result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0)
-        ]
-        runner = Class.new do
-          attr_reader :calls
-
-          define_method(:initialize) do |scripted|
-            @scripted = scripted
-            @calls = []
-          end
-
-          define_method(:capture) do |command, environment:, stdin_data:|
-            @calls << { command:, environment:, stdin_data: }
-            @scripted.fetch(@calls.length - 1)
-          end
-        end.new(responses)
-        cloudflare_client = Class.new do
-          define_method(:initialize) do |validation_mode|
-            @validation_mode = validation_mode
-          end
-
-          define_method(:verify_token) do |_account_id|
-            if @validation_mode == :wrong_account
-              raise Litestream::R2Configurator::CloudflareClient::RequestError.new(
-                "Cloudflare API requestに失敗しました (HTTP 403)",
-                status: 403,
-                codes: [9109]
-              )
-            end
-
-            status = @validation_mode == :inactive ? "disabled" : "active"
-            { "id" => "initial-token-id", "status" => status }
-          end
-
-          define_method(:permission_groups) do |_account_id, name:|
-            [{ "id" => "account-token-write", "name" => name, "scopes" => ["com.cloudflare.api.account"] }]
-          end
-
-          define_method(:token_details) do |account_id, token_id|
-            groups = if @validation_mode == :read_only
-              [{ "id" => "account-token-read" }]
-            elsif @validation_mode == :extra_permission
-              [{ "id" => "account-token-write" }, { "id" => "account-settings-read" }]
-            else
-              [{ "id" => "account-token-write" }]
-            end
-            {
-              "id" => token_id,
-              "status" => "active",
-              "policies" => [{
-                "effect" => "allow",
-                "resources" => { "com.cloudflare.api.account.#{account_id}" => "*" },
-                "permission_groups" => groups
-              }]
-            }
-          end
-        end.new(mode)
-
-        error = assert_raises(Litestream::R2Configurator::Error) do
-          Litestream::R2Configurator.new(
-            root:,
-            prompt: Object.new,
-            runner:,
-            output: StringIO.new,
-            environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-secret" },
-            cloudflare_client:
-          ).run!
-        end
-
-        assert_includes error.message.dup.force_encoding(Encoding::UTF_8), expected_message
-        assert_equal 4, runner.calls.length
-        refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op user] }
-        refute_path_exists root.join("mise.local.toml")
-        refute_path_exists root.join(".kamal")
+    eval_deployment_files(files)
+    runner = Class.new do
+      def capture(*)
+        raise "missing-token instructions must not execute commands"
       end
-    end
+    end.new
+    output = StringIO.new
+
+    Deployment::Configurator.new(
+      runner:,
+      output:,
+      environment: {}
+    ).run!
+
+    assert_includes output.string, "CLOUDFLARE_INITIAL_API_TOKENが設定されていません"
+    assert_includes output.string, "Account API Tokens Write"
   ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
-  def test_r2_configurator_reuses_only_matching_active_cloudflare_token_and_vault_secret
+  def test_one_password_client_scopes_every_operation_to_the_selected_human_account
     files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+    eval_deployment_files(files)
+    result = Deployment::Result
+    runner = Class.new do
+      attr_reader :calls
 
-    configurator = Litestream::R2Configurator.new(
-      prompt: Object.new,
-      environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial" }
+      def initialize(result)
+        @result = result
+        @calls = []
+      end
+
+      def capture(command, environment:, stdin_data:)
+        @calls << { command:, environment:, stdin_data: }
+        stdout = case command
+        when ["op", "--version"]
+          "2.31.0\n"
+        when ["op", "account", "list", "--format=json"]
+          JSON.generate([{ id: "op-account", name: "Example" }])
+        when ["op", "user", "get", "--me", "--format=json", "--account", "op-account"]
+          JSON.generate(id: "person", name: "Person", type: "MEMBER", state: "ACTIVE")
+        when ["op", "vault", "list", "--format=json", "--account", "op-account"]
+          JSON.generate([{ id: "vault", name: "sample-production" }])
+        when ["op", "item", "list", "--include-archive", "--format=json", "--vault", "vault", "--account", "op-account"]
+          "[]"
+        when ["op", "service-account", "create", "deploy:sample:production", "--vault", "sample-production:read_items", "--raw", "--account", "op-account"]
+          "service-token\n"
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+        @result.new(stdout:, stderr: "", success: true, exitstatus: 0)
+      end
+    end.new(result)
+    client = Deployment::OnePasswordClient.new(runner:)
+
+    assert_equal "2.31.0\n", client.version
+    client.accounts
+    assert_equal "person", client.current_user("op-account").fetch("id")
+    client.vaults("op-account")
+    client.items(vault_id: "vault", account_id: "op-account")
+    assert_equal "service-token", client.create_service_account(
+      "deploy:sample:production",
+      vault_name: "sample-production",
+      account_id: "op-account"
     )
-    policy = configurator.send(:cloudflare_token_policy, "account-id", "sample-db-production", "permission-id")
-    raw_token = "existing-raw-token"
-    item = {
-      "fields" => [
-        { "id" => "CLOUDFLARE_R2_API_TOKEN", "value" => raw_token },
-        { "id" => "R2_ACCESS_KEY", "value" => "token-id" },
-        { "id" => "R2_SECRET_KEY", "value" => Digest::SHA256.hexdigest(raw_token) }
+
+    scoped = runner.calls.filter { |call| call.fetch(:command).first == "op" }.drop(2)
+    assert scoped.all? { |call| call.fetch(:command).each_cons(2).include?(["--account", "op-account"]) }
+    service_command = runner.calls.last.fetch(:command)
+    assert_includes service_command, "sample-production:read_items"
+    refute service_command.any? { |argument| argument.include?("write_items") || argument.include?("create_vault") }
+    refute_includes service_command, "service-token"
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_human_one_password_identity_must_be_active_and_not_a_service_account
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    configurator = Deployment::Configurator.new(environment: {})
+    client = Object.new
+    configurator.instance_variable_set(:@one_password, client)
+
+    client.define_singleton_method(:current_user) do |_account_id|
+      { "id" => "service", "type" => "SERVICE_ACCOUNT", "state" => "ACTIVE" }
+    end
+    error = assert_raises(Deployment::Error) do
+      configurator.send(:validate_human_one_password_user!, "op-account")
+    end
+    assert_includes error.message, "人間ユーザー".b
+
+    client.define_singleton_method(:current_user) do |_account_id|
+      { "id" => "person", "type" => "MEMBER", "state" => "SUSPENDED" }
+    end
+    error = assert_raises(Deployment::Error) do
+      configurator.send(:validate_human_one_password_user!, "op-account")
+    end
+    assert_includes error.message, "activeではありません".b
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_vault_planning_reuses_one_exact_match_creates_missing_and_rejects_duplicates
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    configurator = Deployment::Configurator.new(environment: {})
+    client = Object.new
+    client.define_singleton_method(:vaults) do |_account_id|
+      [
+        { "id" => "production", "name" => "sample-production", "items" => 2 },
+        { "id" => "similar", "name" => "sample-production-old", "items" => 0 }
       ]
+    end
+    configurator.instance_variable_set(:@one_password, client)
+
+    plans = configurator.send(:plan_destination_vaults, %w[production staging], "op-account")
+    assert_equal "reuse", plans.dig("production", "action")
+    assert_equal "production", plans.dig("production", "record", "id")
+    assert_equal "create", plans.dig("staging", "action")
+
+    client.define_singleton_method(:vaults) do |_account_id|
+      [
+        { "id" => "first", "name" => "sample-production", "items" => 1 },
+        { "id" => "second", "name" => "sample-production", "items" => 3 }
+      ]
+    end
+    error = assert_raises(Deployment::Error) do
+      configurator.send(:plan_destination_vaults, ["production"], "op-account")
+    end
+    assert_includes error.message, "同名の1Password vaultが複数".b
+    assert_includes error.message, "first"
+    assert_includes error.message, "second"
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_service_account_token_item_is_reused_only_when_unique_active_and_complete
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    configurator = Deployment::Configurator.new(environment: {})
+    client = Object.new
+    item = {
+      "id" => "service-item",
+      "title" => "deploy:sample:production",
+      "category" => "API_CREDENTIAL",
+      "fields" => [{
+        "id" => "OP_SERVICE_ACCOUNT_TOKEN",
+        "label" => "OP_SERVICE_ACCOUNT_TOKEN",
+        "type" => "CONCEALED",
+        "value" => "service-token"
+      }]
     }
-    token = {
-      "id" => "token-id",
-      "name" => "sample-r2-production",
-      "status" => "active",
-      "policies" => [policy]
-    }
-    permission_group = { "id" => "permission-id" }
+    client.define_singleton_method(:item) { |_item_id, **| item }
+    configurator.instance_variable_set(:@one_password, client)
+
     plan = configurator.send(
-      :plan_cloudflare_token,
+      :plan_service_account_item,
       "production",
-      account_id: "account-id",
-      bucket: "sample-db-production",
-      permission_group:,
-      cloudflare_tokens: [token],
-      item_plan: { "item" => item }
+      [{ "id" => "service-item", "title" => "deploy:sample:production" }],
+      account_id: "op-account",
+      vault_id: "vault"
     )
     assert_equal "reuse", plan.fetch("action")
-    assert_equal raw_token, plan.fetch("credentials").fetch("CLOUDFLARE_R2_API_TOKEN")
 
-    cases = {
-      "同名のCloudflare API tokenが複数" => [[token, token], { "item" => item }],
-      "activeではありません" => [[token.merge("status" => "disabled")], { "item" => item }],
-      "権限またはbucketが期待値と一致しません" => [[token.merge("policies" => [])], { "item" => item }],
-      "対応する1Password itemがありません" => [[token], { "item" => nil }],
-      "R2_ACCESS_KEYが一致しません" => [[token], { "item" => item.merge("fields" => item.fetch("fields").map { |field| field["id"] == "R2_ACCESS_KEY" ? field.merge("value" => "other-id") : field }) }],
-      "R2_SECRET_KEYが一致しません" => [[token], { "item" => item.merge("fields" => item.fetch("fields").map { |field| field["id"] == "R2_SECRET_KEY" ? field.merge("value" => "wrong") : field }) }]
-    }
-    cases.each do |message, (tokens, item_plan)|
-      error = assert_raises(Litestream::R2Configurator::Error) do
+    [
+      [{ "id" => "one", "title" => "deploy:sample:production" }, { "id" => "two", "title" => "deploy:sample:production" }],
+      [{ "id" => "archived", "title" => "deploy:sample:production", "state" => "ARCHIVED" }]
+    ].each do |records|
+      assert_raises(Deployment::Error) do
         configurator.send(
-          :plan_cloudflare_token,
+          :plan_service_account_item,
           "production",
-          account_id: "account-id",
-          bucket: "sample-db-production",
-          permission_group:,
-          cloudflare_tokens: tokens,
-          item_plan:
+          records,
+          account_id: "op-account",
+          vault_id: "vault"
         )
       end
-      assert_includes error.message.dup.force_encoding(Encoding::UTF_8), message
     end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
 
-  def test_r2_configurator_requires_one_bucket_scoped_r2_write_permission_group
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    valid = {
-      "id" => "permission-id",
-      "name" => "Workers R2 Storage Bucket Item Write",
-      "scopes" => ["com.cloudflare.edge.r2.bucket"]
-    }
-    cases = [
-      ["見つかりません", []],
-      ["見つかりません", [valid.merge("scopes" => ["com.cloudflare.api.account"])]],
-      ["複数あります", [valid, valid.merge("id" => "other-id")]]
-    ]
-    cases.each do |message, records|
-      client = Object.new
-      client.define_singleton_method(:permission_groups) do |_account_id, name:|
-        name
-        records
-      end
-      configurator = Litestream::R2Configurator.new(
-        prompt: Object.new,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial" },
-        cloudflare_client: client
+    item["fields"] = []
+    error = assert_raises(Deployment::Error) do
+      configurator.send(
+        :plan_service_account_item,
+        "production",
+        [{ "id" => "service-item", "title" => "deploy:sample:production" }],
+        account_id: "op-account",
+        vault_id: "vault"
       )
-
-      error = assert_raises(Litestream::R2Configurator::Error) do
-        configurator.send(:r2_permission_group, "account-id")
-      end
-      assert_includes error.message.dup.force_encoding(Encoding::UTF_8), message
     end
+    assert_includes error.message, "OP_SERVICE_ACCOUNT_TOKENがありません".b
+
+    item["fields"] = [{ "label" => "OP_SERVICE_ACCOUNT_TOKEN", "value" => "service-token" }]
+    item["category"] = "LOGIN"
+    error = assert_raises(Deployment::Error) do
+      configurator.send(
+        :plan_service_account_item,
+        "production",
+        [{ "id" => "service-item", "title" => "deploy:sample:production" }],
+        account_id: "op-account",
+        vault_id: "vault"
+      )
+    end
+    assert_includes error.message, "API Credential".b
   ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
-  def test_r2_configurator_creates_service_account_saves_token_and_stops
+  def test_default_no_finishes_all_discovery_without_mutating_selected_or_unselected_environment
     files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+    eval_deployment_files(files)
 
-    Dir.mktmpdir("r2-service-account") do |directory|
+    Dir.mktmpdir("deployment-configurator") do |directory|
       root = Pathname(directory)
-      root.join("mise.local.toml").write("[env]\nVAPID_PUBLIC_KEY = \"public-key\"\n")
       wrangler = root.join("node_modules/.bin/wrangler")
       FileUtils.mkdir_p(wrangler.dirname)
       wrangler.write("#!/bin/sh\n")
       wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      token = "service-account-token"
-      responses = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "person-id", name: "Person", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(env: { VAPID_PUBLIC_KEY: "public-key" }), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "", stderr: "Key not found: env.OP_SERVICE_ACCOUNT_TOKEN", success: false, exitstatus: 1),
-        result.new(stdout: JSON.generate([{ id: "staging-vault", name: "sample-staging", items: 0 }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "production-vault", name: "sample-production", items: 0), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0)
-      ]
+      result = Deployment::Result
       runner = Class.new do
         attr_reader :calls
 
-        define_method(:initialize) do |scripted, root_path|
-          @scripted = scripted
-          @root_path = root_path
+        def initialize(result)
+          @result = result
           @calls = []
         end
 
-        define_method(:capture) do |command, environment:, stdin_data:|
+        def capture(command, environment:, stdin_data:)
           @calls << { command:, environment:, stdin_data: }
-          if command.first(2) == %w[mise set]
-            @root_path.join("mise.local.toml").open("a") do |file|
-              file.puts "OP_SERVICE_ACCOUNT_TOKEN = #{stdin_data.inspect}"
+          stdout, stderr, success = case command
+          when [command.first, "--version"]
+            command.first == "op" ? ["2.31.0\n", "", true] : ["wrangler 4.30.0\n", "", true]
+          when [command.first, "whoami", "--json"]
+            [JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-account", name: "Cloudflare" }]), "", true]
+          when ["op", "account", "list", "--format=json"]
+            [JSON.generate([{ id: "op-account", name: "Example" }]), "", true]
+          when ["op", "user", "get", "--me", "--format=json", "--account", "op-account"]
+            [JSON.generate(id: "person", name: "Person", type: "MEMBER", state: "ACTIVE"), "", true]
+          when ["op", "vault", "list", "--format=json", "--account", "op-account"]
+            [JSON.generate([{ id: "production-vault", name: "sample-production" }]), "", true]
+          when ["op", "item", "list", "--include-archive", "--format=json", "--vault", "production-vault", "--account", "op-account"]
+            ["[]", "", true]
+          else
+            if command.include?("bucket") && command.include?("info")
+              ["", "The specified bucket does not exist. [code: 10006]", false]
+            else
+              raise "unexpected command: #{command.inspect}"
             end
           end
-          @scripted.fetch(@calls.length - 1)
+          @result.new(stdout:, stderr:, success:, exitstatus: success ? 0 : 1)
         end
-      end.new(responses, root)
+      end.new(result)
       prompt = Class.new do
-        def confirm(*) # rubocop:disable Naming/PredicateMethod
-          true
-        end
-      end.new
-      output = StringIO.new
+        def choose(choices, header:, selected:, no_limit: false)
+          return ["production"] if no_limit
 
-      Litestream::R2Configurator.new(
-        root:,
-        prompt:,
-        runner:,
-        output:,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" },
-        cloudflare_client: ValidInitialTokenClient.new
-      ).run!
-
-      creation = runner.calls.find { |call| call.fetch(:command).first(2) == %w[op service-account] }
-      assert_equal [
-        "op", "service-account", "create", "dev:sample",
-        "--vault", "sample-production:read_items,write_items",
-        "--vault", "sample-staging:read_items,write_items",
-        "--raw"
-      ], creation.fetch(:command)
-      assert_nil creation.fetch(:stdin_data)
-      assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json] }
-      refute runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-staging --format=json] }
-      save = runner.calls.find { |call| call.fetch(:command).first(2) == %w[mise set] }
-      assert_equal token, save.fetch(:stdin_data)
-      assert runner.calls.none? { |call| call.fetch(:command).include?(token) }
-      refute_includes output.string, token
-      assert_equal 0o600, root.join("mise.local.toml").stat.mode & 0o777
-      assert_includes root.join("mise.local.toml").read, 'VAPID_PUBLIC_KEY = "public-key"'
-      assert_includes output.string, "mise exec -- bin/rails litestream:configure:r2"
-      assert_includes output.string, "既存の同名service accountを検索できず"
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_bootstraps_only_missing_destination_vaults
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    result = Litestream::R2Configurator::Result
-    scenarios = [
-      {
-        records: [
-          { id: "production-vault", name: "sample-production", items: 1 },
-          { id: "staging-vault", name: "sample-staging", items: 1 }
-        ],
-        creations: [],
-        expected_created: []
-      },
-      {
-        records: [{ id: "production-vault", name: "sample-production", items: 1 }],
-        creations: [{ id: "staging-vault", name: "sample-staging", items: 0 }],
-        expected_created: ["staging-vault"]
-      },
-      {
-        records: [],
-        creations: [
-          { id: "production-vault", name: "sample-production", items: 0 },
-          { id: "staging-vault", name: "sample-staging", items: 0 }
-        ],
-        expected_created: %w[production-vault staging-vault]
-      }
-    ]
-
-    scenarios.each do |scenario|
-      responses = [
-        result.new(stdout: JSON.generate(scenario.fetch(:records)), stderr: "", success: true, exitstatus: 0),
-        *scenario.fetch(:creations).map do |record|
-          result.new(stdout: JSON.generate(record), stderr: "", success: true, exitstatus: 0)
-        end
-      ]
-      runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
+          [header, selected]
+          choices.fetch(0)
         end
 
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: }
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(responses)
-      prompt = Class.new do
-        def confirm(*) # rubocop:disable Naming/PredicateMethod
-          true
-        end
-      end.new
-      configurator = Litestream::R2Configurator.new(
-        root: Pathname(Dir.tmpdir),
-        prompt:,
-        runner:,
-        output: StringIO.new,
-        environment: {}
-      )
-
-      vaults, created = configurator.send(:bootstrap_destination_vaults)
-
-      assert_equal %w[production staging], vaults.keys
-      assert_equal scenario.fetch(:expected_created), created.map { |vault| vault.fetch("id") }
-      assert_equal %w[op vault list --format json], runner.calls.first.fetch(:command)
-      assert runner.calls.drop(1).all? { |call| call.fetch(:command).first(3) == %w[op vault create] }
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_rejects_duplicate_human_vaults_before_mutation
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    result = Litestream::R2Configurator::Result
-    runner = Class.new do
-      attr_reader :calls
-
-      define_method(:initialize) do |response|
-        @response = response
-        @calls = []
-      end
-
-      define_method(:capture) do |command, environment:, stdin_data:|
-        @calls << { command:, environment:, stdin_data: }
-        @response
-      end
-    end.new(
-      result.new(
-        stdout: JSON.generate([
-          { id: "production-vault-1", name: "sample-production", items: 0 },
-          { id: "production-vault-2", name: "sample-production", items: 3 }
-        ]),
-        stderr: "",
-        success: true,
-        exitstatus: 0
-      )
-    )
-    configurator = Litestream::R2Configurator.new(
-      root: Pathname(Dir.tmpdir),
-      prompt: Object.new,
-      runner:,
-      output: StringIO.new,
-      environment: {}
-    )
-
-    error = assert_raises(Litestream::R2Configurator::Error) do
-      configurator.send(:bootstrap_destination_vaults)
-    end
-
-    assert_includes error.message, "production-vault-1, items: 0"
-    assert_includes error.message, "production-vault-2, items: 3"
-    assert_equal [%w[op vault list --format json]], runner.calls.map { |call| call.fetch(:command) }
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_service_account_never_creates_missing_destination_vault
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    result = Litestream::R2Configurator::Result
-    runner = Class.new do
-      attr_reader :calls
-
-      define_method(:initialize) do |response|
-        @response = response
-        @calls = []
-      end
-
-      define_method(:capture) do |command, environment:, stdin_data:|
-        @calls << { command:, environment:, stdin_data: }
-        @response
-      end
-    end.new(result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0))
-    configurator = Litestream::R2Configurator.new(
-      root: Pathname(Dir.tmpdir),
-      prompt: Object.new,
-      runner:,
-      output: StringIO.new,
-      environment: {}
-    )
-
-    error = assert_raises(Litestream::R2Configurator::Error) do
-      configurator.send(:destination_vaults, ["production"], "service-account-id")
-    end
-
-    assert_includes error.message.dup.force_encoding(Encoding::UTF_8), "read_items,write_items権限"
-    assert_equal [
-      %w[op vault list --format json --account service-account-id]
-    ], runner.calls.map { |call| call.fetch(:command) }
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_refuses_existing_token_overwrite_without_creating_account
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    Dir.mktmpdir("r2-existing-token") do |directory|
-      root = Pathname(directory)
-      root.join("mise.local.toml").write("[env]\nOP_SERVICE_ACCOUNT_TOKEN = \"existing\"\n")
-      wrangler = root.join("node_modules/.bin/wrangler")
-      FileUtils.mkdir_p(wrangler.dirname)
-      wrangler.write("#!/bin/sh\n")
-      wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      responses = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "person-id", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "validated\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "existing\n", stderr: "", success: true, exitstatus: 0)
-      ]
-      runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
+        def input(header:, value:)
+          [header, value]
+          value
         end
 
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: }
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(responses)
-      prompt = Class.new do
-        def confirm(*) # rubocop:disable Naming/PredicateMethod
+        def confirm(*, **)
           false
         end
       end.new
       output = StringIO.new
 
-      Litestream::R2Configurator.new(
+      Deployment::Configurator.new(
         root:,
         prompt:,
         runner:,
@@ -1465,491 +855,375 @@ class KamalRestoreTemplateTest < Minitest::Test
         cloudflare_client: ValidInitialTokenClient.new
       ).run!
 
-      refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op service-account] }
-      assert_equal "[env]\nOP_SERVICE_ACCOUNT_TOKEN = \"existing\"\n", root.join("mise.local.toml").read
-      assert_includes output.string, "service accountとtokenは変更していません"
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_reveals_created_token_only_to_terminal_after_save_retry_is_rejected
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    Dir.mktmpdir("r2-token-reveal") do |directory|
-      root = Pathname(directory)
-      wrangler = root.join("node_modules/.bin/wrangler")
-      FileUtils.mkdir_p(wrangler.dirname)
-      wrangler.write("#!/bin/sh\n")
-      wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      token = "one-time-service-account-token"
-      responses = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "person-id", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate([
-          { id: "staging-vault", name: "sample-staging", items: 0 }
-        ]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "production-vault", name: "sample-production", items: 0), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "", stderr: "write failed", success: false, exitstatus: 1)
-      ]
-      runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
-        end
-
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: stdin_data&.dup }
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(responses)
-      prompt = Class.new do
-        def initialize
-          @confirmations = [true, true, false, true]
-        end
-
-        def confirm(*) # rubocop:disable Naming/PredicateMethod
-          @confirmations.shift
-        end
-      end.new
-      output = StringIO.new
-      terminal = StringIO.new
-
-      Litestream::R2Configurator.new(
-        root:,
-        prompt:,
-        runner:,
-        output:,
-        terminal:,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" },
-        cloudflare_client: ValidInitialTokenClient.new
-      ).run!
-
-      assert_equal "#{token}\n", terminal.string
-      refute_includes output.string, token
-      assert_includes output.string, "service accountは作成済み"
-      assert_includes output.string, "sample-production (production-vault)"
-      assert_equal 1, runner.calls.count { |call| call.fetch(:command).first(2) == %w[mise set] }
-      assert runner.calls.none? { |call| call.fetch(:command).include?(token) }
-      assert_equal 1, runner.calls.count { |call| call.fetch(:command).first(3) == %w[op vault create] }
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_retries_token_save_without_exposing_the_token
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    Dir.mktmpdir("r2-token-retry") do |directory|
-      root = Pathname(directory)
-      result = Litestream::R2Configurator::Result
-      token = "retry-service-account-token"
-      responses = [
-        result.new(stdout: "", stderr: "write failed", success: false, exitstatus: 1),
-        result.new(stdout: "", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "#{token}\n", stderr: "", success: true, exitstatus: 0)
-      ]
-      runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted, root_path|
-          @scripted = scripted
-          @root_path = root_path
-          @calls = []
-        end
-
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: stdin_data&.dup }
-          @root_path.join("mise.local.toml").write("[env]\nOP_SERVICE_ACCOUNT_TOKEN = #{stdin_data.inspect}\n") if @calls.length == 2
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(responses, root)
-      prompt = Class.new do
-        def confirm(*) # rubocop:disable Naming/PredicateMethod
-          true
-        end
-      end.new
-      output = StringIO.new
-      configurator = Litestream::R2Configurator.new(root:, prompt:, runner:, output:, environment: {})
-
-      configurator.send(:persist_service_account_token, token, "dev:sample")
-
-      assert_equal 2, runner.calls.count { |call| call.fetch(:command).first(2) == %w[mise set] }
-      assert_equal 0o600, root.join("mise.local.toml").stat.mode & 0o777
-      refute_includes output.string, token
-      assert_includes output.string, "mise exec -- bin/rails litestream:configure:r2"
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_stops_when_second_vault_creation_is_rejected_and_reports_retained_vault
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    Dir.mktmpdir("r2-vault-rejection") do |directory|
-      root = Pathname(directory)
-      wrangler = root.join("node_modules/.bin/wrangler")
-      FileUtils.mkdir_p(wrangler.dirname)
-      wrangler.write("#!/bin/sh\n")
-      wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      responses = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "person-id", name: "Person", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "production-vault", name: "sample-production"), stderr: "", success: true, exitstatus: 0)
-      ]
-      runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
-        end
-
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: }
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(responses)
-      prompt = Class.new do
-        def initialize
-          @confirmations = [true, false]
-        end
-
-        def choose(choices, **options)
-          options.fetch(:no_limit, false) ? choices : choices.first
-        end
-
-        def input(header:, value:)
-          [header, value]
-          value
-        end
-
-        def confirm(*) # rubocop:disable Naming/PredicateMethod
-          @confirmations.shift
-        end
-      end.new
-      output = StringIO.new
-
-      Litestream::R2Configurator.new(
-        root:,
-        prompt:,
-        runner:,
-        output:,
-        environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" },
-        cloudflare_client: ValidInitialTokenClient.new
-      ).run!
-
-      assert runner.calls.any? { |call| call.fetch(:command) == %w[op vault create sample-production --format=json] }
-      refute runner.calls.any? { |call| call.fetch(:command).first(3) == %w[op item list] }
-      refute runner.calls.any? { |call| call.fetch(:command).include?("bucket") && call.fetch(:command).include?("create") }
-      assert_includes output.string, "sample-production (production-vault)"
+      assert_includes output.string, "適用予定"
+      assert_includes output.string, "中止しました"
+      refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
+      refute runner.calls.any? { |call| call.fetch(:command).include?("staging") }
       refute_path_exists root.join(".kamal/secrets.production")
+      refute_path_exists root.join(".kamal/secrets.staging")
     end
   ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
-  def test_r2_configurator_rejects_duplicate_destination_vaults_and_items
+  def test_service_account_creation_uses_read_only_scope_and_saves_token_as_concealed_item
     files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
+    eval_deployment_files(files)
+    result = Deployment::Result
+    runner = Class.new do
+      attr_reader :calls
 
-    Dir.mktmpdir("r2-duplicates") do |directory|
+      def initialize(result)
+        @result = result
+        @calls = []
+      end
+
+      def capture(command, environment:, stdin_data:)
+        @calls << { command:, environment:, stdin_data: }
+        stdout = case command
+        when ["op", "service-account", "create", "deploy:sample:production", "--vault", "sample-production:read_items", "--raw", "--account", "op-account"]
+          "service-token"
+        when ["op", "item", "template", "get", "API Credential", "--account", "op-account"]
+          JSON.generate(fields: [])
+        when ["op", "item", "create", "--format=json", "--vault", "vault", "--account", "op-account", "-"]
+          JSON.generate(id: "service-item")
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+        @result.new(stdout:, stderr: "", success: true, exitstatus: 0)
+      end
+    end.new(result)
+    output = StringIO.new
+    configurator = Deployment::Configurator.new(runner:, output:, environment: {})
+    plan = {
+      "title" => "deploy:sample:production",
+      "id" => nil,
+      "item" => nil,
+      "action" => "create"
+    }
+
+    assert configurator.send(
+      :apply_service_account_plan,
+      plan,
+      account_id: "op-account",
+      vault: { "id" => "vault", "name" => "sample-production" }
+    )
+
+    service_call = runner.calls.fetch(0)
+    assert_includes service_call.fetch(:command), "sample-production:read_items"
+    refute_includes service_call.fetch(:command), "service-token"
+    saved = JSON.parse(String(runner.calls.fetch(2).fetch(:stdin_data)))
+    token_field = saved.fetch("fields").find { |field| field["label"] == "OP_SERVICE_ACCOUNT_TOKEN" }
+    assert_equal "CONCEALED", token_field.fetch("type")
+    assert_equal "service-token", token_field.fetch("value")
+    refute_includes output.string, "service-token"
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_item_save_failure_reconciles_ambiguous_success_without_exposing_secret
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    output = StringIO.new
+    configurator = Deployment::Configurator.new(output:, environment: {})
+    client = Object.new
+    client.define_singleton_method(:api_credential_template) { |**| { "fields" => [] } }
+    client.define_singleton_method(:save_item) { |*, **| raise Deployment::Error, "write failed" }
+    client.define_singleton_method(:items) do |**|
+      [{ "id" => "saved-item", "title" => "deploy:sample:production" }]
+    end
+    client.define_singleton_method(:item) do |*, **|
+      {
+        "fields" => [{
+          "label" => "OP_SERVICE_ACCOUNT_TOKEN",
+          "value" => "service-token"
+        }]
+      }
+    end
+    configurator.instance_variable_set(:@one_password, client)
+
+    item_id = configurator.send(
+      :persist_item_with_retry,
+      { "title" => "deploy:sample:production", "id" => nil, "item" => nil },
+      account_id: "op-account",
+      vault_id: "vault",
+      fields: { "OP_SERVICE_ACCOUNT_TOKEN" => "service-token" },
+      concealed_fields: ["OP_SERVICE_ACCOUNT_TOKEN"],
+      label: "1Password service account token"
+    )
+
+    assert_equal "saved-item", item_id
+    refute_includes output.string, "service-token"
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_item_save_failure_retries_after_reconciliation_finds_nothing
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    output = StringIO.new
+    prompt = Class.new do
+      attr_reader :calls
+
+      def initialize
+        @calls = 0
+      end
+
+      def confirm(*) # rubocop:disable Naming/PredicateMethod
+        @calls += 1
+        true
+      end
+    end.new
+    configurator = Deployment::Configurator.new(prompt:, output:, environment: {})
+    client = Object.new
+    save_calls = 0
+    client.define_singleton_method(:api_credential_template) { |**| { "fields" => [] } }
+    client.define_singleton_method(:save_item) do |*, **|
+      save_calls += 1
+      raise Deployment::Error, "write failed" if save_calls == 1
+
+      { "id" => "saved-item" }
+    end
+    client.define_singleton_method(:items) { |**| [] }
+    configurator.instance_variable_set(:@one_password, client)
+
+    item_id = configurator.send(
+      :persist_item_with_retry,
+      { "title" => "deploy:sample:production", "id" => nil, "item" => nil },
+      account_id: "op-account",
+      vault_id: "vault",
+      fields: { "OP_SERVICE_ACCOUNT_TOKEN" => "service-token" },
+      concealed_fields: ["OP_SERVICE_ACCOUNT_TOKEN"],
+      label: "1Password service account token"
+    )
+
+    assert_equal "saved-item", item_id
+    assert_equal 2, save_calls
+    assert_equal 1, prompt.calls
+    refute_includes output.string, "service-token"
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_missing_service_account_token_response_stops_without_recreating_account
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    configurator = Deployment::Configurator.new(prompt: Object.new, output: StringIO.new, environment: {})
+    client = Object.new
+    create_calls = 0
+    client.define_singleton_method(:create_service_account) do |*, **|
+      create_calls += 1
+      ""
+    end
+    configurator.instance_variable_set(:@one_password, client)
+
+    error = assert_raises(Deployment::Error) do
+      configurator.send(
+        :apply_service_account_plan,
+        { "title" => "deploy:sample:production", "action" => "create" },
+        account_id: "op-account",
+        vault: { "id" => "vault", "name" => "sample-production" }
+      )
+    end
+
+    assert_equal 1, create_calls
+    assert_includes error.message, "再作成せず".b
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_item_save_terminal_recovery_requires_two_confirmations_and_never_leaks_to_normal_output
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    output = StringIO.new
+    terminal = StringIO.new
+    prompt = Class.new do
+      attr_reader :calls
+
+      def initialize
+        @answers = [false, true]
+        @calls = []
+      end
+
+      def confirm(message, **options)
+        @calls << { message:, options: }
+        @answers.shift
+      end
+    end.new
+    configurator = Deployment::Configurator.new(prompt:, output:, terminal:, environment: {})
+    client = Object.new
+    client.define_singleton_method(:api_credential_template) { |**| { "fields" => [] } }
+    client.define_singleton_method(:save_item) { |*, **| raise Deployment::Error, "write failed" }
+    client.define_singleton_method(:items) { |**| [] }
+    configurator.instance_variable_set(:@one_password, client)
+
+    item_id = configurator.send(
+      :persist_item_with_retry,
+      { "title" => "sample Litestream R2 production", "id" => nil, "item" => nil },
+      account_id: "op-account",
+      vault_id: "vault",
+      fields: { "CLOUDFLARE_R2_API_TOKEN" => "cloudflare-secret" },
+      concealed_fields: ["CLOUDFLARE_R2_API_TOKEN"],
+      label: "Cloudflare API token"
+    )
+
+    assert_nil item_id
+    assert_equal 2, prompt.calls.length
+    assert_equal true, prompt.calls.fetch(0).dig(:options, :default)
+    assert_equal false, prompt.calls.fetch(1).dig(:options, :default)
+    assert_includes terminal.string, "cloudflare-secret"
+    refute_includes output.string, "cloudflare-secret"
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_kamal_secrets_writer_is_atomic_id_based_and_excludes_service_account_token
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+
+    Dir.mktmpdir("kamal-secrets-writer") do |directory|
+      root = Pathname(directory)
+      Deployment::KamalSecretsWriter.new(root:).write(
+        destination: "production",
+        account_id: "op-account",
+        vault_id: "vault-id",
+        item_id: "r2-item-id"
+      )
+      path = root.join(".kamal/secrets.production")
+      content = path.read
+      assert_equal 0o600, path.stat.mode & 0o777
+      assert_includes content, "--account op-account"
+      assert_includes content, "--from vault-id/r2-item-id"
+      assert_includes content, "R2_ACCESS_KEY"
+      refute_includes content, "OP_SERVICE_ACCOUNT_TOKEN"
+    end
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_cloudflare_client_uses_account_token_api_and_redacts_bearer_secret
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    requests = []
+    response = Struct.new(:code, :body)
+    factory = lambda do |_host, _port|
+      Class.new do
+        attr_accessor :use_ssl, :open_timeout, :read_timeout, :write_timeout
+
+        define_method(:initialize) do |requests, response|
+          @requests = requests
+          @response = response
+        end
+
+        define_method(:request) do |request|
+          @requests << request
+          @response
+        end
+      end.new(
+        requests,
+        response.new(
+          "403",
+          JSON.generate(success: false, errors: [{ code: 9109, message: "Bearer initial-secret rejected" }])
+        )
+      )
+    end
+    client = Deployment::CloudflareClient.new(token: "initial-secret", http_factory: factory)
+
+    error = assert_raises(Deployment::CloudflareClient::RequestError) do
+      client.permission_groups("cf-account", name: "Workers R2 Storage Bucket Item Write")
+    end
+
+    assert_equal 403, error.status
+    assert_equal [9109], error.codes
+    refute_includes error.message, "initial-secret"
+    assert_equal "Bearer initial-secret", requests.fetch(0)["Authorization"]
+    assert_equal "/client/v4/accounts/cf-account/tokens/permission_groups", requests.fetch(0).uri.path
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_wrangler_bucket_errors_are_not_misclassified_as_missing
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+
+    Dir.mktmpdir("wrangler-client") do |directory|
       root = Pathname(directory)
       wrangler = root.join("node_modules/.bin/wrangler")
       FileUtils.mkdir_p(wrangler.dirname)
       wrangler.write("#!/bin/sh\n")
       wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      prefix = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "op-id", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(id: "op-id"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(name: "sample-db-production"), stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(name: "sample-db-staging"), stderr: "", success: true, exitstatus: 0)
-      ]
-      prompt_class = Class.new do
-        def choose(choices, **options)
-          options.fetch(:no_limit, false) ? choices : choices.first
+      result = Deployment::Result
+      runner = Class.new do
+        def initialize(result)
+          @result = result
         end
 
-        def input(header:, value:)
-          [header, value]
-          value
+        def capture(*)
+          @result.new(stdout: "", stderr: "Authentication error [code: 10000]", success: false, exitstatus: 1)
         end
-      end
-      runner_class = Class.new do
-        attr_reader :calls
+      end.new(result)
+      client = Deployment::CloudflareClient.new(token: "initial-token", root:, runner:)
 
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
-        end
-
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: }
-          @scripted.fetch(@calls.length - 1)
-        end
+      error = assert_raises(Deployment::Error) do
+        client.existing_buckets("cf-account", ["sample-db-production"])
       end
-
-      duplicate_vaults = JSON.generate([
-        { id: "vault-1", name: "sample-production" },
-        { id: "vault-2", name: "sample-production" },
-        { id: "vault-staging", name: "sample-staging" }
-      ])
-      vault_runner = runner_class.new(prefix + [result.new(stdout: duplicate_vaults, stderr: "", success: true, exitstatus: 0)])
-      vault_error = assert_raises(Litestream::R2Configurator::Error) do
-        Litestream::R2Configurator.new(
-          root:,
-          prompt: prompt_class.new,
-          runner: vault_runner,
-          output: StringIO.new,
-          environment: {
-            "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
-            "OP_SERVICE_ACCOUNT_TOKEN" => "token"
-          },
-          cloudflare_client: ValidInitialTokenClient.new
-        ).run!
-      end
-      assert_includes vault_error.message.dup.force_encoding(Encoding::UTF_8), "同名の1Password vaultが複数"
-      refute vault_runner.calls.any? { |call| call.fetch(:command).first(3) == %w[op item list] }
-
-      vaults = JSON.generate([
-        { id: "vault-production", name: "sample-production" },
-        { id: "vault-staging", name: "sample-staging" }
-      ])
-      duplicate_items = JSON.generate([
-        { id: "item-1", title: "sample Litestream R2 production" },
-        { id: "item-2", title: "sample Litestream R2 production" }
-      ])
-      item_runner = runner_class.new(prefix + [
-        result.new(stdout: vaults, stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: duplicate_items, stderr: "", success: true, exitstatus: 0)
-      ])
-      item_error = assert_raises(Litestream::R2Configurator::Error) do
-        Litestream::R2Configurator.new(
-          root:,
-          prompt: prompt_class.new,
-          runner: item_runner,
-          output: StringIO.new,
-          environment: {
-            "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
-            "OP_SERVICE_ACCOUNT_TOKEN" => "token"
-          },
-          cloudflare_client: ValidInitialTokenClient.new
-        ).run!
-      end
-      assert_includes item_error.message.dup.force_encoding(Encoding::UTF_8), "同名の1Password itemが複数"
-      refute_path_exists root.join(".kamal/secrets.production")
+      assert_includes error.message, "Authentication error"
     end
   ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
-
-  def test_r2_configurator_rejects_invalid_service_account_identity_without_fallback
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    Dir.mktmpdir("r2-invalid-service-account") do |directory|
-      root = Pathname(directory)
-      wrangler = root.join("node_modules/.bin/wrangler")
-      FileUtils.mkdir_p(wrangler.dirname)
-      wrangler.write("#!/bin/sh\n")
-      wrangler.chmod(0o755)
-      result = Litestream::R2Configurator::Result
-      dependency_responses = [
-        result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-        result.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0)
-      ]
-      cases = [
-        [result.new(stdout: "", stderr: "invalid token", success: false, exitstatus: 1), { "OP_SERVICE_ACCOUNT_TOKEN" => "invalid" }, "tokenの検証に失敗"],
-        [result.new(stdout: "", stderr: "not signed in", success: false, exitstatus: 1), {}, "1Passwordユーザーでログインしてください"],
-        [result.new(stdout: JSON.generate(id: "op-id", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0), {}, "OP_SERVICE_ACCOUNT_TOKENが設定されていません"],
-        [result.new(stdout: JSON.generate(id: "op-id", type: "SERVICE_ACCOUNT", state: "INACTIVE"), stderr: "", success: true, exitstatus: 0), { "OP_SERVICE_ACCOUNT_TOKEN" => "token" }, "有効ではありません"],
-        [result.new(stdout: JSON.generate(id: "person-id", type: "MEMBER", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0), { "OP_SERVICE_ACCOUNT_TOKEN" => "token" }, "認証主体がservice accountではありません"],
-        [result.new(stdout: "not-json", stderr: "", success: true, exitstatus: 0), { "OP_SERVICE_ACCOUNT_TOKEN" => "token" }, "JSON応答が不正"]
-      ]
-
-      cases.each do |identity_response, environment, message|
-        environment = { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token" }.merge(environment)
-        runner = Class.new do
-          attr_reader :calls
-
-          define_method(:initialize) do |scripted|
-            @scripted = scripted
-            @calls = []
-          end
-
-          define_method(:capture) do |command, environment:, stdin_data:|
-            @calls << { command:, environment:, stdin_data: }
-            @scripted.fetch(@calls.length - 1)
-          end
-        end.new(dependency_responses + [identity_response])
-
-        error = assert_raises(Litestream::R2Configurator::Error) do
-          Litestream::R2Configurator.new(
-            root:,
-            prompt: Object.new,
-            runner:,
-            output: StringIO.new,
-            environment:,
-            cloudflare_client: ValidInitialTokenClient.new
-          ).run!
-        end
-
-        assert_includes error.message.dup.force_encoding(Encoding::UTF_8), message
-        refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op service-account] }
-      end
-
-      connect_runner = Class.new do
-        attr_reader :calls
-
-        define_method(:initialize) do |scripted|
-          @scripted = scripted
-          @calls = []
-        end
-
-        define_method(:capture) do |command, environment:, stdin_data:|
-          @calls << { command:, environment:, stdin_data: }
-          @scripted.fetch(@calls.length - 1)
-        end
-      end.new(dependency_responses)
-      connect_error = assert_raises(Litestream::R2Configurator::Error) do
-        Litestream::R2Configurator.new(
-          root:,
-          prompt: Object.new,
-          runner: connect_runner,
-          output: StringIO.new,
-          environment: {
-            "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
-            "OP_CONNECT_HOST" => "https://connect.example"
-          }
-        ).run!
-      end
-      assert_includes connect_error.message, "OP_CONNECT_HOST/OP_CONNECT_TOKEN"
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
-  def test_r2_configurator_does_not_treat_wrangler_errors_as_a_missing_bucket
-    files = build_kamal_files(
-      "active_job" => "skip",
-      "action_cable" => "async",
-      "web_push" => "skip"
-    )
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-    eval(files.fetch("lib/litestream/r2_configurator.rb"), TOPLEVEL_BINDING, "generated/lib/litestream/r2_configurator.rb")
-
-    %w[authentication permission network].each do |failure|
-      Dir.mktmpdir("r2-configurator-error") do |directory|
-        root = Pathname(directory)
-        wrangler = root.join("node_modules/.bin/wrangler")
-        FileUtils.mkdir_p(wrangler.dirname)
-        wrangler.write("#!/bin/sh\n")
-        wrangler.chmod(0o755)
-        result = Litestream::R2Configurator::Result
-        responses = [
-          result.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", accounts: [{ id: "cf-account", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: JSON.generate(id: "op-account", name: "dev:sample", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: JSON.generate(id: "op-account"), stderr: "", success: true, exitstatus: 0),
-          result.new(stdout: "", stderr: "#{failure} failure", success: false, exitstatus: 1)
-        ]
-        runner = Class.new do
-          attr_reader :calls
-
-          define_method(:initialize) do |scripted|
-            @scripted = scripted
-            @calls = []
-          end
-
-          define_method(:capture) do |command, environment:, stdin_data:|
-            @calls << { command:, environment:, stdin_data: }
-            @scripted.fetch(@calls.length - 1)
-          end
-        end.new(responses)
-        prompt = Class.new do
-          def choose(choices, **options)
-            options.fetch(:no_limit, false) ? choices : options.fetch(:selected).fetch(0)
-          end
-
-          def input(header:, value:)
-            [header, value]
-            value
-          end
-        end.new
-
-        error = assert_raises(Litestream::R2Configurator::Error) do
-          Litestream::R2Configurator.new(
-            root:,
-            prompt:,
-            runner:,
-            output: StringIO.new,
-            environment: {
-              "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
-              "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
-            },
-            cloudflare_client: ValidInitialTokenClient.new
-          ).run!
-        end
-
-        assert_includes error.message, "#{failure} failure"
-        refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
-        refute_path_exists root.join(".kamal/secrets.production")
-      end
-    end
-  ensure
-    Object.send(:remove_const, :Litestream) if Object.const_defined?(:Litestream)
-  end
-
   private
+
+  def eval_deployment_files(files)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+    paths = %w[
+      lib/deployment/command_runner.rb
+      lib/deployment/cloudflare_client.rb
+      lib/deployment/one_password_client.rb
+      lib/deployment/kamal_secrets_writer.rb
+      lib/deployment/configurator.rb
+    ]
+    features = paths.map { |path| path.delete_prefix("lib/") }
+    added_features = features.reject { |feature| $LOADED_FEATURES.include?(feature) }
+    $LOADED_FEATURES.concat(added_features)
+    paths.each do |path|
+      eval(files.fetch(path), TOPLEVEL_BINDING, "generated/#{path}")
+    end
+  ensure
+    added_features&.each { |feature| $LOADED_FEATURES.delete(feature) }
+  end
 
   def build_restore_files(databases)
     source = File.binread(TEMPLATE_PATH)

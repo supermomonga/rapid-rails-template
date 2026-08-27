@@ -468,9 +468,13 @@ module RapidRailsTemplate
         bin/wait-for-litestream
         bin/kamal-restore
         bin/kamal-restore-volume
-        lib/litestream/r2_configurator.rb
-        lib/tasks/litestream.rake
-        test/lib/litestream/r2_configurator_test.rb
+        lib/deployment/command_runner.rb
+        lib/deployment/cloudflare_client.rb
+        lib/deployment/configurator.rb
+        lib/deployment/kamal_secrets_writer.rb
+        lib/deployment/one_password_client.rb
+        lib/tasks/deployment.rake
+        test/lib/deployment/configurator_test.rb
         docs/deployment.md
       ])
       result << "mise.local.toml"

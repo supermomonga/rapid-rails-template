@@ -15912,7 +15912,6 @@ def configure_mise_local
   create_file "mise.local.toml", <<~TOML, force: true
     [env]
     # CLOUDFLARE_INITIAL_API_TOKEN = ""
-    # OP_SERVICE_ACCOUNT_TOKEN = ""
   TOML
   append_to_file ".gitignore", "\n/mise.local.toml\n" unless File.read(".gitignore").lines.map(&:strip).include?("/mise.local.toml")
 end
@@ -18371,7 +18370,11 @@ def configure_sorbet
         app/services/push_notifier.rb
         app/services/vapid_configuration.rb
         lib/application_identity.rb
-        lib/litestream/r2_configurator.rb
+        lib/deployment/cloudflare_client.rb
+        lib/deployment/command_runner.rb
+        lib/deployment/configurator.rb
+        lib/deployment/kamal_secrets_writer.rb
+        lib/deployment/one_password_client.rb
       ].freeze
 
       APPLICATION_DSL_RBI_SOURCES = {
@@ -18495,7 +18498,11 @@ def configure_application_typechecking
     app/services/push_notifier.rb
     app/services/vapid_configuration.rb
     lib/application_identity.rb
-    lib/litestream/r2_configurator.rb
+    lib/deployment/cloudflare_client.rb
+    lib/deployment/command_runner.rb
+    lib/deployment/configurator.rb
+    lib/deployment/kamal_secrets_writer.rb
+    lib/deployment/one_password_client.rb
   ].select { |path| File.exist?(path) }
 
   paths.each do |path|
@@ -19292,7 +19299,535 @@ def configure_kamal_restore(app_id, databases)
   chmod "bin/kamal-restore", 0o755
 end
 
-def configure_litestream_r2(app_id)
+def configure_deployment(app_id)
+  create_file "lib/deployment/command_runner.rb", <<~'RUBY', force: true
+    # typed: strict
+    # frozen_string_literal: true
+
+    require "open3"
+    require "sorbet-runtime"
+
+    module Deployment
+      Error = Class.new(StandardError)
+
+      class Result < T::Struct
+        const :stdout, String
+        const :stderr, String
+        const :success, T::Boolean
+        const :exitstatus, Integer
+      end
+
+      class CommandRunner
+        extend T::Sig
+
+        sig do
+          params(
+            command: T::Array[String],
+            environment: T::Hash[String, String],
+            stdin_data: T.nilable(String)
+          ).returns(Result)
+        end
+        def capture(command, environment: {}, stdin_data: nil)
+          stdout, stderr, status = T.unsafe(Open3).capture3(environment, *command, stdin_data: stdin_data)
+          Result.new(stdout:, stderr:, success: status.success?, exitstatus: status.exitstatus || 1)
+        end
+      end
+    end
+  RUBY
+
+  create_file "lib/deployment/cloudflare_client.rb", <<~'RUBY', force: true
+    # typed: strict
+    # frozen_string_literal: true
+
+    require "json"
+    require "net/http"
+    require "pathname"
+    require "sorbet-runtime"
+    require "uri"
+    require "deployment/command_runner"
+
+    module Deployment
+      class CloudflareClient
+        extend T::Sig
+
+        API_BASE_URL = "https://api.cloudflare.com/client/v4"
+
+        class RequestError < Error
+          extend T::Sig
+
+          sig { returns(Integer) }
+          attr_reader :status
+
+          sig { returns(T::Array[Integer]) }
+          attr_reader :codes
+
+          sig { params(message: String, status: Integer, codes: T::Array[Integer]).void }
+          def initialize(message, status:, codes:)
+            super(message)
+            @status = status
+            @codes = codes
+          end
+        end
+
+        sig do
+          params(
+            token: String,
+            root: Pathname,
+            runner: T.untyped,
+            http_factory: T.untyped,
+            api_client: T.untyped
+          ).void
+        end
+        def initialize(token:, root: Pathname.pwd, runner: CommandRunner.new, http_factory: nil, api_client: nil)
+          @token = token
+          @runner = runner
+          @wrangler = T.let(root.join("node_modules/.bin/wrangler").to_s, String)
+          @api_client = api_client
+          @http_factory = T.let(
+            http_factory || ->(host, port) { Net::HTTP.new(host, port) },
+            T.untyped
+          )
+        end
+
+        sig { void }
+        def validate_dependency!
+          raise Error, "Wrangler v4が見つかりません。npm installを実行してください: #{@wrangler}" unless File.executable?(@wrangler)
+
+          version = command!([@wrangler, "--version"])
+          raise Error, "Wrangler v4が必要です: #{version.strip}" unless version.match?(/\b4\.\d+\.\d+\b/)
+        end
+
+        sig { returns(T::Hash[String, T.untyped]) }
+        def identity
+          value = json_command!([@wrangler, "whoami", "--json"])
+          unless value.is_a?(Hash) && value["loggedIn"]
+            raise Error, "WranglerはCloudflareへログインしていません"
+          end
+          accounts = value["accounts"]
+          raise Error, "Wranglerのログイン先Cloudflare accountがありません" unless accounts.is_a?(Array) && accounts.any?
+
+          value
+        end
+
+        sig { params(account_id: String, buckets: T::Array[String]).returns(T::Array[String]) }
+        def existing_buckets(account_id, buckets)
+          buckets.filter_map do |bucket|
+            result = @runner.capture(
+              [@wrangler, "r2", "bucket", "info", bucket, "--json"],
+              environment: { "CLOUDFLARE_ACCOUNT_ID" => account_id },
+              stdin_data: nil
+            )
+            unless result.success
+              diagnostic = [result.stdout, result.stderr].join("\n")
+              next if diagnostic.match?(/\[code: 10006\]/)
+
+              detail = [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
+              detail = "exit status #{result.exitstatus}" if detail.empty?
+              raise Error, "R2 bucket確認に失敗しました (#{bucket}): #{detail}"
+            end
+
+            parsed = JSON.parse(result.stdout)
+            raise Error, "Wranglerのbucket情報応答が不正です: #{bucket}" unless parsed.is_a?(Hash) && parsed["name"] == bucket
+
+            bucket
+          end
+        rescue JSON::ParserError
+          raise Error, "Wranglerのbucket情報JSON応答が不正です"
+        end
+
+        sig { params(account_id: String, bucket: String).void }
+        def create_bucket(account_id, bucket)
+          command!([@wrangler, "r2", "bucket", "create", bucket], environment: { "CLOUDFLARE_ACCOUNT_ID" => account_id })
+        end
+
+        sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
+        def verify_token(account_id)
+          return @api_client.verify_token(account_id) if @api_client
+
+          result = request(:get, "/accounts/#{account_id}/tokens/verify")["result"]
+          raise Error, "Cloudflare Initial Token検証応答が不正です" unless result.is_a?(Hash)
+
+          result
+        end
+
+        sig { params(account_id: String, token_id: String).returns(T::Hash[String, T.untyped]) }
+        def token_details(account_id, token_id)
+          return @api_client.token_details(account_id, token_id) if @api_client
+
+          result = request(:get, "/accounts/#{account_id}/tokens/#{token_id}")["result"]
+          raise Error, "Cloudflare Initial Token詳細応答が不正です" unless result.is_a?(Hash)
+
+          result
+        end
+
+        sig { params(account_id: String, name: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+        def permission_groups(account_id, name:)
+          return @api_client.permission_groups(account_id, name:) if @api_client
+
+          result = request(
+            :get,
+            "/accounts/#{account_id}/tokens/permission_groups",
+            query: { "name" => name }
+          )["result"]
+          raise Error, "Cloudflare permission group一覧応答が不正です" unless result.is_a?(Array)
+
+          typed_records(result, "Cloudflare permission group")
+        end
+
+        sig { params(account_id: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+        def tokens(account_id)
+          return @api_client.tokens(account_id) if @api_client
+
+          records = T.let([], T::Array[T::Hash[String, T.untyped]])
+          page = 1
+          loop do
+            envelope = request(
+              :get,
+              "/accounts/#{account_id}/tokens",
+              query: { "page" => page.to_s, "per_page" => "50" }
+            )
+            result = envelope["result"]
+            result_info = envelope["result_info"]
+            unless result.is_a?(Array) && result_info.is_a?(Hash)
+              raise Error, "Cloudflare token一覧応答が不正です"
+            end
+
+            records.concat(typed_records(result, "Cloudflare token"))
+            total_count = result_info["total_count"]
+            raise Error, "Cloudflare token一覧の件数応答が不正です" unless total_count.is_a?(Integer) && total_count >= 0
+            break if records.length >= total_count
+            raise Error, "Cloudflare token一覧のpagination応答が不正です" if result.empty?
+
+            page += 1
+          end
+          records
+        end
+
+        sig do
+          params(
+            account_id: String,
+            name: String,
+            policy: T::Hash[String, T.untyped]
+          ).returns(T::Hash[String, T.untyped])
+        end
+        def create_token(account_id, name:, policy:)
+          return @api_client.create_token(account_id, name:, policy:) if @api_client
+
+          result = request(
+            :post,
+            "/accounts/#{account_id}/tokens",
+            body: { "name" => name, "policies" => [policy] }
+          )["result"]
+          raise Error, "Cloudflare token作成応答が不正です" unless result.is_a?(Hash)
+
+          result
+        end
+
+        private
+
+        sig do
+          params(
+            command: T::Array[String],
+            environment: T::Hash[String, String]
+          ).returns(String)
+        end
+        def command!(command, environment: {})
+          result = @runner.capture(command, environment:, stdin_data: nil)
+          return result.stdout if result.success
+
+          detail = [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
+          detail = "exit status #{result.exitstatus}" if detail.empty?
+          raise Error, "Wrangler commandに失敗しました: #{detail}"
+        end
+
+        sig { params(command: T::Array[String]).returns(T.untyped) }
+        def json_command!(command)
+          JSON.parse(command!(command))
+        rescue JSON::ParserError
+          raise Error, "WranglerのJSON応答が不正です"
+        end
+
+        sig do
+          params(
+            method: Symbol,
+            path: String,
+            query: T::Hash[String, String],
+            body: T.nilable(T::Hash[String, T.untyped])
+          ).returns(T::Hash[String, T.untyped])
+        end
+        def request(method, path, query: {}, body: nil)
+          uri = URI("#{API_BASE_URL}#{path}")
+          uri.query = URI.encode_www_form(query) unless query.empty?
+          request = case method
+          when :get
+            Net::HTTP::Get.new(uri)
+          when :post
+            Net::HTTP::Post.new(uri)
+          else
+            raise Error, "未対応のCloudflare API methodです: #{method}"
+          end
+          request["Authorization"] = "Bearer #{@token}"
+          request["Content-Type"] = "application/json"
+          request.body = JSON.generate(body) if body
+
+          http = @http_factory.call(T.must(uri.host), uri.port)
+          http.use_ssl = true
+          http.open_timeout = 10
+          http.read_timeout = 30
+          http.write_timeout = 30
+          response = http.request(request)
+          envelope = JSON.parse(response.body)
+          raise Error, "Cloudflare APIのJSON応答が不正です" unless envelope.is_a?(Hash)
+          return envelope if response.code.to_i.between?(200, 299) && envelope["success"] == true
+
+          status = response.code.to_i
+          detail = redact_secret(error_detail(envelope))
+          raise RequestError.new(
+            "Cloudflare API requestに失敗しました (HTTP #{response.code}): #{detail}",
+            status:,
+            codes: error_codes(envelope)
+          )
+        rescue Error
+          raise
+        rescue JSON::ParserError
+          raise Error, "Cloudflare APIのJSON応答が不正です"
+        rescue StandardError => error
+          detail = redact_secret("#{error.class}: #{error.message}")
+          raise Error, "Cloudflare API requestに失敗しました: #{detail}"
+        end
+
+        sig { params(records: T::Array[T.untyped], label: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+        def typed_records(records, label)
+          records.map do |record|
+            raise Error, "#{label}応答が不正です" unless record.is_a?(Hash)
+
+            record
+          end
+        end
+
+        sig { params(envelope: T::Hash[String, T.untyped]).returns(String) }
+        def error_detail(envelope)
+          errors = envelope["errors"]
+          return "Cloudflareから詳細が返されませんでした" unless errors.is_a?(Array)
+
+          messages = errors.filter_map do |error|
+            next unless error.is_a?(Hash)
+
+            code = error["code"]
+            message = error["message"]
+            next unless message.is_a?(String) && !message.empty?
+
+            code.is_a?(Integer) ? "#{message} (code: #{code})" : message
+          end
+          messages.empty? ? "Cloudflareから詳細が返されませんでした" : messages.join("; ")
+        end
+
+        sig { params(envelope: T::Hash[String, T.untyped]).returns(T::Array[Integer]) }
+        def error_codes(envelope)
+          errors = envelope["errors"]
+          return [] unless errors.is_a?(Array)
+
+          errors.filter_map do |error|
+            code = error["code"] if error.is_a?(Hash)
+            code if code.is_a?(Integer)
+          end
+        end
+
+        sig { params(value: String).returns(String) }
+        def redact_secret(value)
+          @token.empty? ? value : value.gsub(@token, "[REDACTED]")
+        end
+      end
+    end
+  RUBY
+
+  create_file "lib/deployment/one_password_client.rb", <<~'RUBY', force: true
+    # typed: strict
+    # frozen_string_literal: true
+
+    require "json"
+    require "sorbet-runtime"
+    require "deployment/command_runner"
+
+    module Deployment
+      class OnePasswordClient
+        extend T::Sig
+
+        sig { params(runner: T.untyped).void }
+        def initialize(runner: CommandRunner.new)
+          @runner = runner
+        end
+
+        sig { returns(String) }
+        def version
+          command!(%w[op --version])
+        end
+
+        sig { returns(T::Array[T::Hash[String, T.untyped]]) }
+        def accounts
+          records(json_command!(%w[op account list --format=json]), "1Password account")
+        end
+
+        sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
+        def current_user(account_id)
+          record(json_command!(%W[op user get --me --format=json --account #{account_id}]), "1Password identity")
+        end
+
+        sig { params(account_id: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+        def vaults(account_id)
+          records(json_command!(%W[op vault list --format=json --account #{account_id}]), "1Password vault")
+        end
+
+        sig { params(name: String, account_id: String).returns(T::Hash[String, T.untyped]) }
+        def create_vault(name, account_id:)
+          record(
+            json_command!(%W[op vault create #{name} --format=json --account #{account_id}]),
+            "作成した1Password vault"
+          )
+        end
+
+        sig { params(vault_id: String, account_id: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+        def items(vault_id:, account_id:)
+          records(
+            json_command!(%W[op item list --include-archive --format=json --vault #{vault_id} --account #{account_id}]),
+            "1Password item"
+          )
+        end
+
+        sig { params(item_id: String, vault_id: String, account_id: String).returns(T::Hash[String, T.untyped]) }
+        def item(item_id, vault_id:, account_id:)
+          record(
+            json_command!(%W[op item get #{item_id} --format=json --vault #{vault_id} --account #{account_id}]),
+            "1Password item"
+          )
+        end
+
+        sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
+        def api_credential_template(account_id:)
+          record(
+            json_command!(%W[op item template get API\ Credential --account #{account_id}]),
+            "1Password item template"
+          )
+        end
+
+        sig do
+          params(
+            item: T::Hash[String, T.untyped],
+            item_id: T.nilable(String),
+            vault_id: String,
+            account_id: String
+          ).returns(T::Hash[String, T.untyped])
+        end
+        def save_item(item, item_id:, vault_id:, account_id:)
+          command = if item_id
+            %W[op item edit #{item_id} --format=json --vault #{vault_id} --account #{account_id}]
+          else
+            %W[op item create --format=json --vault #{vault_id} --account #{account_id} -]
+          end
+          record(json_command!(command, stdin_data: JSON.generate(item)), "保存した1Password item")
+        end
+
+        sig { params(name: String, vault_name: String, account_id: String).returns(String) }
+        def create_service_account(name, vault_name:, account_id:)
+          command!(
+            [
+              "op", "service-account", "create", name,
+              "--vault", "#{vault_name}:read_items",
+              "--raw", "--account", account_id
+            ],
+            sensitive: true
+          ).strip
+        end
+
+        private
+
+        sig do
+          params(
+            command: T::Array[String],
+            stdin_data: T.nilable(String),
+            sensitive: T::Boolean
+          ).returns(String)
+        end
+        def command!(command, stdin_data: nil, sensitive: false)
+          result = @runner.capture(command, environment: {}, stdin_data:)
+          return result.stdout if result.success
+
+          sensitive ||= !stdin_data.nil? || command.first(2) == %w[op item]
+          detail = sensitive ? "" : [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
+          detail = "exit status #{result.exitstatus}" if detail.empty?
+          raise Error, "1Password CLI commandに失敗しました: #{detail}"
+        end
+
+        sig { params(command: T::Array[String], stdin_data: T.nilable(String)).returns(T.untyped) }
+        def json_command!(command, stdin_data: nil)
+          JSON.parse(command!(command, stdin_data:))
+        rescue JSON::ParserError
+          raise Error, "1Password CLIのJSON応答が不正です"
+        end
+
+        sig { params(value: T.untyped, label: String).returns(T::Hash[String, T.untyped]) }
+        def record(value, label)
+          raise Error, "#{label}応答が不正です" unless value.is_a?(Hash)
+
+          value
+        end
+
+        sig { params(value: T.untyped, label: String).returns(T::Array[T::Hash[String, T.untyped]]) }
+        def records(value, label)
+          raise Error, "#{label}一覧応答が不正です" unless value.is_a?(Array)
+
+          value.map { |entry| record(entry, label) }
+        end
+      end
+    end
+  RUBY
+
+  create_file "lib/deployment/kamal_secrets_writer.rb", <<~'RUBY', force: true
+    # typed: strict
+    # frozen_string_literal: true
+
+    require "fileutils"
+    require "pathname"
+    require "shellwords"
+    require "sorbet-runtime"
+    require "stringio"
+    require "tempfile"
+
+    module Deployment
+      class KamalSecretsWriter
+        extend T::Sig
+
+        DEPLOY_SECRET_FIELDS = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY].freeze
+
+        sig { params(root: Pathname, output: T.any(IO, StringIO)).void }
+        def initialize(root:, output: $stdout)
+          @root = root
+          @output = output
+        end
+
+        sig { params(destination: String, account_id: String, vault_id: String, item_id: String).void }
+        def write(destination:, account_id:, vault_id:, item_id:)
+          path = @root.join(".kamal/secrets.#{destination}")
+          FileUtils.mkdir_p(path.dirname)
+          account = Shellwords.escape(account_id)
+          source = Shellwords.escape("#{vault_id}/#{item_id}")
+          content = <<~SECRETS
+            R2_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{source} #{DEPLOY_SECRET_FIELDS.join(" ")})
+            #{DEPLOY_SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $R2_SECRETS)" }.join("\n")}
+          SECRETS
+          Tempfile.create(["secrets-#{destination}", ".tmp"], path.dirname.to_s) do |file|
+            file.write(content)
+            file.flush
+            file.fsync
+            File.chmod(0o600, file.path)
+            File.rename(file.path, path)
+          end
+          @output.puts "Kamal secret参照を生成しました: #{path.relative_path_from(@root)}"
+        end
+      end
+    end
+  RUBY
+
   configurator = <<~RUBY
     # typed: strict
     # frozen_string_literal: true
@@ -19300,18 +19835,22 @@ def configure_litestream_r2(app_id)
     require "active_support/core_ext/enumerable"
     require "digest"
     require "fileutils"
+    require "gum"
     require "json"
     require "net/http"
-    require "open3"
     require "pathname"
     require "shellwords"
     require "sorbet-runtime"
     require "stringio"
     require "tempfile"
     require "uri"
+    require "deployment/command_runner"
+    require "deployment/cloudflare_client"
+    require "deployment/kamal_secrets_writer"
+    require "deployment/one_password_client"
 
-    module Litestream
-      class R2Configurator
+    module Deployment
+      class Configurator
         extend T::Sig
 
         APP_ID = #{app_id.inspect}
@@ -19319,10 +19858,6 @@ def configure_litestream_r2(app_id)
   configurator << <<~'RUBY'
         DESTINATIONS = %w[production staging].freeze
         DEPLOY_SECRET_FIELDS = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY].freeze
-        ITEM_SECRET_FIELDS = T.let(
-          ["CLOUDFLARE_R2_API_TOKEN", *DEPLOY_SECRET_FIELDS].freeze,
-          T::Array[String]
-        )
         BUCKET_PATTERN = /\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/
         INITIAL_TOKEN_ENV = "CLOUDFLARE_INITIAL_API_TOKEN"
         INITIAL_TOKEN_TEMPLATE_DOC_URL = "https://developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/"
@@ -19334,235 +19869,6 @@ def configure_litestream_r2(app_id)
         TOKEN_NAME_MAX_BYTES = 120
         SERVICE_ACCOUNT_TYPE = "SERVICE_ACCOUNT"
         ACTIVE_STATE = "ACTIVE"
-
-        Error = Class.new(StandardError)
-
-        class CloudflareClient
-          extend T::Sig
-
-          API_BASE_URL = "https://api.cloudflare.com/client/v4"
-
-          class RequestError < Error
-            extend T::Sig
-
-            sig { returns(Integer) }
-            attr_reader :status
-
-            sig { returns(T::Array[Integer]) }
-            attr_reader :codes
-
-            sig { params(message: String, status: Integer, codes: T::Array[Integer]).void }
-            def initialize(message, status:, codes:)
-              super(message)
-              @status = status
-              @codes = codes
-            end
-          end
-
-          sig { params(token: String, http_factory: T.untyped).void }
-          def initialize(token:, http_factory: nil)
-            @token = token
-            @http_factory = T.let(
-              http_factory || ->(host, port) { Net::HTTP.new(host, port) },
-              T.untyped
-            )
-          end
-
-          sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
-          def verify_token(account_id)
-            envelope = request(:get, "/accounts/#{account_id}/tokens/verify")
-            result = envelope["result"]
-            raise Error, "Cloudflare Initial Token検証応答が不正です" unless result.is_a?(Hash)
-
-            result
-          end
-
-          sig { params(account_id: String, token_id: String).returns(T::Hash[String, T.untyped]) }
-          def token_details(account_id, token_id)
-            envelope = request(:get, "/accounts/#{account_id}/tokens/#{token_id}")
-            result = envelope["result"]
-            raise Error, "Cloudflare Initial Token詳細応答が不正です" unless result.is_a?(Hash)
-
-            result
-          end
-
-          sig { params(account_id: String, name: String).returns(T::Array[T::Hash[String, T.untyped]]) }
-          def permission_groups(account_id, name:)
-            envelope = request(
-              :get,
-              "/accounts/#{account_id}/tokens/permission_groups",
-              query: { "name" => name }
-            )
-            result = envelope["result"]
-            raise Error, "Cloudflare permission group一覧応答が不正です" unless result.is_a?(Array)
-
-            typed_records(result, "Cloudflare permission group")
-          end
-
-          sig { params(account_id: String).returns(T::Array[T::Hash[String, T.untyped]]) }
-          def tokens(account_id)
-            records = T.let([], T::Array[T::Hash[String, T.untyped]])
-            page = 1
-            loop do
-              envelope = request(
-                :get,
-                "/accounts/#{account_id}/tokens",
-                query: { "page" => page.to_s, "per_page" => "50" }
-              )
-              result = envelope["result"]
-              result_info = envelope["result_info"]
-              unless result.is_a?(Array) && result_info.is_a?(Hash)
-                raise Error, "Cloudflare token一覧応答が不正です"
-              end
-
-              records.concat(typed_records(result, "Cloudflare token"))
-              total_count = result_info["total_count"]
-              raise Error, "Cloudflare token一覧の件数応答が不正です" unless total_count.is_a?(Integer) && total_count >= 0
-              break if records.length >= total_count
-              raise Error, "Cloudflare token一覧のpagination応答が不正です" if result.empty?
-
-              page += 1
-            end
-            records
-          end
-
-          sig do
-            params(
-              account_id: String,
-              name: String,
-              policy: T::Hash[String, T.untyped]
-            ).returns(T::Hash[String, T.untyped])
-          end
-          def create_token(account_id, name:, policy:)
-            envelope = request(
-              :post,
-              "/accounts/#{account_id}/tokens",
-              body: { "name" => name, "policies" => [policy] }
-            )
-            result = envelope["result"]
-            raise Error, "Cloudflare token作成応答が不正です" unless result.is_a?(Hash)
-
-            result
-          end
-
-          private
-
-          sig do
-            params(
-              method: Symbol,
-              path: String,
-              query: T::Hash[String, String],
-              body: T.nilable(T::Hash[String, T.untyped])
-            ).returns(T::Hash[String, T.untyped])
-          end
-          def request(method, path, query: {}, body: nil)
-            uri = URI("#{API_BASE_URL}#{path}")
-            uri.query = URI.encode_www_form(query) unless query.empty?
-            request = case method
-            when :get
-              Net::HTTP::Get.new(uri)
-            when :post
-              Net::HTTP::Post.new(uri)
-            else
-              raise Error, "未対応のCloudflare API methodです: #{method}"
-            end
-            request["Authorization"] = "Bearer #{@token}"
-            request["Content-Type"] = "application/json"
-            request.body = JSON.generate(body) if body
-
-            http = @http_factory.call(T.must(uri.host), uri.port)
-            http.use_ssl = true
-            http.open_timeout = 10
-            http.read_timeout = 30
-            http.write_timeout = 30
-            response = http.request(request)
-            envelope = JSON.parse(response.body)
-            unless envelope.is_a?(Hash)
-              raise Error, "Cloudflare APIのJSON応答が不正です"
-            end
-            return envelope if response.code.to_i.between?(200, 299) && envelope["success"] == true
-
-            status = response.code.to_i
-            detail = redact_secret(error_detail(envelope))
-            raise RequestError.new(
-              "Cloudflare API requestに失敗しました (HTTP #{response.code}): #{detail}",
-              status:,
-              codes: error_codes(envelope)
-            )
-          rescue Error
-            raise
-          rescue JSON::ParserError
-            raise Error, "Cloudflare APIのJSON応答が不正です"
-          rescue StandardError => error
-            detail = redact_secret("#{error.class}: #{error.message}")
-            raise Error, "Cloudflare API requestに失敗しました: #{detail}"
-          end
-
-          sig { params(records: T::Array[T.untyped], label: String).returns(T::Array[T::Hash[String, T.untyped]]) }
-          def typed_records(records, label)
-            records.map do |record|
-              raise Error, "#{label}応答が不正です" unless record.is_a?(Hash)
-
-              record
-            end
-          end
-
-          sig { params(envelope: T::Hash[String, T.untyped]).returns(String) }
-          def error_detail(envelope)
-            errors = envelope["errors"]
-            return "Cloudflareから詳細が返されませんでした" unless errors.is_a?(Array)
-
-            messages = errors.filter_map do |error|
-              next unless error.is_a?(Hash)
-
-              code = error["code"]
-              message = error["message"]
-              next unless message.is_a?(String) && !message.empty?
-
-              code.is_a?(Integer) ? "#{message} (code: #{code})" : message
-            end
-            messages.empty? ? "Cloudflareから詳細が返されませんでした" : messages.join("; ")
-          end
-
-          sig { params(envelope: T::Hash[String, T.untyped]).returns(T::Array[Integer]) }
-          def error_codes(envelope)
-            errors = envelope["errors"]
-            return [] unless errors.is_a?(Array)
-
-            errors.filter_map do |error|
-              code = error["code"] if error.is_a?(Hash)
-              code if code.is_a?(Integer)
-            end
-          end
-
-          sig { params(value: String).returns(String) }
-          def redact_secret(value)
-            @token.empty? ? value : value.gsub(@token, "[REDACTED]")
-          end
-        end
-
-        class Result < T::Struct
-          const :stdout, String
-          const :stderr, String
-          const :success, T::Boolean
-          const :exitstatus, Integer
-        end
-
-        class CommandRunner
-          extend T::Sig
-
-          sig do
-            params(
-              command: T::Array[String],
-              environment: T::Hash[String, String],
-              stdin_data: T.nilable(String)
-            ).returns(Result)
-          end
-          def capture(command, environment: {}, stdin_data: nil)
-            stdout, stderr, status = T.unsafe(Open3).capture3(environment, *command, stdin_data: stdin_data)
-            Result.new(stdout:, stderr:, success: status.success?, exitstatus: status.exitstatus || 1)
-          end
-        end
 
         sig do
           params(
@@ -19590,13 +19896,22 @@ def configure_litestream_r2(app_id)
           @output = output
           @environment = environment
           @terminal = terminal
-          @cloudflare_api = cloudflare_client
-          @wrangler = T.let(root.join("node_modules/.bin/wrangler").to_s, String)
-          @mise_local = T.let(root.join("mise.local.toml"), Pathname)
+          @cloudflare_client = T.let(
+            CloudflareClient.new(
+              token: String(environment.fetch(INITIAL_TOKEN_ENV, "")),
+              root:,
+              runner:,
+              api_client: cloudflare_client
+            ),
+            CloudflareClient
+          )
+          @one_password = T.let(OnePasswordClient.new(runner:), OnePasswordClient)
+          @kamal_secrets_writer = T.let(KamalSecretsWriter.new(root:, output:), KamalSecretsWriter)
         end
 
         sig { void }
         def run!
+          validate_authentication_environment!
           unless present_environment?(INITIAL_TOKEN_ENV)
             print_initial_token_instructions
             return
@@ -19604,23 +19919,18 @@ def configure_litestream_r2(app_id)
 
           validate_dependencies!
           cloudflare = cloudflare_identity
-          account = choose_record(cloudflare.fetch("accounts"), "Cloudflare account")
-          account_id = String(account.fetch("id"))
-          validate_cloudflare_initial_token!(account)
-          service_account = ensure_service_account
-          return unless service_account
-
+          cloudflare_account = choose_record(cloudflare.fetch("accounts"), "Cloudflare account")
+          account_id = record_id(cloudflare_account)
+          validate_cloudflare_initial_token!(cloudflare_account)
           destinations = choose_destinations
+          one_password_account = choose_one_password_account
+          one_password_account_id = record_id(one_password_account)
+          one_password_user = validate_human_one_password_user!(one_password_account_id)
+          vault_plans = plan_destination_vaults(destinations, one_password_account_id)
+          item_plans = plan_destination_items(destinations, one_password_account_id, vault_plans)
+
           buckets = bucket_names(destinations)
           existing_buckets = existing_buckets(account_id, buckets.values)
-          service_account_id = record_id(service_account)
-          vaults = destination_vaults(destinations, service_account_id)
-
-          item_plans = destinations.to_h do |destination|
-            vault_id = record_id(vaults.fetch(destination))
-            items = json_command!(%W[op item list --format json --vault #{vault_id} --account #{service_account_id}])
-            [destination, plan_item(destination, items, service_account_id:, vault_id:)]
-          end
           permission_group = r2_permission_group(account_id)
           cloudflare_tokens = cloudflare_api.tokens(account_id)
           token_plans = T.let({}, T::Hash[String, T::Hash[String, T.untyped]])
@@ -19631,15 +19941,16 @@ def configure_litestream_r2(app_id)
               bucket: buckets.fetch(destination),
               permission_group:,
               cloudflare_tokens:,
-              item_plan: item_plans.fetch(destination)
+              item_plan: item_plans.fetch(destination).fetch("r2")
             )
           end
 
           print_plan(
             cloudflare,
-            account,
-            service_account,
-            vaults,
+            cloudflare_account,
+            one_password_account,
+            one_password_user,
+            vault_plans,
             destinations,
             buckets,
             existing_buckets,
@@ -19647,16 +19958,27 @@ def configure_litestream_r2(app_id)
             token_plans
           )
           unless @prompt.confirm(
-            "この内容でR2と1Passwordを構成しますか？",
+            "この内容でデプロイ用の外部サービスと資格情報を構成しますか？",
             default: false,
             affirmative: "実行",
             negative: "中止"
           )
-            @output.puts "中止しました。R2 bucket、Cloudflare API token、1Password item、Kamal secret参照は変更していません。"
+            @output.puts "中止しました。1Password、R2、Cloudflare API token、Kamal secret参照は変更していません。"
             return
           end
 
-          destinations.each do |destination|
+          applied = destinations.all? do |destination|
+            vault_plan = vault_plans.fetch(destination)
+            vault = apply_vault_plan(vault_plan, one_password_account_id)
+            service_account_plan = item_plans.fetch(destination).fetch("service_account")
+            unless apply_service_account_plan(
+              service_account_plan,
+              account_id: one_password_account_id,
+              vault:
+            )
+              next false
+            end
+
             bucket = buckets.fetch(destination)
             create_bucket(account_id, bucket) unless existing_buckets.include?(bucket)
             credentials = cloudflare_credentials(
@@ -19664,267 +19986,60 @@ def configure_litestream_r2(app_id)
               account_id:,
               bucket:
             )
-            item_id = upsert_item(
-              item_plans.fetch(destination),
-              service_account_id:,
-              vault_id: record_id(vaults.fetch(destination)),
-              fields: credentials.merge("CF_ACCOUNT_ID" => account_id, "LITESTREAM_R2_BUCKET" => bucket)
+            r2_fields = credentials.merge("CF_ACCOUNT_ID" => account_id, "LITESTREAM_R2_BUCKET" => bucket)
+            item_id = persist_item_with_retry(
+              item_plans.fetch(destination).fetch("r2"),
+              account_id: one_password_account_id,
+              vault_id: record_id(vault),
+              fields: r2_fields,
+              concealed_fields: %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY],
+              label: "Cloudflare API token"
             )
-            write_kamal_secrets(
-              destination,
-              service_account_id,
-              record_id(vaults.fetch(destination)),
-              item_id
-            )
-          end
+            next false unless item_id
 
-          @output.puts "R2設定が完了しました。デプロイ時は mise exec -- bin/kamal deploy -d production|staging を使用してください。"
+            @kamal_secrets_writer.write(
+              destination:,
+              account_id: one_password_account_id,
+              vault_id: record_id(vault),
+              item_id:
+            )
+            true
+          end
+          return unless applied
+
+          @output.puts "デプロイ設定が完了しました。デプロイ時は bin/kamal deploy -d production|staging を使用してください。"
         end
 
         private
 
         sig { void }
         def validate_dependencies!
-          raise Error, "Wrangler v4が見つかりません。npm installを実行してください: #{@wrangler}" unless File.executable?(@wrangler)
-
-          version = command!([@wrangler, "--version"])
-          raise Error, "Wrangler v4が必要です: #{version.strip}" unless version.match?(/\b4\.\d+\.\d+\b/)
-
-          command!(%w[op --version])
-          command!(%w[mise --version])
-          if %w[OP_CONNECT_HOST OP_CONNECT_TOKEN].any? { |name| present_environment?(name) }
-            raise Error, "OP_CONNECT_HOST/OP_CONNECT_TOKENはOP_SERVICE_ACCOUNT_TOKENより優先されるため使用できません"
-          end
-        end
-
-        sig { returns(T.nilable(T::Hash[String, T.untyped])) }
-        def ensure_service_account
-          result = @runner.capture(%w[op user get --me --format=json], environment: {}, stdin_data: nil)
-          unless result.success
-            detail = result_detail(result)
-            if present_environment?("OP_SERVICE_ACCOUNT_TOKEN")
-              raise Error, "1Password service account tokenの検証に失敗しました: #{detail}"
-            end
-
-            raise Error, "service accountを作成するには、作成権限を持つ1Passwordユーザーでログインしてください: #{detail}"
-          end
-
-          identity = parse_json(result.stdout, "op user get")
-          raise Error, "1Password identity応答が不正です" unless identity.is_a?(Hash)
-
-          if identity["type"] == SERVICE_ACCOUNT_TYPE
-            raise Error, "OP_SERVICE_ACCOUNT_TOKENが設定されていません" unless present_environment?("OP_SERVICE_ACCOUNT_TOKEN")
-            raise Error, "1Password service accountが有効ではありません" unless identity["state"] == ACTIVE_STATE
-
-            service_account_id = record_id(identity)
-            account = json_command!(%W[op account get --format=json --account=#{service_account_id}])
-            raise Error, "Kamalが参照する1Password account応答が不正です" unless account.is_a?(Hash)
-
-            return identity
-          end
-
-          if present_environment?("OP_SERVICE_ACCOUNT_TOKEN")
-            raise Error, "OP_SERVICE_ACCOUNT_TOKENの認証主体がservice accountではありません"
-          end
-
-          create_service_account
-          nil
+          @cloudflare_client.validate_dependency!
+          @one_password.version
         end
 
         sig { void }
-        def create_service_account
-          created_vaults = T.let([], T::Array[T::Hash[String, T.untyped]])
-          prepare_mise_local!
-          if local_token_configured? && !@prompt.confirm(
-            "mise.local.tomlのOP_SERVICE_ACCOUNT_TOKENを上書きしますか？",
-            default: true,
-            affirmative: "上書き",
-            negative: "中止"
-          )
-            @output.puts "中止しました。service accountとtokenは変更していません。"
-            return
+        def validate_authentication_environment!
+          configured = %w[OP_SERVICE_ACCOUNT_TOKEN OP_CONNECT_HOST OP_CONNECT_TOKEN].select do |name|
+            present_environment?(name)
           end
+          return if configured.empty?
 
-          vaults, created_vaults = bootstrap_destination_vaults
-          return unless vaults
-
-          name = self.class.service_account_name(APP_ID)
-          @output.puts "注意: 現行の1Password CLIでは既存の同名service accountを検索できず、tokenも作成時に一度しか表示されません。"
-          @output.puts "作成したtokenはmise.local.tomlから失わないでください。"
-          unless @prompt.confirm(
-            "1Password service account #{name} を作成しますか？",
-            default: true,
-            affirmative: "作成",
-            negative: "中止"
-          )
-            @output.puts "中止しました。service accountとtokenは変更していません。"
-            report_retained_vaults(created_vaults)
-            return
-          end
-
-          command = %W[op service-account create #{name}]
-          DESTINATIONS.each do |destination|
-            vault = vaults.fetch(destination)
-            command.concat(["--vault", "#{record_name(vault)}:read_items,write_items"])
-          end
-          command << "--raw"
-          token = command!(
-            command,
-            sensitive: true
-          ).strip
-          raise Error, "1Password service account tokenが返されませんでした" if token.empty?
-
-          saved = persist_service_account_token(token, name)
-          report_retained_vaults(created_vaults) unless saved
-        rescue Error
-          report_retained_vaults(T.must(created_vaults))
-          raise
-        ensure
-          token&.clear
+          raise Error,
+            "1Passwordの設定操作は人間ユーザーで実行してください。次の環境変数を外して再実行してください: #{configured.join(", ")}"
         end
 
-        sig do
-          returns([
-            T.nilable(T::Hash[String, T::Hash[String, T.untyped]]),
-            T::Array[T::Hash[String, T.untyped]]
-          ])
-        end
-        def bootstrap_destination_vaults
-          created = T.let([], T::Array[T::Hash[String, T.untyped]])
-          records = json_command!(%w[op vault list --format json])
-          raise Error, "1Password vault一覧応答が不正です" unless records.is_a?(Array)
-
-          expected = DESTINATIONS.index_with do |destination|
-            self.class.destination_vault_name(APP_ID, destination)
-          end
-          matches = expected.transform_values do |name|
-            records.select { |record| record.is_a?(Hash) && record["name"] == name }
-          end
-          duplicates = matches.select { |_destination, candidates| candidates.length > 1 }
-          unless duplicates.empty?
-            details = duplicates.flat_map do |destination, candidates|
-              duplicate_vault_details(expected.fetch(destination), candidates)
-            end
-            raise Error, "同名の1Password vaultが複数あります。手動で1件へ整理してください:\n#{details.join("\n")}"
-          end
-
-          vaults = T.let({}, T::Hash[String, T::Hash[String, T.untyped]])
-          DESTINATIONS.each do |destination|
-            name = expected.fetch(destination)
-            vault = matches.fetch(destination).first
-            unless vault
-              unless @prompt.confirm(
-                "1Password vault #{name} を作成しますか？",
-                default: true,
-                affirmative: "作成",
-                negative: "中止"
-              )
-                @output.puts "中止しました。1Password vaultの構成を終了します。"
-                report_retained_vaults(created)
-                return [nil, created]
-              end
-
-              vault = json_command!(%W[op vault create #{name} --format=json])
-              raise Error, "作成した1Password vault応答が不正です: #{name}" unless vault.is_a?(Hash)
-              raise Error, "作成した1Password vault名が一致しません: #{name}" unless vault["name"] == name
-
-              record_id(vault)
-              created << vault
-            end
-            vaults[destination] = vault
-          end
-
-          [vaults, created]
-        rescue Error
-          report_retained_vaults(T.must(created))
-          raise
-        end
-
-        sig { void }
-        def prepare_mise_local!
-          raise Error, "mise.local.tomlをsymlinkとして保存することはできません" if @mise_local.symlink?
-
-          if @mise_local.exist?
-            raise Error, "mise.local.tomlが通常ファイルではありません" unless @mise_local.file?
-            raise Error, "mise.local.tomlへ書き込めません" unless @mise_local.writable?
-
-            command!(%W[mise config get --file #{@mise_local}], sensitive: true)
-          else
-            raise Error, "mise.local.tomlを作成できません" unless @root.writable?
-          end
-        end
-
-        sig { returns(T::Boolean) }
-        def local_token_configured?
-          return false unless @mise_local.exist?
-
-          command = %W[mise config get --file #{@mise_local} env.OP_SERVICE_ACCOUNT_TOKEN]
-          result = @runner.capture(command, environment: {}, stdin_data: nil)
-          return true if result.success
-          return false if result.stderr.include?("Key not found: env.OP_SERVICE_ACCOUNT_TOKEN")
-
-          raise Error, "mise.local.tomlのOP_SERVICE_ACCOUNT_TOKEN確認に失敗しました: exit status #{result.exitstatus}"
-        end
-
-        sig { params(token: String, service_account_name: String).returns(T::Boolean) }
-        def persist_service_account_token(token, service_account_name)
-          loop do
-            begin
-              save_service_account_token!(token)
-              @output.puts "1Password service account #{service_account_name} のtokenをmise.local.tomlへ保存しました。"
-              @output.puts "mise exec -- bin/rails litestream:configure:r2 を再実行してください。"
-              return true
-            rescue Error => error
-              @output.puts "service accountは作成済みですが、token保存に失敗しました: #{error.message}"
-              next if @prompt.confirm(
-                "mise.local.tomlへのtoken保存を再試行しますか？",
-                default: true,
-                affirmative: "再試行",
-                negative: "中止"
-              )
-
-              if @prompt.confirm(
-                "未保存のtokenを端末へ一度だけ表示しますか？",
-                default: false,
-                affirmative: "表示",
-                negative: "表示しない"
-              )
-                reveal_token(token)
-              end
-              @output.puts "service accountは作成済みです。tokenを保存してから再実行してください。"
-              return false
-            end
-          end
-        end
-
-        sig { params(token: String).void }
-        def save_service_account_token!(token)
-          command!(
-            %W[mise set --file #{@mise_local} --stdin OP_SERVICE_ACCOUNT_TOKEN],
-            stdin_data: token.dup,
-            sensitive: true
-          )
-          File.chmod(0o600, @mise_local.to_s)
-          stored = command!(
-            %W[mise config get --file #{@mise_local} env.OP_SERVICE_ACCOUNT_TOKEN],
-            sensitive: true
-          ).strip
-          raise Error, "保存後のOP_SERVICE_ACCOUNT_TOKENが一致しません" unless stored == token
-        rescue SystemCallError => error
-          raise Error, "mise.local.tomlの権限設定に失敗しました: #{error.message}"
-        end
-
-        sig { params(token: String).void }
-        def reveal_token(token)
+        sig { params(fields: T::Hash[String, String]).void }
+        def reveal_credentials(fields)
           terminal = @terminal
           opened = false
           unless terminal
             terminal = File.open("/dev/tty", "w")
             opened = true
           end
-          terminal.puts token
+          terminal.puts JSON.pretty_generate(fields)
         rescue SystemCallError => error
-          raise Error, "tokenを端末へ表示できませんでした: #{error.message}"
+          raise Error, "資格情報を端末へ表示できませんでした: #{error.message}"
         ensure
           terminal.close if opened
         end
@@ -19942,7 +20057,7 @@ def configure_litestream_r2(app_id)
 
         sig { returns(T.untyped) }
         def cloudflare_api
-          @cloudflare_api ||= CloudflareClient.new(token: String(@environment.fetch(INITIAL_TOKEN_ENV)))
+          @cloudflare_client
         end
 
         sig { params(name: String).returns(T::Boolean) }
@@ -19967,13 +20082,22 @@ def configure_litestream_r2(app_id)
         end
 
         sig { returns(T::Hash[String, T.untyped]) }
-        def cloudflare_identity
-          identity = json_command!([@wrangler, "whoami", "--json"])
-          raise Error, "WranglerはCloudflareへログインしていません" unless identity.is_a?(Hash) && identity["loggedIn"]
-          accounts = identity["accounts"]
-          raise Error, "Wranglerのログイン先Cloudflare accountがありません" unless accounts.is_a?(Array) && accounts.any?
+        def choose_one_password_account
+          choose_record(@one_password.accounts, "1Password account")
+        end
+
+        sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
+        def validate_human_one_password_user!(account_id)
+          identity = @one_password.current_user(account_id)
+          raise Error, "1Password service accountでは設定できません。人間ユーザーでログインしてください" if identity["type"] == SERVICE_ACCOUNT_TYPE
+          raise Error, "1Passwordユーザーがactiveではありません" unless identity["state"] == ACTIVE_STATE
 
           identity
+        end
+
+        sig { returns(T::Hash[String, T.untyped]) }
+        def cloudflare_identity
+          @cloudflare_client.identity
         end
 
         sig { params(account: T::Hash[String, T.untyped]).void }
@@ -20063,56 +20187,29 @@ def configure_litestream_r2(app_id)
 
         sig { params(account_id: String, buckets: T::Array[String]).returns(T::Array[String]) }
         def existing_buckets(account_id, buckets)
-          buckets.filter_map do |bucket|
-            command = [@wrangler, "r2", "bucket", "info", bucket, "--json"]
-            result = @runner.capture(command, environment: cloudflare_environment(account_id), stdin_data: nil)
-            unless result.success
-              diagnostic = [result.stdout, result.stderr].join("\n")
-              next if diagnostic.match?(/\[code: 10006\]/)
-
-              detail = [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
-              detail = "exit status #{result.exitstatus}" if detail.empty?
-              raise Error, "R2 bucket確認に失敗しました (#{bucket}): #{detail}"
-            end
-
-            parsed = JSON.parse(result.stdout)
-            raise Error, "Wranglerのbucket情報応答が不正です: #{bucket}" unless parsed.is_a?(Hash) && parsed["name"] == bucket
-
-            bucket
-          end
-        rescue JSON::ParserError
-          raise Error, "Wranglerのbucket情報JSON応答が不正です"
+          @cloudflare_client.existing_buckets(account_id, buckets)
         end
 
         sig do
           params(
             destinations: T::Array[String],
-            service_account_id: String
+            account_id: String
           ).returns(T::Hash[String, T::Hash[String, T.untyped]])
         end
-        def destination_vaults(destinations, service_account_id)
-          records = json_command!(%W[op vault list --format json --account #{service_account_id}])
-          raise Error, "1Password vault一覧応答が不正です" unless records.is_a?(Array)
+        def plan_destination_vaults(destinations, account_id)
+          records = @one_password.vaults(account_id)
 
-          vaults = T.let({}, T::Hash[String, T::Hash[String, T.untyped]])
-          destinations.each do |destination|
+          destinations.to_h do |destination|
             name = self.class.destination_vault_name(APP_ID, destination)
             matches = records.select { |record| record.is_a?(Hash) && record["name"] == name }
             if matches.length > 1
               details = duplicate_vault_details(name, matches)
-              raise Error, "service accountから同名の1Password vaultが複数見えます。手動で1件へ整理してください:\n#{details.join("\n")}"
+              raise Error, "同名の1Password vaultが複数あります。手動で1件へ整理してください:\n#{details.join("\n")}"
             end
+
             vault = matches.first
-            unless vault
-              raise Error,
-                "1Password service accountからvaultを参照できません: #{name}. " \
-                  "対象vaultへのread_items,write_items権限を付与してください"
-            end
-
-            vaults[destination] = vault
+            [destination, { "destination" => destination, "name" => name, "record" => vault, "action" => vault ? "reuse" : "create" }]
           end
-
-          vaults
         end
 
         sig do
@@ -20129,13 +20226,30 @@ def configure_litestream_r2(app_id)
           end
         end
 
-        sig { params(created_vaults: T::Array[T::Hash[String, T.untyped]]).void }
-        def report_retained_vaults(created_vaults)
-          return if created_vaults.empty?
-
-          @output.puts "作成済みの1Password vaultは保持されています:"
-          created_vaults.each do |vault|
-            @output.puts "  #{record_name(vault)} (#{record_id(vault)})"
+        sig do
+          params(
+            destinations: T::Array[String],
+            account_id: String,
+            vault_plans: T::Hash[String, T::Hash[String, T.untyped]]
+          ).returns(T::Hash[String, T::Hash[String, T.untyped]])
+        end
+        def plan_destination_items(destinations, account_id, vault_plans)
+          destinations.to_h do |destination|
+            vault = vault_plans.fetch(destination).fetch("record")
+            items = if vault
+              @one_password.items(
+                vault_id: record_id(T.cast(vault, T::Hash[String, T.untyped])),
+                account_id:
+              )
+            else
+              []
+            end
+            vault_id = vault ? record_id(T.cast(vault, T::Hash[String, T.untyped])) : nil
+            plans = {
+              "service_account" => plan_service_account_item(destination, items, account_id:, vault_id:),
+              "r2" => plan_item(destination, items, account_id:, vault_id:)
+            }
+            [destination, plans]
           end
         end
 
@@ -20143,27 +20257,137 @@ def configure_litestream_r2(app_id)
           params(
             destination: String,
             items: T.untyped,
-            service_account_id: String,
-            vault_id: String
+            account_id: String,
+            vault_id: T.nilable(String)
           ).returns(T::Hash[String, T.untyped])
         end
-        def plan_item(destination, items, service_account_id:, vault_id:)
+        def plan_item(destination, items, account_id:, vault_id:)
           raise Error, "1Password item一覧応答が不正です" unless items.is_a?(Array)
 
           title = "#{APP_ID} Litestream R2 #{destination}"
           matches = items.select { |item| item.is_a?(Hash) && item["title"] == title }
           raise Error, "同名の1Password itemが複数あります: #{title}" if matches.length > 1
+          raise Error, "1Password itemがarchive済みです。復元または削除してください: #{title}" if matches.first&.fetch("state", nil) == "ARCHIVED"
 
           item_id = matches.first&.fetch("id", nil)
           unless item_id.nil? || (item_id.is_a?(String) && !item_id.empty?)
             raise Error, "1Password item IDが不正です: #{title}"
           end
           item = if item_id
-            json_command!(%W[op item get #{item_id} --format json --vault #{vault_id} --account #{service_account_id}])
+            @one_password.item(item_id, vault_id: String(vault_id), account_id:)
           end
-          raise Error, "1Password item応答が不正です: #{title}" if item_id && !item.is_a?(Hash)
 
           { "title" => title, "id" => item_id, "item" => item }
+        end
+
+        sig do
+          params(
+            destination: String,
+            items: T.untyped,
+            account_id: String,
+            vault_id: T.nilable(String)
+          ).returns(T::Hash[String, T.untyped])
+        end
+        def plan_service_account_item(destination, items, account_id:, vault_id:)
+          raise Error, "1Password item一覧応答が不正です" unless items.is_a?(Array)
+
+          title = self.class.service_account_name(APP_ID, destination)
+          matches = items.select { |item| item.is_a?(Hash) && item["title"] == title }
+          raise Error, "同名のservice account token itemが複数あります: #{title}" if matches.length > 1
+          match = matches.first
+          return { "title" => title, "id" => nil, "item" => nil, "action" => "create" } unless match
+
+          raise Error, "service account token itemがarchive済みです。復元または削除してください: #{title}" if match["state"] == "ARCHIVED"
+          item_id = match["id"]
+          raise Error, "service account token item IDが不正です: #{title}" unless item_id.is_a?(String) && !item_id.empty?
+          item = @one_password.item(item_id, vault_id: String(vault_id), account_id:)
+          category = item["category"] || match["category"]
+          unless category == "API_CREDENTIAL"
+            raise Error, "service account token itemがAPI Credentialではありません: #{title}"
+          end
+          service_account_token(item, title)
+
+          { "title" => title, "id" => item_id, "item" => item, "action" => "reuse" }
+        end
+
+        sig { params(item: T::Hash[String, T.untyped], title: String).returns(String) }
+        def service_account_token(item, title)
+          fields = item["fields"]
+          raise Error, "service account token item fields応答が不正です: #{title}" unless fields.is_a?(Array)
+          matches = fields.select do |field|
+            field.is_a?(Hash) && (field["label"] == "OP_SERVICE_ACCOUNT_TOKEN" || field["id"] == "OP_SERVICE_ACCOUNT_TOKEN")
+          end
+          raise Error, "service account token itemにOP_SERVICE_ACCOUNT_TOKENが複数あります: #{title}" if matches.length > 1
+          value = matches.first&.fetch("value", nil)
+          unless value.is_a?(String) && !value.empty?
+            raise Error, "service account token itemにOP_SERVICE_ACCOUNT_TOKENがありません: #{title}"
+          end
+
+          value
+        end
+
+        sig do
+          params(
+            plan: T::Hash[String, T.untyped],
+            account_id: String
+          ).returns(T::Hash[String, T.untyped])
+        end
+        def apply_vault_plan(plan, account_id)
+          record = plan["record"]
+          return record if record.is_a?(Hash)
+
+          name = String(plan.fetch("name"))
+          begin
+            created = @one_password.create_vault(name, account_id:)
+            unless created["name"] == name
+              raise Error, "作成した1Password vault応答が不正です: #{name}"
+            end
+            record_id(created)
+            @output.puts "1Password vaultを作成しました: #{name}"
+            created
+          rescue Error => original_error
+            matches = @one_password.vaults(account_id).select do |vault|
+              vault["name"] == name
+            end
+            if matches.one?
+              @output.puts "1Password vaultの作成結果を再確認しました: #{name}"
+              return matches.fetch(0)
+            end
+            raise original_error if matches.empty?
+
+            details = duplicate_vault_details(name, matches)
+            raise Error, "vault作成結果の確認で同名vaultが複数見つかりました:\n#{details.join("\n")}"
+          end
+        end
+
+        sig do
+          params(
+            plan: T::Hash[String, T.untyped],
+            account_id: String,
+            vault: T::Hash[String, T.untyped]
+          ).returns(T::Boolean)
+        end
+        def apply_service_account_plan(plan, account_id:, vault:)
+          return true if plan.fetch("action") == "reuse"
+
+          name = String(plan.fetch("title"))
+          token = @one_password.create_service_account(name, vault_name: record_name(vault), account_id:).dup
+          if token.empty?
+            raise Error,
+              "1Password service account tokenが返されませんでした。サービスアカウントを再作成せず、1Password管理画面で状態を確認してください: #{name}"
+          end
+
+          item_id = persist_item_with_retry(
+            plan,
+            account_id:,
+            vault_id: record_id(vault),
+            fields: { "OP_SERVICE_ACCOUNT_TOKEN" => token },
+            concealed_fields: ["OP_SERVICE_ACCOUNT_TOKEN"],
+            label: "1Password service account token"
+          )
+          !item_id.nil?
+        ensure
+          token&.clear
         end
 
         sig { params(account_id: String).returns(T::Hash[String, T.untyped]) }
@@ -20278,9 +20502,10 @@ def configure_litestream_r2(app_id)
         sig do
           params(
             cloudflare: T::Hash[String, T.untyped],
-            account: T::Hash[String, T.untyped],
-            service_account: T::Hash[String, T.untyped],
-            vaults: T::Hash[String, T::Hash[String, T.untyped]],
+            cloudflare_account: T::Hash[String, T.untyped],
+            one_password_account: T::Hash[String, T.untyped],
+            one_password_user: T::Hash[String, T.untyped],
+            vault_plans: T::Hash[String, T::Hash[String, T.untyped]],
             destinations: T::Array[String],
             buckets: T::Hash[String, String],
             existing_buckets: T::Array[String],
@@ -20288,22 +20513,35 @@ def configure_litestream_r2(app_id)
             token_plans: T::Hash[String, T::Hash[String, T.untyped]]
           ).void
         end
-        def print_plan(cloudflare, account, service_account, vaults, destinations, buckets, existing_buckets, item_plans, token_plans)
+        def print_plan(cloudflare, cloudflare_account, one_password_account, one_password_user, vault_plans, destinations, buckets, existing_buckets, item_plans, token_plans)
           user = cloudflare["user"]
           email = user.is_a?(Hash) ? user["email"] : nil
           @output.puts "Cloudflare login: #{email || "unknown"} (#{cloudflare.fetch("authType", "unknown")})"
-          @output.puts "Cloudflare account: #{record_name(account)} (#{record_id(account)})"
-          @output.puts "1Password service account: #{record_name(service_account)} (#{record_id(service_account)})"
+          @output.puts "Cloudflare account: #{record_name(cloudflare_account)} (#{record_id(cloudflare_account)})"
+          @output.puts "1Password account: #{record_name(one_password_account)} (#{record_id(one_password_account)})"
+          @output.puts "1Password user: #{record_name(one_password_user)} (#{record_id(one_password_user)})"
           @output.puts "適用予定:"
           destinations.each do |destination|
-            vault = vaults.fetch(destination)
+            vault_plan = vault_plans.fetch(destination)
             bucket = buckets.fetch(destination)
             bucket_action = existing_buckets.include?(bucket) ? "既存を使用" : "新規作成"
-            item_action = item_plans.fetch(destination).fetch("id") ? "更新" : "作成"
+            destination_items = item_plans.fetch(destination)
+            r2_item_plan = destination_items.fetch("r2")
+            service_account_plan = destination_items.fetch("service_account")
+            item_action = r2_item_plan.fetch("id") ? "更新" : "作成"
             token_plan = token_plans.fetch(destination)
             token_action = token_plan.fetch("action") == "reuse" ? "既存を使用" : "新規作成"
-            @output.puts "  #{destination}: 1Password vault=#{record_name(vault)} (#{record_id(vault)})"
-            @output.puts "  #{destination}: bucket=#{bucket} (#{bucket_action}), 1Password item=#{item_plans.fetch(destination).fetch("title")} (#{item_action})"
+            vault_record = vault_plan["record"]
+            vault_identity = if vault_record.is_a?(Hash)
+              "#{record_name(vault_record)} (#{record_id(vault_record)}, 既存を使用)"
+            else
+              "#{vault_plan.fetch("name")} (新規作成)"
+            end
+            service_account_action = service_account_plan.fetch("action") == "reuse" ? "既存を使用" : "新規作成"
+            @output.puts "  #{destination}: 1Password vault=#{vault_identity}"
+            @output.puts "  #{destination}: service account=#{service_account_plan.fetch("title")} (#{service_account_action}, read_items)"
+            @output.puts "  #{destination}: service account token item=#{service_account_plan.fetch("title")} (#{service_account_action})"
+            @output.puts "  #{destination}: bucket=#{bucket} (#{bucket_action}), 1Password item=#{r2_item_plan.fetch("title")} (#{item_action})"
             @output.puts "  #{destination}: Cloudflare API token=#{token_plan.fetch("name")} (#{token_action}, Workers R2 Storage Bucket Item Write)"
             @output.puts "    .kamal/secrets.#{destination}: 1Password ID参照を生成"
           end
@@ -20311,7 +20549,7 @@ def configure_litestream_r2(app_id)
 
         sig { params(account_id: String, bucket: String).void }
         def create_bucket(account_id, bucket)
-          command!([@wrangler, "r2", "bucket", "create", bucket], environment: cloudflare_environment(account_id))
+          @cloudflare_client.create_bucket(account_id, bucket)
           @output.puts "R2 bucketを作成しました: #{bucket}"
         end
 
@@ -20358,17 +20596,18 @@ def configure_litestream_r2(app_id)
         sig do
           params(
             plan: T::Hash[String, T.untyped],
-            service_account_id: String,
+            account_id: String,
             vault_id: String,
-            fields: T::Hash[String, String]
+            fields: T::Hash[String, String],
+            concealed_fields: T::Array[String]
           ).returns(String)
         end
-        def upsert_item(plan, service_account_id:, vault_id:, fields:)
+        def upsert_item(plan, account_id:, vault_id:, fields:, concealed_fields:)
           item_id = plan.fetch("id")
           item = if item_id
             plan.fetch("item")
           else
-            json_command!(%W[op item template get API\ Credential --account #{service_account_id}])
+            @one_password.api_credential_template(account_id:)
           end
           raise Error, "1Password item応答が不正です" unless item.is_a?(Hash)
 
@@ -20376,47 +20615,101 @@ def configure_litestream_r2(app_id)
           current_fields = item.fetch("fields", [])
           raise Error, "1Password item fields応答が不正です" unless current_fields.is_a?(Array)
           item["fields"] = current_fields.reject do |field|
-            field.is_a?(Hash) && ITEM_SECRET_FIELDS.include?(field["label"] || field["id"])
+            field.is_a?(Hash) && fields.key?(field["label"] || field["id"])
           end
-          ITEM_SECRET_FIELDS.each do |name|
+          fields.each do |name, value|
             item.fetch("fields") << {
               "id" => name,
               "label" => name,
-              "type" => %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY].include?(name) ? "CONCEALED" : "STRING",
-              "value" => fields.fetch(name)
+              "type" => concealed_fields.include?(name) ? "CONCEALED" : "STRING",
+              "value" => value
             }
           end
 
-          command = if item_id
-            %W[op item edit #{item_id} --format json --vault #{vault_id} --account #{service_account_id}]
-          else
-            %W[op item create --format json --vault #{vault_id} --account #{service_account_id} -]
-          end
-          saved = json_command!(command, stdin_data: JSON.generate(item))
+          saved = @one_password.save_item(item, item_id: T.cast(item_id, T.nilable(String)), vault_id:, account_id:)
           saved_id = saved["id"] if saved.is_a?(Hash)
           raise Error, "保存した1Password itemのIDを取得できません" unless saved_id.is_a?(String) && !saved_id.empty?
 
           saved_id
         end
 
-        sig { params(destination: String, account_id: String, vault_id: String, item_id: String).void }
-        def write_kamal_secrets(destination, account_id, vault_id, item_id)
-          path = @root.join(".kamal/secrets.#{destination}")
-          FileUtils.mkdir_p(path.dirname)
-          account = Shellwords.escape(account_id)
-          source = Shellwords.escape("#{vault_id}/#{item_id}")
-          content = <<~SECRETS
-            R2_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{source} #{DEPLOY_SECRET_FIELDS.join(" ")})
-            #{DEPLOY_SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $R2_SECRETS)" }.join("\n")}
-          SECRETS
-          Tempfile.create(["secrets-#{destination}", ".tmp"], path.dirname.to_s) do |file|
-            file.write(content)
-            file.flush
-            file.fsync
-            File.chmod(0o600, file.path)
-            File.rename(file.path, path)
+        sig do
+          params(
+            plan: T::Hash[String, T.untyped],
+            account_id: String,
+            vault_id: String,
+            fields: T::Hash[String, String],
+            concealed_fields: T::Array[String],
+            label: String
+          ).returns(T.nilable(String))
+        end
+        def persist_item_with_retry(plan, account_id:, vault_id:, fields:, concealed_fields:, label:)
+          loop do
+            begin
+              return upsert_item(plan, account_id:, vault_id:, fields:, concealed_fields:)
+            rescue Error => error
+              reconciled_id = reconcile_saved_item(plan, account_id:, vault_id:, fields:)
+              return reconciled_id if reconciled_id
+
+              @output.puts "#{label}の1Password保存に失敗しました: #{error.message}"
+              next if @prompt.confirm(
+                "1Passwordへの保存を再試行しますか？",
+                default: true,
+                affirmative: "再試行",
+                negative: "中止"
+              )
+
+              if @prompt.confirm(
+                "未保存の資格情報を端末へ一度だけ表示して終了しますか？",
+                default: false,
+                affirmative: "表示して終了",
+                negative: "再試行へ戻る"
+              )
+                reveal_credentials(fields)
+                @output.puts "資格情報を#{plan.fetch("title")}へ手動保存してから再実行してください。"
+                return nil
+              end
+            end
           end
-          @output.puts "Kamal secret参照を生成しました: #{path.relative_path_from(@root)}"
+        end
+
+        sig do
+          params(
+            plan: T::Hash[String, T.untyped],
+            account_id: String,
+            vault_id: String,
+            fields: T::Hash[String, String]
+          ).returns(T.nilable(String))
+        end
+        def reconcile_saved_item(plan, account_id:, vault_id:, fields:)
+          records = @one_password.items(vault_id:, account_id:)
+
+          title = String(plan.fetch("title"))
+          matches = records.select { |item| item.is_a?(Hash) && item["title"] == title }
+          raise Error, "保存確認で同名の1Password itemが複数見つかりました: #{title}" if matches.length > 1
+          match = matches.first
+          return nil unless match
+          raise Error, "保存確認で1Password itemがarchive済みです: #{title}" if match["state"] == "ARCHIVED"
+
+          item_id = match["id"]
+          raise Error, "保存確認で1Password item IDが不正です: #{title}" unless item_id.is_a?(String) && !item_id.empty?
+          item = @one_password.item(item_id, vault_id:, account_id:)
+          return nil unless item_fields_match?(item, fields)
+
+          item_id
+        end
+
+        sig { params(item: T::Hash[String, T.untyped], expected: T::Hash[String, String]).returns(T::Boolean) }
+        def item_fields_match?(item, expected)
+          fields = item["fields"]
+          return false unless fields.is_a?(Array)
+
+          expected.all? do |name, value|
+            matches = fields.select do |field|
+              field.is_a?(Hash) && (field["label"] == name || field["id"] == name)
+            end
+            matches.one? && matches.first&.fetch("value", nil) == value
+          end
         end
 
         sig { params(records: T.untyped, header: String).returns(T::Hash[String, T.untyped]) }
@@ -20448,57 +20741,6 @@ def configure_litestream_r2(app_id)
           value.is_a?(String) && !value.empty? ? value : "unknown"
         end
 
-        sig { params(account_id: String).returns(T::Hash[String, String]) }
-        def cloudflare_environment(account_id)
-          { "CLOUDFLARE_ACCOUNT_ID" => account_id }
-        end
-
-        sig do
-          params(
-            command: T::Array[String],
-            environment: T::Hash[String, String],
-            stdin_data: T.nilable(String),
-            sensitive: T::Boolean
-          ).returns(String)
-        end
-        def command!(command, environment: {}, stdin_data: nil, sensitive: false)
-          result = @runner.capture(command, environment:, stdin_data:)
-          return result.stdout if result.success
-
-          sensitive ||= !stdin_data.nil? || command.first(2) == %w[op item]
-          detail = sensitive ? "" : [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
-          detail = "exit status #{result.exitstatus}" if detail.empty?
-          raise Error, "コマンドに失敗しました (#{command.first}): #{detail}"
-        end
-
-        sig do
-          params(
-            command: T::Array[String],
-            environment: T::Hash[String, String],
-            stdin_data: T.nilable(String),
-            sensitive: T::Boolean
-          ).returns(T.untyped)
-        end
-        def json_command!(command, environment: {}, stdin_data: nil, sensitive: false)
-          parse_json(
-            command!(command, environment:, stdin_data:, sensitive:),
-            T.must(command.first)
-          )
-        end
-
-        sig { params(value: String, command_name: String).returns(T.untyped) }
-        def parse_json(value, command_name)
-          JSON.parse(value)
-        rescue JSON::ParserError
-          raise Error, "コマンドのJSON応答が不正です (#{command_name})"
-        end
-
-        sig { params(result: Result).returns(String) }
-        def result_detail(result)
-          detail = [result.stdout, result.stderr].map(&:strip).reject(&:empty?).join("\n")
-          detail.empty? ? "exit status #{result.exitstatus}" : detail
-        end
-
         sig { params(value: String).void }
         def validate_bucket_name!(value)
           return if value.bytesize.between?(3, 63) && BUCKET_PATTERN.match?(value)
@@ -20515,9 +20757,9 @@ def configure_litestream_r2(app_id)
             normalized.empty? ? "app" : normalized
           end
 
-          sig { params(app_id: String).returns(String) }
-          def service_account_name(app_id)
-            "dev:#{normalized_app_id(app_id)}"
+          sig { params(app_id: String, destination: String).returns(String) }
+          def service_account_name(app_id, destination)
+            "deploy:#{normalized_app_id(app_id)}:#{destination}"
           end
 
           sig { params(app_id: String, destination: String).returns(String) }
@@ -20564,149 +20806,85 @@ def configure_litestream_r2(app_id)
       end
     end
   RUBY
-  create_file "lib/litestream/r2_configurator.rb", configurator, force: true
+  create_file "lib/deployment/configurator.rb", configurator, force: true
 
-  create_file "lib/tasks/litestream.rake", <<~'RAKE', force: true
+  create_file "lib/tasks/deployment.rake", <<~'RAKE', force: true
     # typed: true
     # frozen_string_literal: true
 
-    require Rails.root.join("lib/litestream/r2_configurator")
+    require Rails.root.join("lib/deployment/configurator")
 
-    namespace :litestream do
-      namespace :configure do
-        desc "Cloudflare R2とKamal destination secretsを構成する"
-        task r2: :environment do
-          Litestream::R2Configurator.new(root: Rails.root).run!
-        end
+    namespace :deployment do
+      desc "デプロイ用の外部サービスと資格情報を構成する"
+      task configure: :environment do
+        Deployment::Configurator.new(root: Rails.root).run!
       end
     end
   RAKE
 
-  create_file "test/lib/litestream/r2_configurator_test.rb", <<~'RUBY', force: true
+  create_file "test/lib/deployment/configurator_test.rb", <<~'RUBY', force: true
     # typed: true
     # frozen_string_literal: true
 
     require "test_helper"
-    require "litestream/r2_configurator"
+    require "deployment/configurator"
     require "stringio"
     require "tmpdir"
 
-    class LitestreamR2ConfiguratorTest < ActiveSupport::TestCase
-      FakeResult = Data.define(:stdout, :stderr, :success, :exitstatus)
-
-      class FakeRunner
-        attr_reader :calls
-
-        def initialize(responses)
-          @responses = responses
-          @calls = []
-        end
-
-        def capture(command, environment:, stdin_data:)
-          @calls << { command:, environment:, stdin_data: }
-          @responses.fetch(@calls.length - 1)
-        end
-      end
-
-      class RejectingPrompt
-        def initialize
-          @inputs = %w[example-db-production example-db-staging]
-        end
-
-        def choose(choices, header:, selected:, no_limit: false)
-          header.to_s
-          return choices if no_limit
-
-          selected.fetch(0)
-        end
-
-        def input(**)
-          @inputs.shift
-        end
-
-        def confirm(*) # rubocop:disable Naming/PredicateMethod
-          false
-        end
-      end
-
-      class FakeCloudflareClient
+    class DeploymentConfiguratorTest < ActiveSupport::TestCase
+      class FailingRunner
         attr_reader :calls
 
         def initialize
           @calls = []
         end
 
-        def permission_groups(account_id, name:)
-          @calls << { method: :permission_groups, account_id:, name: }
-          if name == "Account API Tokens Write"
-            [{ "id" => "account-token-write", "name" => name, "scopes" => ["com.cloudflare.api.account"] }]
-          else
-            [{ "id" => "r2-write", "name" => name, "scopes" => ["com.cloudflare.edge.r2.bucket"] }]
+        def capture(*arguments)
+          @calls << arguments
+          raise "command must not run"
+        end
+      end
+
+      test "uses deterministic environment-specific resource names" do
+        assert_equal "my-app", Deployment::Configurator.normalized_app_id("My App!")
+        assert_equal "deploy:my-app:production",
+          Deployment::Configurator.service_account_name("My App!", "production")
+        assert_equal "my-app-production",
+          Deployment::Configurator.destination_vault_name("My App!", "production")
+        assert_equal "my-app-db-production",
+          Deployment::Configurator.default_bucket_name("My App!", "production")
+        assert_equal "my-app-r2-production",
+          Deployment::Configurator.cloudflare_token_name("My App!", "production")
+        assert_operator Deployment::Configurator.default_bucket_name("a" * 100, "staging").bytesize, :<=, 63
+        assert_operator Deployment::Configurator.cloudflare_token_name("a" * 200, "staging").bytesize, :<=, 120
+      end
+
+      test "rejects service account and Connect authentication before commands" do
+        %w[OP_SERVICE_ACCOUNT_TOKEN OP_CONNECT_HOST OP_CONNECT_TOKEN].each do |name|
+          runner = FailingRunner.new
+          error = assert_raises(Deployment::Error) do
+            Deployment::Configurator.new(
+              prompt: Object.new,
+              runner:,
+              output: StringIO.new,
+              environment: {
+                "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
+                name => "configured"
+              }
+            ).run!
           end
-        end
 
-        def verify_token(account_id)
-          @calls << { method: :verify_token, account_id: }
-          { "id" => "initial-token-id", "status" => "active" }
-        end
-
-        def token_details(account_id, token_id)
-          @calls << { method: :token_details, account_id:, token_id: }
-          {
-            "id" => token_id,
-            "status" => "active",
-            "policies" => [{
-              "effect" => "allow",
-              "resources" => { "com.cloudflare.api.account.#{account_id}" => "*" },
-              "permission_groups" => [{ "id" => "account-token-write" }]
-            }]
-          }
-        end
-
-        def tokens(account_id)
-          @calls << { method: :tokens, account_id: }
-          []
-        end
-
-        def create_token(*)
-          raise "confirmation rejection must not create a Cloudflare token"
+          assert_includes error.message, name
+          assert_empty runner.calls
         end
       end
 
-      class RejectingInitialTokenClient
-        def verify_token(_account_id)
-          { "id" => "initial-token-id", "status" => "active" }
-        end
-
-        def permission_groups(_account_id, name:)
-          raise Litestream::R2Configurator::CloudflareClient::RequestError.new(
-            "Cloudflare API requestに失敗しました (HTTP 403): #{name} Unauthorized (code: 9109)",
-            status: 403,
-            codes: [9109]
-          )
-        end
-      end
-
-      test "normalizes deterministic destination bucket names" do
-        assert_equal "my-app", Litestream::R2Configurator.normalized_app_id("My App!")
-        assert_equal "dev:my-app", Litestream::R2Configurator.service_account_name("My App!")
-        assert_equal "my-app-production", Litestream::R2Configurator.destination_vault_name("My App!", "production")
-        assert_equal "my-app-db-production", Litestream::R2Configurator.default_bucket_name("My App!", "production")
-        assert_equal "my-app-r2-production", Litestream::R2Configurator.cloudflare_token_name("My App!", "production")
-        assert_operator Litestream::R2Configurator.default_bucket_name("a" * 100, "staging").bytesize, :<=, 63
-        assert_operator Litestream::R2Configurator.cloudflare_token_name("a" * 200, "staging").bytesize, :<=, 120
-      end
-
-
-      test "missing initial token prints a template URL without checking dependencies" do
+      test "missing Cloudflare initial token has no external side effects" do
         Dir.mktmpdir do |directory|
           output = StringIO.new
-          runner = Object.new
-          def runner.capture(*)
-            raise "runner must not be called"
-          end
+          runner = FailingRunner.new
 
-          Litestream::R2Configurator.new(
+          Deployment::Configurator.new(
             root: Pathname(directory),
             prompt: Object.new,
             runner:,
@@ -20715,93 +20893,51 @@ def configure_litestream_r2(app_id)
           ).run!
 
           assert_includes output.string, "CLOUDFLARE_INITIAL_API_TOKEN"
-          assert_includes output.string, "account_api_tokens"
-          assert_includes output.string, "Super Administrator"
           assert_includes output.string, "Account API Tokens Write"
+          assert_empty runner.calls
           assert_empty Dir.children(directory)
         end
       end
 
-      test "invalid initial token stops before 1Password and R2 mutations" do
-        Dir.mktmpdir do |directory|
-          root = Pathname(directory)
-          wrangler = root.join("node_modules/.bin/wrangler")
-          FileUtils.mkdir_p(wrangler.dirname)
-          wrangler.write("#!/bin/sh\n")
-          wrangler.chmod(0o755)
-          runner = FakeRunner.new([
-            FakeResult.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: JSON.generate(loggedIn: true, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0)
-          ])
+      test "requires an active human 1Password user" do
+        configurator = Deployment::Configurator.new(prompt: Object.new, environment: {})
+        one_password = Object.new
+        configurator.instance_variable_set(:@one_password, one_password)
 
-          error = assert_raises(Litestream::R2Configurator::Error) do
-            Litestream::R2Configurator.new(
-              root:,
-              prompt: Object.new,
-              runner:,
-              output: StringIO.new,
-              environment: { "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-secret" },
-              cloudflare_client: RejectingInitialTokenClient.new
-            ).run!
-          end
-
-          assert_includes error.message, "HTTP 403, code: 9109"
-          assert_includes error.message, "Super Administrator"
-          refute_includes error.message, "initial-secret"
-          assert_equal 4, runner.calls.length
-          refute runner.calls.any? { |call| call.fetch(:command).first(2) == %w[op user] }
-          refute_path_exists root.join(".kamal")
+        one_password.define_singleton_method(:current_user) do |_account_id|
+          { "id" => "service", "type" => "SERVICE_ACCOUNT", "state" => "ACTIVE" }
         end
+        error = assert_raises(Deployment::Error) do
+          configurator.send(:validate_human_one_password_user!, "op-account")
+        end
+        assert_includes error.message, "人間ユーザー"
+
+        one_password.define_singleton_method(:current_user) do |_account_id|
+          { "id" => "person", "type" => "MEMBER", "state" => "SUSPENDED" }
+        end
+        error = assert_raises(Deployment::Error) do
+          configurator.send(:validate_human_one_password_user!, "op-account")
+        end
+        assert_includes error.message, "activeではありません"
       end
 
-      test "confirmation rejection has no external mutations" do
+      test "Kamal secrets reference the human account and R2 item without the service token" do
         Dir.mktmpdir do |directory|
           root = Pathname(directory)
-          app_id = Litestream::R2Configurator::APP_ID
-          wrangler = root.join("node_modules/.bin/wrangler")
-          FileUtils.mkdir_p(wrangler.dirname)
-          wrangler.write("#!/bin/sh\n")
-          wrangler.chmod(0o755)
-          responses = [
-            FakeResult.new(stdout: "wrangler 4.30.0\n", stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: "2.31.0\n", stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: "2026.4.20\n", stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: JSON.generate(loggedIn: true, authType: "OAuth Token", user: { email: "person@example.com" }, accounts: [{ id: "cf-id", name: "Cloudflare" }]), stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: JSON.generate(id: "op-id", name: "dev:example", type: "SERVICE_ACCOUNT", state: "ACTIVE"), stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: JSON.generate(id: "op-id"), stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
-            FakeResult.new(stdout: "", stderr: "The specified bucket does not exist. [code: 10006]", success: false, exitstatus: 1),
-            FakeResult.new(stdout: JSON.generate([
-              { id: "production-vault", name: Litestream::R2Configurator.destination_vault_name(app_id, "production") },
-              { id: "staging-vault", name: Litestream::R2Configurator.destination_vault_name(app_id, "staging") }
-            ]), stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: "[]", stderr: "", success: true, exitstatus: 0),
-            FakeResult.new(stdout: "[]", stderr: "", success: true, exitstatus: 0)
-          ]
-          runner = FakeRunner.new(responses)
-          cloudflare_client = FakeCloudflareClient.new
-          output = StringIO.new
+          Deployment::KamalSecretsWriter.new(root:, output: StringIO.new).write(
+            destination: "production",
+            account_id: "op-account",
+            vault_id: "vault-id",
+            item_id: "r2-item-id"
+          )
+          path = root.join(".kamal/secrets.production")
+          content = path.read
 
-          Litestream::R2Configurator.new(
-            root:,
-            prompt: RejectingPrompt.new,
-            runner:,
-            output:,
-            environment: {
-              "CLOUDFLARE_INITIAL_API_TOKEN" => "initial-token",
-              "OP_SERVICE_ACCOUNT_TOKEN" => "service-token"
-            },
-            cloudflare_client:
-          ).run!
-
-          assert_equal 11, runner.calls.length
-          refute runner.calls.any? { |call| call.fetch(:command).include?("create") }
-          refute_path_exists root.join(".kamal/secrets.production")
-          assert_includes output.string, "Cloudflare login: person@example.com (OAuth Token)"
-          assert_equal %i[verify_token permission_groups token_details permission_groups tokens], cloudflare_client.calls.map { |call| call.fetch(:method) }
-          assert_includes output.string, "R2 bucket、Cloudflare API token、1Password item、Kamal secret参照は変更していません。"
+          assert_equal 0o600, path.stat.mode & 0o777
+          assert_includes content, "--account op-account"
+          assert_includes content, "--from vault-id/r2-item-id"
+          refute_includes content, "OP_SERVICE_ACCOUNT_TOKEN"
+          refute_includes content, "CLOUDFLARE_R2_API_TOKEN"
         end
       end
     end
@@ -21018,7 +21154,7 @@ def configure_kamal
   RUBY
   chmod "bin/wait-for-litestream", 0o755
 
-  configure_litestream_r2(app_id)
+  configure_deployment(app_id)
   configure_kamal_restore(app_id, databases)
 
   create_file ".kamal/hooks/pre-deploy", <<~SH, force: true
@@ -21044,57 +21180,44 @@ def configure_kamal
     optional Solid Queue worker, and Litestream 0.5.15 share that destination's volume on one Linux
     host. Multiple deployment hosts and network filesystems are outside the supported topology.
 
-    ## One-time R2 configuration
+    ## Deployment service configuration
 
-    Install dependencies, authenticate the local deployment workstation with Wrangler, and run:
+    Install dependencies, sign in to both Wrangler and 1Password CLI as a human user, set
+    `CLOUDFLARE_INITIAL_API_TOKEN`, and run:
 
-        mise exec -- bin/rails litestream:configure:r2
+        bin/rails deployment:configure
 
-    The task accepts only an active 1Password service account through `OP_SERVICE_ACCOUNT_TOKEN`.
-    `OP_CONNECT_HOST` and `OP_CONNECT_TOKEN` are rejected because they take authentication
-    precedence over the required service account. When no service account token is configured,
-    first sign in to 1Password CLI as a human user who can create service accounts and vaults. The
-    task checks both destination vault names across every vault visible to that user before making
-    changes. It reuses one exact-name match, creates a missing vault after confirmation, and stops
-    with vault IDs and item counts if a name is duplicated. It then creates
-    `dev:<normalized-app-id>` with `read_items,write_items` for both destination vaults, writes its
-    token through standard input to `mise.local.toml`, changes that file to mode `0600`, and exits
-    without changing R2. Run the command above again to continue.
+    `OP_SERVICE_ACCOUNT_TOKEN`, `OP_CONNECT_HOST`, and `OP_CONNECT_TOKEN` must be unset. The task
+    lets you select a 1Password account, verifies that its current user is active and is not a
+    service account, and passes that account ID to every 1Password operation.
 
-    `mise.local.toml` is excluded from Git and Docker, but it stores the token as explicitly approved
-    local plaintext rather than using 1Password's recommended non-plaintext storage. Replacing the
-    token does not revoke or delete the old service account. Current 1Password CLI cannot list
-    same-named service accounts or recover an existing token, so the task warns about preserving the
-    one-time token before creation. If saving fails, the in-memory token can be retried; it is printed
-    once to `/dev/tty` only after declining retry and accepting a second, default-No confirmation.
+    Production and staging are selected initially. For each selected destination, the task scans
+    every vault in the selected account for the exact name `<normalized-app-id>-<destination>`.
+    It plans creation when no vault exists, reuses the unique match by ID, and stops before any
+    change when duplicates exist. It also inspects the environment-specific service account token
+    item, R2 credential item, R2 bucket, and Cloudflare API token. It prints the complete plan and
+    makes no changes unless you accept one default-No confirmation.
 
-    On the second run, production uses `<normalized-app-id>-production` and staging uses
-    `<normalized-app-id>-staging`. The task reuses the unique vaults visible to the service account.
-    A missing vault or duplicate visible name is an error with no vault creation or human-user
-    fallback. Vaults created before a cancellation or token-save failure are retained and reused by
-    the next human bootstrap.
+    After confirmation, the task creates any missing vault and an environment-specific service
+    account named `deploy:<normalized-app-id>:<destination>`. The account has no expiration and
+    receives only `read_items` for that destination's vault; it cannot create vaults or write items.
+    Its one-time token is stored as a concealed `OP_SERVICE_ACCOUNT_TOKEN` field in a separate API
+    Credential item with the same name. An existing unique, active item with that field is treated
+    as the existing service account; the task does not authenticate with its token or recreate it.
+    Duplicate, archived, or incomplete items stop configuration.
 
-    As a Super Administrator of the target account, set `CLOUDFLARE_INITIAL_API_TOKEN` to an
-    account-owned token with only dashboard permission **Account API Tokens: Edit**, named
-    **Account API Tokens Write** by the API. Confirm the target account and permission on the
-    dashboard summary before creating it. The task never stores this initial token. If it is absent,
-    the task prints a prefilled account-owned Token Template URL and the Cloudflare documentation,
-    then exits successfully before running commands or changing Cloudflare, 1Password, buckets, or
-    repository files.
+    As a Super Administrator of the target Cloudflare account, create an account-owned Initial
+    Token with only dashboard permission **Account API Tokens: Edit**, named **Account API Tokens
+    Write** by the API. Confirm the target account and permission on the dashboard summary before
+    creating it. The task never stores this Initial Token. If it is absent, the task prints a
+    prefilled Token Template URL and Cloudflare documentation, then exits before running commands
+    or changing external resources or repository files.
 
     After selecting the Wrangler account, the task verifies that the Initial Token is active,
     belongs to that account, and has exactly that one permission for that account. Authentication,
-    account, status, or policy mismatches stop with the selected account and a regeneration URL
-    before creating a 1Password service account or vault, an R2 bucket, or repository files.
-
-    Both destinations are selected initially. The task shows the signed-in Cloudflare identity,
-    lets you choose its account, checks existing buckets, and prints the service account ID,
-    destination vault IDs, buckets, token names and create/reuse actions, items, and generated Kamal
-    references without secret values. Its final default-No confirmation controls buckets,
-    Cloudflare tokens, items, and `.kamal/secrets.*`; service accounts and vaults created before
-    that confirmation are retained if configuration stops. It creates only missing buckets.
-    Default bucket names are `<normalized-app-id>-db-production` and
-    `<normalized-app-id>-db-staging`; you can change either name before confirmation.
+    account, status, or policy mismatches stop before creating a vault, service account, R2 bucket,
+    or repository file. Default bucket names are `<normalized-app-id>-db-production` and
+    `<normalized-app-id>-db-staging`; you can change them before confirmation.
 
     For each destination, the task resolves the current Cloudflare permission group ID and creates
     an account-owned token named `<normalized-app-id>-r2-<destination>`. Its only allow policy is
@@ -21105,16 +21228,31 @@ def configure_kamal
     inactive, mismatched, or orphaned tokens stop configuration without automatic creation,
     rotation, or deletion.
 
-    The created token value is stored as the concealed `CLOUDFLARE_R2_API_TOKEN` field only in the
-    destination vault's 1Password item named
-    `#{app_id} Litestream R2 production` and `#{app_id} Litestream R2 staging`. Generated
-    `R2_ACCESS_KEY` is the Cloudflare token ID; `R2_SECRET_KEY` is the SHA-256 digest of the token
-    value. Generated `.kamal/secrets.production` and `.kamal/secrets.staging` files fetch only
-    `CF_ACCOUNT_ID`, `LITESTREAM_R2_BUCKET`, `R2_ACCESS_KEY`, and `R2_SECRET_KEY` through Kamal's
-    standard 1Password adapter. They never deploy `CLOUDFLARE_R2_API_TOKEN`.
-    `.kamal/secrets-common` provides only
-    secrets shared by both destinations. If configuration stops after bucket creation, the bucket
-    is intentionally retained; rerun the task to continue.
+    The Cloudflare token value is stored as the concealed `CLOUDFLARE_R2_API_TOKEN` field only in
+    the destination vault's `#{app_id} Litestream R2 <destination>` item. `R2_ACCESS_KEY` is the
+    Cloudflare token ID; `R2_SECRET_KEY` is the SHA-256 digest of the token value. If saving either
+    the service account token or Cloudflare token fails, the task re-fetches the same-named item to
+    reconcile an ambiguous success before retrying. Only when you stop retrying and accept a second
+    default-No confirmation are unsaved values printed once to `/dev/tty` for manual storage.
+    Secrets are never placed in argv, normal output, or repository files.
+
+    Generated `.kamal/secrets.production` and `.kamal/secrets.staging` use the selected human
+    1Password account ID, destination vault ID, and R2 item ID to fetch only `CF_ACCOUNT_ID`,
+    `LITESTREAM_R2_BUCKET`, `R2_ACCESS_KEY`, and `R2_SECRET_KEY` through Kamal's standard
+    1Password adapter. They do not fetch either `OP_SERVICE_ACCOUNT_TOKEN` or
+    `CLOUDFLARE_R2_API_TOKEN`.
+
+    For GitHub Actions or another automated deployer, copy the token from the
+    `deploy:<normalized-app-id>:<destination>` item into that environment's secret store and expose
+    it as `OP_SERVICE_ACCOUNT_TOKEN` only to deployment jobs. Production and staging tokens are
+    intentionally separate and can read only their own vault. This task does not configure CI.
+
+    If migrating from the former shared `dev:<normalized-app-id>` service account, disable that
+    account manually in the 1Password administration UI after the two environment-specific tokens
+    are installed and verified. Automatic migration, token rotation, and old-account revocation are
+    intentionally not performed. If service account creation succeeds but its token response is
+    missing, do not rerun creation; inspect 1Password manually and resolve the incomplete account
+    before retrying configuration.
 
     | Database | Local path | R2 object prefix |
     | --- | --- | --- |
@@ -21125,10 +21263,9 @@ def configure_kamal
     Set `KAMAL_DEPLOY_HOST` and `KAMAL_PROXY_HOST`, then run
     `mise exec -- bin/kamal setup -d production` or `mise exec -- bin/kamal setup -d staging`.
     Run routine deploys as `mise exec -- bin/kamal deploy -d DESTINATION`. Set `KAMAL_BUILD_ARCH`
-    only when the host architecture is not
-    `amd64`. Litestream restores a database only when
-    its local file does not exist. A replica with no backup is treated as a new database;
-    every other restore or replication error prevents the application from becoming ready.
+    only when the host architecture is not `amd64`. Litestream restores a database only when its
+    local file does not exist. A replica with no backup is treated as a new database; every other
+    restore or replication error prevents the application from becoming ready.
 
     Accessories are not replaced by a normal application deploy. After changing the Litestream
     image, configuration, files, or secrets, run

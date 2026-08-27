@@ -154,7 +154,6 @@ class RailsTemplateContractTest < Minitest::Test
     assert_equal <<~TOML, body
       [env]
       # CLOUDFLARE_INITIAL_API_TOKEN = ""
-      # OP_SERVICE_ACCOUNT_TOKEN = ""
     TOML
     assert_equal 1, @source.scan('create_file "mise.local.toml"').size
     assert_equal 1, @source.scan('append_to_file ".gitignore", "\\n/mise.local.toml\\n"').size
@@ -1761,8 +1760,8 @@ class RailsTemplateContractTest < Minitest::Test
     kamal = source_between("def configure_kamal", "after_bundle do")
     dockerfile = source_between('create_file "Dockerfile"', 'create_file "bin/docker-entrypoint"')
     restore = source_between("def kamal_restore_cli_body", "def configure_kamal_restore")
-    volume_helper = source_between("def configure_kamal_restore", "def configure_litestream_r2")
-    r2 = source_between("def configure_litestream_r2", "def configure_kamal")
+    volume_helper = source_between("def configure_kamal_restore", "def configure_deployment")
+    r2 = source_between("def configure_deployment", "def configure_kamal")
 
     assert_includes @source, 'gem "kamal", "~> 2.11", require: false'
     assert_includes kamal, "minimum_version: 2.11.0"
@@ -1841,23 +1840,29 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes r2, 'validate_cloudflare_initial_token!(account)'
     assert_includes r2, 'class RequestError < Error'
     assert_includes r2, 'Digest::SHA256.hexdigest(token_value)'
-    assert_includes r2, '["CLOUDFLARE_R2_API_TOKEN", *DEPLOY_SECRET_FIELDS].freeze'
     refute_includes r2, 'password: true'
     assert_includes r2, 'stdin_data: JSON.generate(item)'
     assert_includes r2, 'default: false'
-    assert_includes r2, '%w[op user get --me --format=json]'
-    assert_includes r2, '%W[op account get --format=json --account=#{service_account_id}]'
-    assert_includes r2, '%W[op service-account create #{name}]'
-    assert_includes r2, '"#{record_name(vault)}:read_items,write_items"'
+    assert_includes r2, '%w[OP_SERVICE_ACCOUNT_TOKEN OP_CONNECT_HOST OP_CONNECT_TOKEN]'
+    assert_includes r2, '%W[op user get --me --format=json --account #{account_id}]'
+    assert_includes r2, '"op", "service-account", "create", name'
+    assert_includes r2, '"--vault", "#{vault_name}:read_items"'
     refute_includes r2, '--can-create-vaults'
-    assert_includes r2, '%W[mise set --file #{@mise_local} --stdin OP_SERVICE_ACCOUNT_TOKEN]'
-    assert_includes r2, '%W[op vault create #{name} --format=json]'
-    refute_includes r2, '%W[op vault create #{name} --format=json --account=#{service_account_id}]'
+    refute_includes r2, 'read_items,write_items'
+    refute_includes r2, 'mise set'
+    assert_includes r2, '%W[op vault create #{name} --format=json --account #{account_id}]'
+    assert_includes r2, 'op item list --include-archive'
     assert_includes r2, '"#{normalized_app_id(app_id)}-#{destination}"'
-    assert_includes r2, 'stdin_data: token.dup'
+    assert_includes r2, '"deploy:#{normalized_app_id(app_id)}:#{destination}"'
+    assert_includes r2, 'persist_item_with_retry'
+    assert_includes r2, 'reconcile_saved_item'
+    assert_includes r2, 'File.open("/dev/tty", "w")'
+    assert_includes r2, 'require "deployment/cloudflare_client"'
+    assert_includes r2, 'require "deployment/one_password_client"'
+    assert_includes r2, 'require "deployment/kamal_secrets_writer"'
     refute_includes kamal, 'append_to_file ".gitignore", "\n/mise.local.toml\n"'
     assert_includes kamal, "mise exec -- bin/kamal setup -d production"
-    refute_includes r2, "1Password account/vault"
+    refute_includes r2, "litestream:configure:r2"
   end
 
   def test_generates_fixed_pages_faqs_footer_settings_and_admin_management

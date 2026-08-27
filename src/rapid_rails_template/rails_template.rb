@@ -19330,6 +19330,13 @@ def configure_deployment(app_id)
         def capture(command, environment: {}, stdin_data: nil)
           stdout, stderr, status = T.unsafe(Open3).capture3(environment, *command, stdin_data: stdin_data)
           Result.new(stdout:, stderr:, success: status.success?, exitstatus: status.exitstatus || 1)
+        rescue Errno::ENOENT => error
+          Result.new(stdout: "", stderr: error.message, success: false, exitstatus: 127)
+        end
+
+        sig { params(command: T::Array[String], environment: T::Hash[String, String]).returns(Integer) }
+        def run(command, environment: {})
+          T.unsafe(Kernel).system(environment, *command) == true ? 0 : 1
         end
       end
     end
@@ -20808,16 +20815,806 @@ def configure_deployment(app_id)
   RUBY
   create_file "lib/deployment/configurator.rb", configurator, force: true
 
+  server_setup = <<~RUBY
+    # typed: strict
+    # frozen_string_literal: true
+
+    require "base64"
+    require "fileutils"
+    require "gum"
+    require "ipaddr"
+    require "json"
+    require "net/http"
+    require "openssl"
+    require "pathname"
+    require "resolv"
+    require "securerandom"
+    require "shellwords"
+    require "socket"
+    require "sorbet-runtime"
+    require "stringio"
+    require "tempfile"
+    require "timeout"
+    require "tmpdir"
+    require "yaml"
+    require "deployment/command_runner"
+
+    module Deployment
+      HAS_WORKER = #{VALUES.fetch("active_job") == "solid_queue"}
+  RUBY
+  server_setup << <<~'RUBY'
+      class ServerInstance < T::Struct
+        const :id, String
+        const :label, String
+        const :main_ip, String
+        const :v6_main_ip, String
+        const :os, String
+        const :region, String
+      end
+
+      class VultrClient
+        extend T::Sig
+
+        sig { params(runner: T.untyped, environment: T::Hash[String, String]).void }
+        def initialize(runner:, environment:)
+          @runner = runner
+          @environment = environment
+        end
+
+        sig { void }
+        def validate!
+          key = @environment["VULTR_API_KEY"]
+          raise Error, "VULTR_API_KEYが設定されていません" unless key.is_a?(String) && !key.strip.empty?
+
+          version = @runner.capture(["vultr-cli", "version"])
+          raise Error, "vultr-cliを実行できません: #{version.stderr.strip}" unless version.success
+          raise Error, "vultr-cli major v3が必要です: #{version.stdout.strip}" unless version.stdout.match?(/\bv?3\./)
+        end
+
+        sig { returns(T::Array[ServerInstance]) }
+        def eligible_instances
+          records = all_instance_records
+          instances = records.filter_map { |record| build_instance(record) }
+          raise Error, "稼働中のUbuntu LTS x64専用VPSがありません" if instances.empty?
+
+          instances
+        end
+
+        private
+
+        sig { returns(T::Array[T::Hash[String, T.untyped]]) }
+        def all_instance_records
+          records = T.let([], T::Array[T::Hash[String, T.untyped]])
+          cursor = T.let(nil, T.nilable(String))
+          seen = T.let({}, T::Hash[String, T::Boolean])
+          loop do
+            command = ["vultr-cli", "instance", "list", "--output=json", "--per-page=500"]
+            command << "--cursor=#{cursor}" if cursor
+            result = @runner.capture(command, environment: vultr_environment)
+            raise Error, "Vultr instance一覧を取得できません: #{result.stderr.strip}" unless result.success
+
+            payload = parse_object(result.stdout, "Vultr instance一覧")
+            page = payload["instances"]
+            raise Error, "Vultr instance一覧のJSONが不正です" unless page.is_a?(Array)
+            page.each do |record|
+              raise Error, "Vultr instanceのJSONが不正です" unless record.is_a?(Hash)
+              records << T.cast(record, T::Hash[String, T.untyped])
+            end
+
+            next_cursor = payload.dig("meta", "links", "next")
+            break unless next_cursor.is_a?(String) && !next_cursor.empty?
+            raise Error, "Vultr instance一覧のcursorが循環しています" if seen[next_cursor]
+
+            seen[next_cursor] = true
+            cursor = next_cursor
+          end
+          records
+        end
+
+        sig { params(value: String, label: String).returns(T::Hash[String, T.untyped]) }
+        def parse_object(value, label)
+          parsed = JSON.parse(value)
+          raise Error, "#{label}のJSONがobjectではありません" unless parsed.is_a?(Hash)
+
+          T.cast(parsed, T::Hash[String, T.untyped])
+        rescue JSON::ParserError => error
+          raise Error, "#{label}のJSONを解析できません: #{error.message}"
+        end
+
+        sig { returns(T::Hash[String, String]) }
+        def vultr_environment
+          { "VULTR_API_KEY" => String(@environment.fetch("VULTR_API_KEY")) }
+        end
+
+        sig { params(record: T::Hash[String, T.untyped]).returns(T.nilable(ServerInstance)) }
+        def build_instance(record)
+          return nil unless record["status"] == "active"
+          return nil unless record["power_status"] == "running"
+          return nil unless record["server_status"] == "ok"
+          return nil unless Integer(record.fetch("app_id", -1)) == 0
+
+          os = String(record.fetch("os", ""))
+          return nil unless os.match?(/\AUbuntu .+ LTS x64\z/i)
+
+          main_ip = String(record.fetch("main_ip", ""))
+          return nil unless public_ipv4?(main_ip)
+
+          ServerInstance.new(
+            id: String(record.fetch("id")),
+            label: String(record.fetch("label", "")),
+            main_ip:,
+            v6_main_ip: String(record.fetch("v6_main_ip", "")),
+            os:,
+            region: String(record.fetch("region", ""))
+          )
+        rescue ArgumentError, KeyError, TypeError
+          nil
+        end
+
+        sig { params(value: String).returns(T::Boolean) }
+        def public_ipv4?(value)
+          address = IPAddr.new(value)
+          address.ipv4? && !address.private? && !address.loopback? && !address.link_local?
+        rescue IPAddr::InvalidAddressError
+          false
+        end
+      end
+
+      class CloudflareRanges
+        extend T::Sig
+
+        ENDPOINT = URI("https://api.cloudflare.com/client/v4/ips")
+
+        sig { params(http: T.untyped).void }
+        def initialize(http: Net::HTTP)
+          @http = http
+        end
+
+        sig { returns(T::Array[IPAddr]) }
+        def fetch
+          response = T.unsafe(@http).get_response(ENDPOINT)
+          raise Error, "Cloudflare IP範囲を取得できません: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+          payload = JSON.parse(T.must(response.body))
+          result = payload["result"] if payload.is_a?(Hash) && payload["success"] == true
+          raise Error, "Cloudflare IP範囲の応答が不正です" unless result.is_a?(Hash)
+
+          values = [result["ipv4_cidrs"], result["ipv6_cidrs"]].flatten
+          raise Error, "Cloudflare IP範囲が空です" unless values.any? && values.all? { |value| value.is_a?(String) }
+
+          T.cast(values, T::Array[String]).map { |value| IPAddr.new(value) }
+        rescue JSON::ParserError, IPAddr::InvalidAddressError => error
+          raise Error, "Cloudflare IP範囲を解析できません: #{error.message}"
+        rescue IOError, OpenSSL::SSL::SSLError, SocketError, SystemCallError, Timeout::Error => error
+          raise Error, "Cloudflare IP範囲を取得できません: #{error.message}"
+        end
+      end
+
+      class DnsValidator
+        extend T::Sig
+
+        sig { params(resolver: T.untyped, cloudflare_ranges: T.untyped).void }
+        def initialize(resolver: Resolv, cloudflare_ranges: CloudflareRanges.new)
+          @resolver = resolver
+          @cloudflare_ranges = cloudflare_ranges
+        end
+
+        sig { params(hostname: String, instance: ServerInstance).returns(T.nilable(String)) }
+        def direct_ipv6!(hostname, instance)
+          addresses = resolved_addresses(hostname)
+          ipv4 = addresses.select(&:ipv4?).uniq
+          expected_ipv4 = IPAddr.new(instance.main_ip)
+          raise Error, "#{hostname}のAレコードは#{instance.main_ip}だけにしてください" unless ipv4 == [expected_ipv4]
+
+          ipv6 = addresses.select(&:ipv6?).uniq
+          return nil if ipv6.empty?
+
+          raise Error, "VPSに公開IPv6がありませんがAAAAレコードが存在します" if instance.v6_main_ip.empty?
+          expected_ipv6 = IPAddr.new(instance.v6_main_ip)
+          raise Error, "#{hostname}のAAAAレコードは#{instance.v6_main_ip}だけにしてください" unless ipv6 == [expected_ipv6]
+
+          instance.v6_main_ip
+        end
+
+        sig { params(hostname: String).void }
+        def cloudflare_proxy!(hostname)
+          addresses = resolved_addresses(hostname)
+          ranges = @cloudflare_ranges.fetch
+          outside = addresses.reject { |address| ranges.any? { |range| range.include?(address) } }
+          raise Error, "#{hostname}にはCloudflare proxy外のDNS応答があります: #{outside.join(', ')}" if outside.any?
+        end
+
+        private
+
+        sig { params(hostname: String).returns(T::Array[IPAddr]) }
+        def resolved_addresses(hostname)
+          values = T.unsafe(@resolver).getaddresses(hostname)
+          addresses = values.map { |value| IPAddr.new(String(value)) }.uniq
+          raise Error, "#{hostname}を名前解決できません" if addresses.empty?
+
+          addresses
+        rescue Resolv::ResolvError, IPAddr::InvalidAddressError => error
+          raise Error, "#{hostname}のDNSを確認できません: #{error.message}"
+        end
+      end
+
+      class DestinationConfig
+        extend T::Sig
+
+        MANAGED_PATHS = [
+          %w[servers web],
+          %w[servers worker hosts],
+          %w[proxy host],
+          %w[proxy run bind_ips],
+          %w[env clear APPLICATION_ORIGIN],
+          %w[accessories litestream host],
+          %w[ssh user]
+        ].freeze
+
+        sig { params(path: Pathname).void }
+        def initialize(path)
+          @path = path
+          @raw = T.let(path.read, String)
+          @data = T.let(parse_plain_mapping(@raw), T::Hash[String, T.untyped])
+        end
+
+        sig { returns(String) }
+        attr_reader :raw
+
+        sig { returns(T::Hash[String, T.untyped]) }
+        def managed_values
+          MANAGED_PATHS.to_h { |path| [path.join("."), dig_path(@data, path)] }
+        end
+
+        sig { returns(T.nilable(String)) }
+        def web_host
+          value = dig_path(@data, %w[servers web])
+          return nil if value.nil? || value == []
+          unless value.is_a?(Array) && value.one? && value.first.is_a?(String)
+            raise Error, "#{@path}のservers.webは空、または単一hostの配列にしてください"
+          end
+
+          T.cast(value.first, String)
+        end
+
+        sig { params(instance: ServerInstance, hostname: String, ipv6: T::Boolean).returns(T::Hash[String, T.untyped]) }
+        def proposed(instance:, hostname:, ipv6:)
+          data = T.cast(Marshal.load(Marshal.dump(@data)), T::Hash[String, T.untyped])
+          set_path(data, %w[servers web], [instance.main_ip])
+          set_path(data, %w[servers worker hosts], [instance.main_ip]) if HAS_WORKER
+          set_path(data, %w[proxy host], hostname)
+          set_path(data, %w[proxy run bind_ips], ipv6 ? ["0.0.0.0", "::"] : ["0.0.0.0"])
+          set_path(data, %w[env clear APPLICATION_ORIGIN], "https://#{hostname}")
+          set_path(data, %w[accessories litestream host], instance.main_ip)
+          set_path(data, %w[ssh user], "root")
+          data
+        end
+
+        sig { params(data: T::Hash[String, T.untyped]).void }
+        def write!(data)
+          Tempfile.create([@path.basename.to_s, ".tmp"], @path.dirname.to_s) do |file|
+            file.chmod(0o644)
+            file.write(YAML.dump(data, line_width: -1))
+            file.flush
+            file.fsync
+            File.rename(file.path, @path.to_s)
+          end
+        end
+
+        sig { void }
+        def restore!
+          Tempfile.create([@path.basename.to_s, ".restore"], @path.dirname.to_s) do |file|
+            file.chmod(0o644)
+            file.write(@raw)
+            file.flush
+            file.fsync
+            File.rename(file.path, @path.to_s)
+          end
+        end
+
+        private
+
+        sig { params(raw: String).returns(T::Hash[String, T.untyped]) }
+        def parse_plain_mapping(raw)
+          if raw.include?("<%") || raw.match?(/(?:^|\s)[&*][A-Za-z0-9_-]+/) || raw.lines.any? { |line| line.match?(/^\s*#|\s+#/) }
+            raise Error, "#{@path}にコメント、YAML anchor、またはERBがあるため自動更新できません"
+          end
+          parsed = YAML.safe_load(raw, permitted_classes: [], permitted_symbols: [], aliases: false)
+          parsed = {} if parsed.nil?
+          raise Error, "#{@path}のrootはYAML mappingにしてください" unless parsed.is_a?(Hash)
+          raise Error, "#{@path}のkeyは文字列にしてください" unless parsed.keys.all? { |key| key.is_a?(String) }
+
+          T.cast(parsed, T::Hash[String, T.untyped])
+        rescue Psych::Exception => error
+          raise Error, "#{@path}をplain YAMLとして解析できません: #{error.message}"
+        end
+
+        sig { params(data: T::Hash[String, T.untyped], path: T::Array[String]).returns(T.untyped) }
+        def dig_path(data, path)
+          path.reduce(T.let(data, T.untyped)) do |value, key|
+            break nil unless value.is_a?(Hash)
+            value[key]
+          end
+        end
+
+        sig { params(data: T::Hash[String, T.untyped], path: T::Array[String], value: T.untyped).void }
+        def set_path(data, path, value)
+          current = T.let(data, T::Hash[String, T.untyped])
+          T.must(path[0...-1]).each do |key|
+            child = current[key]
+            if child.nil?
+              child = {}
+              current[key] = child
+            end
+            raise Error, "#{@path}の#{path.join('.')}と既存値の型が競合しています" unless child.is_a?(Hash)
+            current = T.cast(child, T::Hash[String, T.untyped])
+          end
+          current[path.fetch(-1)] = value
+        end
+      end
+
+      class SshHardener
+        extend T::Sig
+
+        CONFIG_PATH = "/etc/ssh/sshd_config.d/99-rapid-rails-template.conf"
+        CONFIG = <<~CONFIG.freeze
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PubkeyAuthentication yes
+          PermitRootLogin prohibit-password
+        CONFIG
+
+        sig { params(runner: T.untyped).void }
+        def initialize(runner:)
+          @runner = runner
+        end
+
+        sig { void }
+        def validate_client!
+          result = @runner.capture(["ssh", "-V"])
+          version = [result.stdout, result.stderr].join(" ").strip
+          raise Error, "OpenSSH clientを実行できません: #{version}" unless result.success && version.match?(/\bOpenSSH_/)
+        end
+
+        sig { params(ip: String, pristine: T::Boolean).void }
+        def preflight!(ip, pristine:)
+          script = +<<~BASH
+            set -euo pipefail
+            test "$(id -u)" = 0
+            . /etc/os-release
+            test "$ID" = ubuntu
+            case "$PRETTY_NAME" in *LTS*) ;; *) echo "Ubuntu LTSではありません" >&2; exit 1;; esac
+            test "$(uname -m)" = x86_64
+          BASH
+          if pristine
+            script << <<~'BASH'
+              if command -v docker >/dev/null 2>&1 && test -n "$(docker ps -aq)"; then
+                echo "既存Docker containerがあります" >&2
+                exit 1
+              fi
+              listeners="$(ss -H -ltn | awk '{print $4}' | grep -Ev '(^127\.|^\[?::1\]?|:22$)' || true)"
+              if test -n "$listeners"; then
+                echo "22番以外の公開TCP待受があります:" >&2
+                echo "$listeners" >&2
+                exit 1
+              fi
+            BASH
+          end
+          result = @runner.capture(ssh_command(ip, control_path: nil, independent: true) + ["bash", "-s"], stdin_data: script)
+          raise Error, "SSH事前確認に失敗しました: #{result.stderr.strip}" unless result.success
+        end
+
+        sig { params(ip: String).returns(String) }
+        def current_config(ip)
+          command = "test ! -e #{Shellwords.escape(CONFIG_PATH)} || cat #{Shellwords.escape(CONFIG_PATH)}"
+          result = @runner.capture(ssh_command(ip, control_path: nil, independent: true) + ["bash", "-c", command])
+          raise Error, "既存SSH設定を取得できません: #{result.stderr.strip}" unless result.success
+
+          result.stdout
+        end
+
+        sig { params(ip: String).void }
+        def apply!(ip)
+          Dir.mktmpdir("rrt-ssh") do |directory|
+            socket = File.join(directory, "c")
+            target = "root@#{ip}"
+            master = @runner.capture(base_ssh + ["-M", "-S", socket, "-fN", target])
+            raise Error, "SSH ControlMasterを開始できません: #{master.stderr.strip}" unless master.success
+
+            backup = "/tmp/rapid-rails-ssh-#{SecureRandom.hex(8)}"
+            begin
+              apply = @runner.capture(master_command(socket, target) + ["bash", "-s"], stdin_data: apply_script(backup))
+              unless apply.success
+                rollback = @runner.capture(master_command(socket, target) + ["bash", "-s"], stdin_data: rollback_script(backup))
+                message = "SSH設定の適用に失敗したため設定を復元しました: #{apply.stderr.strip}"
+                message += " / 復元にも失敗しました: #{rollback.stderr.strip}" unless rollback.success
+                raise Error, message
+              end
+
+              verify = @runner.capture(ssh_command(ip, control_path: nil, independent: true) + ["bash", "-s"], stdin_data: verify_script)
+              unless verify.success
+                rollback = @runner.capture(master_command(socket, target) + ["bash", "-s"], stdin_data: rollback_script(backup))
+                message = "SSH再接続に失敗したため設定を復元しました: #{verify.stderr.strip}"
+                message += " / 復元にも失敗しました: #{rollback.stderr.strip}" unless rollback.success
+                raise Error, message
+              end
+
+              cleanup = "rm -f #{Shellwords.escape(backup)} #{Shellwords.escape("#{backup}.absent")}"
+              @runner.capture(master_command(socket, target) + ["bash", "-c", cleanup])
+            ensure
+              @runner.capture(base_ssh + ["-S", socket, "-O", "exit", target])
+            end
+          end
+        end
+
+        private
+
+        sig { returns(T::Array[String]) }
+        def base_ssh
+          [
+            "ssh", "-p", "22",
+            "-o", "BatchMode=yes",
+            "-o", "PreferredAuthentications=publickey",
+            "-o", "PasswordAuthentication=no",
+            "-o", "KbdInteractiveAuthentication=no",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ConnectTimeout=10"
+          ]
+        end
+
+        sig { params(ip: String, control_path: T.nilable(String), independent: T::Boolean).returns(T::Array[String]) }
+        def ssh_command(ip, control_path:, independent:)
+          command = base_ssh
+          command += ["-o", "ControlMaster=no", "-o", "ControlPath=none"] if independent
+          command += ["-S", control_path] if control_path
+          command + ["root@#{ip}"]
+        end
+
+        sig { params(socket: String, target: String).returns(T::Array[String]) }
+        def master_command(socket, target)
+          base_ssh + ["-S", socket, target]
+        end
+
+        sig { params(backup: String).returns(String) }
+        def apply_script(backup)
+          target = Shellwords.escape(CONFIG_PATH)
+          escaped_backup = Shellwords.escape(backup)
+          escaped_absent = Shellwords.escape("#{backup}.absent")
+          body = Shellwords.escape(Base64.strict_encode64(CONFIG))
+          <<~BASH
+            set -euo pipefail
+            target=#{target}
+            backup=#{escaped_backup}
+            absent=#{escaped_absent}
+            install -d -m 0755 /etc/ssh/sshd_config.d
+            if test -e "$target"; then cp -p "$target" "$backup"; else touch "$absent"; fi
+            restore() {
+              if test -e "$absent"; then rm -f "$target"; else cp -p "$backup" "$target"; fi
+              /usr/sbin/sshd -t && systemctl reload ssh
+            }
+            trap restore ERR
+            printf %s #{body} | base64 --decode > "$target"
+            chmod 0644 "$target"
+            /usr/sbin/sshd -t
+            systemctl reload ssh
+            trap - ERR
+          BASH
+        end
+
+        sig { params(backup: String).returns(String) }
+        def rollback_script(backup)
+          target = Shellwords.escape(CONFIG_PATH)
+          escaped_backup = Shellwords.escape(backup)
+          escaped_absent = Shellwords.escape("#{backup}.absent")
+          <<~BASH
+            set -euo pipefail
+            if test -e #{escaped_absent}; then
+              rm -f #{target}
+            else
+              cp -p #{escaped_backup} #{target}
+            fi
+            /usr/sbin/sshd -t
+            systemctl reload ssh
+            rm -f #{escaped_backup} #{escaped_absent}
+          BASH
+        end
+
+        sig { returns(String) }
+        def verify_script
+          <<~'BASH'
+            set -euo pipefail
+            output="$(/usr/sbin/sshd -T)"
+            grep -qx 'passwordauthentication no' <<<"$output"
+            grep -qx 'kbdinteractiveauthentication no' <<<"$output"
+            grep -qx 'pubkeyauthentication yes' <<<"$output"
+            grep -Eq '^permitrootlogin (prohibit-password|without-password)$' <<<"$output"
+          BASH
+        end
+      end
+
+      class HealthChecker
+        extend T::Sig
+
+        class Target < T::Struct
+          const :hostname, String
+          const :address, T.nilable(String)
+        end
+
+        sig { params(output: T.any(IO, StringIO), timeout: Integer, interval: Integer).void }
+        def initialize(output:, timeout: 60, interval: 2)
+          @output = output
+          @timeout = timeout
+          @interval = interval
+        end
+
+        sig { params(targets: T::Array[T.untyped]).void }
+        def wait!(targets)
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
+          loop do
+            return if targets.all? { |target| healthy?(String(target.hostname), target.address&.to_s) }
+            break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+            sleep @interval
+          end
+          labels = targets.map { |target| target.address ? "#{target.hostname}(#{target.address})" : target.hostname }
+          raise Error, "HTTPS /upが60秒以内に200を返しませんでした: #{labels.join(', ')}"
+        end
+
+        private
+
+        sig { params(hostname: String, address: T.nilable(String)).returns(T::Boolean) }
+        def healthy?(hostname, address)
+          result = Timeout.timeout(5) do
+            tcp = TCPSocket.new(address || hostname, 443)
+            context = OpenSSL::SSL::SSLContext.new
+            context.set_params
+            ssl = OpenSSL::SSL::SSLSocket.new(tcp, context)
+            ssl.hostname = hostname
+            ssl.sync_close = true
+            ssl.connect
+            ssl.post_connection_check(hostname)
+            ssl.write("GET /up HTTP/1.1\r\nHost: #{hostname}\r\nConnection: close\r\n\r\n")
+            status = ssl.gets
+            ssl.close
+            status.is_a?(String) && status.match?(/\AHTTP\/\d(?:\.\d)? 200\b/)
+          end
+          result == true
+        rescue IOError, SystemCallError, SocketError, Timeout::Error, OpenSSL::SSL::SSLError
+          false
+        end
+      end
+
+      class ServerSetup
+        extend T::Sig
+
+        DESTINATIONS = %w[production staging].freeze
+        PROVIDERS = ["Vultr"].freeze
+        DNS_MODES = ["DNS-only", "Cloudflare proxy"].freeze
+        FQDN = /\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\z/i
+
+        sig do
+          params(
+            root: Pathname,
+            prompt: T.untyped,
+            runner: T.untyped,
+            output: T.any(IO, StringIO),
+            environment: T::Hash[String, String],
+            terminal: T::Boolean,
+            vultr: T.untyped,
+            dns: T.untyped,
+            ssh: T.untyped,
+            health: T.untyped
+          ).void
+        end
+        def initialize(
+          root: Pathname.pwd,
+          prompt: Gum,
+          runner: CommandRunner.new,
+          output: $stdout,
+          environment: ENV.to_h,
+          terminal: $stdin.tty? && $stdout.tty?,
+          vultr: nil,
+          dns: nil,
+          ssh: nil,
+          health: nil
+        )
+          @root = root
+          @prompt = prompt
+          @runner = runner
+          @output = output
+          @environment = environment
+          @terminal = terminal
+          @vultr = vultr || VultrClient.new(runner:, environment:)
+          @dns = dns || DnsValidator.new
+          @ssh = ssh || SshHardener.new(runner:)
+          @health = health || HealthChecker.new(output:)
+        end
+
+        sig { void }
+        def run!
+          raise Error, "deployment:setup-serverはTTY上で実行してください" unless @terminal
+          @ssh.validate_client!
+          @vultr.validate!
+
+          destination = choose_one(DESTINATIONS, "Kamal destination", "production")
+          secrets = @root.join(".kamal/secrets.#{destination}")
+          unless secrets.file? && !secrets.read.strip.empty?
+            raise Error, "#{secrets.relative_path_from(@root)}がありません。先にbin/rails deployment:configureを実行してください"
+          end
+
+          provider = choose_one(PROVIDERS, "IaaS", "Vultr")
+          raise Error, "未対応のIaaSです: #{provider}" unless provider == "Vultr"
+          instance = choose_instance(@vultr.eligible_instances)
+
+          current = DestinationConfig.new(@root.join("config/deploy.#{destination}.yml"))
+          hostname = choose_hostname(current)
+          dns_mode = choose_one(DNS_MODES, "DNS構成", "DNS-only")
+          ipv6_address = T.let(nil, T.nilable(String))
+          if dns_mode == "DNS-only"
+            ipv6_address = @dns.direct_ipv6!(hostname, instance)
+          else
+            @dns.cloudflare_proxy!(hostname)
+          end
+
+          other_destination = (DESTINATIONS - [destination]).fetch(0)
+          other = DestinationConfig.new(@root.join("config/deploy.#{other_destination}.yml"))
+          if other.web_host == instance.main_ip
+            raise Error, "#{instance.main_ip}は既に#{other_destination}で使用されています"
+          end
+
+          previous_host = current.web_host
+          pristine = previous_host != instance.main_ip
+          @ssh.preflight!(instance.main_ip, pristine:)
+
+          proposed = current.proposed(instance:, hostname:, ipv6: !ipv6_address.nil?)
+          confirm_destination_change!(current, proposed, destination) unless current.managed_values == managed_values(proposed)
+          confirm_ssh_change!(instance.main_ip)
+
+          @ssh.apply!(instance.main_ip)
+          current.write!(proposed)
+          validate_kamal_config!(destination, current)
+
+          command = [@root.join("bin/kamal").to_s, "setup", "-d", destination]
+          unless @prompt.confirm(
+            "Kamal setup（初回デプロイを含む）を実行しますか？",
+            default: true,
+            affirmative: "実行",
+            negative: "後で実行"
+          )
+            @output.puts "サーバー設定を保存しました。後で次を実行してください: bin/kamal setup -d #{destination}"
+            return
+          end
+
+          unless @runner.run(command).zero?
+            raise Error, "Kamal setupに失敗しました。設定は保持しています。再試行: bin/kamal setup -d #{destination}"
+          end
+
+          @health.wait!(health_targets(hostname, instance, ipv6_address:))
+          @output.puts "#{destination}のサーバー設定と初回デプロイが完了しました。"
+        end
+
+        private
+
+        sig { params(values: T::Array[String], header: String, selected: String).returns(String) }
+        def choose_one(values, header, selected)
+          choice = @prompt.choose(values, header:, selected: [selected])
+          value = String(choice)
+          raise Error, "#{header}の選択が不正です" unless values.include?(value)
+
+          value
+        end
+
+        sig { params(instances: T::Array[ServerInstance]).returns(ServerInstance) }
+        def choose_instance(instances)
+          labels = instances.to_h do |instance|
+            label = "#{instance.label.empty? ? '(no label)' : instance.label} | #{instance.main_ip} | #{instance.os} | #{instance.region} | #{instance.id}"
+            [label, instance]
+          end
+          choice = @prompt.choose(labels.keys, header: "Vultr VPS", selected: [labels.keys.fetch(0)])
+          labels.fetch(String(choice))
+        end
+
+        sig { params(config: DestinationConfig).returns(String) }
+        def choose_hostname(config)
+          current = config.managed_values["proxy.host"]
+          initial = current.is_a?(String) ? current : ""
+          value = String(@prompt.input(header: "公開FQDN", value: initial)).strip.downcase.sub(/\.\z/, "")
+          raise Error, "有効なFQDNを入力してください" unless value.match?(FQDN)
+
+          value
+        end
+
+        sig do
+          params(
+            current: DestinationConfig,
+            proposed: T::Hash[String, T.untyped],
+            destination: String
+          ).void
+        end
+        def confirm_destination_change!(current, proposed, destination)
+          before = current.managed_values
+          after = managed_values(proposed)
+          changed = after.keys.select { |key| before[key] != after[key] }
+          @output.puts "#{destination} Kamal設定の変更:"
+          changed.each { |key| @output.puts "  #{key}: #{before[key].inspect} -> #{after[key].inspect}" }
+          return unless before.values.compact.any?
+          return if @prompt.confirm(
+            "既存の#{destination} Kamal設定を上書きしますか？",
+            default: false,
+            affirmative: "上書き",
+            negative: "中止"
+          )
+
+          raise Error, "Kamal設定の上書きを中止しました"
+        end
+
+        sig { params(ip: String).void }
+        def confirm_ssh_change!(ip)
+          current = @ssh.current_config(ip)
+          return if current.empty? || current == SshHardener::CONFIG
+
+          @output.puts "#{SshHardener::CONFIG_PATH}を次の内容へ置換します:\n#{SshHardener::CONFIG}"
+          return if @prompt.confirm(
+            "既存の専用SSH設定を上書きしますか？",
+            default: false,
+            affirmative: "上書き",
+            negative: "中止"
+          )
+
+          raise Error, "SSH設定の上書きを中止しました"
+        end
+
+        sig { params(data: T::Hash[String, T.untyped]).returns(T::Hash[String, T.untyped]) }
+        def managed_values(data)
+          DestinationConfig::MANAGED_PATHS.to_h do |path|
+            value = path.reduce(T.let(data, T.untyped)) { |entry, key| entry.is_a?(Hash) ? entry[key] : nil }
+            [path.join("."), value]
+          end
+        end
+
+        sig { params(destination: String, config: DestinationConfig).void }
+        def validate_kamal_config!(destination, config)
+          command = [@root.join("bin/kamal").to_s, "config", "-d", destination]
+          result = @runner.capture(command)
+          return if result.success
+
+          config.restore!
+          raise Error, "Kamal設定が不正なためdestinationファイルを復元しました: #{result.stderr.strip}"
+        end
+
+        sig do
+          params(
+            hostname: String,
+            instance: ServerInstance,
+            ipv6_address: T.nilable(String)
+          ).returns(T::Array[T.untyped])
+        end
+        def health_targets(hostname, instance, ipv6_address:)
+          targets = [HealthChecker::Target.new(hostname:, address: instance.main_ip)]
+          targets << HealthChecker::Target.new(hostname:, address: ipv6_address) if ipv6_address
+          targets << HealthChecker::Target.new(hostname:, address: nil)
+          targets
+        end
+      end
+    end
+  RUBY
+  create_file "lib/deployment/server_setup.rb", server_setup, force: true
+
   create_file "lib/tasks/deployment.rake", <<~'RAKE', force: true
     # typed: true
     # frozen_string_literal: true
 
     require Rails.root.join("lib/deployment/configurator")
+    require Rails.root.join("lib/deployment/server_setup")
 
     namespace :deployment do
       desc "デプロイ用の外部サービスと資格情報を構成する"
       task configure: :environment do
         Deployment::Configurator.new(root: Rails.root).run!
+      end
+
+      desc "Vultr VPSを選択してSSHとKamal destinationを初期設定する"
+      task :"setup-server" => :environment do
+        Deployment::ServerSetup.new(root: Rails.root).run!
       end
     end
   RAKE
@@ -20942,6 +21739,552 @@ def configure_deployment(app_id)
       end
     end
   RUBY
+
+  create_file "test/lib/deployment/server_setup_test.rb", <<~'RUBY', force: true
+    # typed: true
+    # frozen_string_literal: true
+
+    require "test_helper"
+    require "deployment/server_setup"
+    require "stringio"
+    require "tmpdir"
+
+    class DeploymentServerSetupTest < ActiveSupport::TestCase
+      class FakeRunner
+        attr_reader :captures, :runs
+
+        def initialize(results = [], run_result: 0)
+          @results = results
+          @run_result = run_result
+          @captures = []
+          @runs = []
+        end
+
+        def capture(command, environment: {}, stdin_data: nil)
+          @captures << { command:, environment:, stdin_data: }
+          @results.shift || Deployment::Result.new(stdout: "", stderr: "", success: true, exitstatus: 0)
+        end
+
+        def run(command, environment: {})
+          @runs << { command:, environment: }
+          @run_result
+        end
+      end
+
+      class FakePrompt
+        attr_reader :confirmations
+
+        def initialize(deploy: false, destination: "production", dns_mode: "DNS-only", overwrite: true)
+          @deploy = deploy
+          @destination = destination
+          @dns_mode = dns_mode
+          @overwrite = overwrite
+          @confirmations = []
+        end
+
+        def choose(values, header:, **)
+          case header
+          when "Kamal destination" then @destination
+          when "IaaS" then "Vultr"
+          when "DNS構成" then @dns_mode
+          else values.first
+          end
+        end
+
+        def input(**)
+          "app.example.com"
+        end
+
+        def confirm(message, **options)
+          @confirmations << [message, options]
+          message.start_with?("Kamal setup") ? @deploy : @overwrite
+        end
+      end
+
+      class FakeVultr
+        attr_reader :validated
+
+        def validate!
+          @validated = true
+        end
+
+        def eligible_instances
+          [Deployment::ServerInstance.new(
+            id: "instance-1",
+            label: "app-production",
+            main_ip: "192.0.2.10",
+            v6_main_ip: "2001:db8::10",
+            os: "Ubuntu 24.04 LTS x64",
+            region: "nrt"
+          )]
+        end
+      end
+
+      class FakeDns
+        attr_reader :calls
+
+        def initialize(ipv6: false)
+          @ipv6 = ipv6
+          @calls = []
+        end
+
+        def direct_ipv6!(_hostname, instance)
+          @calls << :direct
+          @ipv6 ? instance.v6_main_ip : nil
+        end
+
+        def cloudflare_proxy!(_hostname)
+          @calls << :cloudflare
+        end
+      end
+
+      class FakeSsh
+        attr_reader :preflight, :applied, :validated
+
+        def validate_client!
+          @validated = true
+        end
+
+        def preflight!(ip, pristine:)
+          @preflight = [ip, pristine]
+        end
+
+        def current_config(_ip)
+          ""
+        end
+
+        def apply!(ip)
+          @applied = ip
+        end
+      end
+
+      class FakeHealth
+        attr_reader :targets
+
+        def initialize(fail_on_call: true)
+          @fail_on_call = fail_on_call
+        end
+
+        def wait!(targets)
+          @targets = targets
+          raise "health must not run" if @fail_on_call
+        end
+      end
+
+      test "Vultr client requires v3 and filters eligible Ubuntu instances" do
+        runner = FakeRunner.new([
+          Deployment::Result.new(stdout: "vultr-cli v3.8.0\n", stderr: "", success: true, exitstatus: 0),
+          Deployment::Result.new(
+            stdout: JSON.generate(
+              "instances" => [
+                instance_json.merge("id" => "stopped", "power_status" => "stopped"),
+                instance_json.merge("id" => "marketplace", "app_id" => 12)
+              ],
+              "meta" => { "links" => { "next" => "next-page" } }
+            ),
+            stderr: "",
+            success: true,
+            exitstatus: 0
+          ),
+          Deployment::Result.new(
+            stdout: JSON.generate(
+              "instances" => [instance_json],
+              "meta" => { "links" => { "next" => "" } }
+            ),
+            stderr: "",
+            success: true,
+            exitstatus: 0
+          )
+        ])
+        client = Deployment::VultrClient.new(runner:, environment: { "VULTR_API_KEY" => "secret" })
+
+        client.validate!
+        instances = client.eligible_instances
+
+        assert_equal ["instance-1"], instances.map(&:id)
+        assert_equal ["vultr-cli", "instance", "list", "--output=json", "--per-page=500"],
+          runner.captures.fetch(1).fetch(:command)
+        assert_equal "--cursor=next-page", runner.captures.fetch(2).fetch(:command).last
+        assert_equal({ "VULTR_API_KEY" => "secret" }, runner.captures.fetch(2).fetch(:environment))
+      end
+
+      test "Vultr client rejects missing credentials old CLI malformed JSON and no candidates" do
+        runner = FakeRunner.new
+        client = Deployment::VultrClient.new(runner:, environment: {})
+        assert_raises(Deployment::Error) { client.validate! }
+        assert_empty runner.captures
+
+        runner = FakeRunner.new([
+          Deployment::Result.new(stdout: "vultr-cli v2.0.0\n", stderr: "", success: true, exitstatus: 0)
+        ])
+        client = Deployment::VultrClient.new(runner:, environment: { "VULTR_API_KEY" => "secret" })
+        assert_raises(Deployment::Error) { client.validate! }
+
+        runner = FakeRunner.new([
+          Deployment::Result.new(stdout: "not-json", stderr: "", success: true, exitstatus: 0)
+        ])
+        client = Deployment::VultrClient.new(runner:, environment: { "VULTR_API_KEY" => "secret" })
+        assert_raises(Deployment::Error) { client.eligible_instances }
+
+        runner = FakeRunner.new([
+          Deployment::Result.new(
+            stdout: JSON.generate("instances" => [], "meta" => { "links" => { "next" => "" } }),
+            stderr: "",
+            success: true,
+            exitstatus: 0
+          )
+        ])
+        client = Deployment::VultrClient.new(runner:, environment: { "VULTR_API_KEY" => "secret" })
+        assert_raises(Deployment::Error) { client.eligible_instances }
+      end
+
+      test "direct DNS requires the selected IPv4 and matching optional IPv6" do
+        resolver = Object.new
+        resolver.define_singleton_method(:getaddresses) { |_hostname| ["192.0.2.10", "2001:db8::10"] }
+        validator = Deployment::DnsValidator.new(resolver:, cloudflare_ranges: Object.new)
+
+        assert_equal "2001:db8::10", validator.direct_ipv6!("app.example.com", instance)
+
+        resolver.define_singleton_method(:getaddresses) { |_hostname| ["192.0.2.10"] }
+        assert_nil validator.direct_ipv6!("app.example.com", instance)
+
+        resolver.define_singleton_method(:getaddresses) { |_hostname| ["192.0.2.10", "192.0.2.11"] }
+        assert_raises(Deployment::Error) { validator.direct_ipv6!("app.example.com", instance) }
+
+        resolver.define_singleton_method(:getaddresses) { |_hostname| ["192.0.2.10", "2001:db8::11"] }
+        assert_raises(Deployment::Error) { validator.direct_ipv6!("app.example.com", instance) }
+      end
+
+      test "Cloudflare proxy requires every resolved address in the official ranges" do
+        resolver = Object.new
+        resolver.define_singleton_method(:getaddresses) { |_hostname| ["104.16.1.2", "2606:4700::1"] }
+        ranges = Object.new
+        ranges.define_singleton_method(:fetch) { [IPAddr.new("104.16.0.0/13"), IPAddr.new("2606:4700::/32")] }
+        validator = Deployment::DnsValidator.new(resolver:, cloudflare_ranges: ranges)
+
+        validator.cloudflare_proxy!("app.example.com")
+
+        resolver.define_singleton_method(:getaddresses) { |_hostname| ["192.0.2.10"] }
+        assert_raises(Deployment::Error) { validator.cloudflare_proxy!("app.example.com") }
+      end
+
+      test "Cloudflare ranges loads current IPv4 and IPv6 CIDRs and rejects bad responses" do
+        response = Net::HTTPOK.new("1.1", "200", "OK")
+        response.instance_variable_set(
+          :@body,
+          JSON.generate(
+            "success" => true,
+            "result" => { "ipv4_cidrs" => ["104.16.0.0/13"], "ipv6_cidrs" => ["2606:4700::/32"] }
+          )
+        )
+        response.instance_variable_set(:@read, true)
+        http = Object.new
+        http.define_singleton_method(:get_response) { |uri| uri == Deployment::CloudflareRanges::ENDPOINT ? response : nil }
+
+        assert_equal [IPAddr.new("104.16.0.0/13"), IPAddr.new("2606:4700::/32")],
+          Deployment::CloudflareRanges.new(http:).fetch
+
+        http.define_singleton_method(:get_response) { |_uri| raise SocketError, "offline" }
+        error = assert_raises(Deployment::Error) { Deployment::CloudflareRanges.new(http:).fetch }
+        assert_includes error.message, "取得できません"
+      end
+
+      test "destination writer preserves unrelated plain YAML and writes managed values" do
+        Dir.mktmpdir do |directory|
+          path = Pathname(directory).join("deploy.production.yml")
+          path.write(YAML.dump("deploy_timeout" => 45))
+          config = Deployment::DestinationConfig.new(path)
+
+          config.write!(config.proposed(instance:, hostname: "app.example.com", ipv6: true))
+          written = YAML.safe_load(path.read)
+
+          assert_equal 45, written.fetch("deploy_timeout")
+          assert_equal ["192.0.2.10"], written.dig("servers", "web")
+          assert_equal ["192.0.2.10"], written.dig("servers", "worker", "hosts") if Deployment::HAS_WORKER
+          assert_equal ["0.0.0.0", "::"], written.dig("proxy", "run", "bind_ips")
+          assert_equal "app.example.com", written.dig("proxy", "host")
+          assert_equal "https://app.example.com", written.dig("env", "clear", "APPLICATION_ORIGIN")
+          assert_equal "192.0.2.10", written.dig("accessories", "litestream", "host")
+          assert_equal "root", written.dig("ssh", "user")
+
+          config.restore!
+          assert_equal YAML.dump("deploy_timeout" => 45), path.read
+        end
+      end
+
+      test "destination writer rejects ERB comments and aliases" do
+        ["<%= ENV.fetch(\"HOST\") %>\n", "# managed\n--- {}\n", "a: &a 1\nb: *a\n"].each do |contents|
+          Dir.mktmpdir do |directory|
+            path = Pathname(directory).join("deploy.production.yml")
+            path.write(contents)
+            assert_raises(Deployment::Error) { Deployment::DestinationConfig.new(path) }
+          end
+        end
+      end
+
+      test "destination writer rejects conflicting managed types and multiple hosts" do
+        Dir.mktmpdir do |directory|
+          path = Pathname(directory).join("deploy.production.yml")
+          path.write(YAML.dump("servers" => { "web" => ["192.0.2.10", "192.0.2.11"] }))
+          assert_raises(Deployment::Error) { Deployment::DestinationConfig.new(path).web_host }
+
+          path.write(YAML.dump("proxy" => "invalid"))
+          config = Deployment::DestinationConfig.new(path)
+          assert_raises(Deployment::Error) { config.proposed(instance:, hostname: "app.example.com", ipv6: false) }
+        end
+      end
+
+      test "SSH hardener uses a control master and verifies a new independent connection" do
+        runner = FakeRunner.new
+        Deployment::SshHardener.new(runner:).apply!("192.0.2.10")
+
+        assert runner.captures.any? { |call| call.fetch(:command).include?("-M") }
+        verify = runner.captures.find do |call|
+          call.fetch(:command).include?("ControlPath=none") && call.fetch(:stdin_data).to_s.include?("passwordauthentication no")
+        end
+        assert verify
+        assert_includes verify.fetch(:command), "ControlMaster=no"
+        refute_includes Deployment::SshHardener::CONFIG.downcase, "ufw"
+      end
+
+      test "SSH client and preflight use fixed public key root connection options" do
+        runner = FakeRunner.new([
+          Deployment::Result.new(stdout: "", stderr: "OpenSSH_10.0p1", success: true, exitstatus: 0),
+          Deployment::Result.new(stdout: "", stderr: "", success: true, exitstatus: 0)
+        ])
+        hardener = Deployment::SshHardener.new(runner:)
+
+        hardener.validate_client!
+        hardener.preflight!("192.0.2.10", pristine: true)
+
+        command = runner.captures.fetch(1).fetch(:command)
+        assert_equal "root@192.0.2.10", command.last(3).fetch(0)
+        assert_includes command, "BatchMode=yes"
+        assert_includes command, "PreferredAuthentications=publickey"
+        assert_includes command, "StrictHostKeyChecking=accept-new"
+        script = runner.captures.fetch(1).fetch(:stdin_data)
+        assert_includes script, "docker ps -aq"
+        assert_includes script, ":22$"
+        refute_match(/\bufw\b/i, script)
+      end
+
+      test "SSH hardener restores the drop-in through the control master after apply failure" do
+        runner = FakeRunner.new([
+          Deployment::Result.new(stdout: "", stderr: "", success: true, exitstatus: 0),
+          Deployment::Result.new(stdout: "", stderr: "reload failed", success: false, exitstatus: 1),
+          Deployment::Result.new(stdout: "", stderr: "", success: true, exitstatus: 0),
+          Deployment::Result.new(stdout: "", stderr: "", success: true, exitstatus: 0)
+        ])
+
+        error = assert_raises(Deployment::Error) do
+          Deployment::SshHardener.new(runner:).apply!("192.0.2.10")
+        end
+
+        assert_includes error.message, "復元しました"
+        rollback = runner.captures.fetch(2)
+        assert_includes rollback.fetch(:command), "-S"
+        assert_includes rollback.fetch(:stdin_data), "systemctl reload ssh"
+      end
+
+      test "interactive task hardens SSH and writes config without deploying when declined" do
+        Dir.mktmpdir do |directory|
+          root = Pathname(directory)
+          root.join("config").mkpath
+          root.join(".kamal").mkpath
+          root.join("bin").mkpath
+          root.join("config/deploy.production.yml").write("--- {}\n")
+          root.join("config/deploy.staging.yml").write("--- {}\n")
+          root.join(".kamal/secrets.production").write("RAILS_MASTER_KEY=x\n")
+          output = StringIO.new
+          runner = FakeRunner.new
+          ssh = FakeSsh.new
+          vultr = FakeVultr.new
+          prompt = FakePrompt.new(deploy: false)
+
+          Deployment::ServerSetup.new(
+            root:,
+            prompt:,
+            runner:,
+            output:,
+            environment: { "VULTR_API_KEY" => "secret" },
+            terminal: true,
+            vultr:,
+            dns: FakeDns.new,
+            ssh:,
+            health: FakeHealth.new
+          ).run!
+
+          written = YAML.safe_load(root.join("config/deploy.production.yml").read)
+          assert vultr.validated
+          assert ssh.validated
+          assert_equal ["192.0.2.10", true], ssh.preflight
+          assert_equal "192.0.2.10", ssh.applied
+          assert_equal ["192.0.2.10"], written.dig("servers", "web")
+          assert_empty runner.runs
+          assert_includes output.string, "bin/kamal setup -d production"
+          final_confirmation = prompt.confirmations.fetch(-1)
+          assert_equal true, final_confirmation.fetch(1).fetch(:default)
+        end
+      end
+
+      test "task rejects a production and staging IP collision before changing SSH or YAML" do
+        with_root(staging: YAML.dump("servers" => { "web" => ["192.0.2.10"] })) do |root|
+          ssh = FakeSsh.new
+          original = root.join("config/deploy.production.yml").read
+
+          error = assert_raises(Deployment::Error) do
+            run_setup(root:, ssh:, prompt: FakePrompt.new)
+          end
+
+          assert_includes error.message, "stagingで使用"
+          assert_nil ssh.preflight
+          assert_nil ssh.applied
+          assert_equal original, root.join("config/deploy.production.yml").read
+        end
+      end
+
+      test "same destination rerun skips the pristine VPS requirement" do
+        with_root(production: YAML.dump("servers" => { "web" => ["192.0.2.10"] })) do |root|
+          ssh = FakeSsh.new
+
+          run_setup(root:, ssh:, prompt: FakePrompt.new(deploy: false))
+
+          assert_equal ["192.0.2.10", false], ssh.preflight
+          assert_equal "192.0.2.10", ssh.applied
+        end
+      end
+
+      test "declining destination overwrite keeps SSH and YAML unchanged" do
+        original = YAML.dump("servers" => { "web" => ["192.0.2.20"] })
+        with_root(production: original) do |root|
+          ssh = FakeSsh.new
+          prompt = FakePrompt.new(overwrite: false)
+
+          assert_raises(Deployment::Error) { run_setup(root:, ssh:, prompt:) }
+
+          assert_equal ["192.0.2.10", true], ssh.preflight
+          assert_nil ssh.applied
+          assert_equal original, root.join("config/deploy.production.yml").read
+          overwrite = prompt.confirmations.find { |message, _options| message.include?("Kamal設定を上書き") }
+          assert_equal false, overwrite.fetch(1).fetch(:default)
+        end
+      end
+
+      test "invalid merged Kamal config restores YAML but keeps successful SSH hardening" do
+        failure = Deployment::Result.new(stdout: "", stderr: "invalid config", success: false, exitstatus: 1)
+        with_root do |root|
+          ssh = FakeSsh.new
+          original = root.join("config/deploy.production.yml").read
+
+          error = assert_raises(Deployment::Error) do
+            run_setup(root:, ssh:, runner: FakeRunner.new([failure]), prompt: FakePrompt.new)
+          end
+
+          assert_includes error.message, "destinationファイルを復元"
+          assert_equal "192.0.2.10", ssh.applied
+          assert_equal original, root.join("config/deploy.production.yml").read
+        end
+      end
+
+      test "failed Kamal setup preserves destination and prints the exact retry command" do
+        with_root do |root|
+          runner = FakeRunner.new([], run_result: 1)
+
+          error = assert_raises(Deployment::Error) do
+            run_setup(root:, runner:, prompt: FakePrompt.new(deploy: true))
+          end
+
+          assert_includes error.message, "bin/kamal setup -d production"
+          assert_equal [root.join("bin/kamal").to_s, "setup", "-d", "production"],
+            runner.runs.fetch(0).fetch(:command)
+          assert_equal ["192.0.2.10"], YAML.safe_load(root.join("config/deploy.production.yml").read).dig("servers", "web")
+        end
+      end
+
+      test "successful Cloudflare setup verifies the IPv4 origin and public URL" do
+        with_root do |root|
+          dns = FakeDns.new
+          health = FakeHealth.new(fail_on_call: false)
+          runner = FakeRunner.new
+
+          run_setup(
+            root:,
+            runner:,
+            dns:,
+            health:,
+            prompt: FakePrompt.new(deploy: true, dns_mode: "Cloudflare proxy")
+          )
+
+          assert_equal [:cloudflare], dns.calls
+          assert_equal ["192.0.2.10", nil], health.targets.map(&:address)
+          assert_equal 1, runner.runs.length
+        end
+      end
+
+      private
+
+      def with_root(production: "--- {}\n", staging: "--- {}\n")
+        Dir.mktmpdir do |directory|
+          root = Pathname(directory)
+          root.join("config").mkpath
+          root.join(".kamal").mkpath
+          root.join("bin").mkpath
+          root.join("config/deploy.production.yml").write(production)
+          root.join("config/deploy.staging.yml").write(staging)
+          root.join(".kamal/secrets.production").write("RAILS_MASTER_KEY=x\n")
+          yield root
+        end
+      end
+
+      def run_setup(
+        root:,
+        prompt:,
+        runner: FakeRunner.new,
+        dns: FakeDns.new,
+        ssh: FakeSsh.new,
+        health: FakeHealth.new
+      )
+        Deployment::ServerSetup.new(
+          root:,
+          prompt:,
+          runner:,
+          output: StringIO.new,
+          environment: { "VULTR_API_KEY" => "secret" },
+          terminal: true,
+          vultr: FakeVultr.new,
+          dns:,
+          ssh:,
+          health:
+        ).run!
+      end
+
+      def instance
+        Deployment::ServerInstance.new(
+          id: "instance-1",
+          label: "app-production",
+          main_ip: "192.0.2.10",
+          v6_main_ip: "2001:db8::10",
+          os: "Ubuntu 24.04 LTS x64",
+          region: "nrt"
+        )
+      end
+
+      def instance_json
+        {
+          "id" => "instance-1",
+          "label" => "app-production",
+          "main_ip" => "192.0.2.10",
+          "v6_main_ip" => "2001:db8::10",
+          "os" => "Ubuntu 24.04 LTS x64",
+          "region" => "nrt",
+          "status" => "active",
+          "power_status" => "running",
+          "server_status" => "ok",
+          "app_id" => 0
+        }
+      end
+    end
+  RUBY
 end
 
 def configure_kamal
@@ -20994,7 +22337,7 @@ def configure_kamal
   create_file ".kamal/secrets-common", kamal_secrets.join("\n") + "\n", force: true
 
   worker_role = if VALUES.fetch("active_job") == "solid_queue"
-    "  worker:\n    hosts:\n      - <%= ENV.fetch(\"KAMAL_DEPLOY_HOST\") %>\n    cmd: bin/jobs --mode async\n"
+    "  worker:\n    cmd: bin/jobs --mode async\n"
   else
     ""
   end
@@ -21013,12 +22356,10 @@ def configure_kamal
     primary_role: web
 
     servers:
-      web:
-        - <%= ENV.fetch("KAMAL_DEPLOY_HOST") %>
+      web: []
     #{worker_role}
     proxy:
       ssl: true
-      host: <%= ENV.fetch("KAMAL_PROXY_HOST") %>
       app_port: 80
       healthcheck:
         path: /up
@@ -21030,8 +22371,6 @@ def configure_kamal
       arch: <%= ENV.fetch("KAMAL_BUILD_ARCH", "amd64") %>
 
     env:
-      clear:
-        APPLICATION_ORIGIN: https://<%= ENV.fetch("KAMAL_PROXY_HOST") %>
       secret:
         - RAILS_MASTER_KEY
     #{vapid_secret_lines}
@@ -21043,7 +22382,6 @@ def configure_kamal
     accessories:
       litestream:
         image: litestream/litestream:0.5.15
-        host: <%= ENV.fetch("KAMAL_DEPLOY_HOST") %>
         cmd: replicate -config /etc/litestream.yml
         files:
           - config/litestream.yml:/etc/litestream.yml
@@ -21260,8 +22598,46 @@ def configure_kamal
 
     ## Setup and routine operations
 
-    Set `KAMAL_DEPLOY_HOST` and `KAMAL_PROXY_HOST`, then run
-    `mise exec -- bin/kamal setup -d production` or `mise exec -- bin/kamal setup -d staging`.
+    Complete `bin/rails deployment:configure` first. Then install `vultr-cli` major v3, export a
+    non-empty `VULTR_API_KEY`, ensure your existing OpenSSH configuration can authenticate to the
+    target as `root` with a public key, and run:
+
+        bin/rails deployment:setup-server
+
+    The task requires a TTY and uses Gum to select one destination, Vultr, an eligible active
+    Ubuntu LTS x64 VPS, its public FQDN, and either DNS-only or Cloudflare proxy DNS. It accepts
+    only instances with a public IPv4 address, healthy running state, and no Vultr Marketplace
+    application. Production and staging cannot share an IPv4 address. A newly assigned server
+    must have no Docker containers and no public TCP listener other than SSH on port 22.
+
+    DNS-only mode requires the FQDN's only A record to be the selected IPv4. An AAAA record is
+    allowed only when it is the selected instance's public IPv6. Cloudflare proxy mode fetches
+    Cloudflare's current public CIDRs from the unauthenticated Cloudflare IP API and requires every
+    public DNS response to belong to those ranges; it does not claim to verify the hidden origin
+    before setup.
+
+    SSH connects as `root` on port 22 with public-key-only batch authentication and
+    `StrictHostKeyChecking=accept-new`. The task writes
+    `/etc/ssh/sshd_config.d/99-rapid-rails-template.conf`, disables password and
+    keyboard-interactive authentication for all users, validates the effective sshd settings, and
+    proves a separate new public-key connection before closing its recovery connection. It restores
+    the previous drop-in if validation fails. It does not inspect or modify UFW, a Vultr Firewall
+    Group, OS updates, or Docker directly.
+
+    After SSH succeeds, the task atomically updates only its managed keys in
+    `config/deploy.<destination>.yml`, preserving other plain YAML values. Files containing ERB,
+    comments, or YAML anchors are rejected rather than reformatted. Existing managed values and an
+    existing differing SSH drop-in each require a default-No confirmation. The final default-Yes
+    confirmation runs `bin/kamal setup -d DESTINATION` with live output. Successful setup must also
+    return HTTPS 200 from `/up` within 60 seconds. Direct DNS checks the public route and configured
+    IPv4/IPv6 origins; Cloudflare proxy checks both the selected IPv4 origin with FQDN SNI and the
+    public proxied route.
+
+    Declining the final confirmation leaves the verified SSH and destination configuration in place
+    and prints the manual setup command. A failed Kamal setup or HTTPS check also preserves those
+    settings and exits with an error so the same command can be retried. Reassigning an existing
+    destination never stops or deletes the old VPS.
+
     Run routine deploys as `mise exec -- bin/kamal deploy -d DESTINATION`. Set `KAMAL_BUILD_ARCH`
     only when the host architecture is not `amd64`. Litestream restores a database only when its
     local file does not exist. A replica with no backup is treated as a new database; every other

@@ -272,6 +272,12 @@ primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLites
 
 生成する`deployment:configure`は、1Passwordの設定操作をすべて人間ユーザーとして実行します。開始時に`OP_SERVICE_ACCOUNT_TOKEN`、`OP_CONNECT_HOST`、`OP_CONNECT_TOKEN`のいずれかが設定されていれば停止します。1Password CLIへ追加済みのaccountを選択し、`op user get --me`がactiveな人間ユーザーを返すことを確認して、以後すべての`op`操作へ選択account IDを渡します。対象destinationだけについてaccount内の全vaultから`<正規化済みapp_id>-<destination>`の完全一致を調べ、0件なら作成予定、1件ならIDで再利用、複数件なら変更前に停止します。
 
+`deployment:configure`後に実行する対話専用の`bin/rails deployment:setup-server`は、TTY、`vultr-cli` major v3、`VULTR_API_KEY`、OpenSSH、対象destinationのKamal secret参照を必須とします。productionまたはstaging、Vultr、稼働中・正常・公開IPv4付き・Marketplace application未導入のUbuntu LTS x64 VPS、FQDN、DNS-onlyまたはCloudflare proxyを順に選択します。productionとstagingの同一IPv4は拒否し、新規割り当てでは既存Docker containerと22番以外の公開TCP待受がない専用VPSだけを許可します。
+
+DNS-onlyではA recordを選択IPv4だけに限定し、AAAAがある場合はVPSの公開IPv6だけを許可します。Cloudflare proxyでは認証不要のCloudflare IP APIから現行CIDRを取得し、公開DNS応答がすべてその範囲内であることを確認します。rootへの既存公開鍵接続を`accept-new`で確認し、専用sshd drop-inでpassword・keyboard-interactive認証を無効化します。保持中のControlMaster接続とは別の新規接続で実効設定を検証し、失敗時はdrop-inを復元します。UFWとVultr Firewall Groupは読み取り・変更とも行いません。
+
+SSH検証成功後、IP、FQDN、application origin、Litestream host、root SSH user、必要なproxy bindを`config/deploy.<destination>.yml`へ構造的・原子的に保存します。plain YAML mapping以外は自動更新せず、既存の管理項目を変更する場合は新旧値を表示して既定値「中止」で確認します。最後は既定値「実行」で`bin/kamal setup -d DESTINATION`を選択でき、成功後に有効なTLSと`/up`の200応答をorigin・公開経路で確認します。Kamalまたは疎通確認の失敗時は、検証済みSSH設定とdestination設定を保持します。
+
 productionとstagingには、それぞれ`deploy:<正規化済みapp_id>:<destination>`というservice accountを期限なしで作成し、対応する環境vaultの`read_items`だけを付与します。vault作成権限や書き込み権限は付けません。作成時に一度だけ返されるtokenは同じ名前の別API Credential itemへconcealedな`OP_SERVICE_ACCOUNT_TOKEN` fieldとして保存します。同名itemが1件あり、archiveされておらずfieldが揃っていれば既存service accountとして再利用し、token認証や再作成は行いません。同名重複、archive済み、field欠損は変更前に停止します。
 
 `CLOUDFLARE_INITIAL_API_TOKEN`には、対象accountのSuper Administratorが作成したaccount-owned Initial Tokenを毎回環境変数から渡します。権限はdashboard上の`Account API Tokens: Edit`（API上の`Account API Tokens Write`）だけとし、作成確認画面で対象accountと権限を確認します。未設定なら、最小権限を指定済みのToken Template URLとCloudflare公式ドキュメントを表示し、Cloudflare、1Password、bucket、repositoryを変更せず正常終了します。Initial Tokenは1Passwordや`mise.local.toml`へ保存しません。

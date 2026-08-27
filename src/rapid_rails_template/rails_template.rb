@@ -19873,6 +19873,16 @@ def configure_deployment(app_id)
         ACCOUNT_SCOPE = "com.cloudflare.api.account"
         R2_PERMISSION_GROUP_NAME = "Workers R2 Storage Bucket Item Write"
         R2_BUCKET_SCOPE = "com.cloudflare.edge.r2.bucket"
+        R2_ITEM_FIELD_TYPES = T.let(
+          {
+            "CLOUDFLARE_R2_API_TOKEN" => "CONCEALED",
+            "CF_ACCOUNT_ID" => "STRING",
+            "LITESTREAM_R2_BUCKET" => "STRING",
+            "R2_ACCESS_KEY" => "CONCEALED",
+            "R2_SECRET_KEY" => "CONCEALED"
+          }.freeze,
+          T::Hash[String, String]
+        )
         TOKEN_NAME_MAX_BYTES = 120
         SERVICE_ACCOUNT_TYPE = "SERVICE_ACCOUNT"
         ACTIVE_STATE = "ACTIVE"
@@ -19942,7 +19952,7 @@ def configure_deployment(app_id)
           cloudflare_tokens = cloudflare_api.tokens(account_id)
           token_plans = T.let({}, T::Hash[String, T::Hash[String, T.untyped]])
           destinations.each do |destination|
-            token_plans[destination] = plan_cloudflare_token(
+            r2_plan = plan_r2_credentials(
               destination,
               account_id:,
               bucket: buckets.fetch(destination),
@@ -19950,6 +19960,8 @@ def configure_deployment(app_id)
               cloudflare_tokens:,
               item_plan: item_plans.fetch(destination).fetch("r2")
             )
+            token_plans[destination] = T.cast(r2_plan.fetch("token"), T::Hash[String, T.untyped])
+            item_plans.fetch(destination)["r2"] = T.cast(r2_plan.fetch("item"), T::Hash[String, T.untyped])
           end
 
           print_plan(
@@ -19994,13 +20006,12 @@ def configure_deployment(app_id)
               bucket:
             )
             r2_fields = credentials.merge("CF_ACCOUNT_ID" => account_id, "LITESTREAM_R2_BUCKET" => bucket)
-            item_id = persist_item_with_retry(
+            item_id = apply_r2_item_plan(
               item_plans.fetch(destination).fetch("r2"),
               account_id: one_password_account_id,
               vault_id: record_id(vault),
               fields: r2_fields,
-              concealed_fields: %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY],
-              label: "Cloudflare API token"
+              concealed_fields: %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY]
             )
             next false unless item_id
 
@@ -20427,12 +20438,21 @@ def configure_deployment(app_id)
             item_plan: T::Hash[String, T.untyped]
           ).returns(T::Hash[String, T.untyped])
         end
-        def plan_cloudflare_token(destination, account_id:, bucket:, permission_group:, cloudflare_tokens:, item_plan:)
+        def plan_r2_credentials(destination, account_id:, bucket:, permission_group:, cloudflare_tokens:, item_plan:)
           name = self.class.cloudflare_token_name(APP_ID, destination)
           policy = cloudflare_token_policy(account_id, bucket, record_id(permission_group))
           matches = cloudflare_tokens.select { |token| token["name"] == name }
           raise Error, "同名のCloudflare API tokenが複数あります: #{name}" if matches.length > 1
-          return { "name" => name, "action" => "create", "policy" => policy } if matches.empty?
+          if matches.empty?
+            if item_plan["id"] || item_plan["item"].is_a?(Hash)
+              raise Error, "Cloudflare API tokenがありませんが、対応する1Password itemが存在します: #{name}"
+            end
+
+            return {
+              "token" => { "name" => name, "action" => "create", "policy" => policy },
+              "item" => item_plan.merge("action" => "create")
+            }
+          end
 
           token = matches.fetch(0)
           raise Error, "Cloudflare API tokenがactiveではありません: #{name}" unless token["status"] == "active"
@@ -20444,7 +20464,7 @@ def configure_deployment(app_id)
           unless item.is_a?(Hash)
             raise Error, "Cloudflare API tokenは存在しますが、対応する1Password itemがありません: #{name}"
           end
-          credentials = item_credentials(item, name)
+          credentials = r2_item_fields(item, name)
           token_id = token["id"]
           unless token_id.is_a?(String) && !token_id.empty? && credentials.fetch("R2_ACCESS_KEY") == token_id
             raise Error, "Cloudflare API token IDと1PasswordのR2_ACCESS_KEYが一致しません: #{name}"
@@ -20452,8 +20472,17 @@ def configure_deployment(app_id)
           unless Digest::SHA256.hexdigest(credentials.fetch("CLOUDFLARE_R2_API_TOKEN")) == credentials.fetch("R2_SECRET_KEY")
             raise Error, "1PasswordのCloudflare API tokenとR2_SECRET_KEYが一致しません: #{name}"
           end
+          unless credentials.fetch("CF_ACCOUNT_ID") == account_id
+            raise Error, "Cloudflare account IDと1PasswordのCF_ACCOUNT_IDが一致しません: #{name}"
+          end
+          unless credentials.fetch("LITESTREAM_R2_BUCKET") == bucket
+            raise Error, "Cloudflare API tokenのbucketと1PasswordのLITESTREAM_R2_BUCKETが一致しません: #{name}"
+          end
 
-          { "name" => name, "action" => "reuse", "policy" => policy, "credentials" => credentials }
+          {
+            "token" => { "name" => name, "action" => "reuse", "policy" => policy, "credentials" => credentials },
+            "item" => item_plan.merge("action" => "reuse")
+          }
         end
 
         sig { params(account_id: String, bucket: String, permission_group_id: String).returns(T::Hash[String, T.untyped]) }
@@ -20486,20 +20515,28 @@ def configure_deployment(app_id)
         end
 
         sig { params(item: T::Hash[String, T.untyped], token_name: String).returns(T::Hash[String, String]) }
-        def item_credentials(item, token_name)
+        def r2_item_fields(item, token_name)
+          unless item["category"] == "API_CREDENTIAL"
+            raise Error, "Cloudflare API tokenの1Password itemがAPI Credentialではありません: #{token_name}"
+          end
+
           fields = item["fields"]
           raise Error, "1Password item fields応答が不正です: #{token_name}" unless fields.is_a?(Array)
 
           credentials = T.let({}, T::Hash[String, String])
-          %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY].each do |name|
+          R2_ITEM_FIELD_TYPES.each do |name, expected_type|
             matches = fields.select do |field|
               field.is_a?(Hash) && (field["label"] == name || field["id"] == name)
             end
             raise Error, "1Password itemに#{name}が複数あります: #{token_name}" if matches.length > 1
 
-            value = matches.first&.fetch("value", nil)
+            field = matches.first
+            value = field&.fetch("value", nil)
             unless value.is_a?(String) && !value.empty?
               raise Error, "Cloudflare API tokenは存在しますが、1Password itemに#{name}がありません: #{token_name}"
+            end
+            unless field&.fetch("type", nil) == expected_type
+              raise Error, "1Password itemの#{name} field typeが一致しません: #{token_name} (期待: #{expected_type})"
             end
             credentials[name] = value
           end
@@ -20535,7 +20572,11 @@ def configure_deployment(app_id)
             destination_items = item_plans.fetch(destination)
             r2_item_plan = destination_items.fetch("r2")
             service_account_plan = destination_items.fetch("service_account")
-            item_action = r2_item_plan.fetch("id") ? "更新" : "作成"
+            item_action = case r2_item_plan.fetch("action")
+            when "reuse" then "既存を使用"
+            when "create" then "新規作成"
+            else raise Error, "1Password itemの処理計画が不正です: #{r2_item_plan.fetch("title")}"
+            end
             token_plan = token_plans.fetch(destination)
             token_action = token_plan.fetch("action") == "reuse" ? "既存を使用" : "新規作成"
             vault_record = vault_plan["record"]
@@ -20598,6 +20639,39 @@ def configure_deployment(app_id)
             "R2_ACCESS_KEY" => token_id,
             "R2_SECRET_KEY" => Digest::SHA256.hexdigest(token_value)
           }
+        end
+
+        sig do
+          params(
+            plan: T::Hash[String, T.untyped],
+            account_id: String,
+            vault_id: String,
+            fields: T::Hash[String, String],
+            concealed_fields: T::Array[String]
+          ).returns(T.nilable(String))
+        end
+        def apply_r2_item_plan(plan, account_id:, vault_id:, fields:, concealed_fields:)
+          case plan.fetch("action")
+          when "reuse"
+            item_id = plan.fetch("id")
+            unless item_id.is_a?(String) && !item_id.empty?
+              raise Error, "再利用する1Password item IDが不正です: #{plan.fetch("title")}"
+            end
+            return item_id
+          when "create"
+            # Continue to the one-time credential persistence path below.
+          else
+            raise Error, "1Password itemの処理計画が不正です: #{plan.fetch("title")}"
+          end
+
+          persist_item_with_retry(
+            plan,
+            account_id:,
+            vault_id:,
+            fields:,
+            concealed_fields:,
+            label: "Cloudflare API token"
+          )
         end
 
         sig do
@@ -21737,6 +21811,55 @@ def configure_deployment(app_id)
           refute_includes content, "CLOUDFLARE_R2_API_TOKEN"
         end
       end
+
+      test "reuses an exact R2 credential pair without saving the 1Password item" do
+        configurator = Deployment::Configurator.new(output: StringIO.new, environment: {})
+        account_id = "cf-account"
+        bucket = "sample-db-production"
+        permission_group = { "id" => "r2-write" }
+        policy = configurator.send(:cloudflare_token_policy, account_id, bucket, "r2-write")
+        raw_token = "cloudflare-secret"
+        item = {
+          "id" => "r2-item",
+          "title" => "sample Litestream R2 production",
+          "category" => "API_CREDENTIAL",
+          "fields" => [
+            { "id" => "CLOUDFLARE_R2_API_TOKEN", "label" => "CLOUDFLARE_R2_API_TOKEN", "type" => "CONCEALED", "value" => raw_token },
+            { "id" => "CF_ACCOUNT_ID", "label" => "CF_ACCOUNT_ID", "type" => "STRING", "value" => account_id },
+            { "id" => "LITESTREAM_R2_BUCKET", "label" => "LITESTREAM_R2_BUCKET", "type" => "STRING", "value" => bucket },
+            { "id" => "R2_ACCESS_KEY", "label" => "R2_ACCESS_KEY", "type" => "CONCEALED", "value" => "token-id" },
+            { "id" => "R2_SECRET_KEY", "label" => "R2_SECRET_KEY", "type" => "CONCEALED", "value" => Digest::SHA256.hexdigest(raw_token) }
+          ]
+        }
+        plan = configurator.send(
+          :plan_r2_credentials,
+          "production",
+          account_id:,
+          bucket:,
+          permission_group:,
+          cloudflare_tokens: [{
+            "id" => "token-id",
+            "name" => "sample-r2-production",
+            "status" => "active",
+            "policies" => [policy]
+          }],
+          item_plan: { "title" => item.fetch("title"), "id" => item.fetch("id"), "item" => item }
+        )
+        assert_equal "reuse", plan.dig("token", "action")
+        assert_equal "reuse", plan.dig("item", "action")
+
+        one_password = Object.new
+        one_password.define_singleton_method(:save_item) { |*, **| raise "must not save a reused item" }
+        configurator.instance_variable_set(:@one_password, one_password)
+        assert_equal "r2-item", configurator.send(
+          :apply_r2_item_plan,
+          plan.fetch("item"),
+          account_id: "op-account",
+          vault_id: "vault-id",
+          fields: T.cast(plan.dig("token", "credentials"), T::Hash[String, String]),
+          concealed_fields: %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY]
+        )
+      end
     end
   RUBY
 
@@ -22561,10 +22684,12 @@ def configure_kamal
     an account-owned token named `<normalized-app-id>-r2-<destination>`. Its only allow policy is
     **Workers R2 Storage Bucket Item Write** for that destination's bucket. Names longer than 120
     bytes shorten the app ID and include its SHA-256 hash. The task lists every page of existing
-    account tokens before deciding whether to create one. It reuses one only when its name, active
-    state, policy, bucket, token ID, and 1Password-held token-derived secret all match. Duplicate,
-    inactive, mismatched, or orphaned tokens stop configuration without automatic creation,
-    rotation, or deletion.
+    account tokens before deciding whether to create one. It creates a token and item only when
+    neither exists. It reuses both only when the token name, active state, policy, bucket, and the
+    1Password API Credential category plus all five managed field types and values match. An exact
+    pair is shown as existing, keeps the current item ID, and does not call `op item edit`.
+    Duplicate, inactive, mismatched, or one-sided token/item states stop configuration without
+    automatic creation, overwrite, rotation, revocation, or deletion.
 
     The Cloudflare token value is stored as the concealed `CLOUDFLARE_R2_API_TOKEN` field only in
     the destination vault's `#{app_id} Litestream R2 <destination>` item. `R2_ACCESS_KEY` is the

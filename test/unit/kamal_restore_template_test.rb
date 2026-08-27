@@ -787,6 +787,306 @@ class KamalRestoreTemplateTest < Minitest::Test
     Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
+  def test_r2_credentials_are_created_or_reused_as_one_consistent_pair
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    configurator = Deployment::Configurator.new(environment: {})
+    account_id = "cf-account"
+    bucket = "sample-db-production"
+    permission_group = { "id" => "r2-write" }
+    policy = configurator.send(:cloudflare_token_policy, account_id, bucket, "r2-write")
+    raw_token = "cloudflare-secret"
+    item = {
+      "id" => "r2-item",
+      "title" => "sample Litestream R2 production",
+      "category" => "API_CREDENTIAL",
+      "fields" => [
+        { "id" => "CLOUDFLARE_R2_API_TOKEN", "label" => "CLOUDFLARE_R2_API_TOKEN", "type" => "CONCEALED", "value" => raw_token },
+        { "id" => "CF_ACCOUNT_ID", "label" => "CF_ACCOUNT_ID", "type" => "STRING", "value" => account_id },
+        { "id" => "LITESTREAM_R2_BUCKET", "label" => "LITESTREAM_R2_BUCKET", "type" => "STRING", "value" => bucket },
+        { "id" => "R2_ACCESS_KEY", "label" => "R2_ACCESS_KEY", "type" => "CONCEALED", "value" => "token-id" },
+        { "id" => "R2_SECRET_KEY", "label" => "R2_SECRET_KEY", "type" => "CONCEALED", "value" => Digest::SHA256.hexdigest(raw_token) },
+        { "id" => "notesPlain", "label" => "notesPlain", "type" => "STRING", "value" => "preserved" }
+      ]
+    }
+    item_plan = { "title" => item.fetch("title"), "id" => item.fetch("id"), "item" => item }
+    token = {
+      "id" => "token-id",
+      "name" => "sample-r2-production",
+      "status" => "active",
+      "policies" => [policy]
+    }
+
+    reused = configurator.send(
+      :plan_r2_credentials,
+      "production",
+      account_id:,
+      bucket:,
+      permission_group:,
+      cloudflare_tokens: [token],
+      item_plan:
+    )
+    assert_equal "reuse", reused.dig("token", "action")
+    assert_equal "reuse", reused.dig("item", "action")
+    assert_equal "r2-item", reused.dig("item", "id")
+
+    created = configurator.send(
+      :plan_r2_credentials,
+      "production",
+      account_id:,
+      bucket:,
+      permission_group:,
+      cloudflare_tokens: [],
+      item_plan: { "title" => item.fetch("title"), "id" => nil, "item" => nil }
+    )
+    assert_equal "create", created.dig("token", "action")
+    assert_equal "create", created.dig("item", "action")
+
+    [
+      [
+        { "id" => "one", "title" => item.fetch("title") },
+        { "id" => "two", "title" => item.fetch("title") }
+      ],
+      [{ "id" => "archived", "title" => item.fetch("title"), "state" => "ARCHIVED" }]
+    ].each do |items|
+      assert_raises(Deployment::Error) do
+        configurator.send(
+          :plan_item,
+          "production",
+          items,
+          account_id: "op-account",
+          vault_id: "vault-id"
+        )
+      end
+    end
+
+    error = assert_raises(Deployment::Error) do
+      configurator.send(
+        :plan_r2_credentials,
+        "production",
+        account_id:,
+        bucket:,
+        permission_group:,
+        cloudflare_tokens: [],
+        item_plan:
+      )
+    end
+    assert_includes error.message, "Cloudflare API tokenがありませんが".b
+
+    error = assert_raises(Deployment::Error) do
+      configurator.send(
+        :plan_r2_credentials,
+        "production",
+        account_id:,
+        bucket:,
+        permission_group:,
+        cloudflare_tokens: [token],
+        item_plan: { "title" => item.fetch("title"), "id" => nil, "item" => nil }
+      )
+    end
+    assert_includes error.message, "対応する1Password itemがありません".b
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_new_r2_credential_pair_creates_and_saves_once
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    account_id = "cf-account"
+    bucket = "sample-db-production"
+    permission_group_id = "r2-write"
+    api = Object.new
+    create_calls = 0
+    api.define_singleton_method(:create_token) do |requested_account_id, name:, policy:|
+      create_calls += 1
+      raise "unexpected account" unless requested_account_id == account_id
+
+      {
+        "id" => "token-id",
+        "name" => name,
+        "status" => "active",
+        "value" => "cloudflare-secret",
+        "policies" => [policy]
+      }
+    end
+    configurator = Deployment::Configurator.new(environment: {}, cloudflare_client: api)
+    policy = configurator.send(:cloudflare_token_policy, account_id, bucket, permission_group_id)
+    token_plan = { "name" => "sample-r2-production", "action" => "create", "policy" => policy }
+    credentials = configurator.send(:cloudflare_credentials, token_plan, account_id:, bucket:)
+
+    one_password = Object.new
+    save_calls = 0
+    one_password.define_singleton_method(:api_credential_template) { |**| { "fields" => [] } }
+    one_password.define_singleton_method(:save_item) do |item, **|
+      save_calls += 1
+      fields = item.fetch("fields").to_h { |field| [field.fetch("label"), field.fetch("value")] }
+      raise "unexpected credentials" unless fields.fetch("CLOUDFLARE_R2_API_TOKEN") == "cloudflare-secret"
+
+      { "id" => "r2-item" }
+    end
+    configurator.instance_variable_set(:@one_password, one_password)
+    item_id = configurator.send(
+      :apply_r2_item_plan,
+      { "title" => "sample Litestream R2 production", "id" => nil, "item" => nil, "action" => "create" },
+      account_id: "op-account",
+      vault_id: "vault-id",
+      fields: credentials.merge("CF_ACCOUNT_ID" => account_id, "LITESTREAM_R2_BUCKET" => bucket),
+      concealed_fields: %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY]
+    )
+
+    assert_equal "r2-item", item_id
+    assert_equal 1, create_calls
+    assert_equal 1, save_calls
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_r2_credentials_reject_drift_before_apply
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    configurator = Deployment::Configurator.new(environment: {})
+    account_id = "cf-account"
+    bucket = "sample-db-production"
+    permission_group = { "id" => "r2-write" }
+    policy = configurator.send(:cloudflare_token_policy, account_id, bucket, "r2-write")
+    raw_token = "cloudflare-secret"
+    base_item = {
+      "id" => "r2-item",
+      "title" => "sample Litestream R2 production",
+      "category" => "API_CREDENTIAL",
+      "fields" => [
+        { "id" => "CLOUDFLARE_R2_API_TOKEN", "label" => "CLOUDFLARE_R2_API_TOKEN", "type" => "CONCEALED", "value" => raw_token },
+        { "id" => "CF_ACCOUNT_ID", "label" => "CF_ACCOUNT_ID", "type" => "STRING", "value" => account_id },
+        { "id" => "LITESTREAM_R2_BUCKET", "label" => "LITESTREAM_R2_BUCKET", "type" => "STRING", "value" => bucket },
+        { "id" => "R2_ACCESS_KEY", "label" => "R2_ACCESS_KEY", "type" => "CONCEALED", "value" => "token-id" },
+        { "id" => "R2_SECRET_KEY", "label" => "R2_SECRET_KEY", "type" => "CONCEALED", "value" => Digest::SHA256.hexdigest(raw_token) }
+      ]
+    }
+    base_token = {
+      "id" => "token-id",
+      "name" => "sample-r2-production",
+      "status" => "active",
+      "policies" => [policy]
+    }
+    cases = {
+      "activeではありません" => [base_token.merge("status" => "disabled"), base_item],
+      "権限またはbucketが期待値と一致しません" => [base_token.merge("policies" => []), base_item],
+      "R2_ACCESS_KEYが一致しません" => [base_token, changed_r2_item(base_item, "R2_ACCESS_KEY", value: "other-id")],
+      "R2_SECRET_KEYが一致しません" => [base_token, changed_r2_item(base_item, "R2_SECRET_KEY", value: "wrong")],
+      "CF_ACCOUNT_IDが一致しません" => [base_token, changed_r2_item(base_item, "CF_ACCOUNT_ID", value: "other-account")],
+      "LITESTREAM_R2_BUCKETが一致しません" => [base_token, changed_r2_item(base_item, "LITESTREAM_R2_BUCKET", value: "other-bucket")],
+      "field typeが一致しません" => [base_token, changed_r2_item(base_item, "R2_SECRET_KEY", type: "STRING")],
+      "API Credentialではありません" => [base_token, base_item.merge("category" => "LOGIN")]
+    }
+
+    cases.each do |message, (token, item)|
+      error = assert_raises(Deployment::Error) do
+        configurator.send(
+          :plan_r2_credentials,
+          "production",
+          account_id:,
+          bucket:,
+          permission_group:,
+          cloudflare_tokens: [token],
+          item_plan: { "title" => item.fetch("title"), "id" => item.fetch("id"), "item" => item }
+        )
+      end
+      assert_includes error.message, message.b
+    end
+
+    error = assert_raises(Deployment::Error) do
+      configurator.send(
+        :plan_r2_credentials,
+        "production",
+        account_id:,
+        bucket:,
+        permission_group:,
+        cloudflare_tokens: [base_token, base_token],
+        item_plan: { "title" => base_item.fetch("title"), "id" => base_item.fetch("id"), "item" => base_item }
+      )
+    end
+    assert_includes error.message, "同名のCloudflare API tokenが複数".b
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
+  def test_reused_r2_item_is_not_saved_and_is_described_as_existing
+    files = build_kamal_files(
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "skip"
+    )
+    eval_deployment_files(files)
+    output = StringIO.new
+    configurator = Deployment::Configurator.new(output:, environment: {})
+    one_password = Object.new
+    one_password.define_singleton_method(:save_item) { |*, **| raise "must not save a reused item" }
+    configurator.instance_variable_set(:@one_password, one_password)
+    item_plan = {
+      "title" => "sample Litestream R2 production",
+      "id" => "r2-item",
+      "item" => {},
+      "action" => "reuse"
+    }
+    fields = {
+      "CLOUDFLARE_R2_API_TOKEN" => "cloudflare-secret",
+      "CF_ACCOUNT_ID" => "cf-account",
+      "LITESTREAM_R2_BUCKET" => "sample-db-production",
+      "R2_ACCESS_KEY" => "token-id",
+      "R2_SECRET_KEY" => Digest::SHA256.hexdigest("cloudflare-secret")
+    }
+
+    assert_equal "r2-item", configurator.send(
+      :apply_r2_item_plan,
+      item_plan,
+      account_id: "op-account",
+      vault_id: "vault-id",
+      fields:,
+      concealed_fields: %w[CLOUDFLARE_R2_API_TOKEN R2_ACCESS_KEY R2_SECRET_KEY]
+    )
+
+    configurator.send(
+      :print_plan,
+      { "user" => { "email" => "person@example.com" }, "authType" => "OAuth" },
+      { "id" => "cf-account", "name" => "Cloudflare" },
+      { "id" => "op-account", "name" => "Example" },
+      { "id" => "person", "name" => "Person" },
+      { "production" => { "record" => { "id" => "vault-id", "name" => "sample-production" } } },
+      ["production"],
+      { "production" => "sample-db-production" },
+      ["sample-db-production"],
+      {
+        "production" => {
+          "r2" => item_plan,
+          "service_account" => { "title" => "deploy:sample:production", "action" => "reuse" }
+        }
+      },
+      {
+        "production" => {
+          "name" => "sample-r2-production",
+          "action" => "reuse"
+        }
+      }
+    )
+    assert_includes output.string, "1Password item=sample Litestream R2 production (既存を使用)"
+    refute_includes output.string, "更新"
+    refute_includes output.string, "cloudflare-secret"
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
   def test_default_no_finishes_all_discovery_without_mutating_selected_or_unselected_environment
     files = build_kamal_files(
       "active_job" => "solid_queue",
@@ -1213,6 +1513,14 @@ class KamalRestoreTemplateTest < Minitest::Test
     Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
   private
+
+  def changed_r2_item(item, field_name, value: nil, type: nil)
+    changed = JSON.parse(JSON.generate(item))
+    field = changed.fetch("fields").find { |candidate| candidate["id"] == field_name }
+    field["value"] = value if value
+    field["type"] = type if type
+    changed
+  end
 
   def eval_deployment_files(files)
     Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)

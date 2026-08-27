@@ -70,7 +70,7 @@ Rails Application Templateの`gem`などを利用して、bundle installに必�
 
 ### `post_bundle`
 
-development依存にはGumとローカルWrangler v4を固定します。Kamal/Litestream生成ではCloudflare R2固定設定、production/staging overlay、人間ユーザーのaccount全体で冪等に確定するdestination別1Password vault、各vaultだけを読める環境別service account、`CLOUDFLARE_INITIAL_API_TOKEN`のactive状態・所有account・最小権限を外部変更前に検証してからdestination別・bucket限定のaccount-owned tokenを冪等に作成または再利用する責務別service、薄いRake task、destination必須の復元CLIを配置します。
+development依存にはGumとローカルWrangler v4を固定します。Kamal/Litestream生成ではCloudflare R2固定設定、production/staging overlay、人間ユーザーのaccount全体で冪等に確定するdestination別1Password vault、各vaultだけを読める環境別service account、`CLOUDFLARE_INITIAL_API_TOKEN`のactive状態・所有account・最小権限を外部変更前に検証してからdestination別・bucket限定のaccount-owned tokenと1Password itemを一組として冪等に作成または再利用する責務別service、薄いRake task、destination必須の復元CLIを配置します。完全一致した組は再保存せず、片方だけの存在や内容不一致では自動修復・rotation・revokeを行わず停止します。
 
 生成後の`deployment:setup-server`は、`deployment:configure`で対象destinationのsecret参照が生成済みであることを先に確認します。Gumでdestination、Vultr、VPS、FQDN、DNS構成を選び、Vultr・DNS・既存destination・remote OSと専用性を無変更で検証します。既存管理値と専用sshd drop-inの上書きだけを既定値「中止」で確認し、SSH強化を独立接続で確認してからdestination YAMLを保存します。最後の既定値「実行」の確認後だけKamal setupとHTTPS health確認を行います。
 

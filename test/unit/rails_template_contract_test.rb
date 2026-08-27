@@ -1843,6 +1843,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes r2, 'validate_cloudflare_initial_token!(account)'
     assert_includes r2, 'class RequestError < Error'
     assert_includes r2, 'Digest::SHA256.hexdigest(token_value)'
+    assert_includes r2, 'R2_ITEM_FIELD_TYPES = T.let('
+    assert_includes r2, 'def plan_r2_credentials('
+    assert_includes r2, '"item" => item_plan.merge("action" => "reuse")'
+    assert_includes r2, 'def apply_r2_item_plan('
+    assert_includes r2, 'Cloudflare API tokenがありませんが、対応する1Password itemが存在します'.b
+    assert_includes r2, 'when "reuse" then "既存を使用"'.b
+    assert_includes r2, 'when "create" then "新規作成"'.b
+    refute_includes r2, 'item_action = r2_item_plan.fetch("id") ? "更新" : "作成"'.b
     refute_includes r2, 'password: true'
     assert_includes r2, 'stdin_data: JSON.generate(item)'
     assert_includes r2, 'default: false'

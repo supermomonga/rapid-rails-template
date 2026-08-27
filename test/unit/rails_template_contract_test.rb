@@ -1762,6 +1762,7 @@ class RailsTemplateContractTest < Minitest::Test
     restore = source_between("def kamal_restore_cli_body", "def configure_kamal_restore")
     volume_helper = source_between("def configure_kamal_restore", "def configure_deployment")
     r2 = source_between("def configure_deployment", "def configure_kamal")
+    server_setup = source_between('  server_setup = <<~RUBY', '  create_file "lib/deployment/server_setup.rb"')
 
     assert_includes @source, 'gem "kamal", "~> 2.11", require: false'
     assert_includes kamal, "minimum_version: 2.11.0"
@@ -1776,6 +1777,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes kamal, 'remove_file ".kamal/secrets"'
     assert_includes kamal, 'create_file "config/deploy.production.yml"'
     assert_includes kamal, 'create_file "config/deploy.staging.yml"'
+    refute_includes kamal, 'ENV.fetch("KAMAL_DEPLOY_HOST")'
+    refute_includes kamal, 'ENV.fetch("KAMAL_PROXY_HOST")'
     refute_match(/AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|LITESTREAM_STORAGE_REPLICA_URL/, kamal)
     assert_includes kamal, 'cmd: bin/jobs --mode async'
     assert_includes kamal, 'GET /status HTTP/1.0'
@@ -1860,8 +1863,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes r2, 'require "deployment/cloudflare_client"'
     assert_includes r2, 'require "deployment/one_password_client"'
     assert_includes r2, 'require "deployment/kamal_secrets_writer"'
+    assert_includes r2, 'create_file "lib/deployment/server_setup.rb"'
+    assert_includes r2, 'task :"setup-server" => :environment'
+    assert_includes r2, '"vultr-cli", "instance", "list", "--output=json", "--per-page=500"'
+    assert_includes r2, 'PasswordAuthentication no'
+    refute_match(/\bufw\b/i, server_setup)
     refute_includes kamal, 'append_to_file ".gitignore", "\n/mise.local.toml\n"'
-    assert_includes kamal, "mise exec -- bin/kamal setup -d production"
+    assert_includes kamal, "bin/rails deployment:setup-server"
+    assert_includes kamal, "bin/kamal setup -d DESTINATION"
     refute_includes r2, "litestream:configure:r2"
   end
 

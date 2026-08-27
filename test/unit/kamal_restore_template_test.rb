@@ -114,7 +114,9 @@ class KamalRestoreTemplateTest < Minitest::Test
 
     RubyVM::InstructionSequence.compile(files.fetch("bin/wait-for-litestream"))
     RubyVM::InstructionSequence.compile(files.fetch("lib/deployment/configurator.rb"))
+    RubyVM::InstructionSequence.compile(files.fetch("lib/deployment/server_setup.rb"))
     RubyVM::InstructionSequence.compile(files.fetch("test/lib/deployment/configurator_test.rb"))
+    RubyVM::InstructionSequence.compile(files.fetch("test/lib/deployment/server_setup_test.rb"))
   end
 
   def test_docker_build_packages_follow_siwe_selection
@@ -444,7 +446,10 @@ class KamalRestoreTemplateTest < Minitest::Test
     assert_equal true, deploy.fetch("require_destination")
     assert_equal "web", deploy.fetch("primary_role")
     assert_equal "amd64", deploy.dig("builder", "arch")
-    assert_equal ["192.0.2.10"], deploy.dig("servers", "web")
+    assert_equal [], deploy.dig("servers", "web")
+    assert_nil deploy.dig("proxy", "host")
+    assert_nil deploy.dig("env", "clear", "APPLICATION_ORIGIN")
+    assert_nil deploy.dig("accessories", "litestream", "host")
     assert_equal "bin/jobs --mode async", deploy.dig("servers", "worker", "cmd")
     assert_equal "litestream/litestream:0.5.15", deploy.dig("accessories", "litestream", "image")
     assert_equal ["sample_production_storage:/rails/storage"], deploy.dig("accessories", "litestream", "volumes")
@@ -497,8 +502,10 @@ class KamalRestoreTemplateTest < Minitest::Test
       lib/deployment/one_password_client.rb
       lib/deployment/kamal_secrets_writer.rb
       lib/deployment/configurator.rb
+      lib/deployment/server_setup.rb
       lib/tasks/deployment.rake
       test/lib/deployment/configurator_test.rb
+      test/lib/deployment/server_setup_test.rb
     ].each do |path|
       assert files.key?(path), "missing generated artifact: #{path}"
       RubyVM::InstructionSequence.compile(files.fetch(path)) if path.end_with?(".rb")
@@ -508,6 +515,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     assert_equal "deploy:sample:production", Deployment::Configurator.service_account_name("Sample!", "production")
     assert_equal "sample-staging", Deployment::Configurator.destination_vault_name("Sample!", "staging")
     assert_includes files.fetch("lib/tasks/deployment.rake"), "namespace :deployment"
+    assert_includes files.fetch("lib/tasks/deployment.rake"), 'task :"setup-server" => :environment'
     refute files.fetch("lib/tasks/deployment.rake").include?("litestream:configure:r2")
   ensure
     Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
@@ -1214,6 +1222,7 @@ class KamalRestoreTemplateTest < Minitest::Test
       lib/deployment/one_password_client.rb
       lib/deployment/kamal_secrets_writer.rb
       lib/deployment/configurator.rb
+      lib/deployment/server_setup.rb
     ]
     features = paths.map { |path| path.delete_prefix("lib/") }
     added_features = features.reject { |feature| $LOADED_FEATURES.include?(feature) }

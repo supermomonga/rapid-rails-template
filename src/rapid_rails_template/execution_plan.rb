@@ -473,8 +473,10 @@ module RapidRailsTemplate
         lib/deployment/configurator.rb
         lib/deployment/kamal_secrets_writer.rb
         lib/deployment/one_password_client.rb
+        lib/deployment/server_setup.rb
         lib/tasks/deployment.rake
         test/lib/deployment/configurator_test.rb
+        test/lib/deployment/server_setup_test.rb
         docs/deployment.md
       ])
       result << "mise.local.toml"

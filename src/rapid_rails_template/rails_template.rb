@@ -20932,7 +20932,12 @@ def configure_kamal
     mise.local.toml
   IGNORE
 
-  create_file "Dockerfile", <<~'DOCKERFILE', force: true
+  docker_build_packages = %w[build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev]
+  if VALUES.fetch("additional_login_methods").include?("siwe")
+    docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])
+  end
+
+  create_file "Dockerfile", format(<<~'DOCKERFILE', build_packages: docker_build_packages.join(" ")), force: true
     # syntax=docker/dockerfile:1
     # check=error=true
     ARG RUBY_VERSION=4.0.0
@@ -20950,7 +20955,7 @@ def configure_kamal
 
     FROM base AS build
     RUN apt-get update -qq && \
-        apt-get install --no-install-recommends -y build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev && \
+        apt-get install --no-install-recommends -y %{build_packages} && \
         rm -rf /var/lib/apt/lists /var/cache/apt/archives
     COPY Gemfile Gemfile.lock ./
     RUN bundle install && rm -rf /root/.bundle

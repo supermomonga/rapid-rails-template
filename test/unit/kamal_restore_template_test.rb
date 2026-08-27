@@ -117,6 +117,29 @@ class KamalRestoreTemplateTest < Minitest::Test
     RubyVM::InstructionSequence.compile(files.fetch("test/lib/litestream/r2_configurator_test.rb"))
   end
 
+  def test_docker_build_packages_follow_siwe_selection
+    common_values = {
+      "active_job" => "solid_queue",
+      "action_cable" => "solid_cable",
+      "web_push" => "use"
+    }
+    common_packages = %w[build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev]
+    siwe_packages = %w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev]
+    without_siwe = build_kamal_files(common_values).fetch("Dockerfile")
+    with_siwe = build_kamal_files(
+      common_values.merge("additional_login_methods" => %w[siwe])
+    ).fetch("Dockerfile")
+
+    assert_includes without_siwe,
+      "apt-get install --no-install-recommends -y #{common_packages.join(" ")} && \\"
+    siwe_packages.each { |package| refute_includes without_siwe, package }
+    assert_includes with_siwe,
+      "apt-get install --no-install-recommends -y #{(common_packages + siwe_packages).join(" ")} && \\"
+
+    runtime_stage = with_siwe.split("\nFROM base\n", 2).fetch(1)
+    siwe_packages.each { |package| refute_includes runtime_stage, package }
+  end
+
   def test_plan_only_uses_litestream_dry_run_without_mutating_kamal
     runner = FakeRunner.new
 
@@ -1952,7 +1975,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     end_index = source.index("after_bundle do", start_index) || raise("kamal source end not found")
     builder_class = Class.new
     builder_class.const_set(:PLAN, { "app_id" => "sample" })
-    builder_class.const_set(:VALUES, values)
+    builder_class.const_set(:VALUES, { "additional_login_methods" => [] }.merge(values))
     builder_class.const_set(:YAML, YAML)
     builder_class.class_eval(source.byteslice(start_index...end_index), TEMPLATE_PATH, 1)
     files = {}

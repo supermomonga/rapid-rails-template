@@ -2024,6 +2024,62 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes @source, "account_navigation_items << <<~ERB"
   end
 
+  def test_soft_maintenance_uses_one_persistent_setting_and_shared_request_boundaries
+    model = generated_file_source("app/models/soft_maintenance_setting.rb")
+    policy = generated_file_source("app/policies/soft_maintenance_setting_policy.rb")
+    site_concern = generated_file_source("app/controllers/concerns/soft_maintenance_requests.rb")
+    authentication_concern = generated_file_source("app/controllers/concerns/soft_maintenance_authentication.rb")
+    api_concern = generated_file_source("app/controllers/concerns/soft_maintenance_api_requests.rb")
+    admin_controller = generated_file_source("app/controllers/admin/soft_maintenance_settings_controller.rb")
+    admin_view = generated_file_source("app/views/admin/soft_maintenance_settings/show.html.erb")
+    maintenance_layout = generated_file_source("app/views/layouts/soft_maintenance.html.erb")
+    maintenance_view = generated_file_source("app/views/soft_maintenance/show.html.erb")
+    form_controller = generated_file_source("app/javascript/controllers/soft_maintenance_form_controller.js")
+    after_bundle = @source.byteslice(@source.index("after_bundle do")..)
+
+    assert_includes model, "CURRENT_ID = 1"
+    assert_includes model, "find(CURRENT_ID)"
+    assert_includes model, "length: { maximum: 500 }"
+    assert_includes @source, 'add_check_constraint :soft_maintenance_settings, "id = 1"'
+    assert_includes @source, "record_class.create!(id: 1, site_enabled: false"
+    assert_includes @source, 'create_file "test/fixtures/soft_maintenance_settings.yml"'
+    assert_includes policy, "def manage?"
+    assert_includes policy, "def bypass_site?"
+    assert_includes site_concern, "before_action :enforce_soft_site_maintenance"
+    assert_includes site_concern, "soft_maintenance_exempt_request?"
+    assert_includes site_concern, 'controller_path == "rails/pwa"'
+    assert_includes site_concern, 'controller_path.start_with?("active_storage/", "active_storage_db/")'
+    assert_includes site_concern, "self.class <= Admin::BaseController"
+    assert_includes site_concern, 'response.headers["Cache-Control"] = "no-store"'
+    assert_includes site_concern, 'render json: { error: "maintenance", message: soft_maintenance_setting.message }'
+    assert_includes site_concern, 'render template: "soft_maintenance/show", formats: [:html]'
+    assert_includes authentication_concern, "skip_before_action :enforce_soft_site_maintenance"
+    assert_includes authentication_concern, "soft_maintenance_blocks_login?"
+    assert_includes api_concern, "prepend_before_action :enforce_soft_api_maintenance"
+    assert_includes api_concern, 'render json: { error: "maintenance", message: setting.message }'
+    assert_includes admin_controller, "activation_required"
+    assert_includes admin_controller, 'params[:activation_confirmed] != "1"'
+    assert_includes admin_view, 'class: action_button_classes(:secondary), target: "_blank", rel: "noopener"'
+    assert_includes admin_view, 'class: "toggle shrink-0"'
+    assert_equal 2, admin_view.scan('<fieldset class="fieldset min-w-0 grid-cols-1">').size
+    assert_includes admin_view, 'class: "textarea min-h-32 w-full"'
+    assert_includes admin_view, '<p class="label whitespace-normal"><%= t("soft_maintenance.admin.message_hint") %></p>'
+    assert_includes admin_view, "with_modal("
+    assert_includes admin_view, "alert alert-info alert-soft"
+    assert_includes maintenance_layout, 'meta name="turbo-visit-control" content="reload"'
+    assert_includes maintenance_view, '<%= @soft_maintenance_setting.message %>'.b
+    assert_includes form_controller, "activationRequired()"
+    assert_includes form_controller, 'this.confirmationTarget.value = "1"'
+    assert_includes @source, 'resource :soft_maintenance, only: %i[show update]'
+    assert_includes @source, 'return if soft_maintenance_blocks_login?(user)'
+    assert_includes @source, 'before: "      request.env[\"devise.skip_timeout\"] = true\n"'
+    assert_includes @source, 'page.current_window.resize_to(dimensions.fetch("width"), dimensions.fetch("height")) if dimensions'
+    assert_operator after_bundle.index("configure_default_views"), :<,
+      after_bundle.index("configure_soft_maintenance")
+    assert_operator after_bundle.index("configure_soft_maintenance"), :<,
+      after_bundle.index('run_checked "bin/rails db:prepare"')
+  end
+
   def test_default_page_integration_uses_the_generated_role_api
     assert_includes @source, "user.grant_role!(:admin)"
     refute_includes @source, "user.add_role(:admin)"
@@ -2547,11 +2603,13 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes account_navigation, "admin_pages_path"
     refute_includes account_navigation, "admin_faqs_path"
     refute_includes account_navigation, "edit_admin_footer_setting_path"
-    assert_equal 9, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
-    assert_equal 9, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
+    assert_equal 10, admin_navigation.scan('<svg xmlns="http://www.w3.org/2000/svg" class="size-5"').size
+    assert_equal 10, admin_navigation.scan('aria-hidden="true" data-slot="icon"').size
     assert_includes admin_navigation, 'application_routes.admin_root_path'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/overview"'
     assert_includes admin_navigation, 'application_translate("navigation.overview")'
+    assert_includes admin_navigation, "application_routes.admin_soft_maintenance_path"
+    assert_includes admin_navigation, 'application_translate("navigation.soft_maintenance")'
     assert_includes admin_navigation, '"menu-active" if controller_path.in?(%w[admin/users admin/user_roles])'
     assert_includes admin_navigation, 'application_routes.admin_notifications_path'
     assert_includes admin_navigation, '"menu-active" if controller_path == "admin/pages"'

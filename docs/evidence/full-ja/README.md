@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `ab1016ba4ffa8fab47282b9484e7f2aa3017caffff49d0286b8e24a880149f11`
-- Base commit: `2c71dcc584a3e6873cfaa18e965364a35b9ef52f`
+- Source fingerprint: `b9a52788e816d8bedb332064761b23aede8cb1464dc9e9b836486e927604b0c3`
+- Base commit: `9d70e873e7f85bb37f7b2bca2d9a9cae8f8240f9`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -125,6 +125,30 @@
 |Desktop|Mobile|
 |---|---|
 |![管理画面 (desktop)](admin-overview--desktop.png)|![管理画面 (mobile)](admin-overview--mobile.png)|
+
+## ソフトメンテナンス設定
+
+|Desktop|Mobile|
+|---|---|
+|![ソフトメンテナンス設定 (desktop)](admin-soft-maintenance--desktop.png)|![ソフトメンテナンス設定 (mobile)](admin-soft-maintenance--mobile.png)|
+
+## ソフトメンテナンス開始確認
+
+|Desktop|Mobile|
+|---|---|
+|![ソフトメンテナンス開始確認 (desktop)](admin-soft-maintenance-confirmation--desktop.png)|![ソフトメンテナンス開始確認 (mobile)](admin-soft-maintenance-confirmation--mobile.png)|
+
+## ソフトメンテナンス画面プレビュー
+
+|Desktop|Mobile|
+|---|---|
+|![ソフトメンテナンス画面プレビュー (desktop)](soft-maintenance-preview--desktop.png)|![ソフトメンテナンス画面プレビュー (mobile)](soft-maintenance-preview--mobile.png)|
+
+## ソフトメンテナンス中
+
+|Desktop|Mobile|
+|---|---|
+|![ソフトメンテナンス中 (desktop)](soft-maintenance--desktop.png)|![ソフトメンテナンス中 (mobile)](soft-maintenance--mobile.png)|
 
 ## プロフィール（自動生成アバター）
 

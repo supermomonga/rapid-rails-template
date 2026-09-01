@@ -507,7 +507,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     assert_includes files.fetch("lib/tasks/deployment.rake"), "Deployment::Configurator.new(root: Rails.root).run!"
     assert_includes files.fetch(".kamal/hooks/pre-deploy"), "sample-${KAMAL_DESTINATION}-restore-in-progress"
     assert_includes files.fetch(".kamal/hooks/pre-deploy"), "sample-${KAMAL_DESTINATION}-maintenance.json"
-    assert_includes files.fetch("docs/deployment.md"), "## Database maintenance mode"
+    assert_includes files.fetch("docs/deployment.md"), "## Soft maintenance"
+    assert_includes files.fetch("docs/deployment.md"), "## Hard maintenance"
     assert_includes files.fetch("docs/deployment.md"), "bin/kamal-maintenance status --destination=production"
 
     minimal_files = build_kamal_files(

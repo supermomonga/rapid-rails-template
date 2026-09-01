@@ -79,6 +79,7 @@ module RapidRailsTemplate
       result << "configure_pwa" if configuration["pwa"] == "use"
       result << "configure_web_push" if configuration["web_push"] == "use"
       result << "configure_default_views"
+      result << "configure_soft_maintenance"
       result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
       result << "install_job_operations" if configuration["job_operations"] == "enable"
       result << "install_maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
@@ -216,6 +217,23 @@ module RapidRailsTemplate
         app/views/home/index.html.erb
         app/views/accounts/show.html.erb
         test/integration/default_pages_test.rb
+        app/models/soft_maintenance_setting.rb
+        app/policies/soft_maintenance_setting_policy.rb
+        app/controllers/concerns/soft_maintenance_requests.rb
+        app/controllers/concerns/soft_maintenance_authentication.rb
+        app/controllers/admin/soft_maintenance_settings_controller.rb
+        app/javascript/controllers/soft_maintenance_form_controller.js
+        app/views/admin/soft_maintenance_settings/show.html.erb
+        app/views/layouts/soft_maintenance.html.erb
+        app/views/soft_maintenance/show.html.erb
+        config/locales/soft_maintenance.ja.yml
+        config/locales/soft_maintenance.en.yml
+        db/migrate/*_create_soft_maintenance_settings.rb
+        test/fixtures/soft_maintenance_settings.yml
+        test/models/soft_maintenance_setting_test.rb
+        test/policies/soft_maintenance_setting_policy_test.rb
+        test/controllers/admin/soft_maintenance_settings_controller_test.rb
+        test/integration/soft_maintenance_requests_test.rb
         config/storage.yml
         config/initializers/active_storage_db.rb
         db/storage_migrate/*_create_active_storage_db_files.active_storage_db.rb
@@ -228,6 +246,7 @@ module RapidRailsTemplate
       result << "sorbet/rbi/shims/boring_avatars.rbi"
       if configuration["api"] == "enable"
         result.concat(%w[
+          app/controllers/concerns/soft_maintenance_api_requests.rb
           app/models/api_credential.rb
           app/controllers/api/api_controller.rb
           app/controllers/api/api_credentials_controller.rb
@@ -241,6 +260,7 @@ module RapidRailsTemplate
           config/locales/api_credentials.en.yml
           test/models/api_credential_test.rb
           test/controllers/api/api_credentials_controller_test.rb
+          test/controllers/api/soft_maintenance_requests_test.rb
           test/controllers/api_credentials_controller_test.rb
         ])
       end

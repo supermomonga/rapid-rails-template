@@ -290,7 +290,9 @@ Cloudflare APIからpermission group IDを解決して対象bucketだけのallow
 
 空volumeではLitestreamの`restore-if-db-not-exists`を使用し、backupが存在すれば復元してからcontrol socketを公開します。既存DBを上書きしません。既存DBの手動復元はdestination指定必須の`bin/kamal-restore`だけを入口とし、plan表示、RFC3339時点指定、TTY、アプリID・destination・対象を含む完全一致確認、全DBのfull integrity check、destination別deploy lockとmarker、復元前DBの保存を必須にします。確認回避、`force`、単一DBだけの復元は提供しません。
 
-DBメンテナンスモードも質問やgenerator optionにはせず、全構成へRails非依存の`bin/kamal-maintenance`を生成します。`start`・`status`・`message`・`finish`だけを公開し、`production|staging` destinationを必須にします。変更操作はTTYとGumの既定値「中止」の確認を必須とし、forceや非対話実行、自動終了、任意DB command実行、Rails管理画面は提供しません。文言は生成時の既定localeに対応する初期値を持つ1行500文字以下のplain textとし、Kamal Proxyへargvで渡します。
+ソフトメンテナンスは質問やgenerator optionを追加せず、全構成へ標準生成します。主DBの固定ID 1の設定が、サイト状態、共通メッセージ、API有効構成だけのAPI状態を保持します。管理画面の2つのtoggleはサイトとAPIを個別に切り替え、オフからオンへの変更だけ確認modalを必須にします。サイト停止はadmin以外の画面と新規登録を503にしますが、admin、ログイン・ログアウト、静的アセット、Active Storage、PWA、`/up`を通し、既存セッションを破棄しません。API停止はBearer認証より先に全資格情報を拒否します。Worker、定期処理、Maintenance Tasks、通常deploy、実行中requestは停止しません。
+
+ハードメンテナンスも質問やgenerator optionにはせず、全構成へRails非依存の`bin/kamal-maintenance`を生成します。既存の名称と`start`・`status`・`message`・`finish`の契約を維持し、`production|staging` destinationを必須にします。変更操作はTTYとGumの既定値「中止」の確認を必須とし、forceや非対話実行、自動終了、任意DB command実行、Rails管理画面は提供しません。文言は生成時の既定localeに対応する初期値を持つ1行500文字以下のplain textとし、Kamal Proxyへargvで渡します。ソフトメンテナンスとは状態も文言も連動しません。
 
 `start`はProxyを503へ切り替えて全app roleを停止し、primary・storage・条件付きqueue/cableを最終同期してLitestreamを停止します。cacheはapp停止によってアクセス不能になりますが、backup・restore対象にはしません。`finish`はLitestreamのsocket、Web・条件付きWorker、内部health、Proxy live、公開`/up`の順に確認し、全成功後だけremote stateを削除します。remote stateはphase、文言、時刻、最後の成功step、失敗stepを保持し、同じsubcommandの再実行で続行します。restore markerとmaintenance stateは相互排他で、pre-deploy hookはどちらが存在しても通常deployを拒否します。
 

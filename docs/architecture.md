@@ -63,7 +63,8 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 - `--skip-action-mailer`と`--skip-action-mailbox`
 - Rails標準Docker/Kamalを常時生成するため、これらをskipするoptionは渡さない
 - Kamalは`production`・`staging` destinationを必須とし、LitestreamのCloudflare R2 bucket、最小権限のaccount-owned API token、1Password vault内の資格情報、volume、restore marker、maintenance stateをdestination単位で分離する
-- Rails非依存の`bin/kamal-maintenance`がKamal Proxyの503表示とWeb・Worker・Litestreamの停止・再開を担当する。Rails管理画面、DB model、routeは追加せず、restoreとmaintenanceは共通のKamal runner・remote state処理を介して相互排他にする
+- Rails内のソフトメンテナンスは、主DBの単一設定をリクエストごとに読み、管理画面からサイトと条件付きAPIを個別に503へ切り替える。サイト停止中もadmin、ログイン・ログアウト、静的アセット、Active Storage、PWA、`/up`を通し、Workerやデータベースは停止しない
+- Rails非依存の`bin/kamal-maintenance`はハードメンテナンスとして、Kamal Proxyの503表示とWeb・Worker・Litestreamの停止・再開を担当する。既存のCLI名とsubcommand契約を維持し、restoreと共通のKamal runner・remote state処理を介して相互排他にする。ソフトメンテナンスの設定・文言とは連動しない
 - `deployment:setup-server`はVultr VPSの選択、DNS検証、root公開鍵SSHの強化、destination別host設定だけを担当する。UFW、Vultr Firewall Group、OS更新、旧VPSの停止・削除は担当しない
 - Rails標準のSolid Queue/Cableを条件付きにするためのSolid系オプション
 

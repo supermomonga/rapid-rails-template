@@ -383,9 +383,13 @@ Cloudflare token作成用の`CLOUDFLARE_INITIAL_API_TOKEN`は、対象accountの
 
 Accessoryは通常の`kamal deploy`では更新されないため、設定・image・secret変更時はdestinationを付けて`mise exec -- bin/kamal accessory reboot litestream -d DESTINATION`を実行します。
 
-### DBメンテナンスモード
+### ソフトメンテナンス
 
-全生成アプリへRails非依存の`bin/kamal-maintenance`を生成します。`start`はKamal Proxyの`app maintenance --message`を先に実行し、Kamal既定の30秒drain timeoutでWebと条件付きWorkerを停止します。その後、primary・storage・条件付きqueue/cableをLitestream control socket経由で最終同期し、Accessoryを停止して、container停止と公開503・表示文言を検証します。Solid Cache DBはapp停止によって読み書き不能になりますが、再構築可能データなのでLitestream対象には追加しません。
+全生成アプリへRails内のソフトメンテナンスを生成します。主DBの単一設定をリクエストごとに読み、管理画面からサイトと条件付きAPIを独立して切り替えます。サイト停止ではadmin以外のHTML、JSON、Turbo要求を同じ共通文言の503へ切り替え、adminは通常画面とプレビューを利用できます。API停止ではBearer認証より前に固定JSONの503を返します。Worker、定期処理、Maintenance Tasks、通常deploy、すでに処理中のrequest、データベースは停止しません。
+
+### ハードメンテナンス
+
+全生成アプリへRails非依存の`bin/kamal-maintenance`を既存の名称・subcommand契約のまま生成します。ソフトメンテナンスとは設定も文言も連動しません。`start`はKamal Proxyの`app maintenance --message`を先に実行し、Kamal既定の30秒drain timeoutでWebと条件付きWorkerを停止します。その後、primary・storage・条件付きqueue/cableをLitestream control socket経由で最終同期し、Accessoryを停止して、container停止と公開503・表示文言を検証します。Solid Cache DBはapp停止によって読み書き不能になりますが、再構築可能データなのでLitestream対象には追加しません。
 
 `finish`はLitestreamを起動してcontrol socketを確認し、Webと条件付きWorkerを起動して内部`/up`を検証した後に`app live`を実行し、公開`/up`が200になってからremote stateを削除します。途中失敗では503を維持し、`app live`後の公開確認失敗では直ちにmaintenance表示へ戻します。destination別JSON stateは`starting`・`active`・`finishing`・失敗状態、文言、開始・更新時刻、最後の成功step、失敗stepを保存します。`status`はRailsやDBを起動せず、state、Docker上のrole、Litestream、公開応答の不一致を失敗として報告します。
 

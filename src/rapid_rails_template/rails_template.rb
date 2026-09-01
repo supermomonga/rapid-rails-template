@@ -9235,6 +9235,912 @@ def configure_api
   RUBY
 end
 
+def configure_soft_maintenance
+  api_enabled = VALUES.fetch("api") == "enable"
+  pwa_enabled = VALUES.fetch("pwa") == "use"
+  siwe_enabled = VALUES.fetch("additional_login_methods").include?("siwe")
+  default_message = if VALUES.fetch("default_locale") == "ja"
+    "ただいまメンテナンス中です。しばらくしてからもう一度お試しください。"
+  else
+    "Maintenance is currently in progress. Please try again later."
+  end
+  model_attributes = %w[site_enabled:boolean message:text]
+  model_attributes.insert(1, "api_enabled:boolean") if api_enabled
+  generate "model", "SoftMaintenanceSetting", *model_attributes
+
+  migrations = Dir.glob("db/migrate/*_create_soft_maintenance_settings.rb")
+  raise "CreateSoftMaintenanceSettings migrationが一意ではありません" unless migrations.one?
+
+  api_migration_column = api_enabled ? "      t.boolean :api_enabled, null: false, default: false\n" : ""
+  api_initial_value = api_enabled ? "api_enabled: false, " : ""
+  create_file migrations.first, <<~RUBY, force: true
+    class CreateSoftMaintenanceSettings < ActiveRecord::Migration[8.1]
+      def up
+        create_table :soft_maintenance_settings do |t|
+          t.boolean :site_enabled, null: false, default: false
+    #{api_migration_column}      t.text :message, null: false
+          t.timestamps null: false
+        end
+
+        add_check_constraint :soft_maintenance_settings, "id = 1",
+          name: "soft_maintenance_settings_singleton"
+
+        record_class = Class.new(ActiveRecord::Base) do
+          self.table_name = "soft_maintenance_settings"
+        end
+        record_class.create!(id: 1, site_enabled: false, #{api_initial_value}message: #{default_message.inspect})
+      end
+
+      def down
+        drop_table :soft_maintenance_settings
+      end
+    end
+  RUBY
+
+  create_file "test/fixtures/soft_maintenance_settings.yml", <<~YAML, force: true
+    current:
+      id: 1
+      site_enabled: false
+  #{api_enabled ? "    api_enabled: false\n" : ""}    message: #{default_message.inspect}
+      created_at: 2026-01-01 00:00:00 UTC
+      updated_at: 2026-01-01 00:00:00 UTC
+  YAML
+
+  api_model_method = if api_enabled
+    <<~RUBY
+      sig { returns(T::Boolean) }
+      def api_maintenance_enabled?
+        api_enabled?
+      end
+    RUBY
+  else
+    ""
+  end
+  create_file "app/models/soft_maintenance_setting.rb", <<~RUBY, force: true
+    class SoftMaintenanceSetting < ApplicationRecord
+      extend T::Sig
+
+      CURRENT_ID = 1
+
+      validates :id, inclusion: { in: [CURRENT_ID] }
+      validates :message, presence: true, length: { maximum: 500 }
+
+      sig { returns(SoftMaintenanceSetting) }
+      def self.current
+        find(CURRENT_ID)
+      end
+
+      sig { returns(T::Boolean) }
+      def site_maintenance_enabled?
+        site_enabled?
+      end
+
+    #{api_model_method.lines.map { |line| "  #{line}" }.join}end
+  RUBY
+
+  create_file "app/policies/soft_maintenance_setting_policy.rb", <<~RUBY, force: true
+    class SoftMaintenanceSettingPolicy < ApplicationPolicy
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def manage?
+        admin?
+      end
+
+      T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
+      def bypass_site?
+        admin?
+      end
+    end
+  RUBY
+
+  create_file "app/controllers/concerns/soft_maintenance_requests.rb", <<~'RUBY', force: true
+    module SoftMaintenanceRequests
+      extend ActiveSupport::Concern
+
+      included do
+        T.bind(self, T.class_of(ActionController::Base))
+        before_action :enforce_soft_site_maintenance
+        helper_method :soft_site_maintenance?
+      end
+
+      private
+        def soft_maintenance_setting
+          @soft_maintenance_setting ||= SoftMaintenanceSetting.current
+        end
+
+        def soft_site_maintenance?
+          soft_maintenance_setting.site_maintenance_enabled?
+        end
+
+        def enforce_soft_site_maintenance
+          T.bind(self, ApplicationController)
+          return unless soft_site_maintenance?
+          return if soft_maintenance_exempt_request?
+          return if soft_maintenance_admin_area?
+          return if soft_maintenance_admin_user?
+
+          @soft_maintenance_setting = soft_maintenance_setting
+          response.headers["Cache-Control"] = "no-store"
+          if request.format.json?
+            render json: { error: "maintenance", message: soft_maintenance_setting.message },
+              status: :service_unavailable
+          elsif request.format.html? || request.format.turbo_stream?
+            render template: "soft_maintenance/show", formats: [:html], layout: "soft_maintenance",
+              status: :service_unavailable
+          else
+            head :service_unavailable
+          end
+        end
+
+        def soft_maintenance_admin_area?
+          T.bind(self, ApplicationController)
+          defined?(Admin::BaseController) && self.class <= Admin::BaseController
+        end
+
+        def soft_maintenance_exempt_request?
+          T.bind(self, ApplicationController)
+          request.path == "/up" ||
+            controller_path == "rails/pwa" ||
+            controller_path.start_with?("active_storage/", "active_storage_db/")
+        end
+
+        def soft_maintenance_admin_user?
+          T.bind(self, ApplicationController)
+          return false unless user_signed_in?
+
+          SoftMaintenanceSettingPolicy.new(soft_maintenance_setting, user: current_user).apply(:bypass_site?)
+        end
+    end
+  RUBY
+  inject_into_class "app/controllers/application_controller.rb", "ApplicationController",
+    "  include SoftMaintenanceRequests\n\n"
+
+  create_file "app/controllers/concerns/soft_maintenance_authentication.rb", <<~'RUBY', force: true
+    module SoftMaintenanceAuthentication
+      extend ActiveSupport::Concern
+
+      included do
+        T.bind(self, T.class_of(ActionController::Base))
+        skip_before_action :enforce_soft_site_maintenance
+      end
+
+      private
+        def soft_maintenance_blocks_login?(user)
+          T.bind(self, ActionController::Base)
+          setting = SoftMaintenanceSetting.current
+          return false unless setting.site_maintenance_enabled?
+          return false if SoftMaintenanceSettingPolicy.new(setting, user:).apply(:bypass_site?)
+
+          response.headers["Cache-Control"] = "no-store"
+          render json: { error: "maintenance", message: setting.message }, status: :service_unavailable
+          true
+        end
+    end
+  RUBY
+  inject_into_class "app/controllers/users/passkey_sessions_controller.rb", "PasskeySessionsController",
+    "    include SoftMaintenanceAuthentication\n\n"
+  inject_into_file "app/controllers/users/passkey_sessions_controller.rb",
+    before: "      request.env[\"devise.skip_timeout\"] = true\n" do
+      "      return if soft_maintenance_blocks_login?(user)\n"
+    end
+  if VALUES.fetch("additional_login_methods").include?("siwe")
+    inject_into_class "app/controllers/users/siwe_sessions_controller.rb", "SiweSessionsController",
+      "    include SoftMaintenanceAuthentication\n\n"
+    inject_into_file "app/controllers/users/siwe_sessions_controller.rb",
+      before: "      request.env[\"devise.skip_timeout\"] = true\n" do
+        "      return if soft_maintenance_blocks_login?(user)\n"
+      end
+  end
+
+  if api_enabled
+    create_file "app/controllers/concerns/soft_maintenance_api_requests.rb", <<~'RUBY', force: true
+      module SoftMaintenanceApiRequests
+        extend ActiveSupport::Concern
+
+        included do
+          T.bind(self, T.class_of(ActionController::API))
+          prepend_before_action :enforce_soft_api_maintenance
+        end
+
+        private
+          def enforce_soft_api_maintenance
+            T.bind(self, ActionController::API)
+            setting = SoftMaintenanceSetting.current
+            return unless setting.api_maintenance_enabled?
+
+            response.headers["Cache-Control"] = "no-store"
+            render json: { error: "maintenance", message: setting.message }, status: :service_unavailable
+          end
+      end
+    RUBY
+    inject_into_class "app/controllers/api/api_controller.rb", "ApiController",
+      "    include SoftMaintenanceApiRequests\n\n"
+  end
+
+  route <<~RUBY
+    namespace :admin do
+      resource :soft_maintenance, only: %i[show update], controller: "soft_maintenance_settings" do
+        get :preview
+      end
+    end
+  RUBY
+
+  permitted_attributes = api_enabled ? "%i[site_enabled api_enabled message]" : "%i[site_enabled message]"
+  api_initial_assignment = api_enabled ? "        @initial_api_enabled = @setting.api_enabled?\n" : ""
+  api_activation_check = api_enabled ? " || (!@setting.api_enabled? && attributes.fetch(:api_enabled))" : ""
+  create_file "app/controllers/admin/soft_maintenance_settings_controller.rb", <<~RUBY, force: true
+    module Admin
+      class SoftMaintenanceSettingsController < BaseController
+        extend T::Sig
+
+        before_action :set_setting
+
+        sig { void }
+        def show
+          authorize! @setting, to: :manage?
+          prepare_initial_values
+        end
+
+        sig { void }
+        def preview
+          authorize! @setting, to: :manage?
+          @soft_maintenance_setting = @setting
+          @soft_maintenance_preview = true
+          response.headers["Cache-Control"] = "no-store"
+          render template: "soft_maintenance/show", layout: "soft_maintenance"
+        end
+
+        sig { void }
+        def update
+          authorize! @setting, to: :manage?
+          attributes = setting_params.to_h.symbolize_keys
+          attributes[:site_enabled] = ActiveModel::Type::Boolean.new.cast(attributes[:site_enabled])
+    #{api_enabled ? "      attributes[:api_enabled] = ActiveModel::Type::Boolean.new.cast(attributes[:api_enabled])\n" : ""}      prepare_initial_values
+          activation_required = (!@setting.site_enabled? && attributes.fetch(:site_enabled))#{api_activation_check}
+          @setting.assign_attributes(attributes)
+
+          if activation_required && params[:activation_confirmed] != "1"
+            @activation_confirmation_required = true
+            render :show, status: :unprocessable_content
+          elsif @setting.save
+            redirect_to admin_soft_maintenance_path, notice: t("soft_maintenance.admin.updated")
+          else
+            render :show, status: :unprocessable_content
+          end
+        end
+
+        private
+          sig { void }
+          def set_setting
+            @setting = SoftMaintenanceSetting.current
+          end
+
+          sig { void }
+          def prepare_initial_values
+            @initial_site_enabled = @setting.site_enabled?
+    #{api_initial_assignment}      end
+
+          def setting_params
+            params.expect(soft_maintenance_setting: #{permitted_attributes})
+          end
+      end
+    end
+  RUBY
+
+  create_file "app/javascript/controllers/soft_maintenance_form_controller.js", <<~JAVASCRIPT, force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["form", "dialog", "confirmation", "site", "api"]
+      static values = { initialSite: Boolean, initialApi: Boolean, confirmationRequired: Boolean }
+
+      connect() {
+        if (this.confirmationRequiredValue) this.dialogTarget.showModal()
+      }
+
+      submit(event) {
+        if (!this.activationRequired() || this.confirmationTarget.value === "1") return
+
+        event.preventDefault()
+        this.dialogTarget.showModal()
+      }
+
+      confirm() {
+        this.confirmationTarget.value = "1"
+        this.dialogTarget.close()
+        this.formTarget.requestSubmit()
+      }
+
+      cancelConfirmation() {
+        this.dialogTarget.close()
+      }
+
+      resetConfirmation() {
+        this.confirmationTarget.value = "0"
+      }
+
+      activationRequired() {
+        const siteTurnsOn = !this.initialSiteValue && this.siteTarget.checked
+        const apiTurnsOn = this.hasApiTarget && !this.initialApiValue && this.apiTarget.checked
+        return siteTurnsOn || apiTurnsOn
+      }
+    }
+  JAVASCRIPT
+
+  api_toggle = if api_enabled
+    <<~ERB
+      <fieldset class="fieldset min-w-0 grid-cols-1">
+        <legend class="fieldset-legend"><%= t("soft_maintenance.admin.api_label") %></legend>
+        <label class="label cursor-pointer justify-between gap-4 rounded-box bg-base-200 p-4">
+          <span class="min-w-0 whitespace-normal"><%= t("soft_maintenance.admin.api_description") %></span>
+          <%= form.check_box :api_enabled, class: "toggle shrink-0", data: { soft_maintenance_form_target: "api", action: "change->soft-maintenance-form#resetConfirmation" } %>
+        </label>
+      </fieldset>
+    ERB
+  else
+    ""
+  end
+  api_data_value = api_enabled ? ' data-soft-maintenance-form-initial-api-value="<%= @initial_api_enabled %>"' : ""
+  create_file "app/views/admin/soft_maintenance_settings/show.html.erb", <<~ERB, force: true
+    <% content_for :page_title, t("soft_maintenance.admin.title") %>
+    <% content_for :page_actions_secondary do %>
+      <%= link_to t("soft_maintenance.admin.preview"), preview_admin_soft_maintenance_path,
+        class: action_button_classes(:secondary), target: "_blank", rel: "noopener" %>
+    <% end %>
+
+    <div data-controller="soft-maintenance-form"
+         data-soft-maintenance-form-initial-site-value="<%= @initial_site_enabled %>"#{api_data_value}
+         data-soft-maintenance-form-confirmation-required-value="<%= @activation_confirmation_required || false %>">
+      <div class="alert alert-info alert-soft mb-6" role="alert">
+        <div>
+          <h2 class="font-semibold leading-[1.5]"><%= t("soft_maintenance.admin.guidance_title") %></h2>
+          <p><%= t("soft_maintenance.admin.guidance", command: "bin/kamal-maintenance") %></p>
+        </div>
+      </div>
+
+      <section class="card card-border bg-base-100">
+        <div class="card-body p-3">
+          <%= form_with model: @setting, url: admin_soft_maintenance_path,
+            data: { soft_maintenance_form_target: "form", action: "submit->soft-maintenance-form#submit" } do |form| %>
+            <%= hidden_field_tag :activation_confirmed, "0", data: { soft_maintenance_form_target: "confirmation" } %>
+            <% if @setting.errors.any? %>
+              <div class="alert alert-error alert-soft" role="alert">
+                <ul class="list-disc pl-5">
+                  <% @setting.errors.full_messages.each do |message| %><li><%= message %></li><% end %>
+                </ul>
+              </div>
+            <% end %>
+
+            <fieldset class="fieldset min-w-0 grid-cols-1">
+              <legend class="fieldset-legend"><%= t("soft_maintenance.admin.site_label") %></legend>
+              <label class="label cursor-pointer justify-between gap-4 rounded-box bg-base-200 p-4">
+                <span class="min-w-0 whitespace-normal"><%= t("soft_maintenance.admin.site_description") %></span>
+                <%= form.check_box :site_enabled, class: "toggle shrink-0", data: { soft_maintenance_form_target: "site", action: "change->soft-maintenance-form#resetConfirmation" } %>
+              </label>
+            </fieldset>
+
+    #{api_toggle.lines.map { |line| "        #{line}" }.join}        <fieldset class="fieldset min-w-0 grid-cols-1">
+              <legend class="fieldset-legend"><%= form.label :message, t("soft_maintenance.admin.message_label") %></legend>
+              <%= form.text_area :message, class: "textarea min-h-32 w-full", maxlength: 500, required: true,
+                data: { action: "input->soft-maintenance-form#resetConfirmation" } %>
+              <p class="label whitespace-normal"><%= t("soft_maintenance.admin.message_hint") %></p>
+            </fieldset>
+
+            <div class="card-actions flex-wrap justify-end">
+              <%= form.submit t("common.save"), class: action_button_classes(:primary) %>
+            </div>
+          <% end %>
+        </div>
+      </section>
+
+      <% confirmation_actions = capture do %>
+        <button type="button" class="<%= action_button_classes(:quiet) %>" data-action="soft-maintenance-form#cancelConfirmation"><%= t("common.cancel") %></button>
+        <button type="button" class="<%= action_button_classes(:warning) %>" data-action="soft-maintenance-form#confirm"><%= t("soft_maintenance.admin.confirm") %></button>
+      <% end %>
+      <%= with_modal(
+        id: "soft-maintenance-confirmation",
+        title: t("soft_maintenance.admin.confirm_title"),
+        description: t("soft_maintenance.admin.confirm_description"),
+        close_label: t("common.cancel"),
+        actions: confirmation_actions,
+        dialog_data: { soft_maintenance_form_target: "dialog" }
+      ) do %>
+        <div class="alert alert-warning alert-soft" role="alert"><%= t("soft_maintenance.admin.confirm_warning") %></div>
+      <% end %>
+    </div>
+  ERB
+
+  create_file "app/views/layouts/soft_maintenance.html.erb", <<~ERB, force: true
+    <!DOCTYPE html>
+    <html lang="<%= I18n.locale %>" data-theme="rapid-rails">
+      <head>
+        <title><%= document_title %></title>
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="turbo-visit-control" content="reload">
+        <%= csp_meta_tag %>
+        <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
+        <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+      </head>
+      <body class="min-h-screen bg-base-200 text-base-content antialiased" data-layout="soft-maintenance">
+        <main class="grid min-h-screen place-items-center px-5 py-10">
+          <%= yield %>
+        </main>
+      </body>
+    </html>
+  ERB
+
+  create_file "app/views/soft_maintenance/show.html.erb", <<~ERB, force: true
+    <% content_for :page_title, @soft_maintenance_preview ? t("soft_maintenance.preview_title") : t("soft_maintenance.title") %>
+    <section class="card card-border bg-base-100 w-full max-w-xl">
+      <div class="card-body p-6 text-center sm:p-8">
+        <p class="text-sm font-semibold text-primary"><%= application_identity.app_name %></p>
+        <h1 class="card-title justify-center text-2xl leading-[1.5]"><%= t("soft_maintenance.title") %></h1>
+        <p class="whitespace-pre-wrap text-base-content/70"><%= @soft_maintenance_setting.message %></p>
+      </div>
+    </section>
+  ERB
+
+  create_locale_pair(
+    "soft_maintenance",
+    ja: {
+      "navigation" => { "soft_maintenance" => "ソフトメンテナンス" },
+      "soft_maintenance" => {
+        "title" => "メンテナンス中です",
+        "preview_title" => "メンテナンス画面プレビュー",
+        "admin" => {
+          "title" => "ソフトメンテナンス",
+          "preview" => "メンテナンス画面をプレビュー",
+          "site_label" => "サイトをメンテナンスモードにする",
+          "site_description" => "未ログイン利用者と通常ユーザー向けの画面・操作を停止します。",
+          "api_label" => "APIをメンテナンスモードにする",
+          "api_description" => "Bearer認証より前にすべてのAPIリクエストを停止します。",
+          "message_label" => "共通メッセージ",
+          "message_hint" => "サイト画面とAPI応答に表示する500文字以内のプレーンテキストです。改行を使用できます。",
+          "guidance_title" => "ソフトメンテナンスとハードメンテナンス",
+          "guidance" => "ソフトメンテナンスはHTTPリクエストだけを制限し、Workerとデータベースは稼働を続けます。データベースを排他的に停止する作業では%{command}を使用してください。",
+          "confirm_title" => "メンテナンスモードを有効にしますか？",
+          "confirm_description" => "保存後に開始するリクエストから設定が反映されます。",
+          "confirm_warning" => "対象のサイトまたはAPIが利用できなくなることを確認してください。",
+          "confirm" => "有効にして保存",
+          "updated" => "ソフトメンテナンス設定を更新しました"
+        }
+      }
+    },
+    en: {
+      "navigation" => { "soft_maintenance" => "Soft maintenance" },
+      "soft_maintenance" => {
+        "title" => "Under maintenance",
+        "preview_title" => "Maintenance page preview",
+        "admin" => {
+          "title" => "Soft maintenance",
+          "preview" => "Preview maintenance page",
+          "site_label" => "Put the site into maintenance mode",
+          "site_description" => "Stops pages and actions for guests and regular users.",
+          "api_label" => "Put the API into maintenance mode",
+          "api_description" => "Stops every API request before Bearer authentication.",
+          "message_label" => "Shared message",
+          "message_hint" => "Plain text of up to 500 characters shown on the site and in API responses. Line breaks are allowed.",
+          "guidance_title" => "Soft and hard maintenance",
+          "guidance" => "Soft maintenance restricts HTTP requests while workers and databases keep running. Use %{command} when database work requires exclusive application shutdown.",
+          "confirm_title" => "Enable maintenance mode?",
+          "confirm_description" => "The setting applies to requests that start after it is saved.",
+          "confirm_warning" => "Confirm that the selected site or API will become unavailable.",
+          "confirm" => "Enable and save",
+          "updated" => "Soft maintenance settings updated."
+        }
+      }
+    }
+  )
+
+  create_file "test/models/soft_maintenance_setting_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class SoftMaintenanceSettingTest < ActiveSupport::TestCase
+      test "uses one initialized record with disabled modes" do
+        setting = SoftMaintenanceSetting.current
+
+        assert_equal 1, setting.id
+        assert_not setting.site_maintenance_enabled?
+    #{api_enabled ? "    assert_not setting.api_maintenance_enabled?\n" : ""}        assert_equal #{default_message.inspect}, setting.message
+      end
+
+      test "requires a message of at most 500 characters" do
+        setting = SoftMaintenanceSetting.current
+
+        assert_not setting.update(message: "")
+        assert setting.errors.added?(:message, :blank)
+        assert_not setting.update(message: "a" * 501)
+        assert setting.errors.added?(:message, :too_long, count: 500)
+        assert setting.update(message: "First line\nSecond line")
+      end
+
+      test "rejects a second singleton id" do
+        duplicate = SoftMaintenanceSetting.new(id: 2, site_enabled: false, message: "Maintenance")
+
+        assert_not duplicate.valid?
+        assert duplicate.errors.added?(:id, :inclusion, value: 2)
+      end
+    end
+  RUBY
+
+  create_file "test/policies/soft_maintenance_setting_policy_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class SoftMaintenanceSettingPolicyTest < ActiveSupport::TestCase
+      test "allows admins and denies regular users" do
+        setting = SoftMaintenanceSetting.current
+        admin = users(:one)
+        regular = users(:two)
+        admin.grant_role!(:admin)
+
+        assert SoftMaintenanceSettingPolicy.new(setting, user: admin).apply(:manage?)
+        assert SoftMaintenanceSettingPolicy.new(setting, user: admin).apply(:bypass_site?)
+        assert_not SoftMaintenanceSettingPolicy.new(setting, user: regular).apply(:manage?)
+        assert_not SoftMaintenanceSettingPolicy.new(setting, user: regular).apply(:bypass_site?)
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/admin/soft_maintenance_settings_controller_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class Admin::SoftMaintenanceSettingsControllerTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
+
+      setup do
+        @setting = SoftMaintenanceSetting.current
+        @setting.update!(site_enabled: false, #{api_enabled ? "api_enabled: false, " : ""}message: "Scheduled maintenance")
+        @admin = users(:one)
+        @regular = users(:two)
+        @admin.grant_role!(:admin)
+      end
+
+      test "requires an admin" do
+        get admin_soft_maintenance_url
+        assert_redirected_to new_user_session_url
+
+        sign_in @regular
+        get admin_soft_maintenance_url
+        assert_response :forbidden
+      end
+
+      test "renders settings and an admin-only preview link" do
+        sign_in @admin
+
+        get admin_soft_maintenance_url
+
+        assert_response :success
+        assert_select 'input[type="checkbox"].toggle[name="soft_maintenance_setting[site_enabled]"]', count: 1
+    #{api_enabled ? "    assert_select 'input[type=\"checkbox\"].toggle[name=\"soft_maintenance_setting[api_enabled]\"]', count: 1\n" : "    assert_select 'input[name=\"soft_maintenance_setting[api_enabled]\"]', count: 0\n"}        assert_select 'textarea.textarea[name="soft_maintenance_setting[message]"][maxlength="500"][required]', text: @setting.message, count: 1
+        assert_select 'a.btn[target="_blank"][rel="noopener"][href=?]', preview_admin_soft_maintenance_path, count: 1
+        assert_select ".alert.alert-info.alert-soft", text: %r{bin/kamal-maintenance}, count: 1
+        assert_select "dialog#soft-maintenance-confirmation.modal", count: 1
+      end
+
+      test "requires confirmation only when a mode turns on" do
+        sign_in @admin
+
+        patch admin_soft_maintenance_url,
+          params: { soft_maintenance_setting: { site_enabled: "1", #{api_enabled ? "api_enabled: \"0\", " : ""}message: "New message" } }
+
+        assert_response :unprocessable_content
+        assert_not @setting.reload.site_enabled?
+        assert_select '[data-soft-maintenance-form-confirmation-required-value="true"]', count: 1
+
+        patch admin_soft_maintenance_url,
+          params: {
+            activation_confirmed: "1",
+            soft_maintenance_setting: { site_enabled: "1", #{api_enabled ? "api_enabled: \"0\", " : ""}message: "New message" }
+          }
+        assert_redirected_to admin_soft_maintenance_url
+        assert_predicate @setting.reload, :site_enabled?
+        assert_equal "New message", @setting.message
+
+        patch admin_soft_maintenance_url,
+          params: { soft_maintenance_setting: { site_enabled: "0", #{api_enabled ? "api_enabled: \"0\", " : ""}message: "Disabled" } }
+        assert_redirected_to admin_soft_maintenance_url
+        assert_not @setting.reload.site_enabled?
+        assert_equal "Disabled", @setting.message
+      end
+
+      test "validates the shared message" do
+        sign_in @admin
+
+        patch admin_soft_maintenance_url,
+          params: { soft_maintenance_setting: { site_enabled: "0", #{api_enabled ? "api_enabled: \"0\", " : ""}message: "" } }
+
+        assert_response :unprocessable_content
+        assert_equal "Scheduled maintenance", @setting.reload.message
+        assert_select ".alert.alert-error.alert-soft", count: 1
+      end
+
+      test "renders the saved maintenance body as a 200 preview" do
+        sign_in @admin
+
+        get preview_admin_soft_maintenance_url
+
+        assert_response :success
+        assert_equal "no-store", response.headers.fetch("Cache-Control")
+        assert_select 'body[data-layout="soft-maintenance"]', count: 1
+        assert_select "h1", text: I18n.t("soft_maintenance.title"), count: 1
+        assert_select "p", text: @setting.message, count: 1
+        assert_select "title", text: Regexp.new(Regexp.escape(I18n.t("soft_maintenance.preview_title"))), count: 1
+      end
+
+      test "protects the preview with the normal admin boundary" do
+        get preview_admin_soft_maintenance_url
+        assert_redirected_to new_user_session_url
+
+        sign_in @regular
+        get preview_admin_soft_maintenance_url
+        assert_response :forbidden
+      end
+    end
+  RUBY
+
+  create_file "test/integration/soft_maintenance_requests_test.rb", <<~RUBY, force: true
+    require "test_helper"
+
+    class SoftMaintenanceRequestsTest < ActionDispatch::IntegrationTest
+      include Devise::Test::IntegrationHelpers
+
+      setup do
+        @setting = SoftMaintenanceSetting.current
+        @setting.update!(site_enabled: true, #{api_enabled ? "api_enabled: false, " : ""}message: "First line\n<script>alert('x')</script>")
+        @admin = users(:one)
+        @regular = users(:two)
+        @admin.grant_role!(:admin)
+      end
+
+      test "renders an escaped 503 at the requested HTML URL" do
+        get root_url
+
+        assert_response :service_unavailable
+        assert_equal "no-store", response.headers.fetch("Cache-Control")
+        assert_select 'body[data-layout="soft-maintenance"]', count: 1
+        assert_select "h1", text: I18n.t("soft_maintenance.title"), count: 1
+        assert_select "script", count: 0
+        assert_includes response.body, "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+      end
+
+      test "returns the maintenance JSON for site-owned JSON requests" do
+        get root_url, as: :json
+
+        assert_response :service_unavailable
+        assert_equal({ "error" => "maintenance", "message" => @setting.message }, response.parsed_body)
+      end
+
+      test "turns Turbo requests into a full-page maintenance response" do
+        get root_url, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+        assert_response :service_unavailable
+        assert_equal "text/html", response.media_type
+        assert_select 'meta[name="turbo-visit-control"][content="reload"]', count: 1
+        assert_select 'body[data-layout="soft-maintenance"]', count: 1
+      end
+
+      test "serves ordinary requests immediately after site maintenance is disabled" do
+        @setting.update!(site_enabled: false)
+
+        get root_url
+        assert_response :success
+        sign_in @regular
+        get account_url
+        assert_response :success
+      end
+
+      test "keeps a regular users session while blocking ordinary pages" do
+        sign_in @regular
+
+        get account_url
+        assert_response :service_unavailable
+
+        @setting.update!(site_enabled: false)
+        get account_url
+        assert_response :success
+      end
+
+      test "allows admins to use ordinary pages" do
+        sign_in @admin
+
+        get root_url
+        assert_response :success
+        get account_url
+        assert_response :success
+      end
+
+      test "preserves the existing admin authorization behavior" do
+        get admin_root_url
+        assert_redirected_to new_user_session_url
+
+        sign_in @regular
+        get admin_root_url
+        assert_response :forbidden
+      end
+
+      test "allows the login and logout routes but blocks registration" do
+        get new_user_session_url
+        assert_response :success
+        assert_select 'a[href=?]', new_user_registration_path, count: 0
+
+        get new_user_registration_url
+        assert_response :service_unavailable
+
+        post user_passkey_registration_options_url, as: :json
+        assert_response :service_unavailable
+        post user_passkey_registration_url, params: {}, as: :json
+        assert_response :service_unavailable
+
+    #{siwe_enabled ? "    post user_siwe_registration_challenge_url, params: {}, as: :json\n    assert_response :service_unavailable\n    post user_siwe_registration_url, params: {}, as: :json\n    assert_response :service_unavailable\n" : ""}
+
+        sign_in @regular
+        delete destroy_user_session_url
+        assert_redirected_to root_url
+      end
+
+      test "keeps health checks, Active Storage, and configured PWA endpoints available" do
+        get rails_health_check_url
+        assert_response :success
+
+        get "/icon.svg"
+        assert_response :success
+
+        blob = ImageTestFixture.png_blob
+        get Rails.application.routes.url_helpers.rails_storage_proxy_path(blob)
+        assert_response :success
+
+    #{pwa_enabled ? "    get pwa_manifest_url(format: :json)\n    assert_response :success\n    get pwa_service_worker_url(format: :js)\n    assert_response :success\n" : ""}      ensure
+        blob&.purge
+      end
+    end
+  RUBY
+
+  if api_enabled
+    create_file "test/controllers/api/soft_maintenance_requests_test.rb", <<~RUBY, force: true
+      require "test_helper"
+
+      class Api::SoftMaintenanceRequestsTest < ActionDispatch::IntegrationTest
+        setup do
+          @setting = SoftMaintenanceSetting.current
+          @setting.update!(site_enabled: false, api_enabled: true, message: "API maintenance")
+          @admin = users(:one)
+          @admin.grant_role!(:admin)
+          @credential = @admin.api_credentials.create!(name: "Maintenance test")
+          @authorization = {
+            "Authorization" => "Bearer \#{@credential.api_key}.\#{@credential.api_secret}"
+          }
+        end
+
+        test "returns 503 before authentication for every caller" do
+          get root_url
+          assert_response :success
+
+          get api_api_credentials_url
+          assert_response :service_unavailable
+          assert_equal({ "error" => "maintenance", "message" => @setting.message }, response.parsed_body)
+
+          get api_api_credentials_url, headers: { "Authorization" => "Bearer invalid" }
+          assert_response :service_unavailable
+
+          get api_api_credentials_url, headers: @authorization
+          assert_response :service_unavailable
+          assert_nil @credential.reload.last_used_at
+        end
+
+        test "restores the existing authentication behavior when disabled" do
+          @setting.update!(api_enabled: false)
+
+          get api_api_credentials_url, headers: { "Authorization" => "Bearer invalid" }
+          assert_response :unauthorized
+
+          get api_api_credentials_url, headers: @authorization
+          assert_response :success
+          assert_predicate @credential.reload.last_used_at, :present?
+        end
+
+        test "keeps site and API switches independent when both are enabled" do
+          @setting.update!(site_enabled: true)
+
+          get root_url
+          assert_response :service_unavailable
+          get api_api_credentials_url, headers: @authorization
+          assert_response :service_unavailable
+          assert_nil @credential.reload.last_used_at
+        end
+      end
+    RUBY
+  end
+
+  inject_into_class "test/controllers/users/passkey_authentication_controller_test.rb",
+    "Users::PasskeyAuthenticationControllerTest", <<~'RUBY'
+      test "allows only admins to establish a passkey session during soft maintenance" do
+        client = WebAuthn::FakeClient.new(Rails.configuration.x.application_identity.canonical_origin)
+        post user_passkey_registration_options_url, as: :json
+        registration = response.parsed_body
+        credential = client.create(
+          challenge: registration.dig("public_key", "challenge"), user_verified: true,
+          backup_eligibility: true, backup_state: true
+        )
+        post user_passkey_registration_url,
+          params: { challenge_token: registration.fetch("challenge_token"), credential: }, as: :json
+        user = T.must(User.order(:id).last)
+        stored = user.passkey_credentials.sole
+        delete destroy_user_session_url
+        SoftMaintenanceSetting.current.update!(site_enabled: true)
+
+        post user_passkey_session_options_url, as: :json
+        authentication = response.parsed_body
+        assertion = client.get(
+          challenge: authentication.dig("public_key", "challenge"), user_verified: true,
+          backup_eligibility: true, backup_state: true,
+          user_handle: WebAuthn.configuration.encoder.decode(user.webauthn_id),
+          allow_credentials: [stored.webauthn_id]
+        )
+        post user_passkey_session_url,
+          params: { challenge_token: authentication.fetch("challenge_token"), credential: assertion }, as: :json
+        assert_response :service_unavailable
+        assert_equal "maintenance", response.parsed_body.fetch("error")
+
+        SoftMaintenanceSetting.current.update!(site_enabled: false)
+        get account_url
+        assert_redirected_to new_user_session_url
+
+        user.grant_role!(:admin)
+        SoftMaintenanceSetting.current.update!(site_enabled: true)
+        post user_passkey_session_options_url, as: :json
+        authentication = response.parsed_body
+        assertion = client.get(
+          challenge: authentication.dig("public_key", "challenge"), user_verified: true,
+          backup_eligibility: true, backup_state: true,
+          user_handle: WebAuthn.configuration.encoder.decode(user.webauthn_id),
+          allow_credentials: [stored.webauthn_id]
+        )
+        post user_passkey_session_url,
+          params: { challenge_token: authentication.fetch("challenge_token"), credential: assertion }, as: :json
+        assert_response :success
+      ensure
+        SoftMaintenanceSetting.current.update!(site_enabled: false)
+      end
+
+  RUBY
+
+  if VALUES.fetch("additional_login_methods").include?("siwe")
+    inject_into_class "test/controllers/users/siwe_sessions_controller_test.rb",
+      "Users::SiweSessionsControllerTest", <<~'RUBY'
+        test "allows only admins to establish a SIWE session during soft maintenance" do
+          user = users(:one)
+          key = Eth::Key.new
+          user.siwe_identities.create!(name: "Maintenance", address: key.address.to_s)
+          setting = SoftMaintenanceSetting.current
+          setting.update!(site_enabled: true)
+
+          post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
+          challenge = response.parsed_body
+          post user_siwe_url,
+            params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) },
+            as: :json
+          assert_response :service_unavailable
+          assert_equal "maintenance", response.parsed_body.fetch("error")
+
+          setting.update!(site_enabled: false)
+          get account_url
+          assert_redirected_to new_user_session_url
+
+          user.grant_role!(:admin)
+          setting.update!(site_enabled: true)
+          post user_siwe_challenge_url, params: { address: key.address.to_s, chain_id: 1 }, as: :json
+          challenge = response.parsed_body
+          post user_siwe_url,
+            params: { challenge_token: challenge.fetch("challenge_token"), signature: key.personal_sign(challenge.fetch("message")) },
+            as: :json
+          assert_response :success
+        ensure
+          setting&.update!(site_enabled: false)
+        end
+
+    RUBY
+  end
+end
+
 def configure_devise_views
   passkey_icon = <<~'SVG'.strip
     <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
@@ -9305,9 +10211,11 @@ def configure_devise_views
 
     #{siwe_login}
 
-    <% content_for :authentication_switch do %>
-      <p class="mb-4 text-sm text-base-content/70"><%= t("authentication.new_account_prompt") %></p>
-      <%= link_to t("authentication.create_account"), new_user_registration_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+    <% unless soft_site_maintenance? %>
+      <% content_for :authentication_switch do %>
+        <p class="mb-4 text-sm text-base-content/70"><%= t("authentication.new_account_prompt") %></p>
+        <%= link_to t("authentication.create_account"), new_user_registration_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+      <% end %>
     <% end %>
   ERB
 
@@ -11362,6 +12270,14 @@ def configure_default_views
         <% end %>
       </li>
       <li>
+        <%= link_to application_routes.admin_soft_maintenance_path, class: ("menu-active" if controller_path == "admin/soft_maintenance_settings"), aria: { current: ("page" if controller_path == "admin/soft_maintenance_settings") } do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+          </svg>
+          <%= application_translate("navigation.soft_maintenance") %>
+        <% end %>
+      </li>
+      <li>
         <%= link_to application_routes.admin_users_path, class: ("menu-active" if controller_path.in?(%w[admin/users admin/user_roles])), aria: { current: ("page" if controller_path.in?(%w[admin/users admin/user_roles])) } do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m6-3c0 7.142-3.75 12-9 13.5C6.75 18.75 3 13.892 3 6.75c3.75 0 7.5-1.5 9-4.5 1.5 3 5.25 4.5 9 4.5Z" />
@@ -11445,11 +12361,15 @@ def configure_default_views
   logout_path = "application_routes.destroy_user_session_path"
   guest_desktop_navigation = <<~ERB
     <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-outline" %>
-    <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline" %>
+    <% unless soft_site_maintenance? %>
+      <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline" %>
+    <% end %>
   ERB
   guest_mobile_navigation = <<~ERB
     <li><%= link_to t("navigation.sign_in"), application_routes.new_user_session_path %></li>
-    <li><%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path %></li>
+    <% unless soft_site_maintenance? %>
+      <li><%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path %></li>
+    <% end %>
   ERB
   profile_identity = if display_name_enabled || screen_name_enabled
     display_name = if display_name_enabled
@@ -16361,6 +17281,12 @@ def configure_evidence_capture
         end
 
         def prepare_guest_data
+          soft_maintenance_attributes = {
+            site_enabled: false
+          }
+          soft_maintenance_attributes[:api_enabled] = false if API
+          SoftMaintenanceSetting.current.update!(soft_maintenance_attributes)
+
           Page.find_by!(slug: "about").update!(
             content: <<~HTML
               <p>#{Page::TITLES.fetch("about")}は、Railsアプリケーションをすばやく始めるためのテンプレートです。</p>
@@ -16502,6 +17428,7 @@ def configure_evidence_capture
           capture_page("admin-overview", "管理画面", admin_root_path, translate("admin.overview.title"), viewport)
           assert_admin_navigation_active(translate("navigation.overview"))
           assert_admin_overview_geometry(viewport)
+          capture_soft_maintenance_pages(viewport)
           capture_avatar_states(viewport)
           capture_passkey_pages(viewport)
           if WEB_PUSH
@@ -16705,6 +17632,60 @@ def configure_evidence_capture
           accept_confirm { click_button translate("admin.users.revoke") }
           assert_current_path admin_user_path(@regular_user)
           assert_not @regular_user.reload.has_role?(:admin)
+        end
+
+        def capture_soft_maintenance_pages(viewport)
+          dimensions = VIEWPORTS.fetch(viewport)
+          setting = SoftMaintenanceSetting.current
+          attributes = {
+            site_enabled: false,
+            message: "ただいまシステムメンテナンスを実施しています。\nしばらくしてからもう一度お試しください。"
+          }
+          attributes[:api_enabled] = false if API
+          setting.update!(attributes)
+
+          capture_page(
+            "admin-soft-maintenance",
+            "ソフトメンテナンス設定",
+            admin_soft_maintenance_path,
+            translate("soft_maintenance.admin.title"),
+            viewport
+          )
+          assert_admin_navigation_active(translate("navigation.soft_maintenance"))
+          assert_selector 'a[target="_blank"][rel="noopener"]', text: translate("soft_maintenance.admin.preview")
+          assert_selector 'input.toggle[name="soft_maintenance_setting[site_enabled]"]', count: 1
+          assert_selector 'input.toggle[name="soft_maintenance_setting[api_enabled]"]', count: 1 if API
+
+          find('input.toggle[name="soft_maintenance_setting[site_enabled]"]').check
+          click_button translate("common.save")
+          assert_selector "dialog#soft-maintenance-confirmation[open]"
+          assert_selector ".alert.alert-warning.alert-soft", text: translate("soft_maintenance.admin.confirm_warning")
+          capture_current_page("admin-soft-maintenance-confirmation", "ソフトメンテナンス開始確認", viewport)
+
+          capture_page(
+            "soft-maintenance-preview",
+            "ソフトメンテナンス画面プレビュー",
+            preview_admin_soft_maintenance_path,
+            translate("soft_maintenance.title"),
+            viewport
+          )
+          assert_selector 'body[data-layout="soft-maintenance"]', count: 1
+          assert_text setting.message
+
+          setting.update!(site_enabled: true)
+          Capybara.reset_sessions!
+          page.current_window.resize_to(dimensions.fetch("width"), dimensions.fetch("height"))
+          visit root_path
+          assert_equal 503, page.status_code
+          assert_selector 'body[data-layout="soft-maintenance"]', count: 1
+          assert_selector "h1", text: translate("soft_maintenance.title")
+          assert_text setting.message
+          capture_current_page("soft-maintenance", "ソフトメンテナンス中", viewport)
+        ensure
+          setting&.update!(site_enabled: false)
+          Capybara.reset_sessions!
+          page.current_window.resize_to(dimensions.fetch("width"), dimensions.fetch("height")) if dimensions
+          login_as(@user, scope: :user) if @user
         end
 
         def capture_notification_scenarios(viewport)
@@ -23371,10 +24352,20 @@ def configure_kamal
     Include `-d production` or `-d staging` in every Kamal operation. The application entrypoint
     waits for the Litestream control socket before `db:prepare` or the Solid Queue worker starts.
 
-    ## Database maintenance mode
+    ## Soft maintenance
+
+    Use `/admin/soft_maintenance` when Rails and its primary database should keep running while
+    new site or API requests return 503. The site and API switches are independent. Site
+    maintenance still allows administrators, login and logout, static assets, Active Storage,
+    PWA endpoints, and `/up`; API maintenance rejects all credentials before Bearer
+    authentication. Workers, scheduled work, Maintenance Tasks, routine deploys, and requests
+    already in progress continue. The saved message is shared by the site and API response.
+
+    ## Hard maintenance
 
     Use the generated Rails-independent command when database maintenance must exclude every
-    managed application process:
+    managed application process. Its name and command-line contract are unchanged, and its state
+    and message do not synchronize with soft maintenance:
 
         bin/kamal-maintenance start --destination=production
         bin/kamal-maintenance status --destination=production
@@ -23446,7 +24437,7 @@ def configure_kamal
     switch runs while the Kamal deploy lock is held. If startup fails after the switch, services
     remain stopped and the marker remains present for inspection.
   MARKDOWN
-  append_to_file "README.md", "\n## Deployment, maintenance, and recovery\n\nSee [docs/deployment.md](docs/deployment.md) for Kamal, database maintenance mode, Litestream, and confirmed restore operations.\n"
+  append_to_file "README.md", "\n## Deployment, maintenance, and recovery\n\nUse the admin soft-maintenance settings to stop site or API requests while Rails stays available. Use `bin/kamal-maintenance` for hard maintenance that stops application processes around exclusive database work. See [docs/deployment.md](docs/deployment.md) for both modes, Kamal, Litestream, and confirmed restore operations.\n"
 end
 
 after_bundle do
@@ -23474,6 +24465,7 @@ after_bundle do
   configure_pwa if VALUES.fetch("pwa") == "use"
   configure_web_push if VALUES.fetch("web_push") == "use"
   configure_default_views
+  configure_soft_maintenance
   install_solid_components
   install_job_operations if VALUES.fetch("job_operations") == "enable"
   install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"

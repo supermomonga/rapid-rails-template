@@ -18809,38 +18809,15 @@ end
 
 def kamal_restore_cli_body
   <<~'RUBY'
-    require "open3"
     require "optparse"
     require "securerandom"
     require "shellwords"
     require "time"
+    require_relative "../lib/deployment/kamal_operation" unless defined?(Deployment::KamalOperation)
 
     module KamalRestore
-      KAMAL = File.expand_path("kamal", __dir__)
-
-      class CommandRunner
-        def initialize(output:, error:)
-          @output = output
-          @error = error
-        end
-
-        def run!(*arguments)
-          stdout, stderr, status = Open3.capture3(KAMAL, *arguments)
-          @output.write(stdout)
-          @error.write(stderr)
-          return stdout if status.success?
-
-          raise Error, "command failed (#{status.exitstatus}): bin/kamal #{arguments.join(" ")}"
-        rescue SystemCallError => error
-          raise Error, "could not execute bin/kamal: #{error.message}"
-        end
-
-        def ignore_failure(*arguments)
-          run!(*arguments)
-        rescue Error => error
-          @error.puts "cleanup warning: #{error.message}"
-        end
-      end
+      Error = Deployment::KamalOperation::Error unless const_defined?(:Error, false)
+      CommandRunner = Deployment::KamalOperation::CommandRunner
 
       class CLI
         def initialize(argv, input: $stdin, output: $stdout, error: $stderr, runner: nil)
@@ -18859,6 +18836,7 @@ def kamal_restore_cli_body
           options = parse_options
           @destination = options.fetch(:destination)
           @marker = ".kamal/#{APP_ID}-#{@destination}-restore-in-progress"
+          @remote_state = Deployment::KamalOperation::RemoteState.new(destination: @destination, runner: @runner)
           if options.fetch(:rollback)
             run_rollback(options.fetch(:rollback))
           else
@@ -18991,12 +18969,14 @@ def kamal_restore_cli_body
         end
 
         def begin_restore_operation(operation_id)
-          server_exec!("mkdir", "-p", ".kamal")
-          server_exec!("touch", @marker)
-          @marker_created = true
           acquire_lock!("Restore barrier #{APP_ID} #{operation_id}")
+          raise Error, "maintenance mode is active for #{@destination}" if @remote_state.maintenance
+
+          @remote_state.create_restore_marker
+          @marker_created = true
           release_lock!
         rescue StandardError
+          release_lock! if @lock_held
           remove_marker
           raise
         end
@@ -19046,14 +19026,14 @@ def kamal_restore_cli_body
         end
 
         def acquire_lock!(message)
-          run_kamal!("lock", "acquire", "-m", message)
+          @remote_state.acquire_lock(message)
           @lock_held = true
         end
 
         def release_lock!
           return unless @lock_held
 
-          run_kamal!("lock", "release")
+          @remote_state.release_lock
           @lock_held = false
         end
 
@@ -19069,7 +19049,7 @@ def kamal_restore_cli_body
         def remove_marker
           return unless @marker_created
 
-          server_exec!("rm", "-f", @marker)
+          @remote_state.delete_restore_marker
           @marker_created = false
         end
 
@@ -19116,7 +19096,130 @@ def kamal_restore_cli_body
   RUBY
 end
 
+def configure_kamal_operation_support(app_id)
+  support = <<~RUBY
+    # frozen_string_literal: true
+
+    require "base64"
+    require "json"
+    require "open3"
+    require "shellwords"
+    require "sorbet-runtime"
+
+    module Deployment
+      module KamalOperation
+        APP_ID = #{app_id.inspect}
+        DESTINATIONS = %w[production staging].freeze
+  RUBY
+  support << <<~'RUBY'
+
+        class Error < StandardError; end
+
+        class CommandRunner
+          KAMAL = File.expand_path("../../bin/kamal", __dir__)
+
+          def initialize(output: $stdout, error: $stderr, kamal: KAMAL)
+            @output = output
+            @error = error
+            @kamal = kamal
+          end
+
+          def run!(*arguments)
+            stdout, stderr, status = T.unsafe(Open3).capture3(@kamal, *arguments)
+            @output.write(stdout)
+            @error.write(stderr)
+            return stdout if status.success?
+
+            raise Error, "command failed (#{status.exitstatus}): bin/kamal #{arguments.join(" ")}"
+          rescue SystemCallError => error
+            raise Error, "could not execute bin/kamal: #{error.message}"
+          end
+
+          def ignore_failure(*arguments)
+            T.unsafe(self).run!(*arguments)
+          rescue Error => error
+            @error.puts "cleanup warning: #{error.message}"
+            nil
+          end
+        end
+
+        class RemoteState
+          attr_reader :maintenance_path, :restore_path
+
+          def initialize(destination:, runner:)
+            raise Error, "invalid destination: #{destination}" unless DESTINATIONS.include?(destination)
+
+            @destination = destination
+            @runner = runner
+            @maintenance_path = ".kamal/#{APP_ID}-#{destination}-maintenance.json"
+            @restore_path = ".kamal/#{APP_ID}-#{destination}-restore-in-progress"
+          end
+
+          def maintenance
+            contents = server_exec!("if [ -f #{Shellwords.escape(maintenance_path)} ]; then cat #{Shellwords.escape(maintenance_path)}; fi")
+            return nil if contents.strip.empty?
+
+            JSON.parse(contents)
+          rescue JSON::ParserError => error
+            raise Error, "invalid maintenance state: #{error.message}"
+          end
+
+          def write_maintenance(state)
+            encoded = Base64.strict_encode64(JSON.pretty_generate(state) + "\n")
+            temporary_path = "#{maintenance_path}.tmp"
+            server_exec!(
+              "mkdir -p .kamal && printf %s #{Shellwords.escape(encoded)} | base64 -d > " \
+                "#{Shellwords.escape(temporary_path)} && mv #{Shellwords.escape(temporary_path)} " \
+                "#{Shellwords.escape(maintenance_path)}"
+            )
+          end
+
+          def delete_maintenance
+            server_exec!(Shellwords.join(["rm", "-f", maintenance_path]))
+          end
+
+          def restore_active?
+            server_exec!(
+              "if [ -e #{Shellwords.escape(restore_path)} ]; then printf true; else printf false; fi"
+            ).strip == "true"
+          end
+
+          def create_restore_marker
+            server_exec!(Shellwords.join(["mkdir", "-p", ".kamal"]))
+            server_exec!(Shellwords.join(["touch", restore_path]))
+          end
+
+          def delete_restore_marker
+            server_exec!(Shellwords.join(["rm", "-f", restore_path]))
+          end
+
+          def acquire_lock(message)
+            kamal!("lock", "acquire", "-m", message)
+          end
+
+          def release_lock
+            kamal!("lock", "release")
+          end
+
+          private
+
+          def server_exec!(command)
+            kamal!("server", "exec", command)
+          end
+
+          def kamal!(*arguments)
+            @runner.run!(*arguments, "-d", @destination)
+          end
+        end
+      end
+    end
+  RUBY
+  create_file "lib/deployment/kamal_operation.rb", support, force: true
+end
+
 def configure_kamal_restore(app_id, databases)
+  configure_kamal_operation_support(app_id)
+
   database_paths = databases.to_h { |database| [database.fetch("name"), database.fetch("path")] }
   volume_helper = <<~RUBY
     #!/usr/bin/env ruby
@@ -19291,12 +19394,500 @@ def configure_kamal_restore(app_id, databases)
       TIMESTAMP_FORMAT = "%Y%m%dT%H%M%SZ"
       OPERATION_ID = /\A\d{8}T\d{6}Z-[0-9a-f]{12}\z/
 
-      Error = Class.new(StandardError)
     end
   RUBY
   restore_cli << kamal_restore_cli_body
   create_file "bin/kamal-restore", restore_cli, force: true
   chmod "bin/kamal-restore", 0o755
+end
+
+def configure_kamal_maintenance(app_id, databases)
+  default_message = if VALUES.fetch("default_locale") == "ja"
+    "ただいまメンテナンス中です。しばらくしてからもう一度お試しください。"
+  else
+    "We are currently performing maintenance. Please try again later."
+  end
+  default_message_literal = JSON.generate(
+    default_message.dup.force_encoding(Encoding::UTF_8),
+    ascii_only: true
+  )
+  maintenance_cli = <<~RUBY
+    #!/usr/bin/env ruby
+    module KamalMaintenance
+      APP_ID = #{app_id.inspect}
+      DATABASES = #{databases.inspect}.freeze
+      HAS_WORKER = #{databases.any? { |database| database.fetch("name") == "queue" }}
+      DEFAULT_MESSAGE = #{default_message_literal}
+  RUBY
+  maintenance_cli << <<~'RUBY'
+      SOCKET_PATH = "/rails/storage/.litestream.sock"
+      ACTIONS = %w[start status message finish].freeze
+      MUTATING_ACTIONS = %w[start message finish].freeze
+    end
+
+    require "cgi"
+    require "gum"
+    require "json"
+    require "net/http"
+    require "optparse"
+    require "time"
+    require "uri"
+    require "yaml"
+    require_relative "../lib/deployment/kamal_operation" unless defined?(Deployment::KamalOperation)
+
+    module KamalMaintenance
+      Error = Deployment::KamalOperation::Error unless const_defined?(:Error, false)
+
+      class Inspector
+        def initialize(destination:, runner:)
+          @destination = destination
+          @runner = runner
+        end
+
+        def running_roles
+          server_exec!(
+            "docker ps --filter label=service=#{APP_ID} " \
+              "--filter label=destination=#{@destination} --format '{{.Label \"role\"}}'"
+          ).lines.map(&:strip).reject(&:empty?).uniq.sort
+        end
+
+        def litestream_running?
+          server_exec!(
+            "docker inspect -f '{{.State.Running}}' #{APP_ID}-litestream 2>/dev/null || printf false"
+          ).strip == "true"
+        end
+
+        def public_response(path: nil)
+          uri = URI.parse(application_origin)
+          uri.path = path if path
+          request = Net::HTTP::Get.new(uri)
+          response = Net::HTTP.start(
+            uri.host,
+            uri.port,
+            use_ssl: uri.scheme == "https",
+            open_timeout: 10,
+            read_timeout: 10
+          ) { |http| http.request(request) }
+          { "code" => response.code.to_i, "body" => response.body.to_s }
+        rescue URI::InvalidURIError, SocketError, SystemCallError, Timeout::Error => error
+          raise Error, "public health check failed: #{error.message}"
+        end
+
+        private
+
+        def application_origin
+          config = YAML.safe_load(kamal!("config"), aliases: false)
+          origin = config.dig("env", "clear", "APPLICATION_ORIGIN")
+          raise Error, "APPLICATION_ORIGIN is missing from Kamal configuration" if origin.to_s.empty?
+
+          origin
+        rescue Psych::Exception => error
+          raise Error, "could not read Kamal configuration: #{error.message}"
+        end
+
+        def server_exec!(command)
+          kamal!("server", "exec", command)
+        end
+
+        def kamal!(*arguments)
+          @runner.run!(*arguments, "-d", @destination)
+        end
+      end
+
+      class CLI
+        def initialize(
+          argv,
+          input: $stdin,
+          output: $stdout,
+          error: $stderr,
+          runner: nil,
+          prompt: Gum,
+          state_store: nil,
+          inspector: nil,
+          now: -> { Time.now.utc }
+        )
+          @argv = argv.dup
+          @input = input
+          @output = output
+          @error = error
+          @runner = runner || Deployment::KamalOperation::CommandRunner.new(output:, error:)
+          @prompt = prompt
+          @state_store = state_store
+          @inspector = inspector
+          @now = now
+          @current_step = nil
+          @operation_started = false
+        end
+
+        def run
+          options = parse_options
+          @action = options.fetch(:action)
+          @destination = options.fetch(:destination)
+          @state_store ||= Deployment::KamalOperation::RemoteState.new(destination: @destination, runner: @runner)
+          @inspector ||= Inspector.new(destination: @destination, runner: @runner)
+
+          case @action
+          when "start" then start(options.fetch(:message))
+          when "status" then status
+          when "message" then update_message(options.fetch(:message))
+          when "finish" then finish
+          end
+          0
+        rescue OptionParser::ParseError, ArgumentError, Error => error
+          @error.puts "Maintenance failed: #{error.message}"
+          1
+        rescue Interrupt
+          record_failure("interrupted") if @state
+          @error.puts "Maintenance interrupted"
+          130
+        end
+
+        private
+
+        def parse_options
+          action = @argv.shift
+          raise OptionParser::InvalidArgument, "action must be start, status, message, or finish" unless ACTIONS.include?(action)
+
+          options = { action:, destination: nil, message: nil }
+          parser = OptionParser.new do |option_parser|
+            option_parser.banner = "Usage: bin/kamal-maintenance start|status|message|finish --destination=production|staging [--message=TEXT]"
+            option_parser.on("--destination=DESTINATION") do |value|
+              unless Deployment::KamalOperation::DESTINATIONS.include?(value)
+                raise OptionParser::InvalidArgument, "--destination must be production or staging"
+              end
+              options[:destination] = value
+            end
+            option_parser.on("--message=TEXT") { |value| options[:message] = validate_message(value) }
+          end
+          parser.parse!(@argv)
+          raise OptionParser::InvalidArgument, @argv.join(" ") unless @argv.empty?
+          raise OptionParser::MissingArgument, "--destination" unless options.fetch(:destination)
+          if options.fetch(:message) && !%w[start message].include?(action)
+            raise OptionParser::InvalidArgument, "--message is only valid with start or message"
+          end
+
+          options
+        end
+
+        def validate_message(value)
+          message = String(value)
+          raise OptionParser::InvalidArgument, "message must not be empty" if message.empty?
+          raise OptionParser::InvalidArgument, "message must be one line of plain text" if message.match?(/[[:cntrl:]]/)
+          raise OptionParser::InvalidArgument, "message must be at most 500 characters" if message.length > 500
+
+          message
+        end
+
+        def requested_message(option, default: DEFAULT_MESSAGE)
+          return option if option
+
+          ensure_tty!
+          value = @prompt.input(header: "Maintenance message", value: default)
+          validate_message(value)
+        end
+
+        def confirm!(description)
+          ensure_tty!
+
+          accepted = @prompt.confirm(
+            description,
+            default: false,
+            affirmative: "実行",
+            negative: "中止"
+          )
+          raise Error, "cancelled" unless accepted
+        end
+
+        def ensure_tty!
+          return if @input.tty? && @output.tty?
+
+          raise Error, "write operations require an interactive terminal"
+        end
+
+        def start(message_option)
+          @state = @state_store.maintenance
+          message = requested_message(message_option, default: @state&.fetch("message", nil) || DEFAULT_MESSAGE)
+          confirm!("#{APP_ID} (#{@destination}) をメンテナンスモードにしますか？")
+          if @state
+            unless %w[starting start_failed].include?(@state.fetch("phase"))
+              raise Error, "maintenance state is #{@state.fetch("phase")}; use the matching subcommand"
+            end
+            message_changed = @state.fetch("message") != message
+            @state["message"] = message
+            @state["failed_step"] = nil
+            @state["error"] = nil
+          else
+            @operation_started = true
+            create_start_state(message)
+          end
+          @operation_started = true
+
+          @step_sequence = [
+            "state_created", "proxy_maintenance", "app_stopped", "app_stop_verified",
+            *DATABASES.map { |database| "litestream_synced_#{database.fetch("name")}" },
+            "litestream_stopped", "litestream_stop_verified", "public_maintenance_verified", "active"
+          ]
+          if message_changed && completed_step?("proxy_maintenance")
+            @current_step = "proxy_maintenance"
+            run_kamal!("app", "maintenance", "--message", message)
+            write_state(message:)
+          end
+          prepare_start_resume!
+
+          perform_step("proxy_maintenance") { run_kamal!("app", "maintenance", "--message", message) }
+          perform_step("app_stopped") { run_kamal!("app", "stop") }
+          perform_step("app_stop_verified") do
+            roles = @inspector.running_roles
+            raise Error, "application roles are still running: #{roles.join(", ")}" unless roles.empty?
+          end
+          DATABASES.each do |database|
+            perform_step("litestream_synced_#{database.fetch("name")}") do
+              run_kamal!(
+                "accessory", "exec", "litestream", "--reuse",
+                "litestream", "sync", "-socket", SOCKET_PATH, "-wait", "-timeout", "120",
+                database.fetch("path")
+              )
+            end
+          end
+          perform_step("litestream_stopped") { run_kamal!("accessory", "stop", "litestream") }
+          perform_step("litestream_stop_verified") do
+            raise Error, "Litestream is still running" if @inspector.litestream_running?
+          end
+          perform_step("public_maintenance_verified") { verify_public_maintenance!(message) }
+          write_state(phase: "active", last_successful_step: "active", failed_step: nil, error: nil)
+          @output.puts "Maintenance mode is active for #{APP_ID} (#{@destination})."
+        rescue StandardError => error
+          fail_closed_after_start(message) if @operation_started && @state
+          record_failure(error.message, phase: "start_failed") if @operation_started && @state
+          raise
+        end
+
+        def update_message(message_option)
+          @state = @state_store.maintenance
+          raise Error, "maintenance mode is not active" unless @state
+          raise Error, "maintenance phase must be active" unless @state.fetch("phase") == "active"
+          message = requested_message(message_option, default: @state.fetch("message"))
+          confirm!("#{APP_ID} (#{@destination}) のメンテナンス文言を変更しますか？")
+
+          @operation_started = true
+          @current_step = "message_updated"
+          run_kamal!("app", "maintenance", "--message", message)
+          verify_public_maintenance!(message)
+          write_state(message:, last_successful_step: "message_updated", failed_step: nil, error: nil)
+          @output.puts "Maintenance message updated."
+        rescue StandardError => error
+          record_failure(error.message, phase: "active") if @operation_started && @state
+          raise
+        end
+
+        def finish
+          confirm!("#{APP_ID} (#{@destination}) のメンテナンスモードを終了しますか？")
+          @state = @state_store.maintenance
+          raise Error, "maintenance mode is not active" unless @state
+          unless %w[active finishing finish_failed].include?(@state.fetch("phase"))
+            raise Error, "maintenance phase is #{@state.fetch("phase")}; finish cannot continue"
+          end
+          @operation_started = true
+          write_state(phase: "finishing", failed_step: nil, error: nil)
+
+          @step_sequence = [
+            "active", "litestream_started", "litestream_ready", "web_started",
+            *(HAS_WORKER ? ["worker_started"] : []),
+            "app_roles_verified", "internal_health_verified", "proxy_live", "public_health_verified"
+          ]
+          @proxy_live = false
+
+          perform_step("litestream_started") { run_kamal!("accessory", "start", "litestream") }
+          perform_step("litestream_ready") { verify_litestream_ready! }
+          perform_step("web_started") { run_kamal!("app", "start", "-r", "web") }
+          perform_step("worker_started") { run_kamal!("app", "start", "-r", "worker") } if HAS_WORKER
+          perform_step("app_roles_verified") { verify_running_roles! }
+          perform_step("internal_health_verified") { app_exec!(*internal_health_command) }
+          perform_step("proxy_live") do
+            run_kamal!("app", "live")
+            @proxy_live = true
+          end
+          perform_step("public_health_verified") { verify_public_health! }
+          remove_state_under_lock
+          @state = nil
+          @output.puts "Maintenance mode finished for #{APP_ID} (#{@destination})."
+        rescue StandardError => error
+          fail_closed_after_finish(error) if @operation_started
+          raise
+        end
+
+        def status
+          @state = @state_store.maintenance
+          roles = @inspector.running_roles
+          litestream = @inspector.litestream_running?
+          response = @inspector.public_response(path: @state ? nil : "/up")
+          @output.puts "Application: #{APP_ID}"
+          @output.puts "Destination: #{@destination}"
+          @output.puts "Phase: #{@state&.fetch("phase", nil) || "inactive"}"
+          @output.puts "Message: #{@state.fetch("message")}" if @state
+          @output.puts "Started at: #{@state.fetch("started_at")}" if @state
+          @output.puts "Last successful step: #{@state.fetch("last_successful_step")}" if @state
+          @output.puts "Failed step: #{@state.fetch("failed_step")}" if @state&.fetch("failed_step", nil)
+          @output.puts "Error: #{@state.fetch("error")}" if @state&.fetch("error", nil)
+          @output.puts "Running roles: #{roles.empty? ? "none" : roles.join(", ")}"
+          @output.puts "Litestream: #{litestream ? "running" : "stopped"}"
+          @output.puts "Public HTTP status: #{response.fetch("code")}"
+          verify_status_consistency!(@state, roles, litestream, response)
+        end
+
+        def create_start_state(message)
+          @state_store.acquire_lock("Maintenance barrier #{APP_ID}")
+          begin
+            raise Error, "database restore is in progress" if @state_store.restore_active?
+            raise Error, "maintenance state was created concurrently" if @state_store.maintenance
+
+            timestamp = @now.call.iso8601
+            @state = {
+              "schema_version" => 1,
+              "phase" => "starting",
+              "destination" => @destination,
+              "message" => message,
+              "started_at" => timestamp,
+              "updated_at" => timestamp,
+              "last_successful_step" => "state_created",
+              "failed_step" => nil,
+              "error" => nil
+            }
+            @state_store.write_maintenance(@state)
+          ensure
+            @state_store.release_lock
+          end
+        end
+
+        def perform_step(step)
+          return if completed_step?(step)
+
+          @current_step = step
+          yield
+          write_state(last_successful_step: step, failed_step: nil, error: nil)
+        end
+
+        def completed_step?(step)
+          previous = @step_sequence.index(@state.fetch("last_successful_step"))
+          current = @step_sequence.index(step)
+          previous && current && previous >= current
+        end
+
+        def prepare_start_resume!
+          return unless completed_step?("app_stop_verified")
+
+          roles = @inspector.running_roles
+          raise Error, "application roles restarted during maintenance: #{roles.join(", ")}" unless roles.empty?
+
+          final_sync_step = "litestream_synced_#{DATABASES.last.fetch("name")}"
+          needs_litestream = !completed_step?(final_sync_step)
+          run_kamal!("accessory", "start", "litestream") if needs_litestream && !@inspector.litestream_running?
+        end
+
+        def write_state(**changes)
+          @state.merge!(changes.transform_keys(&:to_s))
+          @state["updated_at"] = @now.call.iso8601
+          @state_store.write_maintenance(@state)
+        end
+
+        def record_failure(message, phase: nil)
+          write_state(
+            phase: phase || @state.fetch("phase"),
+            failed_step: @current_step || "unknown",
+            error: message
+          )
+        rescue StandardError => state_error
+          @error.puts "Could not record maintenance failure: #{state_error.message}"
+        end
+
+        def fail_closed_after_finish(error)
+          return unless @state
+
+          if @proxy_live || %w[proxy_live public_health_verified].include?(@state.fetch("last_successful_step", nil))
+            @runner.ignore_failure(
+              "app", "maintenance", "--message", @state.fetch("message"), "-d", @destination
+            )
+            @state["last_successful_step"] = "internal_health_verified"
+          end
+          record_failure(error.message, phase: "finish_failed")
+        end
+
+        def fail_closed_after_start(message)
+          @runner.ignore_failure("app", "maintenance", "--message", message, "-d", @destination)
+          @runner.ignore_failure("app", "stop", "-d", @destination)
+        end
+
+        def remove_state_under_lock
+          @state_store.acquire_lock("Maintenance completed #{APP_ID}")
+          begin
+            @state_store.delete_maintenance
+          ensure
+            @state_store.release_lock
+          end
+        end
+
+        def verify_running_roles!
+          roles = @inspector.running_roles
+          required = HAS_WORKER ? %w[web worker] : %w[web]
+          missing = required - roles
+          raise Error, "application roles did not start: #{missing.join(", ")}" unless missing.empty?
+        end
+
+        def verify_litestream_ready!
+          database = DATABASES.fetch(0)
+          run_kamal!(
+            "accessory", "exec", "litestream", "--reuse",
+            "litestream", "sync", "-socket", SOCKET_PATH, "-wait", "-timeout", "60",
+            database.fetch("path")
+          )
+        end
+
+        def verify_public_maintenance!(message)
+          response = @inspector.public_response
+          raise Error, "public response was #{response.fetch("code")}, expected 503" unless response.fetch("code") == 503
+          visible_body = CGI.unescapeHTML(response.fetch("body"))
+          raise Error, "public maintenance message did not match" unless visible_body.include?(message)
+        end
+
+        def verify_public_health!
+          response = @inspector.public_response(path: "/up")
+          raise Error, "public /up response was #{response.fetch("code")}, expected 200" unless response.fetch("code") == 200
+        end
+
+        def verify_status_consistency!(state, roles, litestream, response)
+          if state
+            visible_body = CGI.unescapeHTML(response.fetch("body"))
+            expected = roles.empty? && !litestream && response.fetch("code") == 503 &&
+              visible_body.include?(state.fetch("message"))
+            raise Error, "remote state and running services are inconsistent" unless expected
+          else
+            required = HAS_WORKER ? %w[web worker] : %w[web]
+            expected = (required - roles).empty? && litestream && response.fetch("code") == 200
+            raise Error, "inactive marker and running services are inconsistent" unless expected
+          end
+        end
+
+        def internal_health_command
+          [
+            "ruby", "-rnet/http", "-e",
+            "response = Net::HTTP.get_response(URI('http://127.0.0.1:80/up')); exit(response.code.to_i == 200 ? 0 : 1)"
+          ]
+        end
+
+        def app_exec!(*command)
+          run_kamal!("app", "exec", "-p", "-r", "web", *command)
+        end
+
+        def run_kamal!(*arguments)
+          @runner.run!(*arguments, "-d", @destination)
+        end
+      end
+    end
+
+    exit KamalMaintenance::CLI.new(ARGV).run if $PROGRAM_NAME == __FILE__
+  RUBY
+  create_file "bin/kamal-maintenance", maintenance_cli, force: true
+  chmod "bin/kamal-maintenance", 0o755
 end
 
 def configure_deployment(app_id)
@@ -22617,14 +23208,20 @@ def configure_kamal
 
   configure_deployment(app_id)
   configure_kamal_restore(app_id, databases)
+  configure_kamal_maintenance(app_id, databases)
 
   create_file ".kamal/hooks/pre-deploy", <<~SH, force: true
     #!/bin/sh
     set -eu
     : "\${KAMAL_DESTINATION:?KAMAL_DESTINATION is required}"
-    marker=".kamal/#{app_id}-\${KAMAL_DESTINATION}-restore-in-progress"
-    if ! bin/kamal server exec "test ! -e \$marker" -d "\$KAMAL_DESTINATION"; then
+    restore_marker=".kamal/#{app_id}-\${KAMAL_DESTINATION}-restore-in-progress"
+    maintenance_marker=".kamal/#{app_id}-\${KAMAL_DESTINATION}-maintenance.json"
+    if ! bin/kamal server exec "test ! -e \$restore_marker" -d "\$KAMAL_DESTINATION"; then
       echo "#{app_id} (\$KAMAL_DESTINATION): database restore is in progress; deploy aborted" >&2
+      exit 1
+    fi
+    if ! bin/kamal server exec "test ! -e \$maintenance_marker" -d "\$KAMAL_DESTINATION"; then
+      echo "#{app_id} (\$KAMAL_DESTINATION): maintenance mode is active; deploy aborted" >&2
       exit 1
     fi
   SH
@@ -22774,6 +23371,48 @@ def configure_kamal
     Include `-d production` or `-d staging` in every Kamal operation. The application entrypoint
     waits for the Litestream control socket before `db:prepare` or the Solid Queue worker starts.
 
+    ## Database maintenance mode
+
+    Use the generated Rails-independent command when database maintenance must exclude every
+    managed application process:
+
+        bin/kamal-maintenance start --destination=production
+        bin/kamal-maintenance status --destination=production
+        bin/kamal-maintenance message --destination=production --message="Maintenance continues"
+        bin/kamal-maintenance finish --destination=production
+
+    `start` and `message` also accept `--message=TEXT`. Without it, Gum prompts with the default
+    message for the application's generated locale. Messages must be non-empty, single-line plain
+    text of at most 500 characters. `start`, `message`, and `finish` require a TTY and one Gum
+    confirmation whose default is cancel; there is no force or noninteractive option.
+
+    `start` first enables the Kamal Proxy 503 response, then stops every application role using
+    Kamal's configured drain timeout (30 seconds by default). It verifies that Web and the optional
+    Worker stopped, performs a final Litestream sync for primary, storage, and the optional queue
+    and cable databases, stops Litestream, and verifies both the stopped processes and the public
+    503 response. Solid Cache becomes inaccessible when the application roles stop, but remains
+    intentionally outside Litestream backup and restore.
+
+    The destination-specific remote JSON state records the phase, message, timestamps, last
+    successful step, and any failed step. A failed `start` or `finish` keeps the marker and public
+    maintenance response. Inspect it with `status`, fix the reported cause, and rerun the same
+    subcommand to continue from the last successful step. `status` uses only Kamal, Docker state,
+    and the public HTTP response; it does not boot Rails or open a database. It exits unsuccessfully
+    when the marker, processes, and public response disagree.
+
+    `finish` starts Litestream, confirms its control socket, starts Web and the optional Worker,
+    checks `/up` inside Web, sends `app live`, verifies public `/up`, and only then removes the
+    marker. A failure after `app live` immediately restores the maintenance response. Restore and
+    maintenance markers are mutually exclusive, and the generated `pre-deploy` hook rejects normal
+    deploys while either exists.
+
+    Kamal waits for graceful process shutdown before forcing remaining Web or Worker containers to
+    stop. Interrupted jobs are not retried by this command. After maintenance, recover ordinary
+    Solid Queue jobs manually in Mission Control Jobs when that feature is enabled, and recover
+    Maintenance Tasks from their dedicated administration screen when that feature is enabled.
+    Database commands intentionally run by the operator during the maintenance window are outside
+    this process-access guarantee.
+
     ## Manual restore
 
     Preview the latest available restore without changing a destination:
@@ -22802,11 +23441,12 @@ def configure_kamal
     application and its remote replicas are correct.
 
     During restore, a destination-specific remote marker makes the generated `pre-deploy` hook
-    reject new deployments for that destination. The destructive file switch runs while the Kamal
-    deploy lock is held. If startup fails after the switch, services remain stopped and the marker
-    remains present for inspection.
+    reject new deployments for that destination. Restore refuses to start while maintenance state
+    exists, and maintenance refuses to start while the restore marker exists. The destructive file
+    switch runs while the Kamal deploy lock is held. If startup fails after the switch, services
+    remain stopped and the marker remains present for inspection.
   MARKDOWN
-  append_to_file "README.md", "\n## Deployment and recovery\n\nSee [docs/deployment.md](docs/deployment.md) for Kamal, Litestream, and confirmed restore operations.\n"
+  append_to_file "README.md", "\n## Deployment, maintenance, and recovery\n\nSee [docs/deployment.md](docs/deployment.md) for Kamal, database maintenance mode, Litestream, and confirmed restore operations.\n"
 end
 
 after_bundle do

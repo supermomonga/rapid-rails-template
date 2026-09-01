@@ -1760,7 +1760,9 @@ class RailsTemplateContractTest < Minitest::Test
     kamal = source_between("def configure_kamal", "after_bundle do")
     dockerfile = source_between('create_file "Dockerfile"', 'create_file "bin/docker-entrypoint"')
     restore = source_between("def kamal_restore_cli_body", "def configure_kamal_restore")
-    volume_helper = source_between("def configure_kamal_restore", "def configure_deployment")
+    operation_support = source_between("def configure_kamal_operation_support", "def configure_kamal_restore")
+    volume_helper = source_between("def configure_kamal_restore", "def configure_kamal_maintenance")
+    maintenance = source_between("def configure_kamal_maintenance", "def configure_deployment")
     r2 = source_between("def configure_deployment", "def configure_kamal")
     server_setup = source_between('  server_setup = <<~RUBY', '  create_file "lib/deployment/server_setup.rb"')
 
@@ -1796,6 +1798,8 @@ class RailsTemplateContractTest < Minitest::Test
       refute_includes dockerfile, package
     end
     assert_includes kamal, 'create_file ".kamal/hooks/pre-deploy"'
+    assert_includes kamal, 'configure_kamal_maintenance(app_id, databases)'
+    assert_includes kamal, 'maintenance_marker=".kamal/#{app_id}-\${KAMAL_DESTINATION}-maintenance.json"'
     refute_includes kamal, "Procfile.prod"
     refute_includes kamal, "foreman"
     refute_includes kamal, "THRUSTER_HTTP_PORT"
@@ -1817,6 +1821,30 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes restore, '"-force"'
     refute_includes restore, "if-replica-exists"
     refute_includes restore, "--yes"
+
+    assert_includes operation_support, 'create_file "lib/deployment/kamal_operation.rb"'
+    assert_includes operation_support, "class CommandRunner"
+    assert_includes operation_support, "class RemoteState"
+    assert_includes operation_support, "write_maintenance"
+    assert_includes restore, "Deployment::KamalOperation::CommandRunner"
+    assert_includes restore, "Deployment::KamalOperation::RemoteState"
+
+    assert_includes maintenance, 'create_file "bin/kamal-maintenance"'
+    assert_includes maintenance, 'ACTIONS = %w[start status message finish]'
+    assert_includes maintenance, 'option_parser.on("--destination=DESTINATION")'
+    assert_includes maintenance, 'option_parser.on("--message=TEXT")'
+    assert_includes maintenance, 'message must be at most 500 characters'
+    assert_includes maintenance, 'return if @input.tty? && @output.tty?'
+    assert_includes maintenance, 'default: false'
+    assert_includes maintenance, '"app", "maintenance", "--message", message'
+    assert_includes maintenance, '"app", "stop"'
+    assert_includes maintenance, '"accessory", "stop", "litestream"'
+    assert_includes maintenance, '"app", "live"'
+    assert_includes maintenance, 'verify_public_health!'
+    assert_includes maintenance, 'phase: "start_failed"'
+    assert_includes maintenance, 'phase: "finish_failed"'
+    refute_includes maintenance, 'rails runner'
+    refute_includes maintenance, '--force'
 
     assert_includes volume_helper, 'SIDECAR_SUFFIXES = ["", "-wal", "-shm", "-journal"]'
     assert_includes volume_helper, "installed.reverse_each"

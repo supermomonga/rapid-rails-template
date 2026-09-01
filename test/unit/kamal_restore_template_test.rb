@@ -66,10 +66,11 @@ class KamalRestoreTemplateTest < Minitest::Test
   class FakeRunner
     attr_reader :commands, :raw_commands
 
-    def initialize(fail_when: nil)
+    def initialize(fail_when: nil, output_when: nil)
       @commands = []
       @raw_commands = []
       @fail_when = fail_when
+      @output_when = output_when
     end
 
     def run!(*arguments)
@@ -78,7 +79,7 @@ class KamalRestoreTemplateTest < Minitest::Test
       @commands << command
       raise KamalRestore::Error, "expected failure" if @fail_when&.call(command)
 
-      ""
+      @output_when&.call(command) || ""
     end
 
     def ignore_failure(*arguments)
@@ -98,11 +99,18 @@ class KamalRestoreTemplateTest < Minitest::Test
     RubyVM::InstructionSequence.compile(@files.fetch("bin/kamal-restore"))
     RubyVM::InstructionSequence.compile(@files.fetch("bin/kamal-restore-volume"))
     Object.send(:remove_const, :KamalRestore) if Object.const_defined?(:KamalRestore)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+    eval(
+      @files.fetch("lib/deployment/kamal_operation.rb"),
+      TOPLEVEL_BINDING,
+      "generated/lib/deployment/kamal_operation.rb"
+    )
     eval(@files.fetch("bin/kamal-restore"), TOPLEVEL_BINDING, "generated/bin/kamal-restore")
   end
 
   def teardown
     Object.send(:remove_const, :KamalRestore) if Object.const_defined?(:KamalRestore)
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
   def test_litestream_readiness_script_compiles
@@ -113,6 +121,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     )
 
     RubyVM::InstructionSequence.compile(files.fetch("bin/wait-for-litestream"))
+    RubyVM::InstructionSequence.compile(files.fetch("bin/kamal-maintenance"))
+    RubyVM::InstructionSequence.compile(files.fetch("lib/deployment/kamal_operation.rb"))
     RubyVM::InstructionSequence.compile(files.fetch("lib/deployment/configurator.rb"))
     RubyVM::InstructionSequence.compile(files.fetch("lib/deployment/server_setup.rb"))
     RubyVM::InstructionSequence.compile(files.fetch("test/lib/deployment/configurator_test.rb"))
@@ -336,7 +346,29 @@ class KamalRestoreTemplateTest < Minitest::Test
 
     assert_equal 1, status
     refute runner.commands.any? { |command| command == %w[app stop] }
-    assert runner.commands.any? { |command| command.last == "rm -f .kamal/sample-production-restore-in-progress" }
+    refute runner.commands.any? { |command| command.last == "touch .kamal/sample-production-restore-in-progress" }
+  end
+
+  def test_maintenance_state_blocks_restore_before_marker_or_application_stop
+    runner = FakeRunner.new(output_when: lambda do |command|
+      next unless command.first(2) == %w[server exec]
+      next unless command.last.include?("sample-production-maintenance.json")
+
+      JSON.generate("phase" => "active")
+    end)
+
+    status = KamalRestore::CLI.new(
+      ["--destination=production"],
+      input: TTYIO.new("RESTORE sample production latest\n"),
+      output: TTYIO.new,
+      error: StringIO.new,
+      runner:
+    ).run
+
+    assert_equal 1, status
+    refute runner.commands.any? { |command| command == %w[app stop] }
+    refute runner.commands.any? { |command| command.last == "touch .kamal/sample-production-restore-in-progress" }
+    assert runner.commands.any? { |command| command == %w[lock release] }
   end
 
   def test_install_failure_keeps_services_stopped_and_marker_present
@@ -473,6 +505,10 @@ class KamalRestoreTemplateTest < Minitest::Test
     assert_equal "--- {}\n", files.fetch("config/deploy.production.yml")
     assert_equal "--- {}\n", files.fetch("config/deploy.staging.yml")
     assert_includes files.fetch("lib/tasks/deployment.rake"), "Deployment::Configurator.new(root: Rails.root).run!"
+    assert_includes files.fetch(".kamal/hooks/pre-deploy"), "sample-${KAMAL_DESTINATION}-restore-in-progress"
+    assert_includes files.fetch(".kamal/hooks/pre-deploy"), "sample-${KAMAL_DESTINATION}-maintenance.json"
+    assert_includes files.fetch("docs/deployment.md"), "## Database maintenance mode"
+    assert_includes files.fetch("docs/deployment.md"), "bin/kamal-maintenance status --destination=production"
 
     minimal_files = build_kamal_files(
       "active_job" => "skip",
@@ -483,6 +519,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     minimal_litestream = YAML.safe_load(minimal_files.fetch("config/litestream.yml"), aliases: true)
     refute minimal_deploy.fetch("servers").key?("worker")
     assert_equal 2, minimal_litestream.fetch("dbs").length
+    assert_includes minimal_files.fetch("bin/kamal-maintenance"), "HAS_WORKER = false"
   ensure
     original_environment&.each do |name, value|
       value.nil? ? ENV.delete(name) : ENV[name] = value
@@ -1566,7 +1603,10 @@ class KamalRestoreTemplateTest < Minitest::Test
     end_index = source.index("after_bundle do", start_index) || raise("kamal source end not found")
     builder_class = Class.new
     builder_class.const_set(:PLAN, { "app_id" => "sample" })
-    builder_class.const_set(:VALUES, { "additional_login_methods" => [] }.merge(values))
+    builder_class.const_set(:VALUES, {
+      "additional_login_methods" => [],
+      "default_locale" => "ja"
+    }.merge(values))
     builder_class.const_set(:YAML, YAML)
     builder_class.class_eval(source.byteslice(start_index...end_index), TEMPLATE_PATH, 1)
     files = {}

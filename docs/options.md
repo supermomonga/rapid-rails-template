@@ -290,6 +290,10 @@ Cloudflare APIからpermission group IDを解決して対象bucketだけのallow
 
 空volumeではLitestreamの`restore-if-db-not-exists`を使用し、backupが存在すれば復元してからcontrol socketを公開します。既存DBを上書きしません。既存DBの手動復元はdestination指定必須の`bin/kamal-restore`だけを入口とし、plan表示、RFC3339時点指定、TTY、アプリID・destination・対象を含む完全一致確認、全DBのfull integrity check、destination別deploy lockとmarker、復元前DBの保存を必須にします。確認回避、`force`、単一DBだけの復元は提供しません。
 
+DBメンテナンスモードも質問やgenerator optionにはせず、全構成へRails非依存の`bin/kamal-maintenance`を生成します。`start`・`status`・`message`・`finish`だけを公開し、`production|staging` destinationを必須にします。変更操作はTTYとGumの既定値「中止」の確認を必須とし、forceや非対話実行、自動終了、任意DB command実行、Rails管理画面は提供しません。文言は生成時の既定localeに対応する初期値を持つ1行500文字以下のplain textとし、Kamal Proxyへargvで渡します。
+
+`start`はProxyを503へ切り替えて全app roleを停止し、primary・storage・条件付きqueue/cableを最終同期してLitestreamを停止します。cacheはapp停止によってアクセス不能になりますが、backup・restore対象にはしません。`finish`はLitestreamのsocket、Web・条件付きWorker、内部health、Proxy live、公開`/up`の順に確認し、全成功後だけremote stateを削除します。remote stateはphase、文言、時刻、最後の成功step、失敗stepを保持し、同じsubcommandの再実行で続行します。restore markerとmaintenance stateは相互排他で、pre-deploy hookはどちらが存在しても通常deployを拒否します。
+
 ## テスト要件
 
 - 各選択肢と既定値が正規化後の設定へ正しく反映されること。
@@ -332,3 +336,4 @@ Cloudflare APIからpermission group IDを解決して対象bucketだけのallow
 - Solid Queue使用時だけKamalの`worker` roleを追加すること。
 - primaryとActive Storageのstorageを常にreplicateし、queueとcableを選択に応じて追加し、cacheを除外すること。
 - 手動復元が非TTY、確認不一致、backup欠落、integrity failure、lock競合で本番DBを変更しないこと。
+- maintenanceの変更操作が非TTY、確認取消、不正なdestination・文言、restore競合でremote processを変更せず、失敗時はstateと503を保持すること。

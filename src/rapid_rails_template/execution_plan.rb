@@ -466,8 +466,10 @@ module RapidRailsTemplate
         config/litestream.yml
         bin/docker-entrypoint
         bin/wait-for-litestream
+        bin/kamal-maintenance
         bin/kamal-restore
         bin/kamal-restore-volume
+        lib/deployment/kamal_operation.rb
         lib/deployment/command_runner.rb
         lib/deployment/cloudflare_client.rb
         lib/deployment/configurator.rb

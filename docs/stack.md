@@ -383,6 +383,14 @@ Cloudflare token作成用の`CLOUDFLARE_INITIAL_API_TOKEN`は、対象accountの
 
 Accessoryは通常の`kamal deploy`では更新されないため、設定・image・secret変更時はdestinationを付けて`mise exec -- bin/kamal accessory reboot litestream -d DESTINATION`を実行します。
 
+### DBメンテナンスモード
+
+全生成アプリへRails非依存の`bin/kamal-maintenance`を生成します。`start`はKamal Proxyの`app maintenance --message`を先に実行し、Kamal既定の30秒drain timeoutでWebと条件付きWorkerを停止します。その後、primary・storage・条件付きqueue/cableをLitestream control socket経由で最終同期し、Accessoryを停止して、container停止と公開503・表示文言を検証します。Solid Cache DBはapp停止によって読み書き不能になりますが、再構築可能データなのでLitestream対象には追加しません。
+
+`finish`はLitestreamを起動してcontrol socketを確認し、Webと条件付きWorkerを起動して内部`/up`を検証した後に`app live`を実行し、公開`/up`が200になってからremote stateを削除します。途中失敗では503を維持し、`app live`後の公開確認失敗では直ちにmaintenance表示へ戻します。destination別JSON stateは`starting`・`active`・`finishing`・失敗状態、文言、開始・更新時刻、最後の成功step、失敗stepを保存します。`status`はRailsやDBを起動せず、state、Docker上のrole、Litestream、公開応答の不一致を失敗として報告します。
+
+`start`・`message`・`finish`はTTYとGumの既定値「中止」の確認を必須とし、forceや非対話実行は提供しません。restoreとmaintenanceは共通のKamal runner・remote marker処理を使って相互排他にし、pre-deploy hookはどちらのmarkerでも通常deployを拒否します。CLIは停止したjobを自動retryしません。再開後、通常のSolid Queue jobはMission Control Jobs、Maintenance Taskは専用管理画面が有効な場合にそれぞれ手動復旧します。
+
 ### 確認付き手動復元
 
 `mise exec -- bin/kamal-restore`は`--destination=production|staging`を必須とし、最新時点、`--timestamp=RFC3339`によるpoint-in-time、`--plan`によるdry-runを提供します。書き込み操作はTTYと`RESTORE <app_id> <destination> <target>`の完全一致入力を必須にし、確認回避やforce optionは提供しません。

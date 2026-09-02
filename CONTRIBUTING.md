@@ -19,13 +19,27 @@ ruby -Itest -e 'Dir["test/{unit,integration}/**/*_test.rb"].sort.each { |file| r
 ## 変更の進め方
 
 1. 変更の目的と影響範囲を明確にする。
-2. 振る舞いまたは設計を変更する場合は、関連する設計文書を先に更新する。
+2. 振る舞いまたは設計を変更する場合は、関連する ADR と参照文書を先に確認する。
 3. 実装開始後は、分割ソースと単体テストを変更する。
 4. 生成コマンドでルートの`bootstrap.rb`を再生成する。
 5. 生成物の同期検証と、Railsアプリケーションを生成する統合テストを実行する。
 6. テンプレートの内容fingerprintが変わった場合は`rake evidence:update`で全部入り日本語sampleのUIエビデンスを更新する。
 
 `rake evidence:verify`はChromiumを起動せずに保存済みエビデンスの鮮度、capture IDとviewportの非重複、manifestと画像の整合性を検証します。通常のMinitestにも同じ検証が含まれます。スクリーンショット更新は全部入り構成の全検証が成功してから`docs/evidence/`へ反映されるため、途中失敗時は既存成果物を維持します。
+
+## 設計判断と参照文書
+
+将来の保守者が採用理由を調査する必要がある設計変更は、[`adrs`](https://github.com/joshrotenberg/adrs) CLIで管理します。まず既存のADRを検索し、既存のAccepted ADRが判断を変更せずに適用できる場合は新しいADRを作りません。
+
+```console
+adrs -C . search "検索語"
+adrs -C . new --no-edit "判断のタイトル"
+adrs -C . status ADR番号 accepted
+adrs -C . doctor
+adrs -C . generate toc
+```
+
+新しいADRは既定のProposedで作成し、背景、判断要因、検討した選択肢、決定、結果、確認方法を記載してからAcceptedへ変更します。statusとADR間の関係は直接編集せず、`adrs status`と`adrs link`を使用します。現在の構成、選択肢、処理順序は`docs/reference/`へ反映し、`docs/adr/README.md`は`adrs generate toc`の出力と一致させます。
 
 ## 生成物の扱い
 
@@ -52,6 +66,8 @@ ruby -Itest -e 'Dir["test/{unit,integration}/**/*_test.rb"].sort.each { |file| r
 
 ## 文書変更の確認
 
+- `adrs -C . doctor`が成功すること。
+- `docs/adr/README.md`が`adrs -C . generate toc`の出力と一致すること。
 - Markdown内の相対リンクが存在すること。
 - `README.md`と設計文書で対応バージョンが一致すること。
 - Mermaidフローチャートの構文が正しく、意図した順序で表示されること。

@@ -1,5 +1,7 @@
 # アーキテクチャ
 
+> この文書は現在のコンポーネント構成と責務を示す更新可能な参照文書です。判断理由は [ADR 2](../adr/0002-bootstrap-rb-wojue-ding-de-nadan-yi-pei-bu-wu-tositesheng-cheng-suru.md)、[ADR 3](../adr/0003-rails-new-qian-nizhi-wen-que-ren-shi-xing-ji-hua-woque-ding-suru.md)、[ADR 5](../adr/0005-sheng-cheng-xian-wogong-shi-api-togou-zao-hua-bian-ji-debian-geng-suru.md)、[ADR 11](../adr/0011-sheng-cheng-jie-guo-woxing-jian-cha-qi-yue-tesuto-ui-zheng-ji-dejian-zheng-suru.md)、[ADR 12](../adr/0012-quan-ti-tong-zhi-hagong-you-rekodo-ge-bie-tong-zhi-hapei-xin-xing-deguan-li-suru.md)を参照してください。
+
 ## 目的
 
 Rapid Rails Templateは、Rails 8.1アプリケーションで繰り返し行う初期設定を、安全かつ再現可能に適用するApplication Templateを提供します。利用者との対話、実行計画、個別処理、ファイル編集を分離し、Railsのバージョン変更に追従しやすい構造を採用します。

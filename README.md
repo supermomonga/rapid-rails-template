@@ -91,10 +91,11 @@ Passkeyによるパスワードレス認証は全構成で必須です。登録�
 
 ## ドキュメント
 
-- [アーキテクチャ](docs/architecture.md)
-- [採用技術とセットアップ要件](docs/stack.md)
-- [テンプレート処理フロー](docs/template-flow.md)
-- [対話オプションの定義方針](docs/options.md)
+- [アーキテクチャ上の判断（ADR）](docs/adr/README.md)
+- [アーキテクチャ](docs/reference/architecture.md)
+- [採用技術とセットアップ要件](docs/reference/stack.md)
+- [テンプレート処理フロー](docs/reference/template-flow.md)
+- [対話オプションの定義方針](docs/reference/options.md)
 - [コントリビューションガイド](CONTRIBUTING.md)
 
 ## ライセンス

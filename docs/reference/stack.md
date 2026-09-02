@@ -1,5 +1,7 @@
 # 採用技術とセットアップ要件
 
+> この文書は現在の技術構成とセットアップ要件を示す更新可能な参照文書です。基盤、認証、永続化、運用、配備、検証、通知の判断理由は [ADR 6](../adr/0006-sheng-cheng-apurinoji-pan-ji-shu-todui-ying-baziyonwogu-ding-suru.md)から [ADR 12](../adr/0012-quan-ti-tong-zhi-hagong-you-rekodo-ge-bie-tong-zhi-hapei-xin-xing-deguan-li-suru.md)を参照してください。
+
 この文書は、生成するRailsアプリケーションへ必ず導入する技術と、対話結果に応じて導入する技術を定義します。
 
 ## ランチャーUI

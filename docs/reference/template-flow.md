@@ -1,5 +1,7 @@
 # テンプレート処理フロー
 
+> この文書は現在の処理順序と変更開始境界を示す更新可能な参照文書です。判断理由は [ADR 2](../adr/0002-bootstrap-rb-wojue-ding-de-nadan-yi-pei-bu-wu-tositesheng-cheng-suru.md)、[ADR 3](../adr/0003-rails-new-qian-nizhi-wen-que-ren-shi-xing-ji-hua-woque-ding-suru.md)、[ADR 4](../adr/0004-dui-hua-opusiyonwoyi-cun-shun-nizheng-gui-hua-suru.md)、[ADR 11](../adr/0011-sheng-cheng-jie-guo-woxing-jian-cha-qi-yue-tesuto-ui-zheng-ji-dejian-zheng-suru.md)を参照してください。
+
 Rapid Rails Templateは、単一の`bootstrap.rb`で前段の対話とApplication Templateの適用を連携します。すべての回答と実行内容を確定してから`rails new`を起動するため、Rails標準ファイルの生成前に`--skip-*`を含むgenerator optionを確定できます。
 
 ```mermaid

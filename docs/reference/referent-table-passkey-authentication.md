@@ -1,3 +1,5 @@
+> この文書は Passkey 認証の用語と要件の対応を示す更新可能な参照資料です。
+
 | 出典 | 目的 | 具体対象 | 役割 | 前後関係 | 候補語 | 初出定義 |
 |---|---|---|---|---|---|---|
 | 承認済み計画 | パスワードなしでUserを認証する | Userに属し、WebAuthn assertionまたはSIWE署名を検証できるPasskey credentialとEVM wallet identity | 記録 | 登録 → ログイン → 追加・解除 | 認証資格情報 | 認証資格情報とは、ログインに使用できるPasskey credentialまたはSIWE identityを指す。 |

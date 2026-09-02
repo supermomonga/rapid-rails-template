@@ -2,7 +2,7 @@
 
 ## プロジェクト構成とモジュール配置
 
-ルートにはプロジェクト全体の文書（`README.md`、`CONTRIBUTING.md`）と環境設定（`mise.toml`）があります。詳細な設計判断は `docs/` に置きます。`architecture.md` はコンポーネント境界、`options.md` は質問項目の振る舞い、`stack.md` は採用技術、`template-flow.md` は実行順序の正本です。
+ルートにはプロジェクト全体の文書（`README.md`、`CONTRIBUTING.md`）と環境設定（`mise.toml`）があります。設計判断は `docs/adr/`、現在の構成を示す更新可能な参照文書は `docs/reference/` に置きます。`docs/reference/architecture.md` はコンポーネント境界、`docs/reference/options.md` は質問項目の振る舞い、`docs/reference/stack.md` は採用技術、`docs/reference/template-flow.md` は実行順序の正本です。
 
 実装は `src/rapid_rails_template/`、実行用スクリプトは `bin/`、Minitestは `test/unit/` と `test/integration/` に置きます。空のプレースホルダーディレクトリは作成しません。ルートの `bootstrap.rb` は生成物です。直接編集せず、分割ソースを変更して再生成してください。
 
@@ -19,7 +19,7 @@
 
 ## コーディングスタイルと命名規則
 
-Ruby は2スペースでインデントします。ファイル、メソッド、オプション識別子には `snake_case`、クラスとモジュールには `CamelCase` を使用します。`docs/architecture.md` の責務境界を守り、質問間の依存関係は非巡回にしてください。生成先では構造化補正済み`.rubocop.yml`と`bin/rubocop -a`を使用します。
+Ruby は2スペースでインデントします。ファイル、メソッド、オプション識別子には `snake_case`、クラスとモジュールには `CamelCase` を使用します。`docs/reference/architecture.md` の責務境界を守り、質問間の依存関係は非巡回にしてください。生成先では構造化補正済み`.rubocop.yml`と`bin/rubocop -a`を使用します。
 
 変更手段は、Rails Generator/Application Template API、ライブラリの generator、構造化データ操作、Prism による AST 編集の順で選びます。grep ベースの書き換え、曖昧な文字列置換、暗黙のフォールバック、Rails 8.1.x／Ruby 4.0.x の対象範囲外に対する互換処理は追加しません。
 

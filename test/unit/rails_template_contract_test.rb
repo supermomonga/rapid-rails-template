@@ -262,7 +262,7 @@ class RailsTemplateContractTest < Minitest::Test
     web_push_view = generated_file_source("app/views/web_push_settings/show.html.erb")
     mission_control_flash = generated_file_source("app/views/layouts/mission_control/jobs/_flash.html.erb")
     agents = File.binread(File.expand_path("../../AGENTS.md", __dir__)).force_encoding(Encoding::UTF_8)
-    stack = File.binread(File.expand_path("../../docs/stack.md", __dir__)).force_encoding(Encoding::UTF_8)
+    stack = File.binread(File.expand_path("../../docs/reference/stack.md", __dir__)).force_encoding(Encoding::UTF_8)
 
     refute_empty semantic_alerts
     semantic_alerts.each do |classes|
@@ -289,7 +289,7 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_default_outline_buttons_use_a_quiet_border_without_overriding_semantic_colors
     agents = File.binread(File.expand_path("../../AGENTS.md", __dir__)).force_encoding(Encoding::UTF_8)
-    stack = File.binread(File.expand_path("../../docs/stack.md", __dir__)).force_encoding(Encoding::UTF_8)
+    stack = File.binread(File.expand_path("../../docs/reference/stack.md", __dir__)).force_encoding(Encoding::UTF_8)
 
     assert_includes @source,
       ".btn-outline:not(:is(.btn-neutral, .btn-primary, .btn-secondary, .btn-accent, .btn-info, .btn-success, .btn-warning, .btn-error)) {"

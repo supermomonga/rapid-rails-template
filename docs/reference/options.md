@@ -1,5 +1,7 @@
 # 対話オプションの定義方針
 
+> この文書は現在の選択肢、依存関係、正規化規則を示す更新可能な参照文書です。判断理由は [ADR 3](../adr/0003-rails-new-qian-nizhi-wen-que-ren-shi-xing-ji-hua-woque-ding-suru.md)、[ADR 4](../adr/0004-dui-hua-opusiyonwoyi-cun-shun-nizheng-gui-hua-suru.md)、[ADR 7](../adr/0007-passkey-wochang-she-si-siwe-wozhui-jia-ren-zheng-fang-shi-nisuru.md)、[ADR 9](../adr/0009-solid-xi-konponentotoyun-yong-hua-mian-wobi-yao-nagou-cheng-dakenidao-ru-suru.md)を参照してください。
+
 この文書は、Rapid Rails Templateへ対話的な選択肢を追加するときの記録形式と設計規則を定義します。固定技術スタックは[採用技術とセットアップ要件](stack.md)を参照してください。
 
 ## 必須項目

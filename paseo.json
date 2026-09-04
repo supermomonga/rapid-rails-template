@@ -2,10 +2,10 @@
   "worktree": {
     "setup": [
       "mise trust",
-      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --no-open docs/evidence/full-ja/README.md"
+      "mo -t \"rapid-rails:${PASEO_WORKTREE_PATH##*/}\" --no-open docs/evidence/full-ja/README.md"
     ],
     "teardown": [
-      "mo -t \"rapid-rails:$PASEO_BRANCH_NAME\" --close docs/evidence/full-ja/README.md"
+      "mo -t \"rapid-rails:${PASEO_WORKTREE_PATH##*/}\" --close docs/evidence/full-ja/README.md"
     ]
   },
   "metadataGeneration": {

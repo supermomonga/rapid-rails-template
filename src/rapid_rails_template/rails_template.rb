@@ -13,6 +13,7 @@ raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.s
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
 
+gem "json", "~> 2.21"
 gem "pagy"
 gem "active_link_to"
 gem "action_policy"

@@ -18,6 +18,8 @@ I18nは`ja`と`en`だけをavailable localeとし、`--default-locale`の値を`
 
 ## 固定構成
 
+JSON処理には`json ~> 2.21`を全構成で使用します。Rails 8.1.3.1の`ActiveSupport::JSON.decode`は`JSON.parse`へoptionsを位置引数で渡しますが、json 3.0.0は第2引数以降をキーワード引数だけで受け付けるため、JSON列の既定値を読み取るmigrationなどで失敗します。生成アプリの依存解決で3系を除外し、migrationやライブラリの処理は上書きしません。この制約は、対象Railsのjson 3系対応を確認し、JSON列の既定値・保存・再読み込みとアプリ生成完了の検証が通った時点で再評価します。
+
 | 分類 | 採用技術・Gem | 方針 |
 | --- | --- | --- |
 | データベース | SQLite（`sqlite3`） | 開発・テスト・productionで使用する |

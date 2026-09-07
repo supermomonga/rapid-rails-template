@@ -17,6 +17,19 @@ class RailsTemplateContractTest < Minitest::Test
     @source = File.binread(TEMPLATE_PATH)
   end
 
+  def test_json_dependency_excludes_incompatible_major_version_in_every_configuration
+    dependencies = []
+    template = Object.new
+    template.define_singleton_method(:gem) { |name, *requirements| dependencies << [name, requirements] }
+    template.instance_eval(source_between('gem "json"', 'gem_group :development'), TEMPLATE_PATH)
+
+    requirements = dependencies.assoc("json")&.last
+    refute_nil requirements
+    requirement = Gem::Requirement.new(*requirements)
+    assert requirement.satisfied_by?(Gem::Version.new("2.21.2"))
+    refute requirement.satisfied_by?(Gem::Version.new("3.0.0"))
+  end
+
   def generated_file_source(path)
     pattern = /^(?<indent>[ \t]*)create_file #{Regexp.escape(path.inspect)}, <<~(?<quote>'?)(?<delimiter>[A-Z]+)\k<quote>, force: true\n(?<body>.*?)^\k<indent>\k<delimiter>$/m
     @source.match(pattern)&.[](:body) || flunk("generated template not found: #{path}")

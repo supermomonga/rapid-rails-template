@@ -1,8 +1,48 @@
-<% accounts = Billing::MerchantAccess.accounts(current_user).order(updated_at: :desc, id: :desc) %>
+<% accounts = Billing::MerchantAccess.accounts(current_user).order(updated_at: :desc, id: :desc).to_a %>
+<% current_account = accounts.find { |account| account.public_id == params[:merchant_id] } %>
 <% if accounts.any? %>
-  <%= form_with url: Billing::Engine.routes.url_helpers.merchant_selection_path, class: "fieldset" do |form| %>
-    <%= form.label :selected_merchant_id, t("billing.ui.switch_merchant"), class: "label" %>
-    <%= form.select :selected_merchant_id, accounts.map { |account| ["#{account.display_name} · #{t("billing.ui.business_states.#{account.status}")}", account.public_id] }, { selected: params[:merchant_id], include_blank: true }, class: "select w-full", required: true %>
-    <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("billing.ui.switch"), class: action_button_classes(:secondary) %></div>
-  <% end %>
+  <section class="card card-border bg-base-100 mt-4" aria-labelledby="billing-merchant-context" data-billing-merchant-selector>
+    <div class="card-body p-3">
+      <h2 id="billing-merchant-context" class="text-sm font-semibold"><%= t(current_account ? "billing.ui.current_merchant" : "billing.ui.select_merchant") %></h2>
+      <% if current_account %>
+        <p class="font-semibold [overflow-wrap:anywhere]" data-billing-current-merchant><%= current_account.display_name %></p>
+        <span class="badge"><%= t("billing.ui.business_states.#{current_account.status}") %></span>
+      <% end %>
+      <% if current_account.nil? || accounts.many? %>
+        <div class="card-actions justify-end">
+          <button type="button" class="btn btn-block" popovertarget="billing-merchant-choices" style="anchor-name: --billing-merchant-switch">
+            <%= t(current_account ? "billing.ui.switch_merchant" : (accounts.all? { |account| account.status == "closed" } ? "billing.ui.open_merchant_history" : "billing.ui.select_merchant")) %>
+            <%= billing_icon("chevron-down") %>
+          </button>
+        </div>
+        <div id="billing-merchant-choices" class="dropdown dropdown-end min-[961px]:dropdown-start bg-base-100 rounded-box shadow-md w-80 max-w-[calc(100vw-2.5rem)] max-h-80 overflow-y-auto" popover style="position-anchor: --billing-merchant-switch" aria-label="<%= t('billing.ui.select_merchant') %>">
+          <%= form_with url: Billing::Engine.routes.url_helpers.merchant_selection_path do %>
+            <ul class="menu w-full">
+              <% accounts.each do |account| %>
+                <li>
+                  <% if account == current_account %>
+                    <span class="menu-active" aria-current="true">
+                      <%= billing_icon("check-circle") %>
+                      <span class="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+                        <span class="block font-semibold"><%= account.display_name %></span>
+                        <span class="block"><%= t("billing.ui.business_states.#{account.status}") %> · <%= t("billing.ui.selected_merchant") %></span>
+                      </span>
+                    </span>
+                  <% else %>
+                    <button type="submit" name="selected_merchant_id" value="<%= account.public_id %>">
+                      <%= billing_icon("building-storefront") %>
+                      <span class="min-w-0 whitespace-normal text-left [overflow-wrap:anywhere]">
+                        <span class="block font-semibold"><%= account.display_name %></span>
+                        <span class="block"><%= t("billing.ui.business_states.#{account.status}") %></span>
+                      </span>
+                    </button>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </section>
 <% end %>

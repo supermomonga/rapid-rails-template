@@ -12,9 +12,11 @@
           <fieldset class="fieldset" <%= "disabled" unless merchant_manageable? %>><legend class="fieldset-legend"><%= t("billing.ui.payout_address") %></legend>
             <%= form.hidden_field :chain_id %>
             <%= form.label :address, t("billing.ui.payout_address_for", chain: chain.name), for: "payout_#{chain.id}", class: "label" %>
-            <%= form.text_field :address, id: "payout_#{chain.id}", required: true, class: "input w-full", spellcheck: false, autocomplete: "off", aria: { invalid: payout.errors[:address].any? } %>
+            <div class="join w-full">
+              <%= form.text_field :address, id: "payout_#{chain.id}", required: true, class: "input join-item min-w-0 flex-1", spellcheck: false, autocomplete: "off", aria: { invalid: payout.errors[:address].any? } %>
+              <% if merchant_manageable? %><%= form.submit t("billing.ui.save"), class: class_names(action_button_classes(:primary), "join-item"), aria: { label: t("billing.ui.save_chain", chain: chain.name) } %><% end %>
+            </div>
           </fieldset>
-          <% if merchant_manageable? %><div class="card-actions justify-end"><%= form.submit t("billing.ui.save_chain", chain: chain.name), class: action_button_classes(:primary) %></div><% end %>
         <% end %>
       </div></section>
     <% end %>

@@ -169,7 +169,8 @@ ja:
       all_chains: すべてのチェーン
       all_states: すべての状態
       reset_filters: 解除
-      apply_filters: 絞り込む
+      apply_filters: 絞り込みを適用
+      apply: 適用
       payment_history_help: 請求額、運営手数料、送金額、取引の確定状況を確認できます。売上に計上するのは支払確定済みの決済だけです。
       no_refunds: 手動返金の記録はありません
       refund_record_help: 外部で返金した後、対応する確定済み決済の詳細から記録を追加できます。
@@ -204,7 +205,8 @@ ja:
       reject_invitation: 拒否する
       revoke_invitation: 招待を取り消す
       expires_at: 有効期限：%{at}
-      change_role: 役割を変更
+      change_role: 役割を更新
+      invite: 招待
       leave_merchant: この販売者から脱退
       remove_member: メンバーを除名
       remove_member_confirmation: "%{name}を「%{merchant}」の所属から外します。よろしいですか？"
@@ -213,8 +215,11 @@ ja:
       before_change: 変更前
       after_change: 変更後
       system_actor: システム
-      switch_merchant: 現在の販売者・切り替え
-      switch: 切り替える
+      current_merchant: 現在の販売者
+      switch_merchant: 販売者を切り替え
+      select_merchant: 販売者を選択
+      selected_merchant: 選択中
+      open_merchant_history: 履歴を開く
       no_active_merchants: 営業中の販売者がありません
       no_active_merchants_help: 販売者を作成するか、届いた招待を確認してください。
       closed_merchants: 閉鎖済み販売者の履歴

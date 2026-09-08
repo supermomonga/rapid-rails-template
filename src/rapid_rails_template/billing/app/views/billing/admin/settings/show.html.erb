@@ -10,9 +10,12 @@
     </fieldset>
     <fieldset class="fieldset"><legend class="fieldset-legend"><%= t("billing.ui.renewal_settings") %></legend>
       <%= form.label :fee_percent, t("billing.ui.fee_percent"), class: "label" %><%= form.text_field :fee_percent, value: params.dig(:setting, :fee_percent) || Billing::Amount.format(@settings.fee_basis_points, decimals: 2), required: true, inputmode: "decimal", class: "input w-full" %>
-      <%= form.label :grace_hours, t("billing.ui.grace_hours"), class: "label" %><%= form.number_field :grace_hours, required: true, min: 0, class: "input w-full" %>
+      <%= form.label :grace_hours, t("billing.ui.grace_hours"), class: "label" %>
+      <div class="join w-full">
+        <%= form.number_field :grace_hours, required: true, min: 0, class: "input join-item min-w-0 flex-1" %>
+        <%= form.submit t("billing.ui.save"), class: class_names(action_button_classes(:primary), "join-item") %>
+      </div>
       <p><%= t("billing.ui.settings_help") %></p>
     </fieldset>
-    <div class="card-actions justify-end"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
   <% end %>
 </div></div>

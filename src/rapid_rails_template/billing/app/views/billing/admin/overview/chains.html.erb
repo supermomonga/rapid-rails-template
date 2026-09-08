@@ -9,10 +9,13 @@
       <%= form_with scope: :chain, url: admin_chain_path(chain.chain_id), method: :patch do |form| %>
         <fieldset class="fieldset"><legend class="fieldset-legend"><%= t("billing.ui.chain_settings") %></legend>
           <%= form.label :treasury_address, t("billing.ui.treasury"), for: "treasury_#{chain.chain_id}", class: "label" %><%= form.text_field :treasury_address, value: @invalid_chain&.chain_id == chain.chain_id ? params.dig(:chain, :treasury_address) : chain.treasury_address, id: "treasury_#{chain.chain_id}", required: true, class: "input w-full", spellcheck: false %>
-          <%= form.label :gas_ceiling_native, t("billing.ui.gas_ceiling", symbol: network.native_symbol), for: "gas_#{chain.chain_id}", class: "label" %><%= form.text_field :gas_ceiling_native, value: @invalid_chain&.chain_id == chain.chain_id ? params.dig(:chain, :gas_ceiling_native) : (chain.gas_ceiling_wei && Billing::Amount.format(chain.gas_ceiling_wei, decimals: 18)), id: "gas_#{chain.chain_id}", required: true, inputmode: "decimal", class: "input w-full" %>
+          <%= form.label :gas_ceiling_native, t("billing.ui.gas_ceiling", symbol: network.native_symbol), for: "gas_#{chain.chain_id}", class: "label" %>
+          <div class="join w-full">
+            <%= form.text_field :gas_ceiling_native, value: @invalid_chain&.chain_id == chain.chain_id ? params.dig(:chain, :gas_ceiling_native) : (chain.gas_ceiling_wei && Billing::Amount.format(chain.gas_ceiling_wei, decimals: 18)), id: "gas_#{chain.chain_id}", required: true, inputmode: "decimal", class: "input join-item min-w-0 flex-1" %>
+            <%= form.submit t("billing.ui.save"), class: class_names(action_button_classes(:primary), "join-item") %>
+          </div>
           <p><%= t("billing.ui.gas_help") %></p>
         </fieldset>
-        <div class="card-actions justify-end"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
       <% end %>
       <% unless chain.verified_at %>
         <%= form_with url: deploy_admin_chain_path(chain.chain_id) do |form| %>

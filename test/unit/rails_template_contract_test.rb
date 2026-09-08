@@ -531,7 +531,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_faqs, "class: action_button_classes(:primary)"
     assert_includes admin_faqs, "class: action_button_classes(:secondary)"
     assert_includes admin_faqs, "class: action_button_classes(:destructive)"
-    assert_includes footer_setting, "class: action_button_classes(:primary)"
+    assert_includes footer_setting, 'class_names(action_button_classes(:primary), "join-item")'
     assert_includes api_index, "class: action_button_classes(:primary)"
     assert_includes api_index, "class: action_button_classes(:secondary)"
     assert_includes notifications, "class: action_button_classes(:primary)"
@@ -547,7 +547,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes notification_history, 'frame_prefix: "history_personal_notification", compact: false'
     assert_includes notification_open, "locals: { delivery: @delivery, frame_prefix:, compact: }"
 
-    [passkey_new, admin_page_edit, admin_faq_form, footer_setting, profile_form, api_form,
+    [passkey_new, admin_page_edit, admin_faq_form, profile_form, api_form,
      notification_form, notification_show, account_delete].each do |view|
       assert_includes view, '<div class="card-actions flex-wrap justify-end">'
     end
@@ -563,8 +563,10 @@ class RailsTemplateContractTest < Minitest::Test
       'class: action_button_classes(:quiet)',
       'class: action_button_classes(:primary)')
     assert_source_order(api_form,
-      'class: action_button_classes(:quiet)',
-      'class: action_button_classes(:primary)')
+      'form.text_field :name',
+      'class_names(action_button_classes(:primary), "join-item")',
+      '</fieldset>',
+      'class: action_button_classes(:quiet)')
     assert_source_order(api_show,
       'class: action_button_classes(:quiet)',
       'class: action_button_classes(:secondary)',
@@ -2744,7 +2746,22 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes job_show, '<header class="flex flex-wrap items-start justify-between gap-4">'
     refute_includes api_form, "content_for :page_actions_primary"
     assert_includes api_form, '<div class="card-actions flex-wrap justify-end">'
-    assert_includes api_form, '<%= form.submit class: action_button_classes(:primary) %>'
+    assert_includes api_form, '<%= form.submit class: class_names(action_button_classes(:primary), "join-item") %>'
+  end
+
+  def test_single_input_actions_join_controls_without_changing_button_roles_or_labels
+    paths = %w[app/views/account/passkeys/edit.html.erb app/views/account/siwe_identities/edit.html.erb app/views/api_credentials/_form.html.erb]
+    paths.each do |path|
+      view = generated_file_source(path)
+      assert_includes view, '<div class="join w-full">', path
+      assert_includes view, 'class: "input join-item min-w-0 flex-1"', path
+      assert_includes view, 'class_names(action_button_classes(:primary), "join-item")', path
+      assert_operator view.index('form.label :name'), :<, view.index('<div class="join w-full">'), path
+      refute_match(/(?:input|btn)-(?:xs|sm)/, view, path)
+    end
+    %w[app/views/profiles/_form.html.erb app/views/admin/faqs/_form.html.erb].each do |path|
+      refute_includes generated_file_source(path), 'class="join w-full"', path
+    end
   end
 
   def test_with_menu_standard_surfaces_use_p_3_without_changing_nested_or_variant_cards

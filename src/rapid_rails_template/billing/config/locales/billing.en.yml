@@ -204,6 +204,7 @@ en:
       all_states: All statuses
       reset_filters: Reset
       apply_filters: Apply filters
+      apply: Apply
       payment_history_help: Review invoice amounts, fees, distributions and transaction
         finality. Only finalized payments count as revenue.
       no_refunds: No manual refunds recorded
@@ -249,7 +250,8 @@ en:
       reject_invitation: Decline
       revoke_invitation: Revoke invitation
       expires_at: 'Expires: %{at}'
-      change_role: Change role
+      change_role: Update role
+      invite: Invite
       leave_merchant: Leave merchant
       remove_member: Remove member
       remove_member_confirmation: Remove %{name} from %{merchant}?
@@ -259,8 +261,11 @@ en:
       before_change: Before
       after_change: After
       system_actor: System
-      switch_merchant: Current merchant / switch
-      switch: Switch
+      current_merchant: Current merchant
+      switch_merchant: Switch merchant
+      select_merchant: Select merchant
+      selected_merchant: Selected
+      open_merchant_history: Open history
       no_active_merchants: No open merchants
       no_active_merchants_help: Create a merchant or review your invitations.
       closed_merchants: Closed merchant history

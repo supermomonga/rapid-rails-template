@@ -2207,11 +2207,13 @@ def install_passkey_views
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :name, t("passkeys.name") %></legend>
-        <%= form.text_field :name, required: true, maxlength: 50, class: "input w-full" %>
+        <div class="join w-full">
+          <%= form.text_field :name, required: true, maxlength: 50, class: "input join-item min-w-0 flex-1" %>
+          <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
+        </div>
       </fieldset>
       <div class="card-actions flex-wrap justify-end">
         <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
-        <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -3573,11 +3575,13 @@ def install_siwe
         <% end %>
         <fieldset class="fieldset">
           <legend class="fieldset-legend"><%= form.label :name, t("siwe.identities.name") %></legend>
-          <%= form.text_field :name, required: true, maxlength: 50, class: "input w-full" %>
+          <div class="join w-full">
+            <%= form.text_field :name, required: true, maxlength: 50, class: "input join-item min-w-0 flex-1" %>
+            <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
+          </div>
         </fieldset>
         <div class="card-actions flex-wrap justify-end">
           <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
-          <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
         </div>
       <% end %>
     </section>
@@ -6652,9 +6656,11 @@ def configure_content_management
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend"><%= form.label :github_url, "GitHub" %></legend>
-              <%= form.url_field :github_url, class: "input w-full", placeholder: "https://example.com/github-account" %>
+              <div class="join w-full">
+                <%= form.url_field :github_url, class: "input join-item min-w-0 flex-1", placeholder: "https://example.com/github-account" %>
+                <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
+              </div>
             </fieldset>
-            <div class="card-actions flex-wrap justify-end"><%= form.submit t("common.update"), class: action_button_classes(:primary) %></div>
           <% end %>
         </div>
       </section>
@@ -8997,12 +9003,14 @@ def configure_api
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= form.label :name %></legend>
-        <%= form.text_field :name, required: true, autocomplete: "off", class: "input w-full" %>
+        <div class="join w-full">
+          <%= form.text_field :name, required: true, autocomplete: "off", class: "input join-item min-w-0 flex-1" %>
+          <%= form.submit class: class_names(action_button_classes(:primary), "join-item") %>
+        </div>
         <p class="label"><%= t("api_credentials.name_hint") %></p>
       </fieldset>
       <div class="card-actions flex-wrap justify-end">
         <%= link_to t("common.cancel"), api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: action_button_classes(:quiet) %>
-        <%= form.submit class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -12168,6 +12176,19 @@ def configure_in_app_notifications
 end
 
 def configure_default_views
+  create_file "config/initializers/form_errors.rb", <<~'RUBY', force: true
+    require "nokogiri"
+
+    Rails.application.config.action_view.field_error_proc = proc do |html_tag, _instance|
+      fragment = Nokogiri::HTML.fragment(html_tag)
+      fragment.css("input:not([type='hidden']), select, textarea").each do |control|
+        control["aria-invalid"] = "true"
+      end
+      # Rails supplies escaped form markup; only a static ARIA attribute is added above.
+      fragment.to_html.html_safe # rubocop:disable Rails/OutputSafety
+    end
+  RUBY
+
   siwe_enabled = VALUES.fetch("additional_login_methods").include?("siwe")
   pwa_enabled = VALUES.fetch("pwa") == "use"
   web_push_enabled = VALUES.fetch("web_push") == "use"
@@ -12777,6 +12798,35 @@ def configure_default_views
 
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
+
+      test "invalid fields preserve Join structure labels and escaped values" do
+        value = '"><script>alert(1)</script>'
+        profile = Profile.new(screen_name: value)
+        profile.errors.add(:screen_name, :invalid)
+        markup = fields_for(:profile, profile) do |form|
+          safe_join([
+            form.label(:screen_name),
+            tag.div(class: "join") { safe_join([form.text_field(:screen_name, class: "input join-item", aria: { describedby: "name-help" }), form.submit("Save", class: class_names(action_button_classes(:primary), "join-item"))]) },
+            form.select(:screen_name, [["Name", "name"]]),
+            form.text_area(:screen_name),
+            form.file_field(:screen_name),
+            form.hidden_field(:screen_name)
+          ])
+        end
+        fragment = Nokogiri::HTML.fragment(markup)
+        assert_empty fragment.css(".field_with_errors, script")
+        input = fragment.at_css(".join > input[type='text']")
+        assert input
+        assert_equal value, input["value"]
+        assert_equal "true", input["aria-invalid"]
+        assert_equal "name-help", input["aria-describedby"]
+        assert_equal input["id"], fragment.at_css("label")["for"]
+        assert_equal 1, fragment.css(".join > input[type='submit']").size
+        %w[select textarea input[type='file']].each do |selector|
+          assert_equal "true", fragment.at_css(selector)["aria-invalid"]
+        end
+        assert_empty fragment.css("label[aria-invalid], input[type='hidden'][aria-invalid]")
+      end
 
       test "maps semantic action button roles without a fallback" do
         expected = {
@@ -19125,7 +19175,57 @@ def configure_evidence_capture
           T.must(singleton_class).define_method(:urlsafe_base64, T.must(original_method))
         end
 
+        def assert_joined_input_actions(identifier, viewport)
+          return unless %w[passkey-edit siwe-identity-edit api-credential-new api-credential-edit
+            billing-members billing-payouts billing-admin-merchant-fee billing-payments billing-refunds
+            billing-merchant-new billing-merchant-edit billing-settings billing-chain-settings billing-sales
+            billing-refund-new billing-refund-invalid admin-footer-setting].include?(identifier)
+
+          widths = viewport == "desktop" ? [320, 390, 640, 960, 961, VIEWPORTS.fetch(viewport).fetch("width")] : [VIEWPORTS.fetch(viewport).fetch("width")]
+          widths.each do |width|
+            page.current_window.resize_to(width, VIEWPORTS.fetch(viewport).fetch("height"))
+            groups = page.evaluate_script(<<~JAVASCRIPT)
+              (() => [...document.querySelectorAll('form')].flatMap(form => {
+                const field = [...form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]), select, textarea')]
+                  .filter(input => input.checkVisibility() && !input.readOnly).at(-1);
+                const button = form.querySelector('.btn[type="submit"]');
+                if (!field || !button || !field.matches('.input, .select, .file-input')) return [];
+                const group = field.parentElement;
+                if (!group.classList.contains('join') || button.parentElement !== group) return [{ joined: false, fieldName: field.name }];
+                const input = field.getBoundingClientRect();
+                const action = button.getBoundingClientRect();
+                const style = getComputedStyle(field);
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+                const minimumWidth = field.matches('select') ? Math.max(...[...field.options].map(option => context.measureText(option.text).width)) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2 : 64;
+                return [{ joined: true, fieldName: field.name, top: input.top, buttonTop: action.top, height: input.height, buttonHeight: action.height,
+                  gap: action.left - input.right, left: input.left, right: action.right, inputWidth: input.width,
+                  minimumWidth, labelCount: field.labels.length,
+                  buttonLabelMatches: !button.hasAttribute('aria-label') || button.getAttribute('aria-label').includes(button.value || button.textContent.trim()),
+                  overflow: document.documentElement.scrollWidth > innerWidth }];
+              }))()
+            JAVASCRIPT
+            assert_not_empty groups, "#{identifier} must join the input and submit button"
+            groups.each do |group|
+              assert group.fetch("joined"), "#{identifier}: #{group.fetch('fieldName')} and its submit button must share a Join"
+              assert_in_delta group.fetch("top"), group.fetch("buttonTop"), 1, "#{identifier} at #{width}px"
+              assert_in_delta group.fetch("height"), group.fetch("buttonHeight"), 1
+              assert_in_delta 0, group.fetch("gap"), 1
+              assert_operator group.fetch("inputWidth"), :>=, group.fetch("minimumWidth"), "#{identifier} input at #{width}px"
+              assert_operator group.fetch("left"), :>=, 0
+              assert_operator group.fetch("right"), :<=, width
+              assert_operator group.fetch("labelCount"), :>=, 1
+              assert group.fetch("buttonLabelMatches"), "#{identifier} accessible name must include the visible button label"
+              assert_not group.fetch("overflow"), "#{identifier} at #{width}px"
+            end
+          end
+        ensure
+          page.current_window.resize_to(VIEWPORTS.fetch(viewport).fetch("width"), VIEWPORTS.fetch(viewport).fetch("height")) if widths
+        end
+
         def capture_current_page(identifier, title, viewport)
+          assert_joined_input_actions(identifier, viewport)
           if identifier.start_with?("billing-")
             assert_billing_geometry(viewport)
           end

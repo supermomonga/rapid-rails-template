@@ -119,6 +119,7 @@ class EvidenceCapture
     Billing::MerchantClosure.start!(merchant: closed, actor: @user)
     Billing::MerchantClosure.complete!(closed)
     capture_page('billing-members', '販売者メンバー・役割・招待管理', routes.merchant_memberships_path(merchant_id: merchant.public_id), translate('billing.ui.members'), viewport)
+    verify_merchant_switcher(merchant, second, routes, viewport)
     capture_page('billing-audit', '通知と独立した販売者操作履歴', routes.merchant_audit_entries_path(merchant_id: merchant.public_id), translate('billing.ui.audit_entries'), viewport)
     capture_page('billing-closure', '販売者の閉鎖確認', routes.merchant_closure_path(merchant_id: merchant.public_id), translate('billing.ui.close_merchant'), viewport)
     capture_page('billing-closed-merchant', '閉鎖済み販売者の履歴と切り替え', routes.merchant_dashboard_path(merchant_id: closed.public_id), translate('billing.ui.merchant_area'), viewport)
@@ -234,6 +235,58 @@ class EvidenceCapture
       assert_selector 'header a', text: translate('billing.ui.back_account')
       capture_current_page('billing-merchant-navigation-open', '販売者画面のモバイルメニュー', viewport)
     end
+  end
+
+  def verify_merchant_switcher(merchant, destination, routes, viewport)
+    original_name = destination.display_name
+    destination.update!(display_name: '共同運営・制作と学習コンテンツを届ける販売者チーム ' + 'Studio' * 10)
+    visit routes.merchant_memberships_path(merchant_id: merchant.public_id)
+    click_button translate('billing.ui.switch_merchant')
+    assert_selector '#billing-merchant-choices:popover-open'
+    assert_selector "#billing-merchant-choices button[value='#{destination.public_id}']", text: destination.display_name
+    assert_selector '[data-billing-current-merchant]', text: merchant.display_name
+    assert_selector '#billing-merchant-choices [aria-current=true]', text: translate('billing.ui.selected_merchant')
+    capture_current_page('billing-merchant-switcher-open', '販売者切り替え・長い名前と現在の選択', viewport)
+    if viewport == 'desktop'
+      [320, 390, 640, 960, 961].each do |width|
+        page.current_window.resize_to(width, 900)
+        geometry = page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const popup = document.querySelector('#billing-merchant-choices');
+            const rect = popup.getBoundingClientRect();
+            const trigger = document.querySelector('[popovertarget="billing-merchant-choices"]');
+            const action = trigger.parentElement.getBoundingClientRect();
+            const button = trigger.getBoundingClientRect();
+            const items = [...popup.querySelectorAll('li > *')];
+            return { left: rect.left, right: rect.right, width: document.documentElement.scrollWidth,
+              buttonWidthDifference: Math.abs(action.width - button.width),
+              overflow: popup.scrollWidth > popup.clientWidth,
+              onTop: items.every(item => {
+                const box = item.getBoundingClientRect();
+                const y = Math.max(box.top, rect.top) + 2;
+                return y >= Math.min(box.bottom, rect.bottom) || item.contains(document.elementFromPoint(box.left + box.width / 2, y));
+              }) };
+          })()
+        JAVASCRIPT
+        assert_operator geometry.fetch('left'), :>=, 0
+        assert_operator geometry.fetch('right'), :<=, width
+        assert_operator geometry.fetch('width'), :<=, width
+        assert_operator geometry.fetch('buttonWidthDifference'), :<=, 1
+        assert_not geometry.fetch('overflow')
+        assert geometry.fetch('onTop'), 'merchant choices must remain above the page content'
+      end
+      page.current_window.resize_to(VIEWPORTS.fetch(viewport).fetch('width'), VIEWPORTS.fetch(viewport).fetch('height'))
+    end
+    page.send_keys(:escape)
+    assert_no_selector '#billing-merchant-choices:popover-open'
+    page.driver.with_playwright_page { |browser_page| browser_page.locator('[popovertarget="billing-merchant-choices"]').press('Enter') }
+    assert_selector '#billing-merchant-choices:popover-open'
+    page.driver.with_playwright_page { |browser_page| browser_page.locator("#billing-merchant-choices button[value='#{destination.public_id}']").press('Enter') }
+    assert_current_path routes.merchant_dashboard_path(merchant_id: destination.public_id)
+    assert_selector '[data-billing-current-merchant]', text: destination.display_name
+    assert_equal destination.id, @user.reload.last_billing_merchant_id
+    capture_current_page('billing-merchant-switched', '販売者切り替え後・長い名前の全文表示', viewport)
+    destination.update!(display_name: original_name)
   end
 
   def billing_evidence_contract(plan, viewport)

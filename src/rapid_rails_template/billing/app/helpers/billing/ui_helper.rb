@@ -2,7 +2,7 @@
 
 module Billing
   module UiHelper
-    ICONS = %w(building-storefront home squares-2x2 credit-card banknotes arrow-uturn-left cog-6-tooth wallet user-circle arrow-top-right-on-square receipt-percent exclamation-triangle check-circle clock document-text).freeze
+    ICONS = %w(building-storefront home squares-2x2 credit-card banknotes arrow-uturn-left cog-6-tooth wallet user-circle arrow-top-right-on-square receipt-percent exclamation-triangle check-circle clock document-text chevron-down).freeze
 
     def billing_icon(name)
       Kernel.raise ArgumentError, 'unknown billing icon' unless ICONS.include?(name)

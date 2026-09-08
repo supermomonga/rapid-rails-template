@@ -319,6 +319,42 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
     assert_redirected_to '/merchant/billing/another-team'
   end
 
+  test 'merchant switcher separates current identity from available destinations' do
+    sign_in @seller
+    get '/merchant/billing/billing-test'
+    assert_select 'aside > section[data-billing-merchant-selector]' do
+      assert_select '[data-billing-current-merchant]', text: 'Merchant'
+      assert_select '[popovertarget]', count: 0
+    end
+    assert_select 'nav [data-billing-merchant-selector]', count: 0
+
+    other = Billing::MerchantAccount.create!(creator: @seller, public_id: 'another-team', display_name: 'Another')
+    get '/merchant/billing/billing-test'
+    assert_select '[data-billing-current-merchant]', text: 'Merchant'
+    assert_select '#billing-merchant-choices[popover]' do
+      assert_select '[aria-current=true]', text: /Merchant/
+      assert_select 'button[value=billing-test]', count: 0
+      assert_select 'button[name=selected_merchant_id][value=another-team]', count: 1
+      assert_select 'select', count: 0
+    end
+    assert_nil @seller.reload.last_billing_merchant_id
+    post '/merchant/billing/selection', params: { selected_merchant_id: other.public_id }
+    follow_redirect!
+    assert_select '[data-billing-current-merchant]', text: 'Another'
+
+    history = Billing::MerchantAccount.create!(creator: @buyer, public_id: 'past-team', display_name: 'Past team')
+    Billing::MerchantClosure.start!(merchant: history, actor: @buyer)
+    Billing::MerchantClosure.complete!(history)
+    sign_in @buyer
+    get '/merchant/billing'
+    assert_select '[data-billing-current-merchant]', count: 0
+    assert_select '[popovertarget=billing-merchant-choices]', text: /#{Regexp.escape(I18n.t('billing.ui.open_merchant_history'))}/
+    assert_select '#billing-merchant-choices button[value=past-team]', count: 1
+    sign_in @admin
+    get '/merchant/billing'
+    assert_select '[data-billing-merchant-selector]', count: 0
+  end
+
   test 'removed members cannot use already open edit forms' do
     membership = @merchant.memberships.create!(user: @buyer, role: 'editor')
     sign_in @buyer

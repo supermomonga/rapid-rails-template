@@ -8,8 +8,11 @@
     <%= form.label :display_name, t("billing.ui.display_name"), class: "label" %><%= form.text_field :display_name, required: true, maxlength: 100, class: "input w-full" %>
     <%= form.label :introduction, t("billing.ui.introduction"), class: "label" %><%= form.text_area :introduction, rows: 4, maxlength: 5000, class: "textarea w-full" %>
     <% if @merchant.image.attached? %><div class="avatar"><div class="w-20 rounded-full"><%= image_tag main_app.rails_storage_proxy_path(@merchant.image), width: 80, height: 80, alt: @merchant.display_name %></div></div><% end %>
-    <%= form.label :image_upload, t("billing.ui.image"), class: "label" %><%= form.file_field :image_upload, accept: "image/png,image/jpeg,image/webp", class: "file-input w-full", aria: { describedby: "merchant-image-help" } %>
+    <%= form.label :image_upload, t("billing.ui.image"), class: "label" %>
+    <div class="join w-full">
+      <%= form.file_field :image_upload, accept: "image/png,image/jpeg,image/webp", class: "file-input join-item min-w-0 flex-1", aria: { describedby: "merchant-image-help" } %>
+      <% if !@merchant.persisted? || merchant_editable? %><%= form.submit t("billing.ui.save"), class: class_names(action_button_classes(:primary), "join-item") %><% end %>
+    </div>
     <p id="merchant-image-help"><%= t("billing.ui.image_help") %></p>
   </fieldset>
-  <% if !@merchant.persisted? || merchant_editable? %><div class="flex flex-wrap justify-end gap-2"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div><% end %>
 <% end %>

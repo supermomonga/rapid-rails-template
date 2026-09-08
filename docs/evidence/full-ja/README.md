@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `62bc8fae2def35ced8f54c9de7cc98647f0f1738c4a5edc8a3c733cc6b35a5a6`
-- Base commit: `2ffe35381a500effad926969d2025134dea52da9`
+- Source fingerprint: `30acd1e84e35244090d50c2167d6d5495bd317170080d72cd1e50c21a4085cfb`
+- Base commit: `facb7c387be1be5afd4654f11813671fc8caf328`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -539,6 +539,18 @@
 |Desktop|Mobile|
 |---|---|
 |![販売者メンバー・役割・招待管理 (desktop)](billing-members--desktop.png)|![販売者メンバー・役割・招待管理 (mobile)](billing-members--mobile.png)|
+
+## 販売者切り替え・長い名前と現在の選択
+
+|Desktop|Mobile|
+|---|---|
+|![販売者切り替え・長い名前と現在の選択 (desktop)](billing-merchant-switcher-open--desktop.png)|![販売者切り替え・長い名前と現在の選択 (mobile)](billing-merchant-switcher-open--mobile.png)|
+
+## 販売者切り替え後・長い名前の全文表示
+
+|Desktop|Mobile|
+|---|---|
+|![販売者切り替え後・長い名前の全文表示 (desktop)](billing-merchant-switched--desktop.png)|![販売者切り替え後・長い名前の全文表示 (mobile)](billing-merchant-switched--mobile.png)|
 
 ## 通知と独立した販売者操作履歴
 

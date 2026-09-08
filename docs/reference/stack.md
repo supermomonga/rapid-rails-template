@@ -83,6 +83,18 @@ theme tokenの`secondary`はprimary色のhover・press用の色、button roleの
 
 文字付きのbuttonとbutton相当のlinkは、hoverしていない通常時にも背景または輪郭で操作可能な要素だと判別できる表示を必須とし、`btn-ghost`を使用しません。この規約は通知popover、受信者selector・badge、header、menu、dropdownなど`action_button_classes`を使用しないcompact用途にも適用します。`btn-ghost`は、accessible nameを持つベルやアバターなど、文字を持たない慣例的な操作triggerだけに限定します。色modifierを持たない`btn-outline`は、文字色を`base-content`のまま維持し、通常時のborderだけを`base-300`へ上書きします。`btn-primary`、`btn-secondary`、`btn-accent`、`btn-neutral`、`btn-info`、`btn-success`、`btn-warning`、`btn-error`のいずれかを併用するoutlineには適用せず、各semantic colorのborderを維持します。
 
+入力・選択部品とその直後の確定buttonは、daisyUI標準の`join w-full`と`join-item`で横一列につなぎます。複数項目のformでも、最後のinput・select・通常のfile-inputと確定buttonを対象にします。入力側を`min-w-0 flex-1`で伸縮させ、既定のcontrol sizeを維持します。label、補足文、validation errorはjoinの外へ置き、戻る・キャンセル・条件のリセットは別の操作として表示します。短いbutton文言を使う場合も、対象を含むaccessible nameにはその表示文言を含めます。共通layoutへ個別formの配置処理は追加しません。
+
+再確認した対象と境界は次のとおりです。
+
+- Join：Passkey・EVMウォレット名、APIキー名、販売者の役割変更とメンバー招待、送金先、個別料率、チェーン・契約状態の絞り込み、チェーン設定、決済設定、返金記録、販売者画像、外部リンク設定。
+- 独立した確定操作を維持：最後がcheckbox群のプラン・FAQ、textareaのメンテナンス告知、rich textの固定ページ、画像の切り抜き確認を伴う通常プロフィール、候補検索・選択結果・下書き指定を伴う通知編集、専用の解約・閉鎖・集金口座作成確認。これらは直前の単一入力とbuttonという構成ではありません。
+- 任意の属性型やcustom partialを扱うscaffold・Maintenance Tasksは、その拡張内容を確認せず最後の部品をJoinへ変換しません。自動送信するジョブ検索、入力を持たない認証・通知・pagination操作も対象外です。
+
+既存のdesktop・mobile撮影シナリオと320・390・640・960・961pxのgeometry検証で、入力とbuttonの接続、高さ、viewport内への収まりを確認します。メンバーページは役割変更と招待をformごとに検査し、別formのJoinだけで合格しないようにします。
+
+入力エラー時はRails標準の`config.action_view.field_error_proc`で、入力を`div.field_with_errors`へ包まず、元のcontrolへ`aria-invalid="true"`を付けます。Railsが生成したHTMLをNokogiriで構造として編集し、valueのescape、labelの関連付け、既存classと説明参照を維持します。labelやhidden inputには`aria-invalid`を付けず、エラー本文は既存のAlertで表示します。これにより、Joinを含むformのDOM構造を正常時とエラー時で揃えます。host・Engine共通の描画設定とし、個別Viewや共通layoutにラッパー補正を追加しません。
+
 daisyUIのAlertは、`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合に`alert-soft`を必須とし、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。静的View、flash、JavaScriptによる状態切り替え、engineの上書きViewを同じ契約に含めます。JavaScriptで状態色を切り替える場合も`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはこのAlert固有の規約の対象外です。
 
 `DESIGN.md`は任意のCSS Custom Propertiesへ依存しない方針ですが、daisyUI custom themeとcomponent自体が公式の`--color-*`、`--radius-*`、`--size-*`、`--input-color`等をcontractとします。daisyUIのtheme・component contractに必要な変数だけを例外として使用し、独自の追加変数やView内のraw palette colorは定義しません。

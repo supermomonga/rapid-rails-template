@@ -5,6 +5,7 @@ require "eth"
 require "tmpdir"
 require "fileutils"
 require "rails/all"
+require "active_support/testing/time_helpers"
 require "importmap-rails"
 Rails.env = "test"
 
@@ -32,24 +33,31 @@ Minitest.after_run { FileUtils.rm_rf(BillingTestApplication.root) }
 class ApplicationJob < ActiveJob::Base; end
 
 class User < ActiveRecord::Base
-  def profile
-    Struct.new(:display_name).new("Test buyer")
-  end
+  include Billing::UserAssociations
+  has_one :profile, dependent: :destroy
+  after_create { create_profile!(display_name: name, screen_name: "user-#{id}") }
+end
+
+class Profile < ActiveRecord::Base
+  belongs_to :user
 end
 
 class UserRole < ActiveRecord::Base
+  include Billing::UserRoleGuard
   scope :admin, -> { where(role: "admin") }
 end
 
 ActiveRecord::Migration.verbose = false
 ActiveRecord::Schema.define do
   create_table(:users) { |t| t.string :name }
+  create_table(:profiles) { |t| t.references :user; t.string :display_name; t.string :screen_name }
   create_table(:user_roles) { |t| t.integer :user_id; t.string :role }
 end
 require File.join(BILLING_SOURCE, "db/migration_templates/create_billing")
 CreateBilling.new.migrate(:up)
 
 class BillingTest < Minitest::Test
+  include ActiveSupport::Testing::TimeHelpers
   def setup
     ActiveRecord::Base.connection.begin_transaction(joinable: false)
     @user = User.create!(name: "Buyer")
@@ -57,7 +65,9 @@ class BillingTest < Minitest::Test
     @chain = Billing::ChainSetting.for_chain(1)
     @chain.update!(treasury_address: "0x#{'11' * 20}", collector_address: "0x#{'22' * 20}",
       executor_address: "0x#{'33' * 20}", gas_ceiling_wei: "100000000000000000", verified_at: Time.current)
-    @plan = Billing::Plan.create!(seller_kind: "operator", name: "30 days", amount_units: 10_000_000, period_days: 30, chain_ids: [1])
+    @merchant = Billing::MerchantAccount.create!(creator: @user, public_id: "test-merchant", display_name: "Merchant", fee_basis_points: 10_000)
+    @merchant.payout_addresses.create!(chain_id: 1, address: "0x#{'66' * 20}")
+    @plan = @merchant.plans.create!(name: "30 days", amount_units: 10_000_000, period_days: 30, chain_ids: [1])
     @now = Time.utc(2026, 9, 8, 0, 0, 0)
   end
 
@@ -67,7 +77,7 @@ class BillingTest < Minitest::Test
 
   def subscription(**attributes)
     defaults = {
-      user: @user, plan: @plan, seller_kind: "operator", buyer_name: "Buyer", seller_name: "Operator", plan_name: @plan.name,
+      user: @user, plan: @plan, buyer_name: "Buyer", seller_name: "Operator", plan_name: @plan.name,
       chain_id: 1, payer_address: "0x#{'44' * 20}", amount_units: @plan.amount_units,
       period_seconds: 30 * 86400, starts_at: @now,
       permission: {

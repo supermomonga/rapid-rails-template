@@ -8,6 +8,8 @@ links:
   kind: amends
 - target: 14
   kind: amendedby
+- target: 15
+  kind: amendedby
 ---
 
 # Spend Permissions決済をアプリ内Engineと常設Solid Queueで構成する

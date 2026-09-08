@@ -3,8 +3,10 @@
 module Billing
   module AccountDeletion
     def self.blocked?(user)
-      Subscription.exists?(user_id: user.id, ended_at: nil) ||
-        Subscription.joins(plan: :merchant_profile).exists?(ended_at: nil, billing_merchant_profiles: { user_id: user.id })
+      contracts = Subscription.where(user_id: user.id)
+      MerchantMembership.exists?(user_id: user.id) || contracts.exists?(ended_at: nil) ||
+        contracts.exists?(['paid_until > ?', Time.current]) ||
+        Transaction.exists?(subscription_id: contracts.select(:id), finalized_at: nil)
     end
   end
 end

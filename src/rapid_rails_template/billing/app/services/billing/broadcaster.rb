@@ -3,13 +3,14 @@
 module Billing
   class Broadcaster
     def self.call(transaction, rpc: Rpc.new(transaction.chain_setting.chain_id), now: Time.current)
-      transaction.chain_setting.with_lock do
+      MerchantAccess.synchronize(transaction.subscription&.plan&.merchant_account) do
+        transaction.chain_setting.lock!
+        transaction.subscription&.lock!
         transaction.lock!
         return if transaction.finalized_at || transaction.status == "review"
 
         if transaction.kind == "charge" && !transaction.broadcast_started_at
           subscription = transaction.subscription
-          subscription.lock!
           deadline = subscription.paid_until ? transaction.charge.period_start + Setting.current.grace_hours.hours : transaction.charge.period_end
           if subscription.cancel_requested_at || subscription.ended_at || now >= deadline
             void_before_broadcast!(transaction)

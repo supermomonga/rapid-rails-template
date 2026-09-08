@@ -1,13 +1,13 @@
 {
-  "verified_on": "2026-09-08",
+  "verified_on": "2026-09-09",
   "anvil_version": "1.7.1",
   "test": "test/chain/billing_fork_test.rb",
   "chains": [
     {
       "name": "arbitrum",
       "chain_id": 42161,
-      "fork_block": 502917875,
-      "fork_rpc": "https://arbitrum.drpc.org",
+      "fork_block": 503062179,
+      "fork_rpc": "https://arb1.arbitrum.io/rpc",
       "code": {
         "manager": {
           "bytes": 12610,
@@ -30,7 +30,7 @@
     {
       "name": "base",
       "chain_id": 8453,
-      "fork_block": 51027630,
+      "fork_block": 51045649,
       "fork_rpc": "https://mainnet.base.org",
       "code": {
         "manager": {
@@ -54,7 +54,7 @@
     {
       "name": "ethereum",
       "chain_id": 1,
-      "fork_block": 25930500,
+      "fork_block": 25933490,
       "fork_rpc": "https://ethereum.reth.rs/rpc",
       "code": {
         "manager": {
@@ -78,7 +78,7 @@
     {
       "name": "polygon",
       "chain_id": 137,
-      "fork_block": 93427033,
+      "fork_block": 93450487,
       "fork_rpc": "https://polygon.drpc.org",
       "code": {
         "manager": {

@@ -2,7 +2,7 @@
 <div class="grid gap-4 sm:grid-cols-2">
   <% @plans.each do |plan| %><article class="card card-border bg-base-100 min-w-0"><div class="card-body">
     <h2 class="card-title break-words"><%= plan.name %></h2>
-    <p class="text-base-content/70"><%= plan.merchant_profile ? plan.merchant_profile.display_name : t("billing.ui.operator") %></p>
+    <p class="text-base-content/70"><%= plan.merchant_account.display_name %></p>
     <p class="text-xl font-semibold tabular-nums"><%= t("billing.ui.price_period", amount: billing_amount(plan.amount_units), days: plan.period_days) %></p>
     <div class="flex flex-wrap gap-2"><% plan.chain_ids.each do |id| %><span class="badge whitespace-nowrap"><%= Billing::Chains.fetch(id).name %></span><% end %></div>
     <% unless plan.chain_ids.any? { |id| plan.available_on?(id) } %><p class="text-sm"><%= t("billing.ui.unavailable") %></p><% end %>

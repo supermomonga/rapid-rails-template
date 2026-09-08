@@ -1,0 +1,9 @@
+<% content_for :page_title, @merchant.display_name %>
+<section class="card card-border bg-base-100"><div class="card-body p-3">
+  <h2 class="card-title"><%= billing_label("merchant_fee", "receipt-percent") %></h2><p><%= t("billing.ui.merchant_fee_help") %></p>
+  <%= form_with model: @merchant, scope: :merchant_account, url: admin_merchant_path(@merchant) do |form| %>
+    <fieldset class="fieldset"><%= form.label :fee_percent, t("billing.ui.fee_percent"), class: "label" %><%= form.text_field :fee_percent, value: @merchant.fee_basis_points.nil? ? "" : Billing::Amount.format(@merchant.fee_basis_points, decimals: 2), inputmode: "decimal", class: "input w-full" %></fieldset>
+    <div class="card-actions justify-end"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
+  <% end %>
+</div></section>
+<div class="mt-6"><%= render "billing/shared/subscriptions", destination: "admin_subscription" %></div>

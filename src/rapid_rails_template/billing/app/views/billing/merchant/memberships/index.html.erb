@@ -1,0 +1,39 @@
+<% content_for :page_title, t("billing.ui.members") %>
+<section class="card card-border bg-base-100"><div class="card-body p-3">
+  <h2 class="card-title"><%= billing_label("members", "user-circle") %></h2><p><%= t("billing.ui.member_roles_help") %></p>
+  <ul class="list">
+    <% @memberships.each do |membership| %>
+      <li class="list-row">
+        <%= billing_icon("user-circle") %>
+        <div class="list-col-grow min-w-0"><h3 class="font-semibold break-words"><%= membership.user.profile.display_name %></h3><p class="break-all">@<%= membership.user.profile.screen_name %></p><span class="badge"><%= t("billing.ui.member_roles.#{membership.role}") %></span></div>
+        <div class="list-col-wrap space-y-3">
+          <% if merchant_manageable? %>
+            <%= form_with model: membership, scope: :merchant_membership, url: merchant_membership_path(membership) do |form| %>
+              <fieldset class="fieldset"><%= form.label :role, t("billing.ui.role_for", name: membership.user.profile.display_name), for: "membership_role_#{membership.id}", class: "label whitespace-normal" %>
+                <%= form.select :role, Billing::MerchantMembership::ROLES.map { |role| [t("billing.ui.member_roles.#{role}"), role] }, {}, id: "membership_role_#{membership.id}", class: "select w-full" %>
+              </fieldset>
+              <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("billing.ui.change_role"), class: action_button_classes(:primary) %></div>
+            <% end %>
+          <% end %>
+          <% if merchant_manageable? || membership.user_id == current_user.id %>
+            <div class="flex flex-wrap justify-end gap-2"><%= button_to t(membership.user_id == current_user.id ? "billing.ui.leave_merchant" : "billing.ui.remove_member"), merchant_membership_path(membership), method: :delete, class: action_button_classes(:destructive), form: { data: { turbo_confirm: t("billing.ui.remove_member_confirmation", name: membership.user.profile.display_name, merchant: merchant_account.display_name) } } %></div>
+          <% end %>
+        </div>
+      </li>
+    <% end %>
+  </ul>
+  <%= render "billing/shared/pagination" %>
+</div></section>
+<% if merchant_manageable? %>
+  <section class="card card-border bg-base-100 mt-6"><div class="card-body p-3">
+    <h2 class="card-title"><%= billing_label("invite_member", "user-circle") %></h2><p><%= t("billing.ui.invitation_help") %></p>
+    <%= form_with url: merchant_member_invitations_path, scope: :invitation do |form| %>
+      <fieldset class="fieldset">
+        <%= form.label :screen_name, t("billing.ui.screen_name"), class: "label" %><%= form.text_field :screen_name, required: true, class: "input w-full", spellcheck: false, autocomplete: "off" %>
+        <%= form.label :role, t("billing.ui.role"), class: "label" %><%= form.select :role, Billing::MerchantMembership::ROLES.map { |role| [t("billing.ui.member_roles.#{role}"), role] }, { selected: "viewer" }, class: "select w-full" %>
+      </fieldset>
+      <div class="card-actions justify-end"><%= form.submit t("billing.ui.invite_member"), class: action_button_classes(:primary) %></div>
+    <% end %>
+    <ul class="list"><% @invitations.each do |invitation| %><li class="list-row"><%= billing_icon("clock") %><div class="list-col-grow min-w-0"><p class="break-words"><%= invitation.recipient&.profile&.display_name %> · <%= t("billing.ui.member_roles.#{invitation.role}") %></p><p><%= t("billing.ui.expires_at", at: l(invitation.expires_at, format: :long)) %></p></div><div class="list-col-wrap flex flex-wrap justify-end gap-2"><%= button_to t("billing.ui.revoke_invitation"), merchant_member_invitation_path(invitation), method: :delete, class: action_button_classes(:destructive) %></div></li><% end %></ul>
+  </div></section>
+<% end %>

@@ -38,9 +38,9 @@ class BillingForkTest < BillingTest
     send_local(chain.usdc, configure.encode_call(@operator_address, 100_000_000), from: master)
     send_local(chain.usdc, function("mint", %w[address uint256], ["bool"]).encode_call(payer, 100_000_000))
 
-    merchant = Billing::MerchantProfile.create!(user: @user, public_id: "fork-merchant", display_name: "Merchant")
+    merchant = Billing::MerchantAccount.create!(creator: @user, public_id: "fork-merchant", display_name: "Merchant")
     merchant.payout_addresses.create!(chain_id: chain_id, address: "0x#{'66' * 20}")
-    plan = merchant.plans.create!(seller_kind: "merchant", name: "Fork plan", amount_units: 10_000_000, period_days: 30, chain_ids: [chain_id])
+    plan = merchant.plans.create!(name: "Fork plan", amount_units: 10_000_000, period_days: 30, chain_ids: [chain_id])
     now = Time.at(Integer(@rpc.call("eth_getBlockByNumber", "latest", false).fetch("timestamp"), 16)).utc
     contract = Billing::Checkout.prepare!(user: @user, plan: plan, chain_id: chain_id, payer_address: payer, rpc: @rpc, now: now)
     hash = Eth::Util.hex_to_bin(contract.permission_hash)

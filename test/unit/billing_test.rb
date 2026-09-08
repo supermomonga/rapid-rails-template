@@ -46,14 +46,14 @@ class BillingDomainTest < BillingTest
     assert @setting.valid?
   end
 
-  def test_runtime_switches_are_independent_and_block_scoped_contracts
+  def test_runtime_switches_are_independent_and_block_open_contracts
     subscription
-    @setting.assign_attributes(operator_enabled: false)
+    @setting.assign_attributes(payments_enabled: false)
     refute @setting.valid?
-    @setting.assign_attributes(operator_enabled: true, merchants_enabled: false, merchant_plan_creation_enabled: false)
+    @setting.assign_attributes(payments_enabled: true, admin_only: false, merchant_plan_creation_enabled: false)
     assert @setting.save!
-    assert @setting.operator_enabled?
-    refute @setting.merchants_enabled?
+    assert @setting.payments_enabled?
+    refute @setting.admin_only?
     refute @setting.merchant_plan_creation_enabled?
   end
 
@@ -90,10 +90,10 @@ class BillingDomainTest < BillingTest
   end
 
   def test_fee_and_destination_changes_apply_only_to_the_next_invoice
-    merchant = Billing::MerchantProfile.create!(user: @user, public_id: "merchant", display_name: "Merchant")
+    merchant = Billing::MerchantAccount.create!(creator: @user, public_id: "merchant", display_name: "Merchant")
     payout = merchant.payout_addresses.create!(chain_id: 1, address: "0x#{'66' * 20}")
-    plan = merchant.plans.create!(seller_kind: "merchant", name: "Merchant plan", amount_units: 10_000_001, period_days: 30, chain_ids: [1])
-    contract = subscription(plan: plan, seller_kind: "merchant", amount_units: plan.amount_units)
+    plan = merchant.plans.create!(name: "Merchant plan", amount_units: 10_000_001, period_days: 30, chain_ids: [1])
+    contract = subscription(plan: plan, amount_units: plan.amount_units)
     first = Billing::ChargeBuilder.call(contract, now: @now)
     @setting.update!(fee_basis_points: 250)
     payout.update!(address: "0x#{'77' * 20}")
@@ -115,13 +115,13 @@ class BillingDomainTest < BillingTest
     @plan.update!(chain_ids: [1, 8453])
     refute @plan.available_on?(8453, env: env)
     assert_nil Billing::ChainSetting.for_chain(8453).treasury_address
-    assert @setting.reload.operator_enabled?
+    assert @setting.reload.payments_enabled?
   end
 
   def test_disabling_new_merchant_plans_preserves_registration_and_existing_plans
     @setting.update!(merchant_plan_creation_enabled: false)
-    merchant = Billing::MerchantProfile.create!(user: @user, public_id: "registered", display_name: "Merchant")
-    plan = merchant.plans.build(seller_kind: "merchant", name: "Plan", amount_units: 1_000_000, period_days: 30, chain_ids: [1])
+    merchant = Billing::MerchantAccount.create!(creator: @user, public_id: "registered", display_name: "Merchant")
+    plan = merchant.plans.build(name: "Plan", amount_units: 1_000_000, period_days: 30, chain_ids: [1])
     refute plan.save
     @setting.update!(merchant_plan_creation_enabled: true)
     plan.save!

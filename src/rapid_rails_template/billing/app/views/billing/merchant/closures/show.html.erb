@@ -1,0 +1,9 @@
+<% content_for :page_title, t("billing.ui.close_merchant") %>
+<section class="card card-border bg-base-100 border-error"><div class="card-body p-3">
+  <h2 class="card-title break-words"><%= merchant_account.display_name %></h2>
+  <div class="alert alert-warning alert-soft"><%= billing_icon("exclamation-triangle") %><span><%= t("billing.ui.closure_help") %></span></div>
+  <%= form_with url: merchant_closure_path do |form| %>
+    <fieldset class="fieldset"><%= form.label :confirmation, t("billing.ui.confirm_merchant_name"), class: "label" %><%= form.text_field :confirmation, required: true, autocomplete: "off", class: "input w-full" %></fieldset>
+    <div class="card-actions justify-end"><%= link_to t("billing.ui.back"), edit_merchant_profile_path, class: action_button_classes(:quiet) %><%= form.submit t("billing.ui.begin_closure"), class: action_button_classes(:destructive_confirm) %></div>
+  <% end %>
+</div></section>

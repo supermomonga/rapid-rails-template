@@ -17,7 +17,7 @@
           <p class="text-sm text-base-content/70"><%= t("billing.ui.refund_help") %></p>
         </div>
       <% end %>
-      <% if area && charge.status == "settled" %><div class="card-actions justify-end"><%= link_to t("billing.ui.record_refund"), area == "admin" ? new_admin_charge_refund_record_path(charge) : new_merchant_charge_refund_record_path(charge), class: action_button_classes(:secondary) %></div><% end %>
+      <% if area == "merchant" && merchant_editable? && charge.status == "settled" %><div class="card-actions justify-end"><%= link_to t("billing.ui.record_refund"), new_merchant_charge_refund_record_path(charge), class: action_button_classes(:secondary) %></div><% end %>
     </div></section>
   <% end %>
 </div>

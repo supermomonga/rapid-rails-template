@@ -62,21 +62,10 @@ def configure_billing
     Rails.application.config.filter_parameters += [:signature, :raw_transaction, :superseded_payload, :billing_execution_private_key]
   RUBY
   inject_into_class "app/models/user.rb", "User", <<~RUBY
-    has_one :merchant_profile, class_name: "Billing::MerchantProfile", dependent: :nullify
-    has_many :billing_subscriptions, class_name: "Billing::Subscription", dependent: :nullify
-    has_many :billing_events, class_name: "Billing::Event", dependent: :destroy
-    before_destroy :ensure_billing_contracts_ended, prepend: true
-
-    private
-      T::Sig::WithoutRuntime.sig { void }
-      def ensure_billing_contracts_ended
-        if Billing::AccountDeletion.blocked?(self)
-          errors.add(:base, I18n.t("billing.errors.active_contracts"))
-          throw :abort
-        end
-        merchant_profile&.plans&.find_each { |plan| plan.update!(accepting_subscriptions: false) }
-      end
-    public
+    include Billing::UserAssociations
+  RUBY
+  inject_into_class "app/models/user_role.rb", "UserRole", <<~RUBY
+    include Billing::UserRoleGuard
   RUBY
   recurring = YAML.safe_load_file("config/recurring.yml", aliases: true)
   %w[development production].each do |environment_name|

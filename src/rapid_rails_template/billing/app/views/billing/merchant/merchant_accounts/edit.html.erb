@@ -1,0 +1,6 @@
+<% content_for :page_title, t("billing.ui.merchant_settings") %>
+<% content_for :page_actions_primary do %><%= link_to billing_label("public_page", "arrow-top-right-on-square"), Billing::Engine.routes.url_helpers.merchant_path(@merchant.public_id), class: action_button_classes(:secondary) %><% end %>
+<%= with_tab tabs: billing_tabs(:merchant_settings) do %><%= render "form" %><% end %>
+<% if merchant_manageable? && @merchant.status == "active" %>
+  <section class="card card-border bg-base-100 mt-6"><div class="card-body p-3"><h2 class="card-title"><%= billing_label("close_merchant", "exclamation-triangle") %></h2><p><%= t("billing.ui.closure_help") %></p><div class="card-actions justify-end"><%= link_to t("billing.ui.close_merchant"), merchant_closure_path, class: action_button_classes(:destructive) %></div></div></section>
+<% end %>

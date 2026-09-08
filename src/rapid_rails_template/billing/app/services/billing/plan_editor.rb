@@ -11,6 +11,8 @@ module Billing
         plan.assign_attributes(values)
         plan.save
       end
+    rescue ActiveRecord::RecordInvalid
+      false
     rescue ArgumentError
       plan.errors.add(:amount_units, :invalid)
       false

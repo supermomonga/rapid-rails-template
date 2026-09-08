@@ -4,7 +4,7 @@ module Billing
   module Merchant
     class SalesController < BaseController
       def index
-        authorize! merchant_profile, to: :manage?
+        authorize! merchant_account, to: :view?
         @pagy, @subscriptions = pagy(:offset, filter_records(sales).order(id: :desc))
       end
 
@@ -15,9 +15,10 @@ module Billing
       end
 
       private
-        def sales
-          Subscription.where(plan_id: merchant_profile.plans.select(:id))
-        end
+
+      def sales
+        Subscription.where(plan_id: merchant_account.plans.select(:id))
+      end
     end
   end
 end

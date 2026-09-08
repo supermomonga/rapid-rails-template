@@ -7,7 +7,7 @@ module Billing
     end
 
     def seller?
-      admin? || user.present? && record.plan.merchant_profile&.user_id == user.id
+      MerchantAccess.allowed?(user, record.plan.merchant_account)
     end
   end
 end

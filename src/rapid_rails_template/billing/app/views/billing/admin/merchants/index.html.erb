@@ -1,0 +1,5 @@
+<% content_for :page_title, t("billing.ui.merchants") %>
+<div class="grid gap-4"><% @merchants.each do |merchant| %>
+  <section class="card card-border bg-base-100"><div class="card-body p-3"><h2 class="card-title break-words"><%= merchant.display_name %></h2><p><span class="badge"><%= t("billing.ui.business_states.#{merchant.status}") %></span></p><p><%= t("billing.ui.effective_fee", percent: Billing::Amount.format(merchant.effective_fee_basis_points, decimals: 2)) %></p><div class="card-actions justify-end"><%= link_to billing_label("view_history", "document-text"), admin_merchant_path(merchant), class: action_button_classes(:secondary) %></div></div></section>
+<% end %></div>
+<%= render "billing/shared/pagination" %>

@@ -1,6 +1,6 @@
 <% content_for :page_title, t("billing.ui.merchant_area") %>
-<% content_for :page_actions_primary do %><%= link_to billing_label("new_plan", "squares-2x2"), new_merchant_plan_path, class: action_button_classes(:primary) if Billing::Setting.current.merchant_plan_creation_enabled %><% end %>
-<% content_for :page_actions_secondary do %><%= link_to billing_label("public_page", "arrow-top-right-on-square"), merchant_path(@merchant.public_id), class: action_button_classes(:secondary) %><% end %>
+<% content_for :page_actions_primary do %><%= link_to billing_label("new_plan", "squares-2x2"), new_merchant_plan_path, class: action_button_classes(:primary) if merchant_editable? && @merchant.status == "active" && Billing::Setting.current.merchant_plan_creation_enabled? %><% end %>
+<% content_for :page_actions_secondary do %><%= link_to billing_label("public_page", "arrow-top-right-on-square"), Billing::Engine.routes.url_helpers.merchant_path(@merchant.public_id), class: action_button_classes(:secondary) %><% end %>
 <div class="space-y-6">
   <div><h2 class="text-xl font-semibold break-words"><%= @merchant.display_name %></h2><p class="text-base-content/70"><%= t("billing.ui.revenue_scope") %></p></div>
   <div class="grid gap-4 sm:grid-cols-2">
@@ -17,7 +17,7 @@
     <ul class="list">
       <li class="list-row"><%= billing_icon("credit-card") %><div class="list-col-grow"><%= link_to t("billing.ui.open_contracts", count: @open_count), merchant_sales_path, class: "link" %></div></li>
       <li class="list-row"><%= billing_icon("clock") %><div class="list-col-grow"><%= link_to t("billing.ui.held_count", count: @held_count), merchant_payments_path, class: "link" %><p class="text-base-content/70"><%= t("billing.ui.held_help") %></p></div></li>
-      <% if @missing_payouts.any? %><li class="list-row"><%= billing_icon("exclamation-triangle") %><div class="list-col-grow"><%= link_to t("billing.ui.complete_payouts"), merchant_payout_addresses_path, class: "link" %><p class="break-words"><%= @missing_payouts.map { |id| Billing::Chains.fetch(id).name }.join(" / ") %></p></div></li><% end %>
+      <% if merchant_manageable? && @missing_payouts.any? %><li class="list-row"><%= billing_icon("exclamation-triangle") %><div class="list-col-grow"><%= link_to t("billing.ui.complete_payouts"), merchant_payout_addresses_path, class: "link" %><p class="break-words"><%= @missing_payouts.map { |id| Billing::Chains.fetch(id).name }.join(" / ") %></p></div></li><% end %>
     </ul>
   </div></section>
 </div>

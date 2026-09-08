@@ -4568,7 +4568,7 @@ def configure_roles
           redirect_to admin_user_path(@user), notice: I18n.t("admin.user_roles.destroy.notice"), status: :see_other
         rescue KeyError
           head :unprocessable_content
-        rescue ActiveRecord::RecordNotDestroyed => error
+        rescue ActiveRecord::RecordNotDestroyed, ActiveRecord::RecordInvalid => error
           redirect_to admin_user_path(@user), alert: error.record.errors.full_messages.to_sentence, status: :see_other
         end
 
@@ -17622,9 +17622,11 @@ def configure_evidence_capture
           assert_not @regular_user.reload.has_role?(:admin)
           accept_confirm { click_button translate("admin.users.grant") }
           assert_current_path admin_user_path(@regular_user)
+          assert_button translate("admin.users.revoke")
           assert @regular_user.reload.has_role?(:admin)
           accept_confirm { click_button translate("admin.users.revoke") }
           assert_current_path admin_user_path(@regular_user)
+          assert_button translate("admin.users.grant")
           assert_not @regular_user.reload.has_role?(:admin)
         end
 

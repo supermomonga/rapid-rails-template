@@ -1,7 +1,0 @@
-<% content_for :page_title, t("billing.ui.manual_refund") %>
-<%= render "billing/shared/breadcrumbs", label: "payments", path: admin_subscription_path(@charge.subscription, tab: "payments"), icon: "banknotes", current: t("billing.ui.manual_refund") %>
-<section class="card card-border bg-base-100"><div class="card-body">
-  <h2 class="card-title"><%= @charge.subscription.plan_name %></h2>
-  <p><%= t("billing.ui.charge", id: @charge.id) %> · <%= billing_amount(@charge.amount_units) %> USDC</p>
-  <%= render "billing/shared/refund_form", charge: @charge, area: "admin", back: admin_subscription_path(@charge.subscription, tab: "payments") %>
-</div></section>

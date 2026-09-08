@@ -122,6 +122,25 @@ class BillingTransactionTest < BillingTest
     assert_nil Billing::ChargeBuilder.call(@subscription, now: @now + 30.days)
   end
 
+  def test_closure_waits_for_an_in_flight_success_and_the_full_paid_period
+    transaction = @builder.charge!(@charge, now: @now)
+    Billing::Broadcaster.call(transaction, rpc: @rpc, now: @now)
+    Billing::MerchantClosure.start!(merchant: @merchant, actor: @user, now: @now + 1)
+    Billing::MerchantClosure.complete!(@merchant, now: @now + 2)
+    assert_equal "closing", @merchant.reload.status
+    @rpc.receipt = receipt_for(transaction)
+    assert Billing::ReceiptVerifier.new(transaction, rpc: @rpc).call
+    assert @subscription.reload.usable?(at: @now + 29.days)
+    Billing::MerchantClosure.complete!(@merchant, now: @now + 29.days)
+    assert_equal "closing", @merchant.reload.status
+    @subscription.update!(revoked_at: @now + 2)
+    travel_to @now + 30.days do
+      Billing::ReconcileJob.new.send(:process_subscription, @subscription)
+      Billing::MerchantClosure.complete!(@merchant)
+    end
+    assert_equal "closed", @merchant.reload.status
+  end
+
   def test_receipt_must_be_finalized_and_canonical_before_access
     transaction = @builder.charge!(@charge, now: @now)
     @rpc.receipt = receipt_for(transaction)
@@ -193,6 +212,33 @@ class BillingTransactionTest < BillingTest
     assert_nil Billing::ChargeBuilder.call(@subscription, now: @now + 30.days)
   end
 
+  def test_zero_full_and_shared_destination_allocations_settle_with_exact_transfers
+    [[0, false], [10_000, false], [250, true]].each_with_index do |(rate, shared), index|
+      @merchant.update!(fee_basis_points: rate)
+      destination = shared ? @chain.treasury_address : "0x#{'66' * 20}"
+      @merchant.payout_addresses.sole.update!(address: destination)
+      @subscription = subscription(user: User.create!(name: "Split #{index}"), permission_hash: "0x#{(index + 6).to_s * 64}")
+      @charge = Billing::ChargeBuilder.call(@subscription, now: @now)
+      transaction = @builder.charge!(@charge, now: @now)
+      @rpc.receipt = receipt_for(transaction)
+      assert Billing::ReceiptVerifier.new(transaction, rpc: @rpc).call
+      assert_equal "settled", @charge.reload.status
+      assert @subscription.reload.usable?(at: @now + 1.day)
+    end
+  end
+
+  def test_closure_before_broadcast_voids_the_prepared_payment
+    transaction = @builder.charge!(@charge, now: @now)
+    Billing::MerchantClosure.start!(merchant: @merchant, actor: @user, now: @now)
+    with_test_method(Billing::Signer, :new, @signer) do
+      Billing::Broadcaster.call(transaction, rpc: @rpc, now: @now)
+    end
+    assert_equal 'void', transaction.reload.kind
+    assert_equal 'cancelled', @charge.reload.status
+    assert_equal 'closing', @merchant.reload.status
+    assert @subscription.reload.cancel_requested_at
+  end
+
   private
     def with_test_method(target, method, result)
       original = target.method(method)
@@ -213,9 +259,13 @@ class BillingTransactionTest < BillingTest
         "data" => "0x#{Eth::Util.bin_to_hex(Eth::Abi.encode(%w[address uint48 uint48 uint160],
           [usdc, period_start.to_i, (period_start + 30.days).to_i, @charge.amount_units]))}"
       }]
-      [[@subscription.payer_address, @chain.collector_address], [@chain.collector_address, @charge.operator_address]].each do |from, to|
+      transfers = [[@subscription.payer_address, @chain.collector_address, @charge.amount_units],
+        [@chain.collector_address, @charge.operator_address, @charge.operator_units],
+        [@chain.collector_address, @charge.merchant_address, @charge.merchant_units]]
+      transfers.each do |from, to, units|
+        next if units.zero?
         logs << { "address" => usdc, "topics" => [transfer, Billing::Contracts.address_topic(from), Billing::Contracts.address_topic(to)],
-          "data" => "0x#{@charge.amount_units.to_s(16).rjust(64, '0')}" }
+          "data" => "0x#{units.to_s(16).rjust(64, '0')}" }
       end
       { "transactionHash" => transaction.transaction_hash, "from" => transaction.signer_address,
         "to" => transaction.to_address, "blockNumber" => "0x64", "blockHash" => "0x#{'aa' * 32}", "status" => "0x1", "logs" => logs }

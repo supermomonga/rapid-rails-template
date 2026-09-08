@@ -3,11 +3,11 @@
 module Billing
   class PlanPolicy < ::ApplicationPolicy
     def manage?
-      record.seller_kind == "operator" ? admin? : user.present? && record.merchant_profile&.user_id == user.id
+      MerchantAccess.allowed?(user, record.merchant_account, :edit)
     end
 
     def create?
-      manage? && (record.seller_kind == "operator" || Setting.current.merchant_plan_creation_enabled?)
+      manage? && record.merchant_account.status == 'active' && Setting.current.merchant_plan_creation_enabled?
     end
   end
 end

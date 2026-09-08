@@ -3,7 +3,7 @@
 module Billing
   class PlansController < ApplicationController
     def index
-      @pagy, @plans = pagy(:offset, Plan.where(accepting_subscriptions: true).includes(:merchant_profile).order(:id))
+      @pagy, @plans = pagy(:offset, Plan.joins(:merchant_account).where(accepting_subscriptions: true, billing_merchant_accounts: { status: 'active' }).includes(:merchant_account).order(:id))
     end
 
     def show

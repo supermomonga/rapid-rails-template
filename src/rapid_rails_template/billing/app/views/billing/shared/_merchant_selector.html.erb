@@ -1,0 +1,8 @@
+<% accounts = Billing::MerchantAccess.accounts(current_user).order(updated_at: :desc, id: :desc) %>
+<% if accounts.any? %>
+  <%= form_with url: Billing::Engine.routes.url_helpers.merchant_selection_path, class: "fieldset" do |form| %>
+    <%= form.label :selected_merchant_id, t("billing.ui.switch_merchant"), class: "label" %>
+    <%= form.select :selected_merchant_id, accounts.map { |account| ["#{account.display_name} · #{t("billing.ui.business_states.#{account.status}")}", account.public_id] }, { selected: params[:merchant_id], include_blank: true }, class: "select w-full", required: true %>
+    <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("billing.ui.switch"), class: action_button_classes(:secondary) %></div>
+  <% end %>
+<% end %>

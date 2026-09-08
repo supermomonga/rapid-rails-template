@@ -3,7 +3,7 @@
 module Billing
   class ChargePolicy < ::ApplicationPolicy
     def manage?
-      admin? || user.present? && record.subscription.plan.merchant_profile&.user_id == user.id
+      MerchantAccess.allowed?(user, record.subscription.plan.merchant_account, :edit)
     end
   end
 end

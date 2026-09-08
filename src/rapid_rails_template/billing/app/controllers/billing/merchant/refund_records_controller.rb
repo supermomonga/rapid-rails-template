@@ -17,10 +17,10 @@ module Billing
       def create
         load_charge
         attributes = params.expect(refund_record: %i[amount_usdc reason chain_id transaction_hash]).to_h
-        @refund = @charge.refund_records.new(attributes.except("amount_usdc"))
-        @refund.amount_units = Amount.parse(attributes.fetch("amount_usdc"))
+        @refund = @charge.refund_records.new(attributes.except('amount_usdc'))
+        @refund.amount_units = Amount.parse(attributes.fetch('amount_usdc'))
         @refund.save!
-        redirect_to merchant_sale_path(@charge.subscription, tab: "payments"), notice: I18n.t("billing.refund_recorded")
+        redirect_to merchant_sale_path(@charge.subscription, tab: 'payments'), notice: I18n.t('billing.refund_recorded')
       rescue ActiveRecord::RecordInvalid
         render :new, status: :unprocessable_content
       rescue ArgumentError
@@ -29,11 +29,12 @@ module Billing
       end
 
       private
-        def load_charge
-          @charge = Charge.where(subscription_id: sales.select(:id)).find(params.expect(:charge_id))
-          authorize! @charge, to: :manage?
-          raise ActiveRecord::RecordNotFound unless @charge.status == "settled"
-        end
+
+      def load_charge
+        @charge = Charge.where(subscription_id: sales.select(:id)).find(params.expect(:charge_id))
+        authorize! @charge, to: :manage?
+        raise ActiveRecord::RecordNotFound unless @charge.status == 'settled'
+      end
     end
   end
 end

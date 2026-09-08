@@ -1,3 +1,0 @@
-<% content_for :page_title, t("billing.ui.operator_plans") %>
-<% content_for :page_actions_primary do %><%= link_to billing_label("new_plan", "squares-2x2"), new_admin_plan_path, class: action_button_classes(:primary) %><% end %>
-<%= render "billing/shared/managed_plans", area: "admin" %>

@@ -5,8 +5,8 @@
     "siwe"
   ],
   "locale": "ja",
-  "source_fingerprint": "575d93499b7b6fda9782075be3eeadc99a132e76b752db301fc59fa8d3e983a5",
-  "base_commit": "307bcae69e33c76c933345d383510d497b1460c5",
+  "source_fingerprint": "62bc8fae2def35ced8f54c9de7cc98647f0f1738c4a5edc8a3c733cc6b35a5a6",
+  "base_commit": "2ffe35381a500effad926969d2025134dea52da9",
   "viewports": {
     "desktop": {
       "width": 1400,
@@ -104,7 +104,7 @@
       "title": "通知popover（未読）",
       "viewport": "desktop",
       "path": "notifications-popover-unread--desktop.png",
-      "sha256": "2ea0354882857419981243570862236a2774ca0ca0dcd807227422511cc9b538",
+      "sha256": "d1f4cac3beece289db2e2787b3e2b561702cee51610f4a443b4849f4747fa5d9",
       "pixel_width": 1400,
       "pixel_height": 994
     },
@@ -113,7 +113,7 @@
       "title": "通知popover（お知らせ）",
       "viewport": "desktop",
       "path": "notifications-popover-announcements--desktop.png",
-      "sha256": "e9d50a67b5fd23442e7375e1d41440532dc9daf670daa75c78b9179e2f9a0c06",
+      "sha256": "0c47c1aed4db4eae2534b3745fc1942777efd5df9dd4d47f9f84604642c10b02",
       "pixel_width": 1400,
       "pixel_height": 994
     },
@@ -122,7 +122,7 @@
       "title": "通知履歴",
       "viewport": "desktop",
       "path": "notifications-history--desktop.png",
-      "sha256": "028f46ca6da2865b6b10782bd73665ef8ba15c9d99d4a1466a1f388d65110e5d",
+      "sha256": "07496e90729feef76f8a1f975a261b73fef214ce3b40f8d1288d3cf43fb755ab",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -131,7 +131,7 @@
       "title": "通知履歴（お知らせ）",
       "viewport": "desktop",
       "path": "notifications-announcements--desktop.png",
-      "sha256": "3d50b3af794ae8f27aac684907052117d96136bd11f6e0cac40fee8e7a04f9a2",
+      "sha256": "0c508ed59c1ec8215147b7e2060fd85f0e6316cd322b9876990857bcae7c5dd1",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -140,7 +140,7 @@
       "title": "通知popover（全件既読後）",
       "viewport": "desktop",
       "path": "notifications-popover-opened--desktop.png",
-      "sha256": "7796b6d686eb3db2f6fc0a2d00db5c4599a11c313d4a6fa606f3bb854396a70c",
+      "sha256": "f744f605a5ade7a28fae5c0de498251b104454b71857e4ad13188378bf408059",
       "pixel_width": 1400,
       "pixel_height": 994
     },
@@ -149,7 +149,7 @@
       "title": "通知管理",
       "viewport": "desktop",
       "path": "admin-notifications--desktop.png",
-      "sha256": "552692b70ebda508746c743323e1c8e844c8784b62a94bb63da07be2fb79700f",
+      "sha256": "3f66ff2e93768e3112ed4f7f94f454fe69f316dfb53e9e5e8ba90b4a23883584",
       "pixel_width": 1400,
       "pixel_height": 1126
     },
@@ -158,7 +158,7 @@
       "title": "通知詳細",
       "viewport": "desktop",
       "path": "admin-notification-show--desktop.png",
-      "sha256": "1cf2b81b82344dd933a26151907cbdbe9005ee00a15072bb6c60363fac447225",
+      "sha256": "bd7eda73238054a651f580fc2393e133a6070d9c6f32bc17d1168d326363a3d1",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -167,7 +167,7 @@
       "title": "通知編集",
       "viewport": "desktop",
       "path": "admin-notification-edit--desktop.png",
-      "sha256": "548e98e7b2d653a58174b200077dcb0d120f19f4edb2394c068372df44d9dac1",
+      "sha256": "2074f750527a41a5d89f6777174793ccfb2265a1a68f6c97b163b32c937dcf71",
       "pixel_width": 1400,
       "pixel_height": 1199
     },
@@ -176,7 +176,7 @@
       "title": "通知の個別受信者選択",
       "viewport": "desktop",
       "path": "admin-notification-recipients--desktop.png",
-      "sha256": "974f7a6f54121c42b250438862ebb8715f86079fa6b6a8c6fbfbd41bf157b3f9",
+      "sha256": "ba05ec0489824ec4a7520244da1c8888eac5b7cdf00b6de193ca6bfc0cab0c42",
       "pixel_width": 1400,
       "pixel_height": 1239
     },
@@ -410,7 +410,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "desktop",
       "path": "api-credential-secret--desktop.png",
-      "sha256": "286190886424299957e31e0e455d4106a240752ede54ea42bfc2dd180894a333",
+      "sha256": "321badace087cd82771665633b02e5fabc1f9c21aba201fdd09e2632d873deea",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -419,7 +419,7 @@
       "title": "APIキー詳細",
       "viewport": "desktop",
       "path": "api-credential-show--desktop.png",
-      "sha256": "6c59067ce441d402b1341ea07a2db4bd49fb7c2a2e3ab7ccee3960636cc12578",
+      "sha256": "8e91ba472522cc41dc4e996c175f1fba00ae6af744fe2f81aa6a9df948b0c7d3",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -437,7 +437,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "desktop",
       "path": "api-credentials-populated--desktop.png",
-      "sha256": "b80d2245276467845e0f78aeac6dd2b30422c09525bd6b83e7ff923a667ccf3b",
+      "sha256": "c2a9e0158bd4357c13bd6181c51e045601a4928a41fcd9d455292150b84e680d",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -455,7 +455,7 @@
       "title": "失敗したジョブ",
       "viewport": "desktop",
       "path": "admin-job-operations-failed--desktop.png",
-      "sha256": "cab053ccf4bfdc77229fcaf2c2267caad0df9ea40104d64d99c501fafe7c995a",
+      "sha256": "d835336dab7e8393e2aec289842d120ace82b4cedc9dfc09d69e9a763660df59",
       "pixel_width": 1400,
       "pixel_height": 1027
     },
@@ -482,7 +482,7 @@
       "title": "運用タスク一時停止中",
       "viewport": "desktop",
       "path": "admin-maintenance-task-paused--desktop.png",
-      "sha256": "e00f1a9d1a209365b3fb8c5801e73c99ea5e01f00cf334b7bb644970255e9f43",
+      "sha256": "4652a9b0273ba2a8a5dce0ab72be3f696b98b91be52fada8dd24280da96db9cd",
       "pixel_width": 1400,
       "pixel_height": 1726
     },
@@ -491,7 +491,7 @@
       "title": "運用タスクエラー",
       "viewport": "desktop",
       "path": "admin-maintenance-task-errored--desktop.png",
-      "sha256": "ae4b59bca44307aaab90189d40d679eaaab4c0c368e00f11ef2eb3182e937b15",
+      "sha256": "1560297d6057d5f99284194680a773011170065c488e532720e293308aedf279",
       "pixel_width": 1400,
       "pixel_height": 1617
     },
@@ -500,7 +500,7 @@
       "title": "運用タスク完了",
       "viewport": "desktop",
       "path": "admin-maintenance-task-completed--desktop.png",
-      "sha256": "a0ba91ed953d7aa680a301b4e291b04213de24a1102cd9b1dc136dc6c6efc7d3",
+      "sha256": "2f7deade945ce0e84ad01a512d5814f0e3299d1babf91a1976315b121e51ac04",
       "pixel_width": 1400,
       "pixel_height": 2071
     },
@@ -554,7 +554,7 @@
       "title": "ユーザー管理",
       "viewport": "desktop",
       "path": "admin-users--desktop.png",
-      "sha256": "52c51aa1bab3808747e8a8e7614634fb95b87ba68d2b0430bb160c16285247cd",
+      "sha256": "db44792904575daf19d0a600d5ec8a8e0eacb92be4550de847f51232c04ad9ea",
       "pixel_width": 1400,
       "pixel_height": 2164
     },
@@ -563,7 +563,7 @@
       "title": "ユーザー詳細",
       "viewport": "desktop",
       "path": "admin-user-show--desktop.png",
-      "sha256": "5e65f57eff14cc6b74f93cf1b86a8d450a7069c9bdba7656e1a09e2b168bf7f2",
+      "sha256": "e69f734369734f0fd51ebf536e4598dfd602cee3edc28c3f88838779938d5bde",
       "pixel_width": 1400,
       "pixel_height": 1213
     },
@@ -617,34 +617,34 @@
       "title": "販売者画面・初回の販売準備",
       "viewport": "desktop",
       "path": "billing-merchant-overview-empty--desktop.png",
-      "sha256": "ef2f9dba080ab23dcf48b4a2b760d2dc100c2555dad461de2acdf9f8bc5a7c40",
+      "sha256": "4c03fb941898fd1015860651e00488a30609fd0624f0ce540699270734f64d91",
       "pixel_width": 1400,
-      "pixel_height": 1159
+      "pixel_height": 1204
     },
     {
       "id": "billing-merchant-edit",
       "title": "販売者プロフィール",
       "viewport": "desktop",
       "path": "billing-merchant-edit--desktop.png",
-      "sha256": "2cc95c82c67b3fa4780dff31f1143db8386370fa2f4aa5661f630d1d83b5ba3f",
+      "sha256": "974b312be48a7eb39ec9138b882fde188fded7cd5283d139d5a557ae83cc62d2",
       "pixel_width": 1400,
-      "pixel_height": 1146
+      "pixel_height": 1374
     },
     {
       "id": "billing-payouts",
       "title": "チェーン別の販売者送金先",
       "viewport": "desktop",
       "path": "billing-payouts--desktop.png",
-      "sha256": "74faba7adfdd4104d69241d96e2bdb3fb2f0c41cd7a7e0063c6b753454c847c8",
+      "sha256": "11428b17cddca880bff071154eea8079d344305e27107cd87f134440dc5247a8",
       "pixel_width": 1400,
-      "pixel_height": 1060
+      "pixel_height": 1104
     },
     {
       "id": "billing-seller-plans",
       "title": "販売プラン一覧",
       "viewport": "desktop",
       "path": "billing-seller-plans--desktop.png",
-      "sha256": "a678308d5c73f34e79ef09a116d02d7ca9a97040170ea027ecb3571be5093c0d",
+      "sha256": "57c9974ddf048f6f74e7167c1e0c545b04a0a5aab4f8bbd962e61f366afe5347",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -653,25 +653,25 @@
       "title": "販売プラン作成",
       "viewport": "desktop",
       "path": "billing-plan-new--desktop.png",
-      "sha256": "cd86ab95bf574fa5ffe113b5bbbf8a341eaf517f4afae2d9d34ddd23628b5b46",
+      "sha256": "bf1d64155f105d7261dfc7262cc6ad8ae8fa68a7d017cd344b285738267b1278",
       "pixel_width": 1400,
-      "pixel_height": 1167
+      "pixel_height": 1211
     },
     {
       "id": "billing-plan-edit",
       "title": "販売プラン編集",
       "viewport": "desktop",
       "path": "billing-plan-edit--desktop.png",
-      "sha256": "66d311cb177b6ddfdefae67a3295b8bc18b99ed469fb1a7c7cf0a434e6ec97aa",
+      "sha256": "d3677e2258155cf5dbbfa29fe1fbe71fbb7d36a579a0073ad6e3917682b1fdd4",
       "pixel_width": 1400,
-      "pixel_height": 1167
+      "pixel_height": 1211
     },
     {
       "id": "billing-settings",
       "title": "決済設定（独立した3設定）",
       "viewport": "desktop",
       "path": "billing-settings--desktop.png",
-      "sha256": "145eb8895e795532cd4a8c12adcaf614fb15e93bc9dc60b5c48dd892807e979c",
+      "sha256": "baf7a6111192c064f02dd6b27f7385c1e5b363c23e368a99e3dcb22edfb016a9",
       "pixel_width": 1400,
       "pixel_height": 915
     },
@@ -680,7 +680,7 @@
       "title": "決済運用（設定不足・チェーン設定）",
       "viewport": "desktop",
       "path": "billing-setup--desktop.png",
-      "sha256": "45b04e4fba94d5fdd2855649f3cb9b1ef0391505ec8f23bc49e6e517521fae8b",
+      "sha256": "d350c7859254ed9f50931244d48f9ddebbdc1c884a8094705daa8b9170274819",
       "pixel_width": 1400,
       "pixel_height": 1362
     },
@@ -689,34 +689,34 @@
       "title": "チェーン別の運営設定",
       "viewport": "desktop",
       "path": "billing-chain-settings--desktop.png",
-      "sha256": "920c145027b2a98c6e1790272eaab495fa7b8f0be6640da6c52e82212fdc7f91",
+      "sha256": "4440d627fe71b39f2221c046aee6d3889197a0fcabf4ceb71761ec96740bb2dc",
       "pixel_width": 1400,
       "pixel_height": 2310
     },
     {
-      "id": "billing-operator-plans",
-      "title": "運営者プラン一覧",
+      "id": "billing-admin-merchants",
+      "title": "販売者の横断閲覧",
       "viewport": "desktop",
-      "path": "billing-operator-plans--desktop.png",
-      "sha256": "f00cc88abd337734a2e5442bb62c980ce3c0ea866b8ca8903af1a388f90ec19e",
+      "path": "billing-admin-merchants--desktop.png",
+      "sha256": "ded20bd7c85ce15015b4a3bde6e7e6f9a02aaa25fe67bda22b5eaeb6225f2ddd",
       "pixel_width": 1400,
       "pixel_height": 900
     },
     {
-      "id": "billing-operator-plan-new",
-      "title": "運営者プラン作成",
+      "id": "billing-admin-merchant-fee",
+      "title": "販売者別の運営手数料",
       "viewport": "desktop",
-      "path": "billing-operator-plan-new--desktop.png",
-      "sha256": "f63ab3010d00d6326419f0538ad86651dad1d24648fc7287394b7e2bf6b78048",
+      "path": "billing-admin-merchant-fee--desktop.png",
+      "sha256": "6ee0d3a597e0124d0cc3f5ba95c4caf197f55a046b571bbeb3ce93766099ccf8",
       "pixel_width": 1400,
-      "pixel_height": 1232
+      "pixel_height": 900
     },
     {
       "id": "billing-pending",
       "title": "契約（初回支払・署名待ち）",
       "viewport": "desktop",
       "path": "billing-pending--desktop.png",
-      "sha256": "adf2e6152f3d5ba82741dabd24e310ae04519e817238a108163a948a52d78ead",
+      "sha256": "0f28f811d59f27879db3ba9ce581b9492325150e95ea04a5094035fdb42a0df1",
       "pixel_width": 1400,
       "pixel_height": 1471
     },
@@ -725,7 +725,7 @@
       "title": "契約時と異なるウォレットの拒否",
       "viewport": "desktop",
       "path": "billing-wallet-mismatch--desktop.png",
-      "sha256": "8e4b7f0d6413f25037defe51c1cdcbb0177eac9c1a8c2757b9e661f9e5d40d47",
+      "sha256": "d6d1949f88b3f89e5441845f8b0409747a447a5f6d8ae22b96244b9065de9f5d",
       "pixel_width": 1400,
       "pixel_height": 1496
     },
@@ -734,7 +734,7 @@
       "title": "購入者の決済履歴・手動返金の記録",
       "viewport": "desktop",
       "path": "billing-active-refund--desktop.png",
-      "sha256": "b4c98bc5bbffdac9da549a68193267cfb1d972303c02cc51ac29c67f10823e03",
+      "sha256": "da479419e79a5e614f760ead610e2a0cfe7996a2c40e9149f3fa7c6d02d83d38",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -743,16 +743,16 @@
       "title": "販売者画面・売上概要",
       "viewport": "desktop",
       "path": "billing-merchant-overview--desktop.png",
-      "sha256": "5848f306d43085ab9888eaf0df0fdce0890e943891568706ddd1e0ce48c8b5e3",
+      "sha256": "64ea229b2ddbb801f8dabae3d1881327e67480ae66ed8a8d3df219e49c39aa46",
       "pixel_width": 1400,
-      "pixel_height": 1159
+      "pixel_height": 1204
     },
     {
       "id": "billing-subscriptions",
       "title": "購入者の契約一覧",
       "viewport": "desktop",
       "path": "billing-subscriptions--desktop.png",
-      "sha256": "5bb2774e0b27548f36efb8e3e5cc41fdbb3efe26a66af447593de41838bf1a29",
+      "sha256": "0027a33855ba5cf5714c1d242400a4ee21e32f02cc08d27bd62a55406e852786",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -761,7 +761,7 @@
       "title": "販売契約一覧",
       "viewport": "desktop",
       "path": "billing-sales--desktop.png",
-      "sha256": "33622c24f91245383c17aba829ebccd7c55b27c6eeaadf6ef51215e2b5b0ba15",
+      "sha256": "ff523c047f3071ff90d05b2bb861918c9e39ffd730558f291f17f0b1858d74d1",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -770,16 +770,16 @@
       "title": "販売者の決済履歴",
       "viewport": "desktop",
       "path": "billing-payments--desktop.png",
-      "sha256": "b36a136e079be148158f5cba1675423d6f05121a27d259f25c41e9e01395973e",
+      "sha256": "c7332979f95cd284f2844f1133a1de13fe4f751b250a32d972a681cbdf58d810",
       "pixel_width": 1400,
-      "pixel_height": 1105
+      "pixel_height": 1150
     },
     {
       "id": "billing-refunds",
       "title": "販売者の手動返金履歴",
       "viewport": "desktop",
       "path": "billing-refunds--desktop.png",
-      "sha256": "9b323de7aecdf8c3285400284e4dc333f372e8435d6593560a0e793d896cb628",
+      "sha256": "be65696993a4597141369651137dceb500782ed1f438ee2b9d84daf575d1da58",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -788,34 +788,115 @@
       "title": "販売契約詳細",
       "viewport": "desktop",
       "path": "billing-sale--desktop.png",
-      "sha256": "e1e07f2bdb15cd428373c8090543907426f76cde0239bad106b4c8717979c203",
+      "sha256": "23482b5727074ee0bf5aa8dd2c106e3a0080a0a37b18d97a1836bfffe5743e2e",
       "pixel_width": 1400,
-      "pixel_height": 900
+      "pixel_height": 918
     },
     {
       "id": "billing-refund-new",
       "title": "手動返金の記録フォーム",
       "viewport": "desktop",
       "path": "billing-refund-new--desktop.png",
-      "sha256": "5ec2614ffe28461769da05d47a24b300b797b67f2f7fa78f19e9eedd0df5741a",
+      "sha256": "bc87cf9fe968ea9a24c2f7641b3bda875892df6ad978a2294a27afaa0f84b1b1",
       "pixel_width": 1400,
-      "pixel_height": 1046
+      "pixel_height": 1090
     },
     {
       "id": "billing-refund-invalid",
       "title": "手動返金の入力エラーと値の保持",
       "viewport": "desktop",
       "path": "billing-refund-invalid--desktop.png",
-      "sha256": "91e9b5afe2d804efa34bf672adcc86918e0bf6e6f11674a0cc6f0103e191e003",
+      "sha256": "ae4ebbc1e9b8203655bfe9fca6f281a83108cb1f3636f56e34991d759df6b792",
       "pixel_width": 1400,
-      "pixel_height": 1100
+      "pixel_height": 1144
+    },
+    {
+      "id": "billing-members",
+      "title": "販売者メンバー・役割・招待管理",
+      "viewport": "desktop",
+      "path": "billing-members--desktop.png",
+      "sha256": "f8b5d2e33b2d4c0a4caca9afef22eacdba0d4d880d6b6657d4915252722d6eb7",
+      "pixel_width": 1400,
+      "pixel_height": 1881
+    },
+    {
+      "id": "billing-audit",
+      "title": "通知と独立した販売者操作履歴",
+      "viewport": "desktop",
+      "path": "billing-audit--desktop.png",
+      "sha256": "03683d8105103d3394b4acd9111250dc94658cc9915a6056a50fb5d797e8036f",
+      "pixel_width": 1400,
+      "pixel_height": 2296
+    },
+    {
+      "id": "billing-closure",
+      "title": "販売者の閉鎖確認",
+      "viewport": "desktop",
+      "path": "billing-closure--desktop.png",
+      "sha256": "de02e212b8166808f803682efd7cc8cd0249ada756b6bbe329368ae9b048448e",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "billing-closed-merchant",
+      "title": "閉鎖済み販売者の履歴と切り替え",
+      "viewport": "desktop",
+      "path": "billing-closed-merchant--desktop.png",
+      "sha256": "1f60da7e88caf991bd3fbec90a29ffdbae49fd3daab6adddd05f2fe87d95bf20",
+      "pixel_width": 1400,
+      "pixel_height": 1184
+    },
+    {
+      "id": "billing-closing-merchant",
+      "title": "閉鎖処理中の販売者",
+      "viewport": "desktop",
+      "path": "billing-closing-merchant--desktop.png",
+      "sha256": "c875ad5d32a1f882cfc02c55489286edad2a0178a35e7529de39823c0cf0ab5b",
+      "pixel_width": 1400,
+      "pixel_height": 1266
+    },
+    {
+      "id": "billing-viewer-members",
+      "title": "閲覧者によるメンバー確認",
+      "viewport": "desktop",
+      "path": "billing-viewer-members--desktop.png",
+      "sha256": "d1589b871628f87e5423eea9821938a47f97c57da22f2d5c9702b5d3504d02d7",
+      "pixel_width": 1400,
+      "pixel_height": 965
+    },
+    {
+      "id": "billing-invitations",
+      "title": "本人による招待の承諾・拒否",
+      "viewport": "desktop",
+      "path": "billing-invitations--desktop.png",
+      "sha256": "2245543a851b391968f2e37aec29047a8c980fc7f2982b30fec5290dfb4dcc71",
+      "pixel_width": 1400,
+      "pixel_height": 900
+    },
+    {
+      "id": "billing-merchant-entry",
+      "title": "販売者の作成・招待・閉鎖済み履歴への入口",
+      "viewport": "desktop",
+      "path": "billing-merchant-entry--desktop.png",
+      "sha256": "38cdf8d89ca4cd31936bce8138ea3b8e81a541a725036419719d656f06def938",
+      "pixel_width": 1400,
+      "pixel_height": 938
+    },
+    {
+      "id": "billing-merchant-restricted",
+      "title": "アプリ管理者限定による販売者機能の利用制限",
+      "viewport": "desktop",
+      "path": "billing-merchant-restricted--desktop.png",
+      "sha256": "014a63dd090803d3c1b991a311ca0ea98185c78efa12d8bcb72e42effca677a9",
+      "pixel_width": 1400,
+      "pixel_height": 900
     },
     {
       "id": "billing-admin-subscriptions",
       "title": "管理者の契約一覧",
       "viewport": "desktop",
       "path": "billing-admin-subscriptions--desktop.png",
-      "sha256": "d2fd7d028060858854974c8713fd4910e6c19cba202f5bd4aec780ef0f4b6563",
+      "sha256": "043c5efceef94eab62fc175d654723a03532701bb4f4b1fdf961e6a66c09a3ab",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -824,7 +905,7 @@
       "title": "管理者の契約・決済詳細",
       "viewport": "desktop",
       "path": "billing-admin-subscription--desktop.png",
-      "sha256": "c887ff014d81c8eef83edb2732022666ff8bae1d3112bf046a42c412d07af995",
+      "sha256": "937f67c948e93923a80030e95592c719d64a42895d26efe75ad3570e07784d4d",
       "pixel_width": 1400,
       "pixel_height": 939
     },
@@ -833,7 +914,7 @@
       "title": "契約（更新猶予中）",
       "viewport": "desktop",
       "path": "billing-grace--desktop.png",
-      "sha256": "f16556dcaac5d4cc6f011c4cc69d2d294232464c49d1cd27c0ad8a0d0966db24",
+      "sha256": "48d6fcc1842bb058c7a441ade4a312a3c8babbfd222ec7552d3c192d4c575837",
       "pixel_width": 1400,
       "pixel_height": 1028
     },
@@ -842,7 +923,7 @@
       "title": "決済運用（未確定・要確認・送信保留）",
       "viewport": "desktop",
       "path": "billing-review-held--desktop.png",
-      "sha256": "40a70819f2b78e6baad4d0ef3449755602a2ca119aab93a0a02760f15e25ba10",
+      "sha256": "1ffdc2df398985fc8045354d9e049d121bd1cc067223ee66165b75412a510933",
       "pixel_width": 1400,
       "pixel_height": 1492
     },
@@ -851,7 +932,7 @@
       "title": "契約の解約確認",
       "viewport": "desktop",
       "path": "billing-cancellation--desktop.png",
-      "sha256": "6a7ce8cd9d476ceceff265757855292f252c11a82294f368c4591a8fa947bc81",
+      "sha256": "bb3e9cde680a5debc9bd2bbad39ab98d829281706a7901072abbe07e256c29ff",
       "pixel_width": 1400,
       "pixel_height": 900
     },
@@ -860,7 +941,7 @@
       "title": "解約後の支払済み利用期間",
       "viewport": "desktop",
       "path": "billing-cancelled-access--desktop.png",
-      "sha256": "6c1c03c8c2daed85db4c113bb2ca7321d37c9791b07fe9d26368173af36f2cd3",
+      "sha256": "30cc6361418587628afd279ba5d8b867c9545a0658955271285b2d9c51b4b605",
       "pixel_width": 1400,
       "pixel_height": 964
     },
@@ -869,7 +950,7 @@
       "title": "契約終了・許可取消済み",
       "viewport": "desktop",
       "path": "billing-ended--desktop.png",
-      "sha256": "a9d36b37cd5cce0c0425ff974594e0d48ee5d7ffd8e2e54002e8e276b65e4e15",
+      "sha256": "2f4fa83aba6595375d419ba0d81a034b5a96cfdbcd0edfec7f5910c186ace63b",
       "pixel_width": 1400,
       "pixel_height": 944
     },
@@ -878,9 +959,9 @@
       "title": "販売者登録",
       "viewport": "desktop",
       "path": "billing-merchant-new--desktop.png",
-      "sha256": "4ad4ff7b7b6361c4642d0a8f8378c033cc562576f23d615c32a70122dcdf0786",
+      "sha256": "761754b19aa5429b8fc637e9c50a559cae63beff561e1834be95c82ea6d6332b",
       "pixel_width": 1400,
-      "pixel_height": 1050
+      "pixel_height": 1025
     },
     {
       "id": "navigation-regular-user",
@@ -950,7 +1031,7 @@
       "title": "Passkey登録後の紛失リスク警告",
       "viewport": "mobile",
       "path": "passkey-registration-risk-warning--mobile.png",
-      "sha256": "870b7960e45dd5ead04a23a9b82e734f7dc5a7e5867b0473ee182ec5e3583be2",
+      "sha256": "4ac5585421d969539eae252198b6ff0eff329da82948e88d82538b680d90b8a6",
       "pixel_width": 390,
       "pixel_height": 1804
     },
@@ -986,7 +1067,7 @@
       "title": "通知popover（未読）",
       "viewport": "mobile",
       "path": "notifications-popover-unread--mobile.png",
-      "sha256": "ad3b4c16923fef6903a4632e4ba123188f2671477477bb0fc702cd89047dccfd",
+      "sha256": "5f00e056bd20c366b8dfe2a3e1daac5f0422ac51402de2a35e4d478b66665981",
       "pixel_width": 390,
       "pixel_height": 1678
     },
@@ -995,7 +1076,7 @@
       "title": "通知popover（お知らせ）",
       "viewport": "mobile",
       "path": "notifications-popover-announcements--mobile.png",
-      "sha256": "79cc8c8b2d2fc14dc719f11c8faf7267e4610427313506a77f7059ddc66193cc",
+      "sha256": "8c8f58676395ee1271600bf3933642e3a5291c34ede7936d81e4ac0a9433a075",
       "pixel_width": 390,
       "pixel_height": 1678
     },
@@ -1004,7 +1085,7 @@
       "title": "通知履歴",
       "viewport": "mobile",
       "path": "notifications-history--mobile.png",
-      "sha256": "ecc4cb8b77ed7a265d74dd9068698e431c34e86fa692b6aa938b4e2897b675d3",
+      "sha256": "9e946c28558b06bc0815c424cc25a5a9298dcde185f03478d1940a89ff64f040",
       "pixel_width": 390,
       "pixel_height": 1176
     },
@@ -1013,7 +1094,7 @@
       "title": "通知履歴（お知らせ）",
       "viewport": "mobile",
       "path": "notifications-announcements--mobile.png",
-      "sha256": "2465b20f980e6495e1fbf47af2f32e27cd1ab3a80e61c4369779792774e4dccb",
+      "sha256": "39fb0e25a13bb68f471b6a7ae66031dcb2a3dc1055530cbcc879bba0ffdc0cbb",
       "pixel_width": 390,
       "pixel_height": 1178
     },
@@ -1022,7 +1103,7 @@
       "title": "通知popover（全件既読後）",
       "viewport": "mobile",
       "path": "notifications-popover-opened--mobile.png",
-      "sha256": "7e53bec4de08a29057f657853125dbb547415efe2b3e2a26ae91e9ad19cfaeec",
+      "sha256": "6e7602b17c745d26a7de683ba2888a8852fa5ba8bf39ea43405f602fbe49c151",
       "pixel_width": 390,
       "pixel_height": 1678
     },
@@ -1040,7 +1121,7 @@
       "title": "通知詳細",
       "viewport": "mobile",
       "path": "admin-notification-show--mobile.png",
-      "sha256": "deacbe42a5acdf15c2508ad1424fc5f9a9c560c9bf9973208639447eba5e0d24",
+      "sha256": "6c64ad27d2dea40195f3df6cb0f1dcb68d7851c18fc23ba711b4f6f6663ffd6c",
       "pixel_width": 390,
       "pixel_height": 1175
     },
@@ -1049,7 +1130,7 @@
       "title": "通知編集",
       "viewport": "mobile",
       "path": "admin-notification-edit--mobile.png",
-      "sha256": "c6795b87df176587a85d66f517c6d13756f44ce6dd1a01b54f26f2f6797d064f",
+      "sha256": "1ce308e91ba99f70527de147a56d46ea3d3b96ee772f946f8cd23580b4213fd8",
       "pixel_width": 390,
       "pixel_height": 1749
     },
@@ -1058,7 +1139,7 @@
       "title": "通知の個別受信者選択",
       "viewport": "mobile",
       "path": "admin-notification-recipients--mobile.png",
-      "sha256": "46ceccc03aa9ccfe2c40fcc844fdc0cc152451d4168c877126db50dc2566fdf3",
+      "sha256": "30432bef7e7f3d29fc31b0fee44935192a5062c88efce6eeaf3f5fb17d830d54",
       "pixel_width": 390,
       "pixel_height": 1789
     },
@@ -1076,7 +1157,7 @@
       "title": "管理画面",
       "viewport": "mobile",
       "path": "admin-overview--mobile.png",
-      "sha256": "787cecb6de087130b2e3dfe9f310ecffb2536de6a1e3a868e3da85f8bad62cba",
+      "sha256": "478772d39e0991299d1e63e0f566c80ee7da08044b204f0c31ee627d5591a535",
       "pixel_width": 390,
       "pixel_height": 1645
     },
@@ -1193,7 +1274,7 @@
       "title": "Passkey一覧",
       "viewport": "mobile",
       "path": "passkeys--mobile.png",
-      "sha256": "e4c69abdf2028f02bfe21e1af745da32a4176f07c75e17847d20321f6cd18ab5",
+      "sha256": "e9b9600825aa6fec87149e7e7614516c240e911c7ffadc249dcc2ab73e256e76",
       "pixel_width": 390,
       "pixel_height": 1143
     },
@@ -1220,7 +1301,7 @@
       "title": "Passkey名変更",
       "viewport": "mobile",
       "path": "passkey-edit--mobile.png",
-      "sha256": "7d0f266474c72abe2200a34875f7597b87bd42ff3b73ffeeeeb5b47f2c5ceb0c",
+      "sha256": "4460f5ca02697f7bcfed531bf9e723240f9b88918038e8ac2f36cd97ae80f5a0",
       "pixel_width": 390,
       "pixel_height": 1058
     },
@@ -1247,7 +1328,7 @@
       "title": "アカウント削除（再認証）",
       "viewport": "mobile",
       "path": "account-delete-reauth--mobile.png",
-      "sha256": "5d9f7cf7162aa9b37e359b5ff25340bf4e970ddff50b5f785188231b5cc6d61b",
+      "sha256": "52096983099d5eec477acac8e476b56fcdc8f1f732f475497d5225a3904a54e9",
       "pixel_width": 390,
       "pixel_height": 1113
     },
@@ -1292,7 +1373,7 @@
       "title": "APIキー詳細（初回secret）",
       "viewport": "mobile",
       "path": "api-credential-secret--mobile.png",
-      "sha256": "edef8c15611bf7d2bed7f18b11ff051241482ead9b74e2ef8f22ecb5ce31f778",
+      "sha256": "254fd47d947cd2399c2d17602d3631299662edde07145957093e0a0d507a6edb",
       "pixel_width": 390,
       "pixel_height": 1342
     },
@@ -1301,7 +1382,7 @@
       "title": "APIキー詳細",
       "viewport": "mobile",
       "path": "api-credential-show--mobile.png",
-      "sha256": "709dee1e7eb977dcc975c7756a573cfb51c875c0287903dce54a5adab4819adb",
+      "sha256": "3237fd2ee7c8521b8df5c4a8214250cdd028949667bf9c1034953a9b7c608d42",
       "pixel_width": 390,
       "pixel_height": 1176
     },
@@ -1319,7 +1400,7 @@
       "title": "APIキー一覧（登録済み）",
       "viewport": "mobile",
       "path": "api-credentials-populated--mobile.png",
-      "sha256": "bcc32de35078e1ccd9fc9131090affed7daf7beea2b08bf188f02ff90a1565b2",
+      "sha256": "53ebe8d0716b1daa8f48e1f8e3829b4cb478d5469a496179a98c102c8e522385",
       "pixel_width": 390,
       "pixel_height": 1145
     },
@@ -1328,7 +1409,7 @@
       "title": "キュー",
       "viewport": "mobile",
       "path": "admin-job-operations--mobile.png",
-      "sha256": "7a0dcfabd46f2cc8bf49f322d380dad184732769ff64fb668b152730093a7c67",
+      "sha256": "03adda84dbdd84b4ca5f9ad3835e270ebc004480a14a2d68e9344611501a8f8f",
       "pixel_width": 390,
       "pixel_height": 1080
     },
@@ -1373,7 +1454,7 @@
       "title": "運用タスク一時停止中",
       "viewport": "mobile",
       "path": "admin-maintenance-task-paused--mobile.png",
-      "sha256": "9ce09f5367169ce2c96e8c6d5d689f7e17993d97fdc006384472b7411439bd44",
+      "sha256": "18ad33bd5de215a1bf19aab6ce6128f3d85d6acf1b7947872eed54714d3de315",
       "pixel_width": 390,
       "pixel_height": 2762
     },
@@ -1382,7 +1463,7 @@
       "title": "運用タスクエラー",
       "viewport": "mobile",
       "path": "admin-maintenance-task-errored--mobile.png",
-      "sha256": "15f0dd0737dc97bf63ee4596bb0e0d5e25ed28270f5679d915dbd6dddb52a5fb",
+      "sha256": "4c6ab0cc5176007507d174d3e7ea61fb79b993be8859e3065f75b831462ba2e1",
       "pixel_width": 390,
       "pixel_height": 2618
     },
@@ -1391,7 +1472,7 @@
       "title": "運用タスク完了",
       "viewport": "mobile",
       "path": "admin-maintenance-task-completed--mobile.png",
-      "sha256": "8f610b4af9c834ff831aa50773dcf9e5497c573822c32b5fafdec0c2740642d8",
+      "sha256": "dbcb33fa1adc0a14aca8eefee0f00cefbacc20fba74a7cfc93c824cee34d6ad6",
       "pixel_width": 390,
       "pixel_height": 3376
     },
@@ -1400,7 +1481,7 @@
       "title": "運用タスクのモバイルメニュー",
       "viewport": "mobile",
       "path": "admin-maintenance-tasks-navigation-open--mobile.png",
-      "sha256": "18c4e66aa87703c2163f826e706479c533ef3e7a08d64fe80bd5e4b04062ffea",
+      "sha256": "cac5595d2fc3a917be16070e268a8b701570f5dac1550a2c38e7564fb03123c8",
       "pixel_width": 390,
       "pixel_height": 2296
     },
@@ -1454,7 +1535,7 @@
       "title": "ユーザー管理",
       "viewport": "mobile",
       "path": "admin-users--mobile.png",
-      "sha256": "3c7e9f4f7bca0cd63f1a4a30311825588be380b4e47f39d7b8c19c4e20cca6f6",
+      "sha256": "0beceb10f6b437ee540699abaca73dd98d970cdd0d7b2eb1fd006c68d4186943",
       "pixel_width": 390,
       "pixel_height": 2636
     },
@@ -1463,7 +1544,7 @@
       "title": "ユーザー詳細",
       "viewport": "mobile",
       "path": "admin-user-show--mobile.png",
-      "sha256": "d8393d4596e35328d6d0481f4a32baff229adb3de4f4c4ad7b8410b1cea1e0f1",
+      "sha256": "9db71e4305a2794914cd700ff36055272efa905694c96ed63a95e14d7771b7b4",
       "pixel_width": 390,
       "pixel_height": 1727
     },
@@ -1517,70 +1598,70 @@
       "title": "販売者画面・初回の販売準備",
       "viewport": "mobile",
       "path": "billing-merchant-overview-empty--mobile.png",
-      "sha256": "1642aba835dcb2b04f16a8ec4df1a31bfa58a8825e3e146eaa48c1f314dd0e04",
+      "sha256": "e8233dafd2fe97fbe1dc3f59fcdb6a7271026b73ddfcdc1758b6f9a96aed76b0",
       "pixel_width": 390,
-      "pixel_height": 2020
+      "pixel_height": 2186
     },
     {
       "id": "billing-merchant-edit",
       "title": "販売者プロフィール",
       "viewport": "mobile",
       "path": "billing-merchant-edit--mobile.png",
-      "sha256": "6aafe510d738dcc63774d1c58095d0b6fa5513d9b42b2d583b5f3573385776bc",
+      "sha256": "2c4b9d7572a7ec29de1092503a2678e47b9823b8089bb374dd7ef63f9fd56802",
       "pixel_width": 390,
-      "pixel_height": 1662
+      "pixel_height": 2037
     },
     {
       "id": "billing-payouts",
       "title": "チェーン別の販売者送金先",
       "viewport": "mobile",
       "path": "billing-payouts--mobile.png",
-      "sha256": "5eadfc101d05bcabbbfeff16d953fba4967bc9ea011a95e5de1805dacd2725cd",
+      "sha256": "adae207414fc6d392149a12f4beedfb0e3fbc8b16d6085568ee14c63681bc680",
       "pixel_width": 390,
-      "pixel_height": 2107
+      "pixel_height": 2274
     },
     {
       "id": "billing-seller-plans",
       "title": "販売プラン一覧",
       "viewport": "mobile",
       "path": "billing-seller-plans--mobile.png",
-      "sha256": "c7265f3c4bf0c635cceea2567bcb3324a09b6ad8c0e1c6b5d88243d78059af47",
+      "sha256": "151e799d4ac8b004396489c1d243fd2642254ea8574ddacaa0e4db9eae07a34a",
       "pixel_width": 390,
-      "pixel_height": 1267
+      "pixel_height": 1434
     },
     {
       "id": "billing-plan-new",
       "title": "販売プラン作成",
       "viewport": "mobile",
       "path": "billing-plan-new--mobile.png",
-      "sha256": "25bab86baae465fe6d8fc760e6ad0e8d986422eeeafc8a1efdd50cf1b834ae02",
+      "sha256": "5a8795729128a5f673dcba4d1d3bd9e71cab1cf85c7fb22c37005f300144e6ba",
       "pixel_width": 390,
-      "pixel_height": 1662
+      "pixel_height": 1828
     },
     {
       "id": "billing-plan-edit",
       "title": "販売プラン編集",
       "viewport": "mobile",
       "path": "billing-plan-edit--mobile.png",
-      "sha256": "ce34aee3e46339d1020a6b20f83ac0df41661d9a9b7bea158818b082f3bfc48e",
+      "sha256": "514099b73eb3383986bd0e5b92d1bf4f0dbc4230e9879b249d52776c758460fe",
       "pixel_width": 390,
-      "pixel_height": 1662
+      "pixel_height": 1828
     },
     {
       "id": "billing-settings",
       "title": "決済設定（独立した3設定）",
       "viewport": "mobile",
       "path": "billing-settings--mobile.png",
-      "sha256": "5e97e1d27327af3e59b778d3b7167c3054c5fa4604c837d7355e22b1f92d3908",
+      "sha256": "8482973f286cc3ac118a8dafc73f3d9e79136bc667d1a7a9695e078d9c888024",
       "pixel_width": 390,
-      "pixel_height": 1454
+      "pixel_height": 1475
     },
     {
       "id": "billing-setup",
       "title": "決済運用（設定不足・チェーン設定）",
       "viewport": "mobile",
       "path": "billing-setup--mobile.png",
-      "sha256": "7d5230d285f3ecbf62a82627c99f554493164fa5df2bdeffa79a643fe1abd8ca",
+      "sha256": "6736e8c0d9af3c0e7f9de9dc6008599fb2f97df79229577d0dbba9618fe28912",
       "pixel_width": 390,
       "pixel_height": 1814
     },
@@ -1589,34 +1670,34 @@
       "title": "チェーン別の運営設定",
       "viewport": "mobile",
       "path": "billing-chain-settings--mobile.png",
-      "sha256": "8aad792f2285f7d392c7ae1f6cdeb941c7bc98afc681ca0ccee8f867ed8f82dc",
+      "sha256": "539512fc975b97f8e45c5319343d13e555e83cdd2f86c95a33251488ca9a8556",
       "pixel_width": 390,
       "pixel_height": 3125
     },
     {
-      "id": "billing-operator-plans",
-      "title": "運営者プラン一覧",
+      "id": "billing-admin-merchants",
+      "title": "販売者の横断閲覧",
       "viewport": "mobile",
-      "path": "billing-operator-plans--mobile.png",
-      "sha256": "593b894c1ee8ce6b7a282619358edf2897c91873fe1bc1341bf0e7eac7790b7b",
+      "path": "billing-admin-merchants--mobile.png",
+      "sha256": "bcb0704bd2c17f87501ccba02aa9cd2a4b81eeddd711163bd413ce0713589230",
       "pixel_width": 390,
-      "pixel_height": 1158
+      "pixel_height": 1638
     },
     {
-      "id": "billing-operator-plan-new",
-      "title": "運営者プラン作成",
+      "id": "billing-admin-merchant-fee",
+      "title": "販売者別の運営手数料",
       "viewport": "mobile",
-      "path": "billing-operator-plan-new--mobile.png",
-      "sha256": "72c632e8628b8e699a7eee1d0780128df4e3427b022303e27f3e05c1c503349b",
+      "path": "billing-admin-merchant-fee--mobile.png",
+      "sha256": "a6de60703fee1cc6651401f22e5b1afd04732a8c1a386a121366774fc7308f1c",
       "pixel_width": 390,
-      "pixel_height": 1727
+      "pixel_height": 1533
     },
     {
       "id": "billing-pending",
       "title": "契約（初回支払・署名待ち）",
       "viewport": "mobile",
       "path": "billing-pending--mobile.png",
-      "sha256": "bc1f94a291678b44ac55dbcec3226c8d3cea1de113648183023c92ba92a8aefd",
+      "sha256": "701c5390bc280f48b7280c504051a939d2237464a111798d8c7a2ff18528ac9b",
       "pixel_width": 390,
       "pixel_height": 2207
     },
@@ -1625,7 +1706,7 @@
       "title": "契約時と異なるウォレットの拒否",
       "viewport": "mobile",
       "path": "billing-wallet-mismatch--mobile.png",
-      "sha256": "295dfa4e67ead7ca001e4fbf1bd11a62afb9ea5ef6df467e9bfaccb0fc2102dc",
+      "sha256": "5cb88dfe31e32b44d4abc6d027cd5aecace3cc8890f8693461f9dac4f04f9407",
       "pixel_width": 390,
       "pixel_height": 2258
     },
@@ -1634,7 +1715,7 @@
       "title": "購入者の決済履歴・手動返金の記録",
       "viewport": "mobile",
       "path": "billing-active-refund--mobile.png",
-      "sha256": "c6983246905b691d5609943498eec60f2738b65e6d3732c12a44a72ae0f3c1ad",
+      "sha256": "2d68bc87da862c6cff7f52500c001a871696751aaeaca836b595cde88b968a5a",
       "pixel_width": 390,
       "pixel_height": 1345
     },
@@ -1643,16 +1724,16 @@
       "title": "販売者画面・売上概要",
       "viewport": "mobile",
       "path": "billing-merchant-overview--mobile.png",
-      "sha256": "847f7b8a063022b575bc1d4fd6c65e10abb213eec3545863f23c7f323237cb9a",
+      "sha256": "5b7727a4a630b9ed93b931c8c87a6c5ea23694455b7768589381a5f4516a8495",
       "pixel_width": 390,
-      "pixel_height": 2020
+      "pixel_height": 2186
     },
     {
       "id": "billing-subscriptions",
       "title": "購入者の契約一覧",
       "viewport": "mobile",
       "path": "billing-subscriptions--mobile.png",
-      "sha256": "e83a854188978d53c85e0ac1fbadd60f8621d243ee41efefc92635de0be8b3e3",
+      "sha256": "0e37cb2270276c4f64d3f28296633bd9360d46477cc7734092909633a7f55062",
       "pixel_width": 390,
       "pixel_height": 1288
     },
@@ -1661,70 +1742,151 @@
       "title": "販売契約一覧",
       "viewport": "mobile",
       "path": "billing-sales--mobile.png",
-      "sha256": "dbc0fe4d64f71c63ab33bbb7efd80763e6d135deb2584a46a319accf80172713",
+      "sha256": "3313f8ff4bbd6e816c8b098c38632aefffae9b46d91fa960e90917b5e3bcf5d5",
       "pixel_width": 390,
-      "pixel_height": 1757
+      "pixel_height": 1924
     },
     {
       "id": "billing-payments",
       "title": "販売者の決済履歴",
       "viewport": "mobile",
       "path": "billing-payments--mobile.png",
-      "sha256": "ccdc2538f3a95e734787977c98b38a4311fc2955f0e9fa048dc18fe003f5021c",
+      "sha256": "2409b69cd8eb98b4cd07ea19219dcf282a362d4058d3eae383648d2808e0bb98",
       "pixel_width": 390,
-      "pixel_height": 2768
+      "pixel_height": 2934
     },
     {
       "id": "billing-refunds",
       "title": "販売者の手動返金履歴",
       "viewport": "mobile",
       "path": "billing-refunds--mobile.png",
-      "sha256": "8a96c8ff1dc2c9b43fe20d14c433dbe222d657e196c5ae1a436bfe4c56f2237b",
+      "sha256": "43a27d3cd8dbdf3695c4f213718a373d74b3cd2f3d3f11a29ed9a626c07c4d58",
       "pixel_width": 390,
-      "pixel_height": 1578
+      "pixel_height": 1744
     },
     {
       "id": "billing-sale",
       "title": "販売契約詳細",
       "viewport": "mobile",
       "path": "billing-sale--mobile.png",
-      "sha256": "5eb5b25107a87621979d32e17b5d875c6e73e0e523c86d1c68c5e7c2a19d41b9",
+      "sha256": "22eb3a3ca2aa7091fef6d1aae4d472c8b232fe3c3490d9f2bb199eac9034f1a9",
       "pixel_width": 390,
-      "pixel_height": 1567
+      "pixel_height": 1733
     },
     {
       "id": "billing-refund-new",
       "title": "手動返金の記録フォーム",
       "viewport": "mobile",
       "path": "billing-refund-new--mobile.png",
-      "sha256": "1fd17b5ebb32cb49982890f36bad4248443bbec9868e860ab5965fbbe30c4439",
+      "sha256": "ddd5a034db58f0bbcdd080764f853daaab29462669c6260c81f31859630f1c83",
       "pixel_width": 390,
-      "pixel_height": 1519
+      "pixel_height": 1686
     },
     {
       "id": "billing-refund-invalid",
       "title": "手動返金の入力エラーと値の保持",
       "viewport": "mobile",
       "path": "billing-refund-invalid--mobile.png",
-      "sha256": "25230f715ad02e3e2dfb15a30bcb06fdb495ac1ec956c20392a9017d229aeb6a",
+      "sha256": "d400a4fe1eda85561bdabacbb14af3f4962bb4a6a3c2413270332faf69c09110",
       "pixel_width": 390,
-      "pixel_height": 1573
+      "pixel_height": 1740
+    },
+    {
+      "id": "billing-members",
+      "title": "販売者メンバー・役割・招待管理",
+      "viewport": "mobile",
+      "path": "billing-members--mobile.png",
+      "sha256": "9597d4387a6119034121ffe65ca12899479f96c78bdd3cf99411593c3310abb7",
+      "pixel_width": 390,
+      "pixel_height": 2957
+    },
+    {
+      "id": "billing-audit",
+      "title": "通知と独立した販売者操作履歴",
+      "viewport": "mobile",
+      "path": "billing-audit--mobile.png",
+      "sha256": "15ec3894ce9685c794b63b1e74eb586f22c1e7484eb2482fda186d3dac8463ec",
+      "pixel_width": 390,
+      "pixel_height": 4733
+    },
+    {
+      "id": "billing-closure",
+      "title": "販売者の閉鎖確認",
+      "viewport": "mobile",
+      "path": "billing-closure--mobile.png",
+      "sha256": "b21629fa69c66d31c4198fc4e0655fbfa00addeb92a75df48d0ec0a801277e9d",
+      "pixel_width": 390,
+      "pixel_height": 1308
+    },
+    {
+      "id": "billing-closed-merchant",
+      "title": "閉鎖済み販売者の履歴と切り替え",
+      "viewport": "mobile",
+      "path": "billing-closed-merchant--mobile.png",
+      "sha256": "e2834bd9e8b083b1b7ec196178c332c13ee7be3c79fed15cdc88e03004cc1417",
+      "pixel_width": 390,
+      "pixel_height": 2130
+    },
+    {
+      "id": "billing-closing-merchant",
+      "title": "閉鎖処理中の販売者",
+      "viewport": "mobile",
+      "path": "billing-closing-merchant--mobile.png",
+      "sha256": "ef33d1b88401c141715b2356cb5db8acc1b0f4f124ae269d6e7be8a092f28574",
+      "pixel_width": 390,
+      "pixel_height": 2232
+    },
+    {
+      "id": "billing-viewer-members",
+      "title": "閲覧者によるメンバー確認",
+      "viewport": "mobile",
+      "path": "billing-viewer-members--mobile.png",
+      "sha256": "19fd41365e7c4e2f82b6d3ccf6b8c98b3ba59184f681694343629826a241f94f",
+      "pixel_width": 390,
+      "pixel_height": 1709
+    },
+    {
+      "id": "billing-invitations",
+      "title": "本人による招待の承諾・拒否",
+      "viewport": "mobile",
+      "path": "billing-invitations--mobile.png",
+      "sha256": "fd92e5459dc8d8b57d467c129ab63bc06df61245f85c64e9b877b0e57aab82ee",
+      "pixel_width": 390,
+      "pixel_height": 1121
+    },
+    {
+      "id": "billing-merchant-entry",
+      "title": "販売者の作成・招待・閉鎖済み履歴への入口",
+      "viewport": "mobile",
+      "path": "billing-merchant-entry--mobile.png",
+      "sha256": "028e6290e41114beb4fd97880dea4dcb4c74fd0d3cc13992e7c102ed5facd09a",
+      "pixel_width": 390,
+      "pixel_height": 1566
+    },
+    {
+      "id": "billing-merchant-restricted",
+      "title": "アプリ管理者限定による販売者機能の利用制限",
+      "viewport": "mobile",
+      "path": "billing-merchant-restricted--mobile.png",
+      "sha256": "374d513e4a795095f692555834cb9bb3b64d80113a630e74aa708d3263158caf",
+      "pixel_width": 390,
+      "pixel_height": 1121
     },
     {
       "id": "billing-merchant-navigation-open",
       "title": "販売者画面のモバイルメニュー",
       "viewport": "mobile",
       "path": "billing-merchant-navigation-open--mobile.png",
-      "sha256": "d4f566d5ed4c73c706edd34c42532d9a6506f225d787ea08a698dc16ef225f98",
+      "sha256": "3c4f3369d786e032660df3ae870566f8e00129c93f8d423f265a95ff7595d9f5",
       "pixel_width": 390,
-      "pixel_height": 1757
+      "pixel_height": 1924
     },
     {
       "id": "billing-admin-subscriptions",
       "title": "管理者の契約一覧",
       "viewport": "mobile",
       "path": "billing-admin-subscriptions--mobile.png",
-      "sha256": "32b4988ba489d98135891010897ffbd87babc3987c43321b3e1e22ef04e199c1",
+      "sha256": "46dc297f66bb1025334ad3e7c16de1345c58c561f2ab45486fe5ccee03618d24",
       "pixel_width": 390,
       "pixel_height": 1532
     },
@@ -1733,7 +1895,7 @@
       "title": "管理者の契約・決済詳細",
       "viewport": "mobile",
       "path": "billing-admin-subscription--mobile.png",
-      "sha256": "2410514d4f79ed274e93a1f7d2da02e19078a62873c84f06865842a67c35c864",
+      "sha256": "926d10486e90b23961886e16d30dc2fc064af661b4c66974593fccaa1f081f61",
       "pixel_width": 390,
       "pixel_height": 1632
     },
@@ -1742,7 +1904,7 @@
       "title": "契約（更新猶予中）",
       "viewport": "mobile",
       "path": "billing-grace--mobile.png",
-      "sha256": "e6ddf71b908913a476ce1caffc71f830507f826ca15df21ba54f93f260076386",
+      "sha256": "49154a174fd11c78e19426b6f9441f1d1378a1618ae13097e294c19d36da2970",
       "pixel_width": 390,
       "pixel_height": 1687
     },
@@ -1751,7 +1913,7 @@
       "title": "決済運用（未確定・要確認・送信保留）",
       "viewport": "mobile",
       "path": "billing-review-held--mobile.png",
-      "sha256": "954ac2a42c7d9e93523fbebd1beaf318fd2eae9bd67c0dbc93e93217b9e5be73",
+      "sha256": "dd8d703a090d0da76dc482c2574017180400173ccd753d3a9aa5840c529557cf",
       "pixel_width": 390,
       "pixel_height": 1978
     },
@@ -1760,7 +1922,7 @@
       "title": "契約の解約確認",
       "viewport": "mobile",
       "path": "billing-cancellation--mobile.png",
-      "sha256": "c9bfb6fae8390b7b19bb44517938000bc8574e40cdf567d851e6da1ab4952b3b",
+      "sha256": "82e5983b588e9bde195a5c1c9447a364b7a3367112f516ae5b63574e4e510aa6",
       "pixel_width": 390,
       "pixel_height": 1121
     },
@@ -1769,7 +1931,7 @@
       "title": "解約後の支払済み利用期間",
       "viewport": "mobile",
       "path": "billing-cancelled-access--mobile.png",
-      "sha256": "1779edfc76506b46e04e7ea55fb863ff9a21b4516cc85807cf2ff49774f7cc05",
+      "sha256": "cb41aeb4ce21190de402913a9dfa7519cf061e89e0a8ffdd7115f2dd8c952817",
       "pixel_width": 390,
       "pixel_height": 1659
     },
@@ -1778,7 +1940,7 @@
       "title": "契約終了・許可取消済み",
       "viewport": "mobile",
       "path": "billing-ended--mobile.png",
-      "sha256": "c435e9f5efd52d6f489e6cfeaec42c2f773585fb4c785e2239431b7f746c17f6",
+      "sha256": "2909ccd495308b21a59d8eea35cae507a044dbdbf79ef2def3667b4aa9ec64f3",
       "pixel_width": 390,
       "pixel_height": 1583
     },
@@ -1787,9 +1949,9 @@
       "title": "販売者登録",
       "viewport": "mobile",
       "path": "billing-merchant-new--mobile.png",
-      "sha256": "de45d12e79ced304f11de1c2eb03df7eca3183edc9acad8fd7f8ebbceb38a9d8",
+      "sha256": "6c259fcdd3873b43802affc9caa414653a4d00459b5501bc3951cf496ae4f28b",
       "pixel_width": 390,
-      "pixel_height": 1592
+      "pixel_height": 1714
     },
     {
       "id": "billing-navigation-open",
@@ -1931,7 +2093,7 @@
       "title": "EVMウォレットを登録",
       "viewport": "mobile",
       "path": "siwe-identity-new--mobile.png",
-      "sha256": "405fcc16f4073b05cec3526269a5aa738b7605be24cf9456d7e527c8881e12ce",
+      "sha256": "526426e744c676905cb7d33551d4fe4ceb419893d96bcbd1a134846491ef779b",
       "pixel_width": 390,
       "pixel_height": 1054
     },
@@ -1967,7 +2129,7 @@
       "title": "EVMウォレットログインを解除",
       "viewport": "mobile",
       "path": "siwe-identity-unlink--mobile.png",
-      "sha256": "ab1d333bc8270cd11d2f7cf84558e6785fc5cf4d43639534f6604ade8b6e9f9a",
+      "sha256": "8db7c2a4aeff86fd0e964e28158ba55fde68297e455cdc69bfc76b65984276f4",
       "pixel_width": 390,
       "pixel_height": 1191
     },

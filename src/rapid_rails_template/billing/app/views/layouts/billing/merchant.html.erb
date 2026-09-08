@@ -7,8 +7,15 @@
         <%= render "billing/shared/merchant_navigation" %>
       </ul>
     </div>
+    <%= render "billing/shared/merchant_selector" %>
   </nav>
 <% end %>
 <%= render layout: "layouts/with_menu" do %>
-  <div data-controller="billing-navigation"><%= yield %></div>
+  <div data-controller="billing-navigation">
+    <% if params[:merchant_id].present? %>
+      <p class="mb-4 font-semibold break-words"><%= merchant_account.display_name %> <span class="badge"><%= t("billing.ui.business_states.#{merchant_account.status}") %></span></p>
+      <% unless merchant_account.status == "active" %><div class="alert alert-info alert-soft mb-4"><%= billing_icon("clock") %><span><%= t("billing.ui.business_state_help.#{merchant_account.status}") %></span></div><% end %>
+    <% end %>
+    <%= yield %>
+  </div>
 <% end %>

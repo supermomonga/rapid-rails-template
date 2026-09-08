@@ -11,8 +11,8 @@ en:
       after finalization.
     recheck_requested: Transaction reconciliation requested.
     errors:
-      active_contracts: This account has purchasing or selling contracts, paid access,
-        or unfinished payment operations and cannot be deleted.
+      active_contracts: Leave every merchant and wait for purchase contracts, paid
+        access and pending operations to end before deleting your account.
       unavailable: Checkout is currently unavailable on this chain.
       duplicate: You already have a contract for this plan. Wait until the contract
         and its access period end before subscribing again.
@@ -21,6 +21,11 @@ en:
         status and signature.
       setup: Check the collection account settings and connection. Transaction status
         is available in the administration screen.
+      invitation: The invitation could not be processed. Check the username, membership,
+        permissions and expiry.
+      confirmation: Merchant name does not match.
+      closure: Cannot begin closure. Check the current business state and your permissions.
+      fee: Enter a fee from 0 to 100%.
     notifications:
       payment_settled: Your subscription payment was finalized.
       payment_failed: Your subscription payment could not be completed. Check your
@@ -34,6 +39,7 @@ en:
         on hold.
       late_period: A submitted transaction finalized in a later billing period. The
         actual paid period was applied to the contract.
+      merchant_invitation: You have an invitation to a merchant.
     ui:
       navigation: Billing navigation
       plans: Subscription plans
@@ -44,7 +50,6 @@ en:
       sales: Sales and subscriptions
       overview: Billing operations
       settings: Billing settings
-      operator_plans: Operator plans
       pagination: Pagination
       no_plans: There are no plans to display.
       no_merchants: No merchants have registered yet.
@@ -79,8 +84,8 @@ en:
       introduction: Introduction
       image: Merchant image
       image_help: Select a square PNG, JPEG, or WebP image, up to 5 MiB.
-      merchant_profile_help: This public merchant profile is separate from your personal
-        profile. Administrator approval is not required.
+      merchant_profile_help: Public information is separate from members’ personal
+        profiles. Members and activity history remain private.
       payouts: Sales payout addresses
       payout_address: USDC recipient address
       payout_help: Set a recipient address for each chain. Changes apply from the
@@ -118,12 +123,10 @@ en:
       transaction_hash: Transaction hash
       record_refund: Record refund
       features: Billing features
-      operator_enabled: Operator subscription billing
-      merchants_enabled: Merchant subscription billing
-      merchant_plan_creation_enabled: New merchant plan creation
-      flags_help: These settings are independent. Billing cannot be disabled while
-        contracts, access periods, or unresolved processing remain. Disabling new
-        plan creation preserves merchant registration and existing plan management.
+      merchant_plan_creation_enabled: New plan creation
+      flags_help: Billing cannot be disabled while obligations remain. Disabling plan
+        creation preserves existing management. Administrator-only access requires
+        an app administrator with the merchant administrator role in every open merchant.
       renewal_settings: Fees and renewal grace
       fee_percent: Operator fee on merchant sales (%)
       grace_hours: Renewal grace (hours)
@@ -165,9 +168,8 @@ en:
       merchant_overview: Overview
       merchant_registration: Register as a seller
       start_selling: Start selling subscriptions
-      registration_help: Create a seller profile to manage plans, sales and payout
-        addresses in your seller dashboard. Then configure a payout address for each
-        accepted chain.
+      registration_help: Merchants support individual and shared operation. The creator
+        becomes the first administrator and can invite members.
       back_account: Back to my account
       profile: Profile
       operations: Operations
@@ -229,6 +231,119 @@ en:
         existing plans.
       merchant_settings: Seller settings
       manual_refund_total: Recorded manual refunds
+      payments_enabled: Subscription billing
+      admin_only: App administrators only
+      members: Members
+      role: Role
+      role_for: Role for %{name}
+      member_roles_help: Administrators manage all operations; editors manage plans,
+        public information and refund records; viewers read history. An open merchant
+        must retain an eligible administrator.
+      invitations: Invitations
+      invite_member: Invite member
+      screen_name: Registered username (without @)
+      invitation_help: Invite an existing user. Membership starts when they accept.
+        Invitations expire after seven days.
+      no_invitations: No invitations.
+      accept_invitation: Accept
+      reject_invitation: Decline
+      revoke_invitation: Revoke invitation
+      expires_at: 'Expires: %{at}'
+      change_role: Change role
+      leave_merchant: Leave merchant
+      remove_member: Remove member
+      remove_member_confirmation: Remove %{name} from %{merchant}?
+      audit_entries: Activity history
+      audit_help: Changes to merchant settings and membership are recorded here, separately
+        from notifications, for all members.
+      before_change: Before
+      after_change: After
+      system_actor: System
+      switch_merchant: Current merchant / switch
+      switch: Switch
+      no_active_merchants: No open merchants
+      no_active_merchants_help: Create a merchant or review your invitations.
+      closed_merchants: Closed merchant history
+      restricted_help: Merchant features are currently limited to app administrators.
+        Memberships and existing contracts are retained.
+      close_merchant: Close merchant
+      begin_closure: Begin closure
+      confirm_merchant_name: Enter the merchant name to confirm
+      closure_help: Stop new subscriptions and renewals and cancel all contracts and
+        permissions. Paid access remains available. Closure cannot be reversed.
+      merchant_fee: Merchant platform fee
+      merchant_fee_help: Leave blank to use the global rate. Set 0–100%; changes apply
+        to future invoices. Use the same setting for platform-owned merchants.
+      effective_fee: 'Effective fee: %{percent}%'
+      member_roles:
+        admin: Administrator
+        editor: Editor
+        viewer: Viewer
+      business_states:
+        active: Open
+        closing: Closing
+        closed: Closed
+      business_state_help:
+        closing: Waiting for paid access and pending operations to end. Handover and
+          history remain available.
+        closed: Closed. History and leaving membership remain available.
+      invitation_states:
+        pending: Pending
+        accepted: Accepted
+        rejected: Declined
+        revoked: Revoked
+        expired: Expired
+      audit_actions:
+        merchant_account:
+          changed: Merchant information changed
+        plan:
+          changed: Plan changed
+        payout_address:
+          changed: Payout address changed
+        refund_record:
+          changed: Manual refund recorded
+        membership:
+          changed: Membership or role changed
+          removed: Membership removed
+        invitation:
+          created: Invitation created
+          accepted: Invitation accepted
+          rejected: Invitation declined
+          revoked: Invitation revoked
+          expired: Invitation expired
+      audit_fields:
+        public_id: Public ID
+        display_name: Display name
+        introduction: Introduction
+        status: Status
+        fee_basis_points: Fee
+        image: Image
+        user_id: User ID
+        user_name: Member name
+        role: Role
+        recipient_id: Recipient ID
+        recipient_name: Recipient name
+        inviter_id: Inviter ID
+        inviter_name: Inviter name
+        expires_at: Expiration
+        name: Plan name
+        description: Description
+        amount_units: Amount
+        period_days: Period (days)
+        chain_ids: Accepted chains
+        accepting_subscriptions: Accepting subscriptions
+        chain_id: Chain
+        address: Payout address
+        charge_id: Payment ID
+        reason: Reason
+        transaction_hash: Transaction ID
+      audit_targets:
+        merchant_account: Merchant
+        merchant_membership: Membership
+        merchant_invitation: Invitation
+        plan: Plan
+        payout_address: Payout address
+        refund_record: Manual refund
     states:
       pending: Awaiting payment
       active: Active
@@ -264,3 +379,5 @@ en:
       billing_creation_disabled: New merchant plans are currently disabled
       billing_separate_treasury: must be a revenue address separate from the execution
         key and collection account
+      billing_last_administrator: Every open merchant must retain at least one eligible
+        administrator.

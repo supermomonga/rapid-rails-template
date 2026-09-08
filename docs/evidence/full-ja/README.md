@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `575d93499b7b6fda9782075be3eeadc99a132e76b752db301fc59fa8d3e983a5`
-- Base commit: `307bcae69e33c76c933345d383510d497b1460c5`
+- Source fingerprint: `62bc8fae2def35ced8f54c9de7cc98647f0f1738c4a5edc8a3c733cc6b35a5a6`
+- Base commit: `2ffe35381a500effad926969d2025134dea52da9`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -456,17 +456,17 @@
 |---|---|
 |![チェーン別の運営設定 (desktop)](billing-chain-settings--desktop.png)|![チェーン別の運営設定 (mobile)](billing-chain-settings--mobile.png)|
 
-## 運営者プラン一覧
+## 販売者の横断閲覧
 
 |Desktop|Mobile|
 |---|---|
-|![運営者プラン一覧 (desktop)](billing-operator-plans--desktop.png)|![運営者プラン一覧 (mobile)](billing-operator-plans--mobile.png)|
+|![販売者の横断閲覧 (desktop)](billing-admin-merchants--desktop.png)|![販売者の横断閲覧 (mobile)](billing-admin-merchants--mobile.png)|
 
-## 運営者プラン作成
+## 販売者別の運営手数料
 
 |Desktop|Mobile|
 |---|---|
-|![運営者プラン作成 (desktop)](billing-operator-plan-new--desktop.png)|![運営者プラン作成 (mobile)](billing-operator-plan-new--mobile.png)|
+|![販売者別の運営手数料 (desktop)](billing-admin-merchant-fee--desktop.png)|![販売者別の運営手数料 (mobile)](billing-admin-merchant-fee--mobile.png)|
 
 ## 契約（初回支払・署名待ち）
 
@@ -533,6 +533,60 @@
 |Desktop|Mobile|
 |---|---|
 |![手動返金の入力エラーと値の保持 (desktop)](billing-refund-invalid--desktop.png)|![手動返金の入力エラーと値の保持 (mobile)](billing-refund-invalid--mobile.png)|
+
+## 販売者メンバー・役割・招待管理
+
+|Desktop|Mobile|
+|---|---|
+|![販売者メンバー・役割・招待管理 (desktop)](billing-members--desktop.png)|![販売者メンバー・役割・招待管理 (mobile)](billing-members--mobile.png)|
+
+## 通知と独立した販売者操作履歴
+
+|Desktop|Mobile|
+|---|---|
+|![通知と独立した販売者操作履歴 (desktop)](billing-audit--desktop.png)|![通知と独立した販売者操作履歴 (mobile)](billing-audit--mobile.png)|
+
+## 販売者の閉鎖確認
+
+|Desktop|Mobile|
+|---|---|
+|![販売者の閉鎖確認 (desktop)](billing-closure--desktop.png)|![販売者の閉鎖確認 (mobile)](billing-closure--mobile.png)|
+
+## 閉鎖済み販売者の履歴と切り替え
+
+|Desktop|Mobile|
+|---|---|
+|![閉鎖済み販売者の履歴と切り替え (desktop)](billing-closed-merchant--desktop.png)|![閉鎖済み販売者の履歴と切り替え (mobile)](billing-closed-merchant--mobile.png)|
+
+## 閉鎖処理中の販売者
+
+|Desktop|Mobile|
+|---|---|
+|![閉鎖処理中の販売者 (desktop)](billing-closing-merchant--desktop.png)|![閉鎖処理中の販売者 (mobile)](billing-closing-merchant--mobile.png)|
+
+## 閲覧者によるメンバー確認
+
+|Desktop|Mobile|
+|---|---|
+|![閲覧者によるメンバー確認 (desktop)](billing-viewer-members--desktop.png)|![閲覧者によるメンバー確認 (mobile)](billing-viewer-members--mobile.png)|
+
+## 本人による招待の承諾・拒否
+
+|Desktop|Mobile|
+|---|---|
+|![本人による招待の承諾・拒否 (desktop)](billing-invitations--desktop.png)|![本人による招待の承諾・拒否 (mobile)](billing-invitations--mobile.png)|
+
+## 販売者の作成・招待・閉鎖済み履歴への入口
+
+|Desktop|Mobile|
+|---|---|
+|![販売者の作成・招待・閉鎖済み履歴への入口 (desktop)](billing-merchant-entry--desktop.png)|![販売者の作成・招待・閉鎖済み履歴への入口 (mobile)](billing-merchant-entry--mobile.png)|
+
+## アプリ管理者限定による販売者機能の利用制限
+
+|Desktop|Mobile|
+|---|---|
+|![アプリ管理者限定による販売者機能の利用制限 (desktop)](billing-merchant-restricted--desktop.png)|![アプリ管理者限定による販売者機能の利用制限 (mobile)](billing-merchant-restricted--mobile.png)|
 
 ## 管理者の契約一覧
 

@@ -6,10 +6,17 @@ module Billing
       rate_limit to: 10, within: 1.minute, only: :create
 
       def index
-        @pagy, @subscriptions = pagy(:offset, Subscription.where(user_id: T.must(current_user).id).order(id: :desc))
+        subscriptions = Subscription.where(user_id: T.must(current_user).id)
+        subscriptions = params[:scope] == "ended" ? subscriptions.where.not(ended_at: nil) : subscriptions.where(ended_at: nil)
+        @pagy, @subscriptions = pagy(:offset, subscriptions.order(id: :desc))
       end
 
       def show
+        @subscription = own_subscription
+        @pagy, @charges = pagy(:offset, @subscription.charges.includes(:transactions, :refund_records).order(period_index: :desc))
+      end
+
+      def cancellation
         @subscription = own_subscription
       end
 
@@ -17,7 +24,7 @@ module Billing
         input = params.expect(subscription: %i[plan_id chain_id payer_address])
         contract = Checkout.prepare!(user: current_user, plan: Plan.find(input.fetch(:plan_id)),
           chain_id: Integer(input.fetch(:chain_id)), payer_address: input.fetch(:payer_address))
-        render json: { id: contract.id, typed_data: Checkout.typed_data(contract),
+        render json: { id: contract.id, typed_data: Checkout.typed_data(contract), review: Checkout.review(contract),
           authorize_path: authorize_account_subscription_path(contract), subscription_path: account_subscription_path(contract) }, status: :created
       rescue ActiveRecord::RecordNotUnique
         render json: { error: I18n.t("billing.errors.duplicate") }, status: :conflict

@@ -1,0 +1,18 @@
+<% content_for :page_title, @plan.name %>
+<%= render layout: "layouts/billing/public" do %>
+  <%= render "billing/shared/breadcrumbs", label: "plans", path: plans_path, icon: "squares-2x2", current: @plan.name %>
+  <article class="card card-border bg-base-100"><div class="card-body">
+    <% if @plan.merchant_profile %><%= link_to @plan.merchant_profile.display_name, merchant_path(@plan.merchant_profile.public_id), class: "link" %><% else %><p><%= t("billing.ui.operator") %></p><% end %>
+    <p class="text-xl font-semibold"><%= t("billing.ui.price_period", amount: billing_amount(@plan.amount_units), days: @plan.period_days) %></p>
+    <p class="whitespace-pre-wrap break-words"><%= @plan.description %></p>
+    <p><%= t("billing.ui.checkout_terms") %></p>
+    <% available = @plan.chain_ids.select { |id| @plan.available_on?(id) } %>
+    <% if available.empty? %>
+      <div class="alert alert-warning alert-soft" role="status"><%= t("billing.ui.unavailable") %></div>
+    <% elsif !user_signed_in? %>
+      <div class="card-actions justify-end"><%= link_to t("billing.ui.sign_in"), main_app.new_user_session_path, class: action_button_classes(:primary) %></div>
+    <% else %>
+      <%= render "billing/shared/checkout", plan: @plan, chain_ids: available %>
+    <% end %>
+  </div></article>
+<% end %>

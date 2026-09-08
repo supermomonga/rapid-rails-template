@@ -1,0 +1,7 @@
+<% content_for :page_title, t("billing.ui.sales") %>
+<% content_for :page_actions_secondary do %><%= render "billing/shared/filters" %><% end %>
+<%= with_tab tabs: billing_tabs(:merchant_sales) do %>
+  <p class="mb-4"><%= t("billing.ui.payment_history_help") %></p>
+  <%= render "billing/shared/payments", charges: @charges, area: "merchant", show_contract: true %>
+  <%= render "billing/shared/pagination" %>
+<% end %>

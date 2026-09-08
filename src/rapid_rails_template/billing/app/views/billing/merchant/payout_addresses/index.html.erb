@@ -1,0 +1,22 @@
+<% content_for :page_title, t("billing.ui.merchant_settings") %>
+<%= with_tab tabs: billing_tabs(:merchant_settings) do %>
+  <p class="mb-4"><%= t("billing.ui.payout_help") %></p>
+  <div class="grid gap-4 xl:grid-cols-2">
+    <% Billing::Chains::ALL.each_value do |chain| %>
+      <% payout = @invalid_payout&.chain_id == chain.id ? @invalid_payout : (@merchant.payout_addresses.find_by(chain_id: chain.id) || @merchant.payout_addresses.new(chain_id: chain.id)) %>
+      <section class="card card-border bg-base-100"><div class="card-body">
+        <h2 class="card-title"><%= chain.name %></h2>
+        <p><span class="status <%= payout.persisted? ? 'status-success' : 'status-warning' %>" aria-hidden="true"></span> <%= t(payout.persisted? ? "billing.ui.configured" : "billing.ui.not_configured") %></p>
+        <%= render "billing/shared/errors", errors: payout.errors.full_messages %>
+        <%= form_with model: payout, scope: :payout_address, url: payout.persisted? ? merchant_payout_address_path(payout) : merchant_payout_addresses_path do |form| %>
+          <fieldset class="fieldset"><legend class="fieldset-legend"><%= t("billing.ui.payout_address") %></legend>
+            <%= form.hidden_field :chain_id %>
+            <%= form.label :address, t("billing.ui.payout_address_for", chain: chain.name), for: "payout_#{chain.id}", class: "label" %>
+            <%= form.text_field :address, id: "payout_#{chain.id}", required: true, class: "input w-full", spellcheck: false, autocomplete: "off", aria: { invalid: payout.errors[:address].any? } %>
+          </fieldset>
+          <div class="card-actions justify-end"><%= form.submit t("billing.ui.save_chain", chain: chain.name), class: action_button_classes(:primary) %></div>
+        <% end %>
+      </div></section>
+    <% end %>
+  </div>
+<% end %>

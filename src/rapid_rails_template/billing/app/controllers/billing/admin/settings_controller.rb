@@ -18,6 +18,7 @@ module Billing
           render :show, status: :unprocessable_content
         end
       rescue ArgumentError
+        @settings.assign_attributes(attributes)
         @settings.errors.add(:fee_basis_points, :invalid)
         render :show, status: :unprocessable_content
       end

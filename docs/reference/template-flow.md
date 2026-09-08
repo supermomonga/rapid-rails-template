@@ -99,3 +99,5 @@ Rails 8.1の標準`rails new`による`git init`を利用します。Application
 ### 後始末
 
 子プロセスの成否や割り込みにかかわらず、Application Template payloadと設定の一時ファイルを削除します。生成済みアプリケーションは、途中失敗を隠すために自動削除せず、失敗したstepと状態を利用者へ報告します。
+
+デプロイ設定用の対話ライブラリは、対応するRakeタスクの実行時に読み込む。タスク一覧の読み込みやproductionの`assets:precompile`では、development専用のgumを要求しない。

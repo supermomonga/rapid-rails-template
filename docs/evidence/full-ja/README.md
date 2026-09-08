@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `3d26c08ae9b0da046fca9c0173ee10ef4b9f919da3f06dfda957a9c3261c49df`
-- Base commit: `03d6b2d991639d9ddc60724ff7690276b5296601`
+- Source fingerprint: `575d93499b7b6fda9782075be3eeadc99a132e76b752db301fc59fa8d3e983a5`
+- Base commit: `307bcae69e33c76c933345d383510d497b1460c5`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -378,6 +378,210 @@
 |---|---|
 |![ユーザー編集 (desktop)](admin-user-edit--desktop.png)|![ユーザー編集 (mobile)](admin-user-edit--mobile.png)|
 
+## サブスクリプションプラン一覧
+
+|Desktop|Mobile|
+|---|---|
+|![サブスクリプションプラン一覧 (desktop)](billing-plans--desktop.png)|![サブスクリプションプラン一覧 (mobile)](billing-plans--mobile.png)|
+
+## 販売者一覧
+
+|Desktop|Mobile|
+|---|---|
+|![販売者一覧 (desktop)](billing-merchants--desktop.png)|![販売者一覧 (mobile)](billing-merchants--mobile.png)|
+
+## 販売者ページ
+
+|Desktop|Mobile|
+|---|---|
+|![販売者ページ (desktop)](billing-merchant--desktop.png)|![販売者ページ (mobile)](billing-merchant--mobile.png)|
+
+## 受付できないプラン
+
+|Desktop|Mobile|
+|---|---|
+|![受付できないプラン (desktop)](billing-plan-unavailable--desktop.png)|![受付できないプラン (mobile)](billing-plan-unavailable--mobile.png)|
+
+## 販売者画面・初回の販売準備
+
+|Desktop|Mobile|
+|---|---|
+|![販売者画面・初回の販売準備 (desktop)](billing-merchant-overview-empty--desktop.png)|![販売者画面・初回の販売準備 (mobile)](billing-merchant-overview-empty--mobile.png)|
+
+## 販売者プロフィール
+
+|Desktop|Mobile|
+|---|---|
+|![販売者プロフィール (desktop)](billing-merchant-edit--desktop.png)|![販売者プロフィール (mobile)](billing-merchant-edit--mobile.png)|
+
+## チェーン別の販売者送金先
+
+|Desktop|Mobile|
+|---|---|
+|![チェーン別の販売者送金先 (desktop)](billing-payouts--desktop.png)|![チェーン別の販売者送金先 (mobile)](billing-payouts--mobile.png)|
+
+## 販売プラン一覧
+
+|Desktop|Mobile|
+|---|---|
+|![販売プラン一覧 (desktop)](billing-seller-plans--desktop.png)|![販売プラン一覧 (mobile)](billing-seller-plans--mobile.png)|
+
+## 販売プラン作成
+
+|Desktop|Mobile|
+|---|---|
+|![販売プラン作成 (desktop)](billing-plan-new--desktop.png)|![販売プラン作成 (mobile)](billing-plan-new--mobile.png)|
+
+## 販売プラン編集
+
+|Desktop|Mobile|
+|---|---|
+|![販売プラン編集 (desktop)](billing-plan-edit--desktop.png)|![販売プラン編集 (mobile)](billing-plan-edit--mobile.png)|
+
+## 決済設定（独立した3設定）
+
+|Desktop|Mobile|
+|---|---|
+|![決済設定（独立した3設定） (desktop)](billing-settings--desktop.png)|![決済設定（独立した3設定） (mobile)](billing-settings--mobile.png)|
+
+## 決済運用（設定不足・チェーン設定）
+
+|Desktop|Mobile|
+|---|---|
+|![決済運用（設定不足・チェーン設定） (desktop)](billing-setup--desktop.png)|![決済運用（設定不足・チェーン設定） (mobile)](billing-setup--mobile.png)|
+
+## チェーン別の運営設定
+
+|Desktop|Mobile|
+|---|---|
+|![チェーン別の運営設定 (desktop)](billing-chain-settings--desktop.png)|![チェーン別の運営設定 (mobile)](billing-chain-settings--mobile.png)|
+
+## 運営者プラン一覧
+
+|Desktop|Mobile|
+|---|---|
+|![運営者プラン一覧 (desktop)](billing-operator-plans--desktop.png)|![運営者プラン一覧 (mobile)](billing-operator-plans--mobile.png)|
+
+## 運営者プラン作成
+
+|Desktop|Mobile|
+|---|---|
+|![運営者プラン作成 (desktop)](billing-operator-plan-new--desktop.png)|![運営者プラン作成 (mobile)](billing-operator-plan-new--mobile.png)|
+
+## 契約（初回支払・署名待ち）
+
+|Desktop|Mobile|
+|---|---|
+|![契約（初回支払・署名待ち） (desktop)](billing-pending--desktop.png)|![契約（初回支払・署名待ち） (mobile)](billing-pending--mobile.png)|
+
+## 契約時と異なるウォレットの拒否
+
+|Desktop|Mobile|
+|---|---|
+|![契約時と異なるウォレットの拒否 (desktop)](billing-wallet-mismatch--desktop.png)|![契約時と異なるウォレットの拒否 (mobile)](billing-wallet-mismatch--mobile.png)|
+
+## 購入者の決済履歴・手動返金の記録
+
+|Desktop|Mobile|
+|---|---|
+|![購入者の決済履歴・手動返金の記録 (desktop)](billing-active-refund--desktop.png)|![購入者の決済履歴・手動返金の記録 (mobile)](billing-active-refund--mobile.png)|
+
+## 販売者画面・売上概要
+
+|Desktop|Mobile|
+|---|---|
+|![販売者画面・売上概要 (desktop)](billing-merchant-overview--desktop.png)|![販売者画面・売上概要 (mobile)](billing-merchant-overview--mobile.png)|
+
+## 購入者の契約一覧
+
+|Desktop|Mobile|
+|---|---|
+|![購入者の契約一覧 (desktop)](billing-subscriptions--desktop.png)|![購入者の契約一覧 (mobile)](billing-subscriptions--mobile.png)|
+
+## 販売契約一覧
+
+|Desktop|Mobile|
+|---|---|
+|![販売契約一覧 (desktop)](billing-sales--desktop.png)|![販売契約一覧 (mobile)](billing-sales--mobile.png)|
+
+## 販売者の決済履歴
+
+|Desktop|Mobile|
+|---|---|
+|![販売者の決済履歴 (desktop)](billing-payments--desktop.png)|![販売者の決済履歴 (mobile)](billing-payments--mobile.png)|
+
+## 販売者の手動返金履歴
+
+|Desktop|Mobile|
+|---|---|
+|![販売者の手動返金履歴 (desktop)](billing-refunds--desktop.png)|![販売者の手動返金履歴 (mobile)](billing-refunds--mobile.png)|
+
+## 販売契約詳細
+
+|Desktop|Mobile|
+|---|---|
+|![販売契約詳細 (desktop)](billing-sale--desktop.png)|![販売契約詳細 (mobile)](billing-sale--mobile.png)|
+
+## 手動返金の記録フォーム
+
+|Desktop|Mobile|
+|---|---|
+|![手動返金の記録フォーム (desktop)](billing-refund-new--desktop.png)|![手動返金の記録フォーム (mobile)](billing-refund-new--mobile.png)|
+
+## 手動返金の入力エラーと値の保持
+
+|Desktop|Mobile|
+|---|---|
+|![手動返金の入力エラーと値の保持 (desktop)](billing-refund-invalid--desktop.png)|![手動返金の入力エラーと値の保持 (mobile)](billing-refund-invalid--mobile.png)|
+
+## 管理者の契約一覧
+
+|Desktop|Mobile|
+|---|---|
+|![管理者の契約一覧 (desktop)](billing-admin-subscriptions--desktop.png)|![管理者の契約一覧 (mobile)](billing-admin-subscriptions--mobile.png)|
+
+## 管理者の契約・決済詳細
+
+|Desktop|Mobile|
+|---|---|
+|![管理者の契約・決済詳細 (desktop)](billing-admin-subscription--desktop.png)|![管理者の契約・決済詳細 (mobile)](billing-admin-subscription--mobile.png)|
+
+## 契約（更新猶予中）
+
+|Desktop|Mobile|
+|---|---|
+|![契約（更新猶予中） (desktop)](billing-grace--desktop.png)|![契約（更新猶予中） (mobile)](billing-grace--mobile.png)|
+
+## 決済運用（未確定・要確認・送信保留）
+
+|Desktop|Mobile|
+|---|---|
+|![決済運用（未確定・要確認・送信保留） (desktop)](billing-review-held--desktop.png)|![決済運用（未確定・要確認・送信保留） (mobile)](billing-review-held--mobile.png)|
+
+## 契約の解約確認
+
+|Desktop|Mobile|
+|---|---|
+|![契約の解約確認 (desktop)](billing-cancellation--desktop.png)|![契約の解約確認 (mobile)](billing-cancellation--mobile.png)|
+
+## 解約後の支払済み利用期間
+
+|Desktop|Mobile|
+|---|---|
+|![解約後の支払済み利用期間 (desktop)](billing-cancelled-access--desktop.png)|![解約後の支払済み利用期間 (mobile)](billing-cancelled-access--mobile.png)|
+
+## 契約終了・許可取消済み
+
+|Desktop|Mobile|
+|---|---|
+|![契約終了・許可取消済み (desktop)](billing-ended--desktop.png)|![契約終了・許可取消済み (mobile)](billing-ended--mobile.png)|
+
+## 販売者登録
+
+|Desktop|Mobile|
+|---|---|
+|![販売者登録 (desktop)](billing-merchant-new--desktop.png)|![販売者登録 (mobile)](billing-merchant-new--mobile.png)|
+
 ## 一般Userのナビゲーション
 
 |Desktop|Mobile|
@@ -401,6 +605,18 @@
 ### Mobile
 
 ![運用タスクのモバイルメニュー (mobile)](admin-maintenance-tasks-navigation-open--mobile.png)
+
+## 販売者画面のモバイルメニュー
+
+### Mobile
+
+![販売者画面のモバイルメニュー (mobile)](billing-merchant-navigation-open--mobile.png)
+
+## 決済画面のモバイルメニュー
+
+### Mobile
+
+![決済画面のモバイルメニュー (mobile)](billing-navigation-open--mobile.png)
 
 ## Ethereumでログイン
 

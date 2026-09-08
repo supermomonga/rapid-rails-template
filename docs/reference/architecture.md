@@ -77,7 +77,7 @@ Application Templateを`rails new APP_PATH -m TEMPLATE_URL`で直接指定する
 
 ## 質問・確認・実行の境界
 
-決済処理は生成アプリ内の`Billing::Engine`へ分離します。Engineは決済モデル、契約、送信・確定処理、ジョブ、認可、決済画面、migrationを所有し、ホストはログイン、User、管理者role、共通layout/helper、通知基盤、個別機能の利用制限を所有します。Engineは`/`へ一度だけmountし、内部で`/billing`、`/account/billing`、`/admin/billing`を定義します。公開する利用判定は`Billing::Access.active?(user:, plan:, at:)`です。責務と支払条件の詳細は[billing.md](billing.md)を正本とします。
+決済処理は生成アプリ内の`Billing::Engine`へ分離します。Engineは決済モデル、契約、送信・確定処理、ジョブ、認可、決済画面、migrationを所有し、ホストはログイン、User、管理者role、共通layout/helper、通知基盤、個別機能の利用制限を所有します。Engineは`/`へ一度だけmountし、内部で公開の`/billing`、購入者の`/account/billing`、販売者の`/merchant/billing`、管理者の`/admin/billing`を定義します。販売者は独立したメニューを持ち、ホストの`with_menu`と`with_tab`を再利用します。公開する利用判定は`Billing::Access.active?(user:, plan:, at:)`です。責務と支払条件の詳細は[billing.md](billing.md)を正本とします。
 
 Solid Queueは決済の定期引き落とし、確定照合、許可取消に必要なため全構成で常設します。管理者向けジョブ運用画面、Maintenance Tasks、Web Pushの選択とは独立しています。
 

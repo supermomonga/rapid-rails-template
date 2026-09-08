@@ -6,6 +6,8 @@ date: 2026-09-08
 links:
 - target: 9
   kind: amends
+- target: 14
+  kind: amendedby
 ---
 
 # Spend Permissions決済をアプリ内Engineと常設Solid Queueで構成する

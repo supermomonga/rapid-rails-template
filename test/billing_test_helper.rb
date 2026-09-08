@@ -5,6 +5,7 @@ require "eth"
 require "tmpdir"
 require "fileutils"
 require "rails/all"
+require "importmap-rails"
 Rails.env = "test"
 
 BILLING_SOURCE = File.expand_path("../src/rapid_rails_template/billing", __dir__)

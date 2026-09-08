@@ -109,9 +109,11 @@ class BillingDomainTest < BillingTest
   end
 
   def test_chain_configuration_does_not_borrow_another_chains_settings
-    assert @plan.available_on?(1)
+    env = { "BILLING_EXECUTION_PRIVATE_KEY" => "test-key", "BILLING_ETHEREUM_RPC_URL" => "https://rpc.example.test" }
+    assert @plan.available_on?(1, env: env)
+    refute @plan.available_on?(1, env: {})
     @plan.update!(chain_ids: [1, 8453])
-    refute @plan.available_on?(8453)
+    refute @plan.available_on?(8453, env: env)
     assert_nil Billing::ChainSetting.for_chain(8453).treasury_address
     assert @setting.reload.operator_enabled?
   end

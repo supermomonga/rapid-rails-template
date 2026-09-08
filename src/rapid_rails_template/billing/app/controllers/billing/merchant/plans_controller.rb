@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Billing
-  module Account
+  module Merchant
     class PlansController < BaseController
       def index
         authorize! merchant_profile, to: :manage?
@@ -34,7 +34,7 @@ module Billing
         def save_plan(action)
           attributes = params.expect(plan: [:name, :description, :price_usdc, :period_days, :accepting_subscriptions, chain_ids: []])
           if PlanEditor.save(@plan, attributes)
-            redirect_to account_plans_path, notice: I18n.t("billing.saved")
+            redirect_to merchant_plans_path, notice: I18n.t("billing.saved")
           else
             render action, status: :unprocessable_content
           end

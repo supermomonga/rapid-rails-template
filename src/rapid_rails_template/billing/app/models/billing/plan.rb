@@ -17,10 +17,10 @@ module Billing
       seller_kind == "operator" ? I18n.t("billing.operator") : T.must(merchant_profile).display_name
     end
 
-    def available_on?(chain_id)
+    def available_on?(chain_id, env: ENV)
       merchant = merchant_profile
       accepting_subscriptions? && chain_ids.include?(chain_id) && Setting.current.enabled_for?(seller_kind) &&
-        ChainSetting.for_chain(chain_id).ready? &&
+        ChainSetting.for_chain(chain_id).ready? && ConfigurationStatus.credentials_present?(chain_id, env: env) &&
         (seller_kind == "operator" || merchant && merchant.user_id.present? && merchant.payout_addresses.exists?(chain_id: chain_id))
     end
 

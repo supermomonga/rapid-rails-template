@@ -3,6 +3,7 @@
 module Billing
   class ApplicationController < ::ApplicationController
     helper ::ApplicationHelper
+    helper Billing::UiHelper
     before_action :prevent_billing_cache
     rescue_from ConfigurationError, with: :billing_unavailable
 

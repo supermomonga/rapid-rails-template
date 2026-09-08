@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
 module Billing
-  module Account
+  module Merchant
     class PayoutAddressesController < BaseController
+      def index
+        @merchant = merchant_profile
+      end
+
       def create
         authorize! merchant_profile, to: :manage?
         address = merchant_profile.payout_addresses.new(address_params)
@@ -23,11 +27,12 @@ module Billing
 
         def save_address(address)
           Setting.current.with_lock { address.save! }
-          redirect_to edit_account_merchant_profile_path, notice: I18n.t("billing.saved")
+          redirect_to merchant_payout_addresses_path, notice: I18n.t("billing.saved")
         rescue ActiveRecord::RecordInvalid
           @merchant = merchant_profile
           @payout_errors = address.errors.full_messages
-          render "billing/account/merchant_profiles/edit", status: :unprocessable_content
+          @invalid_payout = address
+          render :index, status: :unprocessable_content
         end
     end
   end

@@ -1,0 +1,23 @@
+<% if charges.empty? %><%= render "billing/shared/empty", icon: "banknotes", title: t("billing.ui.no_payments"), description: t("billing.ui.no_payments_help") %><% end %>
+<div class="space-y-4">
+  <% charges.each do |charge| %>
+    <section class="card card-border bg-base-100"><div class="card-body">
+      <div class="flex flex-wrap items-start justify-between gap-2"><h2 class="card-title"><%= billing_icon("banknotes") %><%= t("billing.ui.charge", id: charge.id) %></h2><span class="badge whitespace-nowrap"><%= t("billing.states.#{charge.status}") %></span></div>
+      <% if show_contract %><p><%= link_to charge.subscription.plan_name, merchant_sale_path(charge.subscription, tab: "payments"), class: "link" %> · <%= charge.subscription.buyer_name %></p><% end %>
+      <p class="text-lg font-semibold tabular-nums" data-billing-amount><%= billing_amount(charge.amount_units) %> USDC</p>
+      <p><%= Billing::Chains.fetch(charge.subscription.chain_id).name %></p>
+      <p><%= l(charge.settled_period_start || charge.period_start, format: :long) %> — <%= l(charge.settled_period_end || charge.period_end, format: :long) %></p>
+      <% if area %><dl class="grid gap-3 sm:grid-cols-2"><div><dt class="text-base-content/70"><%= t("billing.ui.operator_allocation") %></dt><dd><%= billing_amount(charge.operator_units) %> USDC</dd></div><div><dt class="text-base-content/70"><%= t("billing.ui.merchant_allocation") %></dt><dd><%= billing_amount(charge.merchant_units) %> USDC</dd></div></dl><% unless charge.status == "settled" %><p class="text-sm text-base-content/70"><%= t("billing.ui.pending_split_help") %></p><% end %><% end %>
+      <% charge.transactions.each do |transaction| %><p><%= link_to t("billing.ui.transaction", id: transaction.id), transaction.explorer_url, class: "link", target: "_blank", rel: "noopener noreferrer" %> · <%= t("billing.states.#{transaction.status}") %></p><% end %>
+      <% charge.refund_records.each do |refund| %>
+        <div class="border-t border-base-300 pt-4 space-y-2">
+          <h3 class="font-semibold"><%= t("billing.ui.manual_refund") %> · <%= billing_amount(refund.amount_units) %> USDC</h3>
+          <p class="whitespace-pre-wrap break-words"><%= refund.reason %></p>
+          <%= link_to t("billing.ui.refund_transaction", chain: Billing::Chains.fetch(refund.chain_id).name), refund.explorer_url, class: "link", target: "_blank", rel: "noopener noreferrer" %>
+          <p class="text-sm text-base-content/70"><%= t("billing.ui.refund_help") %></p>
+        </div>
+      <% end %>
+      <% if area && charge.status == "settled" %><div class="card-actions justify-end"><%= link_to t("billing.ui.record_refund"), area == "admin" ? new_admin_charge_refund_record_path(charge) : new_merchant_charge_refund_record_path(charge), class: action_button_classes(:secondary) %></div><% end %>
+    </div></section>
+  <% end %>
+</div>

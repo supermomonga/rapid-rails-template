@@ -1,0 +1,3 @@
+<% state = billing_subscription_state(subscription) %>
+<% classes = { "pending" => "badge badge-soft badge-info", "active" => "badge badge-soft badge-success", "grace" => "badge badge-soft badge-warning", "cancelling" => "badge badge-soft badge-warning", "ended" => "badge" } %>
+<span class="<%= classes.fetch(state) %> whitespace-nowrap" data-billing-state><%= t("billing.states.#{state}") %></span>

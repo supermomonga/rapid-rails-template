@@ -1,0 +1,15 @@
+<%= render "billing/shared/errors", errors: @merchant.errors.full_messages %>
+<%= form_with model: @merchant, scope: :merchant_profile, url: merchant_profile_path do |form| %>
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend"><%= t("billing.ui.merchant_profile") %></legend>
+    <p><%= t("billing.ui.merchant_profile_help") %></p>
+    <%= form.label :public_id, t("billing.ui.public_id"), class: "label" %><%= form.text_field :public_id, required: true, class: "input w-full", spellcheck: false, autocomplete: "off", aria: { describedby: "merchant-public-id-help" } %>
+    <p id="merchant-public-id-help"><%= t("billing.ui.public_id_help") %></p>
+    <%= form.label :display_name, t("billing.ui.display_name"), class: "label" %><%= form.text_field :display_name, required: true, maxlength: 100, class: "input w-full" %>
+    <%= form.label :introduction, t("billing.ui.introduction"), class: "label" %><%= form.text_area :introduction, rows: 4, maxlength: 5000, class: "textarea w-full" %>
+    <% if @merchant.image.attached? %><div class="avatar"><div class="w-20 rounded-full"><%= image_tag main_app.rails_storage_proxy_path(@merchant.image), width: 80, height: 80, alt: @merchant.display_name %></div></div><% end %>
+    <%= form.label :image_upload, t("billing.ui.image"), class: "label" %><%= form.file_field :image_upload, accept: "image/png,image/jpeg,image/webp", class: "file-input w-full", aria: { describedby: "merchant-image-help" } %>
+    <p id="merchant-image-help"><%= t("billing.ui.image_help") %></p>
+  </fieldset>
+  <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
+<% end %>

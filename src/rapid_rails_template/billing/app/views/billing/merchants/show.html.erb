@@ -1,0 +1,6 @@
+<% content_for :page_title, @merchant.display_name %>
+<%= render layout: "layouts/billing/public" do %>
+  <%= render "billing/shared/breadcrumbs", label: "merchants", path: merchants_path, icon: "building-storefront", current: @merchant.display_name %>
+  <div class="mb-6"><%= render "identity", merchant: @merchant %></div>
+  <%= render "billing/plans/list" %>
+<% end %>

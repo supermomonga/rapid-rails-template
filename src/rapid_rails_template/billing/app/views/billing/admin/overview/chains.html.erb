@@ -1,0 +1,26 @@
+<% content_for :page_title, t("billing.ui.chain_settings") %>
+<div class="space-y-4">
+  <% @chains.each do |chain| %>
+    <% network = Billing::Chains.fetch(chain.chain_id) %>
+    <section class="card card-border bg-base-100"><div class="card-body p-3">
+      <h2 class="card-title"><%= network.name %></h2>
+      <%= render "billing/shared/errors", errors: chain.errors.full_messages %>
+      <p class="break-all"><%= t("billing.ui.collector") %>: <%= chain.collector_address.presence || t("billing.ui.not_created") %></p>
+      <%= form_with scope: :chain, url: admin_chain_path(chain.chain_id), method: :patch do |form| %>
+        <fieldset class="fieldset"><legend class="fieldset-legend"><%= t("billing.ui.chain_settings") %></legend>
+          <%= form.label :treasury_address, t("billing.ui.treasury"), for: "treasury_#{chain.chain_id}", class: "label" %><%= form.text_field :treasury_address, value: @invalid_chain&.chain_id == chain.chain_id ? params.dig(:chain, :treasury_address) : chain.treasury_address, id: "treasury_#{chain.chain_id}", required: true, class: "input w-full", spellcheck: false %>
+          <%= form.label :gas_ceiling_native, t("billing.ui.gas_ceiling", symbol: network.native_symbol), for: "gas_#{chain.chain_id}", class: "label" %><%= form.text_field :gas_ceiling_native, value: @invalid_chain&.chain_id == chain.chain_id ? params.dig(:chain, :gas_ceiling_native) : (chain.gas_ceiling_wei && Billing::Amount.format(chain.gas_ceiling_wei, decimals: 18)), id: "gas_#{chain.chain_id}", required: true, inputmode: "decimal", class: "input w-full" %>
+          <p><%= t("billing.ui.gas_help") %></p>
+        </fieldset>
+        <div class="card-actions justify-end"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
+      <% end %>
+      <% unless chain.verified_at %>
+        <%= form_with url: deploy_admin_chain_path(chain.chain_id) do |form| %>
+          <p><%= t("billing.ui.deploy_help") %></p>
+          <label class="label whitespace-normal"><%= check_box_tag :confirmed, "1", false, required: true, class: "checkbox shrink-0" %><%= t("billing.ui.deploy_confirm", chain: network.name) %></label>
+          <div class="card-actions justify-end"><%= form.submit t("billing.ui.deploy"), class: action_button_classes(:warning) %></div>
+        <% end %>
+      <% end %>
+    </div></section>
+  <% end %>
+</div>

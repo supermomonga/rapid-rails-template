@@ -12355,22 +12355,24 @@ def configure_default_views
     </li>
   ERB
   signed_in_condition = "user_signed_in?"
-  admin_controller_conditions = ['controller_path.start_with?("admin/")']
+  admin_controller_conditions = ['controller_path.start_with?("admin/")', 'controller_path.start_with?("billing/admin/")']
   admin_controller_conditions << 'controller_path.start_with?("mission_control/jobs/")' if job_operations_enabled
   admin_controller_conditions << 'controller_path.start_with?("maintenance_tasks/")' if maintenance_tasks_enabled
   admin_controller_condition = admin_controller_conditions.join(" || ")
   profile_owner = "current_user.profile"
   logout_path = "application_routes.destroy_user_session_path"
   guest_desktop_navigation = <<~ERB
+    <%= link_to t("billing.ui.plans"), Billing::Engine.routes.url_helpers.plans_path, class: "link" %>
     <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-outline" %>
     <% unless soft_site_maintenance? %>
       <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline" %>
     <% end %>
   ERB
   guest_mobile_navigation = <<~ERB
-    <li><%= link_to t("navigation.sign_in"), application_routes.new_user_session_path %></li>
+    <li><%= link_to Billing::Engine.routes.url_helpers.plans_path do %><%= billing_icon("squares-2x2") %><%= t("billing.ui.plans") %><% end %></li>
+    <li><%= link_to application_routes.new_user_session_path do %><%= billing_icon("user-circle") %><%= t("navigation.sign_in") %><% end %></li>
     <% unless soft_site_maintenance? %>
-      <li><%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path %></li>
+      <li><%= link_to application_routes.new_user_registration_path do %><%= billing_icon("user-circle") %><%= t("navigation.sign_up") %><% end %></li>
     <% end %>
   ERB
   profile_identity = if display_name_enabled || screen_name_enabled
@@ -12764,7 +12766,7 @@ def configure_default_views
 
         tablist = tag.div(safe_join(items), role: "tablist",
           class: class_names("tabs tabs-lift min-w-max", "tabs-#{size}" => size.present?))
-        tag.div(tablist, class: "overflow-x-auto")
+        tag.div(tablist, class: "isolate overflow-x-auto")
       end
     end
   RUBY
@@ -12984,6 +12986,7 @@ def configure_default_views
         assert_equal "Tab content", fragment.at_css(".tab-active + .tab-content p").text
         assert_equal "/account/siwe_identities", fragment.at_css(".tab-active")["href"]
         assert_includes fragment.at_css(".tab-active")["class"].split, "z-10"
+        assert_includes fragment.at_css("[role='tablist']").parent["class"].split, "isolate"
         refute_includes fragment.at_css(".tab:not(.tab-active)")["class"].split, "z-10"
         assert_equal "true", fragment.at_css(".tab-active")["aria-selected"]
         assert_equal "page", fragment.at_css(".tab-active")["aria-current"]
@@ -13223,7 +13226,9 @@ def configure_default_views
             </div>
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow">
-    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if #{admin_controller_condition} %>
+    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if controller_path.start_with?("billing/merchant/") %>
+                <%= render "billing/shared/merchant_navigation" %>
+              <% elsif #{admin_controller_condition} %>
                 <li class="menu-title"><%= application_translate("navigation.admin") %></li>
                 <%= render "shared/admin_navigation" %>
               <% else %>
@@ -16942,6 +16947,7 @@ def configure_evidence_capture
             verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
             verify_notification_geometry if viewport_name == "desktop"
             capture_authenticated_pages(viewport_name)
+            capture_billing_scenarios(viewport_name)
             capture_regular_user_navigation(viewport_name)
             Capybara.reset_sessions!
           end
@@ -19118,6 +19124,9 @@ def configure_evidence_capture
         end
 
         def capture_current_page(identifier, title, viewport)
+          if identifier.start_with?("billing-")
+            assert_billing_geometry(viewport)
+          end
           filename = "#{identifier}--#{viewport}.png"
           path = @output_directory.join(filename)
           page.driver.with_playwright_page do |playwright_page|
@@ -20858,6 +20867,9 @@ def configure_kamal_maintenance(app_id, databases)
 end
 
 def configure_deployment(app_id)
+  create_file "config/initializers/deployment_tools.rb", <<~RUBY, force: true
+    Rails.autoloaders.main.ignore(Rails.root.join("lib/deployment"))
+  RUBY
   create_file "lib/deployment/command_runner.rb", <<~'RUBY', force: true
     # typed: strict
     # frozen_string_literal: true
@@ -23253,17 +23265,16 @@ def configure_deployment(app_id)
     # typed: true
     # frozen_string_literal: true
 
-    require Rails.root.join("lib/deployment/configurator")
-    require Rails.root.join("lib/deployment/server_setup")
-
     namespace :deployment do
       desc "デプロイ用の外部サービスと資格情報を構成する"
       task configure: :environment do
+        require Rails.root.join("lib/deployment/configurator")
         Deployment::Configurator.new(root: Rails.root).run!
       end
 
       desc "Vultr VPSを選択してSSHとKamal destinationを初期設定する"
       task :"setup-server" => :environment do
+        require Rails.root.join("lib/deployment/server_setup")
         Deployment::ServerSetup.new(root: Rails.root).run!
       end
     end

@@ -10,6 +10,10 @@ module Billing
         @held_charges = Charge.where(status: "held").includes(:subscription).order(:id).limit(100)
         @missing_configuration = ConfigurationStatus.missing
       end
+
+      def chains
+        @chains = Chains::ALL.keys.map { |id| ChainSetting.for_chain(id) }
+      end
     end
   end
 end

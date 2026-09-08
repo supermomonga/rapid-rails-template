@@ -1,0 +1,14 @@
+<% content_for :with_menu_navigation, flush: true do %>
+  <nav class="w-full rounded-box bg-base-100" aria-label="<%= t('billing.ui.merchant_menu') %>" data-controller="billing-navigation">
+    <p class="px-4 pt-3 text-sm font-semibold text-neutral min-[961px]:hidden" data-with-menu-mobile-category><%= t("billing.ui.merchant_area") %></p>
+    <div class="overflow-x-auto min-[961px]:overflow-visible" data-with-menu-scroll>
+      <ul class="menu menu-horizontal w-max min-w-full min-[961px]:menu-vertical min-[961px]:w-full" data-with-menu-items>
+        <li class="menu-title max-[961px]:hidden"><%= t("billing.ui.merchant_area") %></li>
+        <%= render "billing/shared/merchant_navigation" %>
+      </ul>
+    </div>
+  </nav>
+<% end %>
+<%= render layout: "layouts/with_menu" do %>
+  <div data-controller="billing-navigation"><%= yield %></div>
+<% end %>

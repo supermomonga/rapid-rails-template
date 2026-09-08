@@ -8,9 +8,14 @@ module Billing
         attributes = params.expect(chain: %i[treasury_address gas_ceiling_native]).to_h
         attributes["gas_ceiling_wei"] = Amount.parse(attributes.delete("gas_ceiling_native"), decimals: 18).to_s
         Setting.current.with_lock { chain.update!(attributes) }
-        redirect_to admin_root_path, notice: I18n.t("billing.saved")
+        redirect_to admin_chain_settings_path, notice: I18n.t("billing.saved")
       rescue ActiveRecord::RecordInvalid, ArgumentError, KeyError
-        render plain: I18n.t("billing.errors.invalid"), status: :unprocessable_content
+        raise ActionController::BadRequest unless chain
+
+        @invalid_chain = chain
+        chain.errors.add(:base, I18n.t("billing.errors.invalid")) if chain.errors.empty?
+        @chains = Chains::ALL.keys.map { |id| id == chain.chain_id ? chain : ChainSetting.for_chain(id) }
+        render "billing/admin/overview/chains", status: :unprocessable_content
       end
 
       def deploy

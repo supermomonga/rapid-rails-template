@@ -11,3 +11,4 @@
 * [11. 生成結果を型検査・契約テスト・UI 証跡で検証する](0011-sheng-cheng-jie-guo-woxing-jian-cha-qi-yue-tesuto-ui-zheng-ji-dejian-zheng-suru.md)
 * [12. 全体通知は共有レコード、個別通知は配信行で管理する](0012-quan-ti-tong-zhi-hagong-you-rekodo-ge-bie-tong-zhi-hapei-xin-xing-deguan-li-suru.md)
 * [13. Spend Permissions決済をアプリ内Engineと常設Solid Queueで構成する](0013-spend-permissions決済をアプリ内engineと常設solid-queueで構成する.md)
+* [14. 販売者の運用画面を購入者のマイページから分離する](0014-販売者の運用画面を購入者のマイページから分離する.md)

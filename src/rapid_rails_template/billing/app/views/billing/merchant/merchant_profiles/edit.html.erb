@@ -1,0 +1,3 @@
+<% content_for :page_title, t("billing.ui.merchant_settings") %>
+<% content_for :page_actions_primary do %><%= link_to billing_label("public_page", "arrow-top-right-on-square"), merchant_path(@merchant.public_id), class: action_button_classes(:secondary) %><% end %>
+<%= with_tab tabs: billing_tabs(:merchant_settings) do %><%= render "form" %><% end %>

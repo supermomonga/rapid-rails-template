@@ -1,3 +1,4 @@
+---
 ja:
   billing:
     title: サブスク決済
@@ -22,9 +23,233 @@ ja:
       connection_failed: 取引の送信または照合を完了できませんでした。確定状態を継続して確認します。
       verification_failed: 取引の検証結果を確認する必要があります。自動処理を保留しました。
       late_period: 送信済み取引が後の請求周期で確定しました。実際に支払った周期を契約へ反映しました。
+    ui:
+      navigation: 決済メニュー
+      plans: サブスクリプションプラン
+      merchants: 販売者一覧
+      subscriptions: 契約一覧
+      merchant_profile: 販売者プロフィール
+      seller_plans: 販売プラン
+      sales: 販売契約・売上
+      overview: 決済運用
+      settings: 決済設定
+      operator_plans: 運営者プラン
+      pagination: ページ切り替え
+      no_plans: 表示できるプランはありません。
+      no_merchants: 販売者はまだ登録されていません。
+      operator: 運営者
+      price_period: "%{amount} USDC / %{days}日"
+      details: 詳細
+      checkout_terms: 固定日数の前払い契約です。署名した金額を周期ごとに自動で引き落とします。初回の支払確定後に利用を開始できます。解約後も支払済み期間は利用できます。
+      unavailable: 現在、このプランは新規契約を受け付けていません。
+      sign_in: ログインして申し込む
+      new_plan: プランを作成
+      edit_plan: プランを編集
+      accepting: 新規契約を受付中
+      closed: 新規受付を停止中
+      public_page: 公開ページ
+      edit: 編集
+      plan_terms: プランの契約条件
+      name: プラン名
+      description: 説明
+      price: 価格（USDC）
+      period_days: 契約周期（日数）
+      plan_change_help: 価格・周期の変更は新しい契約にだけ適用されます。周期は更新猶予より長く設定してください。
+      accepted_chains: 受付チェーン
+      accepting_help: 受付停止後も既存契約は更新されます。チェーンごとの送金先設定が必要です。
+      back: 戻る
+      save: 保存
+      public_id: 公開ID
+      display_name: 表示名
+      introduction: 紹介文
+      image: 販売者画像
+      image_help: 正方形のPNG・JPEG・WebP画像（5 MiB以下）を選択してください。
+      merchant_profile_help: 通常のプロフィールとは別に公開されます。登録に管理者の承認は必要ありません。
+      payouts: 売上の送金先
+      payout_address: USDC受取アドレス
+      payout_help: チェーンごとに受取アドレスを設定してください。変更は次の請求から適用されます。
+      contract: '契約 #%{id}'
+      plan: プラン
+      status: 状態
+      chain: チェーン
+      paid_until: 支払済みの利用期限
+      not_paid: 支払確定前
+      no_subscriptions: 契約はありません。
+      payer: 支払ウォレット
+      started_at: 契約周期の起点
+      permission: 引き落とし許可
+      revoked: 取消済み
+      revoking: 取消処理中
+      permission_active: 契約に従って管理中
+      initial_pending: 初回の支払確定を待っています。利用はまだ開始されていません。
+      cancel_help: 解約すると以後の更新を止め、許可を取り消します。支払済み期間は利用できます。送信済みの請求が確定した場合も、その支払期間を提供します。
+      cancel_subscription: 契約を解約
+      payments: 決済履歴
+      no_payments: 決済履歴はありません。
+      charge: '決済 #%{id}'
+      split: '運営者: %{operator} USDC / 販売者: %{merchant} USDC'
+      transaction: '取引 #%{id} を確認'
+      manual_refund: 手動返金の記録
+      refund_transaction: "%{chain}の返金取引を確認"
+      refund_help: 外部で実行した返金の記録です。この操作では送金・取引照合・利用期限の変更を行いません。
+      refund_amount: 返金額（USDC）
+      reason: 理由
+      transaction_hash: 取引ID
+      record_refund: 返金を記録
+      features: 受付機能
+      operator_enabled: 運営者のサブスク決済
+      merchants_enabled: 販売者のサブスク決済
+      merchant_plan_creation_enabled: 販売者の新規プラン作成
+      flags_help: 各設定は独立しています。契約・利用期間・未完了処理が残る間は決済をOFFにできません。新規プラン作成をOFFにしても販売者登録と既存プラン管理は継続できます。
+      renewal_settings: 手数料・更新猶予
+      fee_percent: 販売者売上の運営手数料（%）
+      grace_hours: 更新時の猶予（時間）
+      settings_help: 手数料は次の請求から適用します。猶予中は利用可能です。猶予は対象となるプラン・契約の周期より短く設定してください。
+      missing_configuration: 不足している設定
+      collector: 集金口座
+      not_created: 未作成
+      chain_settings: チェーン設定
+      treasury: 運営者のUSDC受取アドレス
+      gas_ceiling: ガス代の見積上限（%{symbol}）
+      gas_help: 上限を超える見積中は送信を保留します。実際のガス代の完全な上限を保証する設定ではありません。
+      deploy_help: 公式Factoryと実行鍵の権限を確認し、標準Smart Accountを作成します。ガス代が発生します。
+      deploy_confirm: "%{chain}で集金口座を作成することを確認しました"
+      deploy: 集金口座を作成
+      pending_transactions: 未確定の取引・許可取消
+      latest_100: 対象の先頭100件を表示しています。
+      none: 対象はありません。
+      held_charges: 送信を保留している決済
+      recheck: 確定状態を再確認
+      payment_wallet: Base Accountで支払う
+      wallet_help: 支払ウォレットはアプリへのログインと別に接続します。
+      connect_wallet: ウォレットを接続して条件を確認
+      authorize_payment: 条件に同意して引き落としを許可
+      saved_contract: 保存した契約を確認・再開
+      permission_review: |-
+        %{amount} USDC / %{days}日
+        チェーン: %{chain}
+        支払ウォレット: %{wallet}
+        周期の起点: %{starts_at}
+      seller: 販売者
+      buyer: 購入者
+      grace_help: 更新の支払を確認できていません。%{until}までは猶予期間として利用できます。猶予終了後は契約を終了します。
+      merchant_area: 販売者画面
+      merchant_menu: 販売者メニュー
+      merchant_overview: 概要
+      merchant_registration: 販売者登録
+      start_selling: サブスクリプションの販売を始める
+      registration_help: 販売者プロフィールを作成すると、販売プラン・売上・送金先を専用画面で管理できます。登録後、受付チェーンの送金先を設定してください。
+      back_account: マイページに戻る
+      profile: プロフィール
+      operations: 処理状況
+      revenue_scope: 全期間・全チェーンの確定済み決済をUSDCで集計しています。手動返金は外部で実行した返金の記録で、送金済み金額から自動的には差し引きません。
+      gross_sales: 売上総額
+      operator_fee: 運営手数料
+      merchant_received: 販売者への送金額
+      manual_refunds: 手動返金履歴
+      view_history: 履歴を見る
+      next_actions: 契約と販売準備
+      open_contracts: 継続中・処理中の契約：%{count}件
+      held_count: 保留中の決済：%{count}件
+      held_help: 保留中の金額は売上に含めていません。決済履歴で状態を確認できます。
+      complete_payouts: 未設定の送金先を登録する
+      public_id_help: 3〜64文字の半角小文字・数字・ハイフン・アンダースコアで入力してください。公開ページのURLに使用します。
+      configured: 設定済み
+      not_configured: 未設定
+      payout_address_for: "%{chain}のUSDC送金先"
+      save_chain: "%{chain}の設定を保存"
+      breadcrumbs: 現在地
+      browse_plans: プランを探す
+      current_contracts: 現在の契約
+      ended_contracts: 終了した契約
+      empty_contracts_help: この一覧に該当する契約はありません。契約すると、利用期限や決済状況をここから確認できます。
+      empty_plans_help: 販売プランを作成すると、この画面で受付状態や条件を管理できます。
+      all_chains: すべてのチェーン
+      all_states: すべての状態
+      reset_filters: 解除
+      apply_filters: 絞り込む
+      payment_history_help: 請求額、運営手数料、送金額、取引の確定状況を確認できます。売上に計上するのは支払確定済みの決済だけです。
+      no_refunds: 手動返金の記録はありません
+      refund_record_help: 外部で返金した後、対応する確定済み決済の詳細から記録を追加できます。
+      contract_details: 契約内容
+      ended_help: この契約は終了しています。再開する場合は新しく契約してください。
+      cancelled_help: 更新を停止しています。表示された支払済みの期限まで利用できます。送信済み決済が確定した場合は、その支払期間も反映します。
+      signature_pending: 署名待ち
+      no_payments_help: 決済処理が始まると、請求期間と取引の状態をここに表示します。
+      keep_subscription: 契約に戻る
+      confirm_cancellation: 更新停止と解約を確定
+      unavailable_chains: 現在受付できないチェーン：%{chains}。送金先や運営側の設定を確認してください。
+      no_merchants_help: 販売者が登録すると、公開プロフィールと販売プランをここから探せます。
+      no_public_plans_help: 公開中の販売プランはまだありません。
+      operator_allocation: 運営者への配分
+      merchant_allocation: 販売者への配分
+      pending_split_help: 表示額は請求時点の配分予定額です。支払確定後に送金完了として扱います。
+      new_plans_paused: 現在、新しい販売プランの作成は停止されています。既存プランの管理は引き続き利用できます。
+      merchant_settings: 販売者設定
+      manual_refund_total: 記録した手動返金額
+    states:
+      pending: 支払確定待ち
+      active: 利用中
+      cancelling: 解約・許可取消処理中
+      ended: 終了
+      grace: 更新猶予中
+      submitted: 送信済み・確定待ち
+      settled: 支払確定
+      cancelled: 中止
+      held: 保留
+      prepared: 送信準備済み
+      finalized: 確定
+      reverted: 実行失敗
+      review: 要確認
+    checkout:
+      connecting: ウォレットに接続しています。
+      review: 保存した契約条件を確認して署名してください。
+      signing: ウォレットで引き落とし許可に署名してください。
+      wrongChain: 選択したチェーンに切り替えてください。
+      wrongWallet: 契約時の支払ウォレットに接続してください。
+      failed: 処理できませんでした。契約一覧で保存状況を確認してください。
+    kinds:
+      charge: 引き落とし
+      revoke: 許可取消
+      deploy: 集金口座作成
+      void: 未送信請求の中止
   errors:
     messages:
       billing_period: は対象プラン・契約の周期より短くしてください
       billing_contracts: は契約・利用期間・未完了処理が残る間はOFFにできません
       billing_creation_disabled: 現在、販売者の新規プラン作成を停止しています
       billing_separate_treasury: は実行鍵および集金口座と異なる売上保管先を指定してください
+  activerecord:
+    attributes:
+      billing/refund_record:
+        amount_units: 返金額
+        reason: 理由
+        chain_id: チェーン
+        transaction_hash: 取引ID
+        charge: 対象の決済
+      billing/merchant_profile:
+        public_id: 公開ID
+        display_name: 表示名
+        introduction: 紹介文
+        image_upload: 販売者画像
+      billing/plan:
+        name: プラン名
+        description: 説明
+        amount_units: 価格
+        period_days: 周期
+        chain_ids: 受付チェーン
+        merchant_profile: 販売者
+      billing/payout_address:
+        address: 売上の送金先
+        chain_id: チェーン
+      billing/chain_setting:
+        collector_address: 集金口座
+        treasury_address: 運営者の売上保管先
+        gas_ceiling_wei: ガス代の見積上限
+        chain_id: チェーン
+      billing/setting:
+        fee_basis_points: 運営手数料
+        grace_hours: 更新猶予
+        operator_enabled: 運営者のサブスク決済
+        merchants_enabled: 販売者のサブスク決済
+        merchant_plan_creation_enabled: 販売者の新規プラン作成

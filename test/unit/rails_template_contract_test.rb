@@ -138,7 +138,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, 'class: class_names("tabs tabs-lift min-w-max"'
     assert_includes helper, 'class: "tab-content sticky left-0 max-w-[100cqw] [contain:inline-size] bg-base-100 border-base-300 p-3"'
     assert_includes @source, '<div class="min-w-0 [container-type:inline-size]">'
-    assert_includes helper, 'tag.div(tablist, class: "overflow-x-auto")'
+    assert_includes helper, 'tag.div(tablist, class: "isolate overflow-x-auto")'
     assert_includes layout, '<html lang="<%= I18n.locale %>"'
     assert_includes layout, 'property="og:site_name" content="<%= application_identity.app_name %>"'
     assert_includes header, "link_to application_identity.app_name, application_routes.root_path"

@@ -1,0 +1,4 @@
+<div class="mx-auto max-w-6xl px-5 py-8">
+  <h1 class="mb-6 text-2xl font-bold break-words"><%= content_for(:page_title) %></h1>
+  <div class="min-w-0 [container-type:inline-size]" data-controller="billing-navigation"><%= with_tab tabs: billing_tabs(:public) do %><%= yield %><% end %></div>
+</div>

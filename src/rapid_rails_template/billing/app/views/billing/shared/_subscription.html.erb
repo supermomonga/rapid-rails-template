@@ -1,0 +1,32 @@
+<% history = params[:tab] == "payments" %>
+<% detail_path = buyer ? account_subscription_path(@subscription) : (refund_area == "admin" ? admin_subscription_path(@subscription) : merchant_sale_path(@subscription)) %>
+<%= with_tab tabs: [ApplicationHelper::Tab.new(name: billing_label("contract_details", "document-text"), path: detail_path, is_active: -> { !history }), ApplicationHelper::Tab.new(name: billing_label("payments", "banknotes"), path: "#{detail_path}?tab=payments", is_active: -> { history })] do %>
+  <% if history %>
+    <%= render "billing/shared/payments", charges: @charges, area: refund_area, show_contract: false %>
+    <%= render "billing/shared/pagination" %>
+  <% else %>
+    <div class="space-y-6">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0"><h2 class="text-xl font-semibold break-words"><%= @subscription.plan_name %></h2><p class="mt-2 text-lg font-semibold tabular-nums"><%= t("billing.ui.price_period", amount: billing_amount(@subscription.amount_units), days: @subscription.period_seconds / 86400) %></p></div>
+        <%= render "billing/shared/subscription_status", subscription: @subscription %>
+      </div>
+      <% if @subscription.ended_at %><div class="alert alert-info alert-soft"><%= billing_icon("check-circle") %><span><%= t("billing.ui.ended_help") %></span></div>
+      <% elsif @subscription.cancel_requested_at %><div class="alert alert-info alert-soft"><%= billing_icon("clock") %><span><%= t("billing.ui.cancelled_help") %></span></div>
+      <% elsif @subscription.paid_until && Time.current >= @subscription.paid_until && @subscription.usable? %><div class="alert alert-warning alert-soft"><%= billing_icon("exclamation-triangle") %><span><%= t("billing.ui.grace_help", until: l(@subscription.paid_until + Billing::Setting.current.grace_hours.hours, format: :long)) %></span></div>
+      <% elsif !@subscription.paid_until %><div class="alert alert-info alert-soft"><%= billing_icon("clock") %><span><%= t("billing.ui.initial_pending") %></span></div><% end %>
+      <dl class="grid gap-4 sm:grid-cols-2">
+        <div><dt class="text-base-content/70"><%= t("billing.ui.seller") %></dt><dd class="break-words"><%= @subscription.seller_name %></dd></div>
+        <% if refund_area %><div><dt class="text-base-content/70"><%= t("billing.ui.buyer") %></dt><dd class="break-words"><%= @subscription.buyer_name %></dd></div><% end %>
+        <div><dt class="text-base-content/70"><%= t("billing.ui.chain") %></dt><dd><%= Billing::Chains.fetch(@subscription.chain_id).name %></dd></div>
+        <div><dt class="text-base-content/70"><%= t("billing.ui.started_at") %></dt><dd><%= l(@subscription.starts_at, format: :long) %></dd></div>
+        <div><dt class="text-base-content/70"><%= t("billing.ui.paid_until") %></dt><dd class="font-semibold"><%= @subscription.paid_until ? l(@subscription.paid_until, format: :long) : t("billing.ui.not_paid") %></dd></div>
+        <div><dt class="text-base-content/70"><%= t("billing.ui.permission") %></dt><dd><%= t(@subscription.revoked_at ? "billing.ui.revoked" : (@subscription.cancel_requested_at ? "billing.ui.revoking" : (@subscription.signature.blank? ? "billing.ui.signature_pending" : "billing.ui.permission_active"))) %></dd></div>
+        <div class="sm:col-span-2"><dt class="text-base-content/70"><%= t("billing.ui.payer") %></dt><dd class="break-all font-mono text-sm"><%= @subscription.payer_address %></dd></div>
+      </dl>
+      <% if buyer && !@subscription.cancel_requested_at && !@subscription.ended_at %>
+        <% if @subscription.signature.blank? %><section class="card card-border bg-base-100"><div class="card-body"><%= render "billing/shared/checkout", plan: @subscription.plan, chain_ids: [@subscription.chain_id], subscription: @subscription %></div></section><% end %>
+        <div class="flex flex-wrap justify-end gap-2"><%= link_to t("billing.ui.cancel_subscription"), cancellation_account_subscription_path(@subscription), class: action_button_classes(:destructive) %></div>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>

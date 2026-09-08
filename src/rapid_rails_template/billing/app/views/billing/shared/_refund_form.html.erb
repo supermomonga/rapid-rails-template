@@ -1,0 +1,12 @@
+<%= render "billing/shared/errors", errors: @refund.errors.full_messages %>
+<%= form_with model: @refund, scope: :refund_record, url: area == "admin" ? admin_charge_refund_records_path(charge) : merchant_charge_refund_records_path(charge), id: "refund_#{charge.id}" do |form| %>
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend"><%= t("billing.ui.manual_refund") %></legend>
+    <p><%= t("billing.ui.refund_help") %></p>
+    <%= form.label :amount_usdc, t("billing.ui.refund_amount"), class: "label" %><%= form.text_field :amount_usdc, value: params.dig(:refund_record, :amount_usdc), required: true, inputmode: "decimal", class: "input w-full", aria: { invalid: @refund.errors[:amount_units].any? } %>
+    <%= form.label :reason, t("billing.ui.reason"), class: "label" %><%= form.text_area :reason, required: true, maxlength: 5000, rows: 4, class: "textarea w-full", aria: { invalid: @refund.errors[:reason].any? } %>
+    <%= form.label :chain_id, t("billing.ui.chain"), class: "label" %><%= form.select :chain_id, Billing::Chains::ALL.values.map { |chain| [chain.name, chain.id] }, {}, class: "select w-full" %>
+    <%= form.label :transaction_hash, t("billing.ui.transaction_hash"), class: "label" %><%= form.text_field :transaction_hash, required: true, class: "input w-full", spellcheck: false, autocomplete: "off", aria: { invalid: @refund.errors[:transaction_hash].any? } %>
+  </fieldset>
+  <div class="card-actions justify-end"><%= link_to t("billing.ui.back"), back, class: action_button_classes(:quiet) %><%= form.submit t("billing.ui.record_refund"), class: action_button_classes(:primary) %></div>
+<% end %>

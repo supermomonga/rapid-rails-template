@@ -1,30 +1,266 @@
+---
 en:
   billing:
     title: Subscriptions
     operator: Operator
     saved: Saved.
     refund_recorded: The manual refund record was saved.
-    cancel_requested: Cancellation requested. Paid access remains available. Submitted payments will be checked until finalized.
-    setup_submitted: Collection account creation submitted. Checkout will become available after finalization.
+    cancel_requested: Cancellation requested. Paid access remains available. Submitted
+      payments will be checked until finalized.
+    setup_submitted: Collection account creation submitted. Checkout will become available
+      after finalization.
     recheck_requested: Transaction reconciliation requested.
     errors:
-      active_contracts: This account has purchasing or selling contracts, paid access, or unfinished payment operations and cannot be deleted.
+      active_contracts: This account has purchasing or selling contracts, paid access,
+        or unfinished payment operations and cannot be deleted.
       unavailable: Checkout is currently unavailable on this chain.
-      duplicate: You already have a contract for this plan. Wait until the contract and its access period end before subscribing again.
+      duplicate: You already have a contract for this plan. Wait until the contract
+        and its access period end before subscribing again.
       invalid: Check the supplied values.
-      authorization: The spending permission could not be accepted. Check the contract status and signature.
-      setup: Check the collection account settings and connection. Transaction status is available in the administration screen.
+      authorization: The spending permission could not be accepted. Check the contract
+        status and signature.
+      setup: Check the collection account settings and connection. Transaction status
+        is available in the administration screen.
     notifications:
       payment_settled: Your subscription payment was finalized.
-      payment_failed: Your subscription payment could not be completed. Check your balance and spending permission.
+      payment_failed: Your subscription payment could not be completed. Check your
+        balance and spending permission.
       contract_expired: Renewals stopped because the payment deadline passed.
-      collection_held: Collection is on hold. Check settings, the gas estimate ceiling, and the connection.
-      connection_failed: Transaction submission or reconciliation could not be completed. Finality checks will continue.
-      verification_failed: A transaction requires review. Automatic processing is on hold.
-      late_period: A submitted transaction finalized in a later billing period. The actual paid period was applied to the contract.
+      collection_held: Collection is on hold. Check settings, the gas estimate ceiling,
+        and the connection.
+      connection_failed: Transaction submission or reconciliation could not be completed.
+        Finality checks will continue.
+      verification_failed: A transaction requires review. Automatic processing is
+        on hold.
+      late_period: A submitted transaction finalized in a later billing period. The
+        actual paid period was applied to the contract.
+    ui:
+      navigation: Billing navigation
+      plans: Subscription plans
+      merchants: Merchants
+      subscriptions: Subscriptions
+      merchant_profile: Merchant profile
+      seller_plans: Your plans
+      sales: Sales and subscriptions
+      overview: Billing operations
+      settings: Billing settings
+      operator_plans: Operator plans
+      pagination: Pagination
+      no_plans: There are no plans to display.
+      no_merchants: No merchants have registered yet.
+      operator: Operator
+      price_period: "%{amount} USDC / %{days} days"
+      details: Details
+      checkout_terms: This is a prepaid subscription for a fixed number of days. The
+        authorized amount is collected automatically each period. Access starts after
+        the initial payment is finalized. Cancellation preserves paid access.
+      unavailable: This plan is currently unavailable for new subscriptions.
+      sign_in: Sign in to subscribe
+      new_plan: Create plan
+      edit_plan: Edit plan
+      accepting: Accepting subscriptions
+      closed: Closed to new subscriptions
+      public_page: Public page
+      edit: Edit
+      plan_terms: Plan terms
+      name: Plan name
+      description: Description
+      price: Price (USDC)
+      period_days: Period (days)
+      plan_change_help: Price and period changes apply only to new subscriptions.
+        The period must exceed the renewal grace period.
+      accepted_chains: Accepted chains
+      accepting_help: Existing subscriptions renew when new enrollment is closed.
+        Payout settings are required for each chain.
+      back: Back
+      save: Save
+      public_id: Public ID
+      display_name: Display name
+      introduction: Introduction
+      image: Merchant image
+      image_help: Select a square PNG, JPEG, or WebP image, up to 5 MiB.
+      merchant_profile_help: This public merchant profile is separate from your personal
+        profile. Administrator approval is not required.
+      payouts: Sales payout addresses
+      payout_address: USDC recipient address
+      payout_help: Set a recipient address for each chain. Changes apply from the
+        next charge.
+      contract: 'Subscription #%{id}'
+      plan: Plan
+      status: Status
+      chain: Chain
+      paid_until: Paid access until
+      not_paid: Awaiting payment finality
+      no_subscriptions: There are no subscriptions.
+      payer: Payment wallet
+      started_at: Period anchor
+      permission: Spend permission
+      revoked: Revoked
+      revoking: Revocation pending
+      permission_active: Managed with this subscription
+      initial_pending: The initial payment is awaiting finality. Access has not started
+        yet.
+      cancel_help: Cancellation stops future renewals and revokes permission. Paid
+        access remains available. A payment already submitted still provides its paid
+        period if it settles.
+      cancel_subscription: Cancel subscription
+      payments: Payment history
+      no_payments: There are no payments yet.
+      charge: 'Payment #%{id}'
+      split: 'Operator: %{operator} USDC / Merchant: %{merchant} USDC'
+      transaction: 'View transaction #%{id}'
+      manual_refund: Manual refund record
+      refund_transaction: View refund transaction on %{chain}
+      refund_help: This records a refund performed externally. It does not transfer
+        funds, verify the transaction, or change access dates.
+      refund_amount: Refund amount (USDC)
+      reason: Reason
+      transaction_hash: Transaction hash
+      record_refund: Record refund
+      features: Billing features
+      operator_enabled: Operator subscription billing
+      merchants_enabled: Merchant subscription billing
+      merchant_plan_creation_enabled: New merchant plan creation
+      flags_help: These settings are independent. Billing cannot be disabled while
+        contracts, access periods, or unresolved processing remain. Disabling new
+        plan creation preserves merchant registration and existing plan management.
+      renewal_settings: Fees and renewal grace
+      fee_percent: Operator fee on merchant sales (%)
+      grace_hours: Renewal grace (hours)
+      settings_help: Fee changes apply from the next charge. Access continues during
+        grace. Grace must be shorter than every applicable plan and subscription period.
+      missing_configuration: Missing configuration
+      collector: Collection account
+      not_created: Not created
+      chain_settings: Chain settings
+      treasury: Operator USDC recipient address
+      gas_ceiling: Gas estimate ceiling (%{symbol})
+      gas_help: Submission pauses when the estimate exceeds this ceiling. This is
+        not a guarantee of an absolute cap on actual gas costs.
+      deploy_help: Verifies the official Factory and executor authority, then creates
+        a standard Smart Account. This incurs gas costs.
+      deploy_confirm: I confirm creation of the collection account on %{chain}
+      deploy: Create collection account
+      pending_transactions: Unfinalized transactions and revocations
+      latest_100: Showing the first 100 matching records.
+      none: There are no matching records.
+      held_charges: Held payments
+      recheck: Recheck finality
+      payment_wallet: Pay with Base Account
+      wallet_help: Connect the payment wallet separately from your app login.
+      connect_wallet: Connect wallet and review terms
+      authorize_payment: Agree and authorize recurring payment
+      saved_contract: View or resume the saved subscription
+      permission_review: |-
+        %{amount} USDC / %{days} days
+        Chain: %{chain}
+        Payment wallet: %{wallet}
+        Period anchor: %{starts_at}
+      seller: Seller
+      buyer: Buyer
+      grace_help: The renewal payment has not settled. Access continues during grace
+        until %{until}. The subscription ends after grace expires.
+      merchant_area: Seller dashboard
+      merchant_menu: Seller menu
+      merchant_overview: Overview
+      merchant_registration: Register as a seller
+      start_selling: Start selling subscriptions
+      registration_help: Create a seller profile to manage plans, sales and payout
+        addresses in your seller dashboard. Then configure a payout address for each
+        accepted chain.
+      back_account: Back to my account
+      profile: Profile
+      operations: Operations
+      revenue_scope: Lifetime finalized payments across all chains, in USDC. Manual
+        refunds are records of external transfers and are not automatically subtracted
+        from amounts already sent.
+      gross_sales: Gross sales
+      operator_fee: Operator fee
+      merchant_received: Sent to seller
+      manual_refunds: Manual refunds
+      view_history: View history
+      next_actions: Contracts and selling setup
+      open_contracts: 'Ongoing or processing contracts: %{count}'
+      held_count: 'Payments on hold: %{count}'
+      held_help: Held payments are excluded from revenue. Check their status in payment
+        history.
+      complete_payouts: Set missing payout addresses
+      public_id_help: Use 3–64 lowercase letters, numbers, hyphens or underscores.
+        This becomes part of your public page URL.
+      configured: Configured
+      not_configured: Not configured
+      payout_address_for: USDC payout address on %{chain}
+      save_chain: Save %{chain} settings
+      breadcrumbs: Breadcrumbs
+      browse_plans: Browse plans
+      current_contracts: Current contracts
+      ended_contracts: Ended contracts
+      empty_contracts_help: No contracts match this view. After subscribing, you can
+        check access dates and payment status here.
+      empty_plans_help: Create a plan to manage enrollment and terms here.
+      all_chains: All chains
+      all_states: All statuses
+      reset_filters: Reset
+      apply_filters: Apply filters
+      payment_history_help: Review invoice amounts, fees, distributions and transaction
+        finality. Only finalized payments count as revenue.
+      no_refunds: No manual refunds recorded
+      refund_record_help: After making an external refund, add its record from the
+        corresponding finalized payment.
+      contract_details: Contract details
+      ended_help: This contract has ended. Start a new contract to subscribe again.
+      cancelled_help: Renewals have stopped. Access continues until the paid-through
+        date shown. If a submitted payment finalizes, its paid period will also be
+        applied.
+      signature_pending: Awaiting signature
+      no_payments_help: Billing periods and transaction status appear here once payment
+        processing begins.
+      keep_subscription: Back to contract
+      confirm_cancellation: Confirm cancellation
+      unavailable_chains: 'Currently unavailable chains: %{chains}. Check payout addresses
+        and operator configuration.'
+      no_merchants_help: Registered sellers and their plans will appear here.
+      no_public_plans_help: There are no public plans yet.
+      operator_allocation: Operator allocation
+      merchant_allocation: Seller allocation
+      pending_split_help: These are the allocations saved when the invoice was created.
+        Transfers are complete only after payment finalizes.
+      new_plans_paused: New plan creation is currently paused. You can continue managing
+        existing plans.
+      merchant_settings: Seller settings
+      manual_refund_total: Recorded manual refunds
+    states:
+      pending: Awaiting payment
+      active: Active
+      cancelling: Cancellation in progress
+      ended: Ended
+      grace: Renewal grace
+      submitted: Submitted, awaiting finality
+      settled: Settled
+      cancelled: Cancelled
+      held: Held
+      prepared: Prepared
+      finalized: Finalized
+      reverted: Reverted
+      review: Needs review
+    checkout:
+      connecting: Connecting to your wallet.
+      review: Review the saved terms before signing.
+      signing: Sign the spend permission in your wallet.
+      wrongChain: Switch to the selected chain.
+      wrongWallet: Connect the payment wallet used for this subscription.
+      failed: The request could not be completed. Check your subscription list for
+        saved progress.
+    kinds:
+      charge: Collection
+      revoke: Revocation
+      deploy: Account creation
+      void: Unsent charge cancellation
   errors:
     messages:
       billing_period: must be shorter than every applicable plan and contract period
-      billing_contracts: cannot be turned off while contracts, paid access, or unfinished operations remain
+      billing_contracts: cannot be turned off while contracts, paid access, or unfinished
+        operations remain
       billing_creation_disabled: New merchant plans are currently disabled
-      billing_separate_treasury: must be a revenue address separate from the execution key and collection account
+      billing_separate_treasury: must be a revenue address separate from the execution
+        key and collection account

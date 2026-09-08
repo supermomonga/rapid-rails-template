@@ -1,0 +1,23 @@
+<% content_for :page_title, t("billing.ui.merchant_area") %>
+<% content_for :page_actions_primary do %><%= link_to billing_label("new_plan", "squares-2x2"), new_merchant_plan_path, class: action_button_classes(:primary) if Billing::Setting.current.merchant_plan_creation_enabled %><% end %>
+<% content_for :page_actions_secondary do %><%= link_to billing_label("public_page", "arrow-top-right-on-square"), merchant_path(@merchant.public_id), class: action_button_classes(:secondary) %><% end %>
+<div class="space-y-6">
+  <div><h2 class="text-xl font-semibold break-words"><%= @merchant.display_name %></h2><p class="text-base-content/70"><%= t("billing.ui.revenue_scope") %></p></div>
+  <div class="grid gap-4 sm:grid-cols-2">
+    <% [["gross_sales", @gross_units, "banknotes"], ["operator_fee", @fee_units, "receipt-percent"], ["merchant_received", @net_units, "wallet"], ["manual_refund_total", @refund_units, "arrow-uturn-left"]].each do |label, units, icon| %>
+      <div class="stats bg-base-100 min-w-0"><div class="stat min-w-0">
+        <div class="stat-title"><%= t("billing.ui.#{label}") %></div>
+        <div class="stat-value text-2xl break-all tabular-nums"><%= billing_amount(units) %> <span class="text-sm">USDC</span></div>
+        <div class="stat-actions"><%= link_to billing_label("view_history", icon), label == "manual_refund_total" ? merchant_refund_records_path : merchant_payments_path, class: "link" %></div>
+      </div></div>
+    <% end %>
+  </div>
+  <section class="card card-border bg-base-100"><div class="card-body p-3">
+    <h2 class="card-title"><%= billing_label("next_actions", "document-text") %></h2>
+    <ul class="list">
+      <li class="list-row"><%= billing_icon("credit-card") %><div class="list-col-grow"><%= link_to t("billing.ui.open_contracts", count: @open_count), merchant_sales_path, class: "link" %></div></li>
+      <li class="list-row"><%= billing_icon("clock") %><div class="list-col-grow"><%= link_to t("billing.ui.held_count", count: @held_count), merchant_payments_path, class: "link" %><p class="text-base-content/70"><%= t("billing.ui.held_help") %></p></div></li>
+      <% if @missing_payouts.any? %><li class="list-row"><%= billing_icon("exclamation-triangle") %><div class="list-col-grow"><%= link_to t("billing.ui.complete_payouts"), merchant_payout_addresses_path, class: "link" %><p class="break-words"><%= @missing_payouts.map { |id| Billing::Chains.fetch(id).name }.join(" / ") %></p></div></li><% end %>
+    </ul>
+  </div></section>
+</div>

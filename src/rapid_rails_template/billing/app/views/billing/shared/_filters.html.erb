@@ -1,0 +1,5 @@
+<%= form_with url: request.path, method: :get, class: "grid gap-3 sm:grid-cols-2" do |form| %>
+  <div class="min-w-0"><%= form.label :chain_id, t("billing.ui.chain"), class: "label" %><%= form.select :chain_id, Billing::Chains::ALL.values.map { |chain| [chain.name, chain.id] }, { include_blank: t("billing.ui.all_chains"), selected: params[:chain_id] }, class: "select w-full" %></div>
+  <% if local_assigns[:statuses] %><div class="min-w-0"><%= form.label :status, t("billing.ui.status"), class: "label" %><%= form.select :status, statuses.map { |state| [t("billing.states.#{state}"), state] }, { include_blank: t("billing.ui.all_states"), selected: params[:status] }, class: "select w-full" %></div><% end %>
+  <div class="flex flex-wrap justify-end gap-2 sm:col-span-2"><%= link_to t("billing.ui.reset_filters"), request.path, class: action_button_classes(:quiet) %><%= form.submit t("billing.ui.apply_filters"), class: action_button_classes(:secondary) %></div>
+<% end %>

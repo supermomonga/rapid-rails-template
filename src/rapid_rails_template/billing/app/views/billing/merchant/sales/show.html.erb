@@ -1,0 +1,3 @@
+<% content_for :page_title, t("billing.ui.contract", id: @subscription.id) %>
+<%= render "billing/shared/breadcrumbs", label: "sales", path: merchant_sales_path, icon: "credit-card", current: @subscription.plan_name %>
+<%= render "billing/shared/subscription", buyer: false, refund_area: "merchant" %>

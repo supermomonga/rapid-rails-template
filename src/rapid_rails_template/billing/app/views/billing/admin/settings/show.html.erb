@@ -1,0 +1,18 @@
+<% content_for :page_title, t("billing.ui.settings") %>
+<div class="card card-border bg-base-100"><div class="card-body p-3">
+  <%= render "billing/shared/errors", errors: @settings.errors.full_messages %>
+  <%= form_with model: @settings, scope: :setting, url: admin_settings_path do |form| %>
+    <fieldset class="fieldset"><legend class="fieldset-legend"><%= t("billing.ui.features") %></legend>
+      <% %i[operator_enabled merchants_enabled merchant_plan_creation_enabled].each do |attribute| %>
+        <label class="label whitespace-normal"><%= form.check_box attribute, class: "checkbox shrink-0" %><%= t("billing.ui.#{attribute}") %></label>
+      <% end %>
+      <p><%= t("billing.ui.flags_help") %></p>
+    </fieldset>
+    <fieldset class="fieldset"><legend class="fieldset-legend"><%= t("billing.ui.renewal_settings") %></legend>
+      <%= form.label :fee_percent, t("billing.ui.fee_percent"), class: "label" %><%= form.text_field :fee_percent, value: params.dig(:setting, :fee_percent) || Billing::Amount.format(@settings.fee_basis_points, decimals: 2), required: true, inputmode: "decimal", class: "input w-full" %>
+      <%= form.label :grace_hours, t("billing.ui.grace_hours"), class: "label" %><%= form.number_field :grace_hours, required: true, min: 0, class: "input w-full" %>
+      <p><%= t("billing.ui.settings_help") %></p>
+    </fieldset>
+    <div class="card-actions justify-end"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
+  <% end %>
+</div></div>

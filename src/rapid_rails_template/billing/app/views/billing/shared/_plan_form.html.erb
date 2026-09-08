@@ -1,0 +1,27 @@
+<div class="card card-border bg-base-100"><div class="card-body p-3">
+  <%= render "billing/shared/errors", errors: @plan.errors.full_messages %>
+  <%= form_with model: @plan, scope: :plan, url: destination do |form| %>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend"><%= t("billing.ui.plan_terms") %></legend>
+      <%= form.label :name, t("billing.ui.name"), class: "label" %>
+      <%= form.text_field :name, required: true, class: "input w-full" %>
+      <%= form.label :description, t("billing.ui.description"), class: "label" %>
+      <%= form.text_area :description, rows: 4, class: "textarea w-full" %>
+      <%= form.label :price_usdc, t("billing.ui.price"), class: "label" %>
+      <%= form.text_field :price_usdc, value: params.dig(:plan, :price_usdc) || (@plan.amount_units && Billing::Amount.format(@plan.amount_units)), inputmode: "decimal", required: true, class: "input w-full" %>
+      <%= form.label :period_days, t("billing.ui.period_days"), class: "label" %>
+      <%= form.number_field :period_days, min: 1, max: 36500, required: true, class: "input w-full" %>
+      <p><%= t("billing.ui.plan_change_help") %></p>
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend"><%= t("billing.ui.accepted_chains") %></legend>
+      <%= hidden_field_tag "plan[chain_ids][]", "" %>
+      <% Billing::Chains::ALL.each_value do |chain| %>
+        <label class="label"><%= check_box_tag "plan[chain_ids][]", chain.id, @plan.chain_ids.include?(chain.id), class: "checkbox" %><%= chain.name %></label>
+      <% end %>
+      <label class="label"><%= form.check_box :accepting_subscriptions, class: "checkbox" %><%= t("billing.ui.accepting") %></label>
+      <p><%= t("billing.ui.accepting_help") %></p>
+    </fieldset>
+    <div class="card-actions justify-end"><%= link_to t("billing.ui.back"), back, class: action_button_classes(:quiet) %><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
+  <% end %>
+</div></div>

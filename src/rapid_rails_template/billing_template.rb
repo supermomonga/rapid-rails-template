@@ -19,6 +19,40 @@ def configure_billing
   remove_file engine_migration
   remove_file migrations.first
   route 'mount Billing::Engine => "/", as: :billing'
+  create_file "app/helpers/billing_helper.rb", <<~RUBY
+    module BillingHelper
+      include Billing::UiHelper
+    end
+  RUBY
+  create_file "sorbet/rbi/shims/billing_ui.rbi", <<~RUBY
+    # typed: true
+    module Billing::UiHelper
+      include ActionView::Helpers
+    end
+  RUBY
+  prepend_to_file "app/views/shared/_account_navigation.html.erb", <<~ERB
+    <%= billing_menu_item("subscriptions", Billing::Engine.routes.url_helpers.account_subscriptions_path, "credit-card", active: controller_path.start_with?("billing/account/")) %>
+  ERB
+  append_to_file "app/views/shared/_account_navigation.html.erb", <<~ERB
+    <%= billing_menu_item("merchant_area", Billing::Engine.routes.url_helpers.merchant_root_path, "building-storefront", active: false) %>
+  ERB
+  prepend_to_file "app/views/shared/_admin_navigation.html.erb", <<~ERB
+    <%= billing_menu_item("overview", Billing::Engine.routes.url_helpers.admin_root_path, "banknotes", active: controller_path.start_with?("billing/admin/")) %>
+  ERB
+  append_to_file "config/importmap.rb", <<~RUBY
+    pin "billing/base_account", to: "billing/base_account.js"
+    pin "billing/checkout_controller", to: "billing/checkout_controller.js"
+    pin "billing/navigation_controller", to: "billing/navigation_controller.js"
+  RUBY
+  append_to_file "app/javascript/controllers/index.js", <<~JS
+    import BillingCheckoutController from "billing/checkout_controller"
+    application.register("billing-checkout", BillingCheckoutController)
+    import BillingNavigationController from "billing/navigation_controller"
+    application.register("billing-navigation", BillingNavigationController)
+  JS
+  append_to_file "app/assets/tailwind/application.css", <<~CSS
+    @source "../../../engines/billing/app/views";
+  CSS
   environment "config.x.billing.web_push_enabled = #{VALUES.fetch('web_push') == 'use'}"
   if VALUES.fetch("web_push") == "use"
     environment "config.x.billing.push_delivery = ->(**attributes) { ::PushNotifier.deliver_later(**attributes) if attributes.fetch(:user).push_subscriptions.exists? }"
@@ -54,6 +88,9 @@ def configure_billing
   create_file "config/recurring.yml", YAML.dump(recurring), force: true
   create_file "test/billing_engine_test.rb", <<~RUBY
     require_relative "../engines/billing/test/integration/host_contract_test"
+  RUBY
+  append_to_file "test/support/evidence_capture.rb", <<~RUBY
+    require_relative "../../engines/billing/test/support/evidence_capture"
   RUBY
   create_file "sorbet/tapioca/compilers/billing_routes.rb", <<~RUBY
     require_relative "../../../engines/billing/lib/tapioca/dsl/compilers/billing_routes"

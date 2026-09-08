@@ -1,0 +1,5 @@
+<% content_for :page_title, t("billing.ui.subscriptions") %>
+<% content_for :page_actions_primary do %><%= link_to billing_label("browse_plans", "squares-2x2"), plans_path, class: action_button_classes(:secondary) %><% end %>
+<%= with_tab tabs: [ApplicationHelper::Tab.new(name: t("billing.ui.current_contracts"), path: account_subscriptions_path, is_active: -> { params[:scope] != "ended" }), ApplicationHelper::Tab.new(name: t("billing.ui.ended_contracts"), path: account_subscriptions_path(scope: "ended"), is_active: -> { params[:scope] == "ended" })] do %>
+  <%= render "billing/shared/subscriptions", destination: "account_subscription" %>
+<% end %>

@@ -4,6 +4,8 @@ module Billing
   module Admin
     class BaseController < ::Admin::BaseController
       helper ::ApplicationHelper
+      helper Billing::UiHelper
+      layout "billing/admin"
       before_action :authorize_billing_administration
       before_action :prevent_billing_cache
       rescue_from ConfigurationError, RpcError, VerificationError, GasLimitExceeded, with: :setup_failed

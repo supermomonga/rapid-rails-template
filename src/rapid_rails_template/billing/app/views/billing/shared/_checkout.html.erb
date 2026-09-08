@@ -1,0 +1,19 @@
+<% contract = local_assigns[:subscription] %>
+<%= tag.div data: { controller: "billing-checkout", billing_checkout_create_url_value: account_subscriptions_path, billing_checkout_plan_id_value: plan.id, billing_checkout_app_name_value: application_identity.app_name, billing_checkout_labels_value: t("billing.checkout"), billing_checkout_contract_value: contract && { typed_data: Billing::Checkout.typed_data(contract), authorize_path: authorize_account_subscription_path(contract), subscription_path: account_subscription_path(contract), review: Billing::Checkout.review(contract) } } do %>
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend"><%= t("billing.ui.payment_wallet") %></legend>
+    <p><%= t("billing.ui.wallet_help") %></p>
+    <%= label_tag :billing_chain, t("billing.ui.chain"), class: "label" %>
+    <%= select_tag :billing_chain, options_for_select(chain_ids.map { |id| [Billing::Chains.fetch(id).name, id] }), class: "select w-full", data: { billing_checkout_target: "chain" } %>
+  </fieldset>
+  <div class="card-actions justify-end">
+    <%= button_tag t("billing.ui.connect_wallet"), type: :button, class: action_button_classes(:primary), data: { action: "billing-checkout#prepare", billing_checkout_target: "prepare" } %>
+  </div>
+  <div hidden data-billing-checkout-target="review" class="space-y-3">
+    <p class="whitespace-pre-wrap break-all" data-billing-checkout-target="terms"></p>
+    <p><%= t("billing.ui.checkout_terms") %></p>
+    <div class="card-actions justify-end"><%= button_tag t("billing.ui.authorize_payment"), type: :button, class: action_button_classes(:primary), data: { action: "billing-checkout#authorize", billing_checkout_target: "authorize" } %></div>
+  </div>
+  <p role="status" aria-live="polite" class="mt-3 break-words" data-billing-checkout-target="message"></p>
+  <a hidden class="link" data-billing-checkout-target="contractLink"><%= t("billing.ui.saved_contract") %></a>
+<% end %>

@@ -7,9 +7,10 @@ require_relative "rapid_rails_template/questionnaire"
 require_relative "rapid_rails_template/generator_options"
 require_relative "rapid_rails_template/execution_plan"
 require_relative "rapid_rails_template/runner"
+require_relative "rapid_rails_template/template_payload"
 
 module RapidRailsTemplate
-  APPLICATION_TEMPLATE = File.binread(File.expand_path("rapid_rails_template/rails_template.rb", __dir__))
+  APPLICATION_TEMPLATE = TemplatePayload.build(File.expand_path("rapid_rails_template", __dir__)).freeze
 end
 
 require_relative "rapid_rails_template/entrypoint"

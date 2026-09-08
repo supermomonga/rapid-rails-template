@@ -1,0 +1,13 @@
+<% routes = Billing::Engine.routes.url_helpers %>
+<% if params[:merchant_id].present? %>
+  <% merchant_id = params[:merchant_id] %>
+  <%= billing_menu_item("merchant_overview", routes.merchant_dashboard_path(merchant_id: merchant_id), "home", active: controller_path == "billing/merchant/overview") %>
+  <%= billing_menu_item("seller_plans", routes.merchant_plans_path(merchant_id: merchant_id), "squares-2x2", active: controller_path == "billing/merchant/plans") %>
+  <%= billing_menu_item("sales", routes.merchant_sales_path(merchant_id: merchant_id), "banknotes", active: controller_path.in?(%w[billing/merchant/sales billing/merchant/payments billing/merchant/refund_records])) %>
+  <%= billing_menu_item("merchant_settings", routes.edit_merchant_profile_path(merchant_id: merchant_id), "cog-6-tooth", active: controller_path.in?(%w[billing/merchant/merchant_accounts billing/merchant/payout_addresses billing/merchant/closures])) %>
+  <%= billing_menu_item("members", routes.merchant_memberships_path(merchant_id: merchant_id), "user-circle", active: controller_path.in?(%w[billing/merchant/memberships billing/merchant/member_invitations])) %>
+  <%= billing_menu_item("audit_entries", routes.merchant_audit_entries_path(merchant_id: merchant_id), "document-text", active: controller_path == "billing/merchant/audit_entries") %>
+<% end %>
+<%= billing_menu_item("invitations", routes.merchant_invitations_path, "clock", active: controller_path == "billing/merchant/invitations") %>
+<%= billing_menu_item("merchant_registration", routes.new_merchant_account_path, "building-storefront", active: controller_path == "billing/merchant/merchant_accounts" && action_name.in?(%w[new create])) if Billing::MerchantAccess.eligible?(current_user) %>
+<%= billing_menu_item("back_account", application_routes.account_path, "arrow-uturn-left", active: false) %>

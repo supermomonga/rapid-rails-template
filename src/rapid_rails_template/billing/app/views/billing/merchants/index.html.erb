@@ -1,0 +1,6 @@
+<% content_for :page_title, t("billing.ui.merchants") %>
+<%= render layout: "layouts/billing/public" do %>
+  <% if @merchants.empty? %><%= render "billing/shared/empty", icon: "building-storefront", title: t("billing.ui.no_merchants"), description: t("billing.ui.no_merchants_help") %><% end %>
+  <div class="grid gap-4 sm:grid-cols-2"><% @merchants.each do |merchant| %><article class="card card-border bg-base-100"><div class="card-body"><%= render "billing/merchants/identity", merchant: merchant %><div class="card-actions justify-end"><%= link_to t("billing.ui.details"), merchant_path(merchant.public_id), class: action_button_classes(:secondary) %></div></div></article><% end %></div>
+  <%= render "billing/shared/pagination" %>
+<% end %>

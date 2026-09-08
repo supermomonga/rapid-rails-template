@@ -83,6 +83,18 @@ theme tokenの`secondary`はprimary色のhover・press用の色、button roleの
 
 文字付きのbuttonとbutton相当のlinkは、hoverしていない通常時にも背景または輪郭で操作可能な要素だと判別できる表示を必須とし、`btn-ghost`を使用しません。この規約は通知popover、受信者selector・badge、header、menu、dropdownなど`action_button_classes`を使用しないcompact用途にも適用します。`btn-ghost`は、accessible nameを持つベルやアバターなど、文字を持たない慣例的な操作triggerだけに限定します。色modifierを持たない`btn-outline`は、文字色を`base-content`のまま維持し、通常時のborderだけを`base-300`へ上書きします。`btn-primary`、`btn-secondary`、`btn-accent`、`btn-neutral`、`btn-info`、`btn-success`、`btn-warning`、`btn-error`のいずれかを併用するoutlineには適用せず、各semantic colorのborderを維持します。
 
+入力・選択部品とその直後の確定buttonは、daisyUI標準の`join w-full`と`join-item`で横一列につなぎます。複数項目のformでも、最後のinput・select・通常のfile-inputと確定buttonを対象にします。入力側を`min-w-0 flex-1`で伸縮させ、既定のcontrol sizeを維持します。label、補足文、validation errorはjoinの外へ置き、戻る・キャンセル・条件のリセットは別の操作として表示します。短いbutton文言を使う場合も、対象を含むaccessible nameにはその表示文言を含めます。共通layoutへ個別formの配置処理は追加しません。
+
+再確認した対象と境界は次のとおりです。
+
+- Join：Passkey・EVMウォレット名、APIキー名、販売者の役割変更とメンバー招待、送金先、個別料率、チェーン・契約状態の絞り込み、チェーン設定、決済設定、返金記録、販売者画像、外部リンク設定。
+- 独立した確定操作を維持：最後がcheckbox群のプラン・FAQ、textareaのメンテナンス告知、rich textの固定ページ、画像の切り抜き確認を伴う通常プロフィール、候補検索・選択結果・下書き指定を伴う通知編集、専用の解約・閉鎖・集金口座作成確認。これらは直前の単一入力とbuttonという構成ではありません。
+- 任意の属性型やcustom partialを扱うscaffold・Maintenance Tasksは、その拡張内容を確認せず最後の部品をJoinへ変換しません。自動送信するジョブ検索、入力を持たない認証・通知・pagination操作も対象外です。
+
+既存のdesktop・mobile撮影シナリオと320・390・640・960・961pxのgeometry検証で、入力とbuttonの接続、高さ、viewport内への収まりを確認します。メンバーページは役割変更と招待をformごとに検査し、別formのJoinだけで合格しないようにします。
+
+入力エラー時はRails標準の`config.action_view.field_error_proc`で、入力を`div.field_with_errors`へ包まず、元のcontrolへ`aria-invalid="true"`を付けます。Railsが生成したHTMLをNokogiriで構造として編集し、valueのescape、labelの関連付け、既存classと説明参照を維持します。labelやhidden inputには`aria-invalid`を付けず、エラー本文は既存のAlertで表示します。これにより、Joinを含むformのDOM構造を正常時とエラー時で揃えます。host・Engine共通の描画設定とし、個別Viewや共通layoutにラッパー補正を追加しません。
+
 daisyUIのAlertは、`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合に`alert-soft`を必須とし、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。静的View、flash、JavaScriptによる状態切り替え、engineの上書きViewを同じ契約に含めます。JavaScriptで状態色を切り替える場合も`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはこのAlert固有の規約の対象外です。
 
 `DESIGN.md`は任意のCSS Custom Propertiesへ依存しない方針ですが、daisyUI custom themeとcomponent自体が公式の`--color-*`、`--radius-*`、`--size-*`、`--input-color`等をcontractとします。daisyUIのtheme・component contractに必要な変数だけを例外として使用し、独自の追加変数やView内のraw palette colorは定義しません。
@@ -194,7 +206,7 @@ Userの`global_notifications_read_at`はUser作成時の`created_at`と同じ値
 
 `pwa=use`ではRails 8.1標準のPWA controllerを利用し、`/manifest.json`と`/service-worker`を明示的にrouteへ接続します。manifestはApplication Identityの表示用アプリ名と既定locale、`/icon.png`、scopeとstart URL `/`、`standalone`表示、theme色`#3ea8ff`を持ちます。Service Workerの`push` handlerは`{ title, options }`を表示し、`notificationclick` handlerはpayloadの`options.data.path`を同一origin内へ制限した上で、既存windowのfocus・navigateまたは新規windowのopenを行います。
 
-`web_push=use`では`web-push ~> 3.1`とSolid Queueを導入します。`PushSubscription`はUser、安定したbrowser ID、endpoint、`p256dh`、`auth`を保持し、browser IDとendpointをそれぞれ一意にします。登録時は両キーの既存recordをlockし、同一ブラウザの別accountログインや同一endpointの再登録を現在のUserへ移します。User削除時はassociationとdatabase外部キーの両方で購読を削除します。
+`web_push=use`では`web-push ~> 3.1`を導入し、常設のSolid Queueを使用します。`PushSubscription`はUser、安定したbrowser ID、endpoint、`p256dh`、`auth`を保持し、browser IDとendpointをそれぞれ一意にします。登録時は両キーの既存recordをlockし、同一ブラウザの別accountログインや同一endpointの再登録を現在のUserへ移します。User削除時はassociationとdatabase外部キーの両方で購読を削除します。
 
 VAPID設定は`VapidConfiguration`だけが`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`を読み、欠落、空値、不正なsubjectを明示的に失敗させます。開発用の生成鍵はgit管理外の`mise.local.toml`へ保存します。本番では3変数すべてが必須です。鍵を変更した場合、Stimulus controllerがapplication server keyの差異を検出して旧購読を解除し、現在の鍵で再購読します。旧鍵との二重運用は行いません。
 
@@ -296,7 +308,7 @@ https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2
 
 ## Solid Queue
 
-ジョブ管理を使用する場合だけ、現在解決される`solid_queue` 1.6.0を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、developmentでは`storage/development_queue.sqlite3`へ接続して`solid_queue:install`が生成する`db/queue_schema.rb`と`db/queue_migrate`を使用します。生成中の`db:prepare`がこのqueue databaseも準備するため、Puma pluginの初回起動時からSolid Queueのtableが存在します。test環境だけはActive Storageを含むenqueue処理とjob assertionを外部worker・queue DBから分離するため、Rails標準の`test` adapterへ明示的に上書きします。
+全構成で`solid_queue` 1.6.0を導入し、Active Job adapterを`solid_queue`に設定します。SQLiteではprimary databaseとqueue databaseを分け、developmentでは`storage/development_queue.sqlite3`へ接続して`solid_queue:install`が生成する`db/queue_schema.rb`と`db/queue_migrate`を使用します。生成中の`db:prepare`がこのqueue databaseも準備するため、Puma pluginの初回起動時からSolid Queueのtableが存在します。test環境だけはActive Storageを含むenqueue処理とjob assertionを外部worker・queue DBから分離するため、Rails標準の`test` adapterへ明示的に上書きします。
 
 developmentではPumaからSolid Queueを起動します。
 
@@ -304,13 +316,13 @@ developmentではPumaからSolid Queueを起動します。
 plugin :solid_queue if ENV.fetch("RAILS_ENV", "development") == "development"
 ```
 
-productionではPuma pluginを有効化せず、Solid Queue使用時だけKamalの`worker` roleで`bin/jobs --mode async`を起動します。Web roleとはコンテナを分離し、worker、dispatcher、schedulerを同じSolid Queue supervisorで管理します。
+productionではPuma pluginを有効化せず、Kamalの常設`worker` roleで`bin/jobs --mode async`を起動します。Web roleとはコンテナを分離し、worker、dispatcher、schedulerを同じSolid Queue supervisorで管理します。
 
 `solid_queue:install`が生成する`config/recurring.yml`の標準cleanupを維持します。`preserve_finished_jobs`は既定の`true`、`clear_finished_jobs_after`は既定の1日とし、毎時12分に`SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)`を実行します。cleanupは`finished_at`が保持期間より古い完了ジョブだけを対象とします。失敗ジョブは`solid_queue_failed_executions`に残り、管理者または運用者がretryかdiscardを行うまで削除しません。既存の`bin/jobs --mode async` supervisorがworker、dispatcher、schedulerを起動するため、cleanup専用processは追加しません。
 
 ## Mission Control Jobs
 
-`job_operations=enable`かつ`active_job=solid_queue`の場合だけ、Mission Control Jobs 1.1.0を導入します。engineは`/admin/jobs`だけへmountし、root直下の`/jobs`や別pathへ公開しません。queue一覧、状態別job、worker、定期task、失敗内容、単体・一括retry/discardなど、Solid Queue adapterが提供する操作を使用します。
+`job_operations=enable`の場合だけ、Mission Control Jobs 1.1.0を導入します。engineは`/admin/jobs`だけへmountし、root直下の`/jobs`や別pathへ公開しません。queue一覧、状態別job、worker、定期task、失敗内容、単体・一括retry/discardなど、Solid Queue adapterが提供する操作を使用します。
 
 `MissionControl::Jobs.base_controller_class`には`Admin::JobOperationsController`を設定します。このcontrollerは既存`Admin::BaseController`を継承し、全engine actionを`JobOperationPolicy#manage?`で認可します。追加ログイン方法にかかわらずDeviseの`current_user`を既存Action Policy contextへ渡し、controller内でroleを直接判定しません。Mission Control標準のHTTP Basic認証は明示的に無効化し、別系統の認証は追加しません。
 
@@ -320,7 +332,7 @@ Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Contr
 
 ## Maintenance Tasks
 
-`maintenance_tasks=enable`かつ`active_job=solid_queue`の場合だけ、Shopify `maintenance_tasks` 2.17.0を導入します。公式`maintenance_tasks:install` generatorが提供するmigrationをそのまま使用し、`maintenance_tasks_runs`で実行履歴、status、cursor、arguments、metadata、job ID、error class/message/backtraceを管理します。同じ情報を保持する独自modelやaudit tableは追加しません。
+`maintenance_tasks=enable`の場合だけ、Shopify `maintenance_tasks` 2.17.0を導入します。公式`maintenance_tasks:install` generatorが提供するmigrationをそのまま使用し、`maintenance_tasks_runs`で実行履歴、status、cursor、arguments、metadata、job ID、error class/message/backtraceを管理します。同じ情報を保持する独自modelやaudit tableは追加しません。
 
 engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksController`を`MaintenanceTasks.parent_controller`へ設定します。parent controllerは既存`Admin::BaseController`を継承し、全engine actionを`MaintenanceTaskPolicy#manage?`で認可します。metadataには`triggered_by_user_id`として`users.id`を保存し、追加ログイン方法にかかわらずDeviseの`current_user`を利用します。
 
@@ -350,7 +362,7 @@ productionの`config/database.yml`には、常設のstorage databaseに加え、
 
 デプロイは全構成でKamal V2へ固定し、選択optionは設けません。Rails標準のDocker/Kamal生成を有効にしたうえで、Kamal `~> 2.11`と`minimum_version: 2.11.0`を固定します。対象topologyは単一Linux host・単一Web replicaです。
 
-`Dockerfile`はRails標準構成を基礎に、Ruby 4.0.0のmulti-stage build、Node.js/npmによるasset build、libvips、jemalloc、YJIT、Thrusterを維持します。SIWE選択時だけ、`rbsecp256k1`のネイティブ拡張のビルドに必要なAutotoolsと開発用パッケージをbuild stageへ追加し、最終runtime imageには含めません。LitestreamとForemanはアプリimageへ含めません。Webはprimary role、Solid Queue使用時だけ`worker` roleを生成します。
+`Dockerfile`はRails標準構成を基礎に、Ruby 4.0.6のmulti-stage build、Node.js/npmによるasset build、libvips、jemalloc、YJIT、Thrusterを維持します。常設の`eth`に必要な`rbsecp256k1`のネイティブ拡張のビルドに必要なAutotoolsと開発用パッケージをbuild stageへ追加し、最終runtime imageには含めません。LitestreamとForemanはアプリimageへ含めません。Webはprimary role、全構成で`worker` roleを生成します。
 
 production SQLiteは`<app_id>_<destination>_storage` named volumeの`/rails/storage`へ配置し、`production`と`staging`を分離します。Kamalはdestination指定を必須にします。
 
@@ -358,7 +370,7 @@ production SQLiteは`<app_id>_<destination>_storage` named volumeの`/rails/stor
 | --- | --- | --- | --- |
 | primary | `/rails/storage/production.sqlite3` | 常時 | 対象 |
 | storage | `/rails/storage/production_storage.sqlite3` | 常時 | 対象 |
-| queue | `/rails/storage/production_queue.sqlite3` | Solid Queue使用時 | 対象 |
+| queue | `/rails/storage/production_queue.sqlite3` | 常設 | 対象 |
 | cache | `/rails/storage/production_cache.sqlite3` | Solid Cache使用時 | 対象外 |
 | cable | `/rails/storage/production_cable.sqlite3` | Solid Cable使用時 | 対象 |
 
@@ -375,7 +387,7 @@ Litestream 0.5.15をKamal Accessoryとして起動し、Web・Workerと同じdes
 | access key | `R2_ACCESS_KEY` |
 | secret key | `R2_SECRET_KEY` |
 
-endpointは`${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`、regionは`auto`です。object prefixは`primary`、`storage`、条件付き`queue`・`cable`です。資格情報の正本は人間ユーザーのaccount全体で一意性を確認したdestination別vault内のitemとします。productionとstagingにはそれぞれ`deploy:<正規化済みapp_id>:<destination>`というservice accountを作り、対応するvaultの`read_items`だけを付与します。そのtokenは同名のAPI Credential itemにconcealed fieldとして保存します。`.kamal/secrets.production`・`.kamal/secrets.staging`には選択した1Password account ID、vault ID、R2 item IDだけを生成し、service account tokenは取得しません。共通secretは`.kamal/secrets-common`に置きます。ローカルWrangler v4とGumを使う`bin/rails deployment:configure`が人間ユーザーの1Password認証、vault、service account、bucket、Cloudflare account-owned API token、item、参照生成を担当します。
+endpointは`${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`、regionは`auto`です。object prefixは常設の`primary`・`storage`・`queue`と、条件付きの`cable`です。資格情報の正本は人間ユーザーのaccount全体で一意性を確認したdestination別vault内のitemとします。productionとstagingにはそれぞれ`deploy:<正規化済みapp_id>:<destination>`というservice accountを作り、対応するvaultの`read_items`だけを付与します。そのtokenは同名のAPI Credential itemにconcealed fieldとして保存します。`.kamal/secrets.production`・`.kamal/secrets.staging`には選択した1Password account ID、vault ID、R2 item IDだけを生成し、service account tokenは取得しません。共通secretは`.kamal/secrets-common`に置きます。ローカルWrangler v4とGumを使う`bin/rails deployment:configure`が人間ユーザーの1Password認証、vault、service account、bucket、Cloudflare account-owned API token、item、参照生成を担当します。
 
 対話専用の`bin/rails deployment:setup-server`は、公式`vultr-cli` major v3のJSON出力を全ページ取得し、単一のUbuntu LTS x64 VPSをdestinationへ割り当てます。Kamal共通設定はdestination固有のhostを持たず、`config/deploy.production.yml`または`config/deploy.staging.yml`がWeb・Worker・LitestreamのIPv4、proxy FQDN、application origin、root SSH userを保持します。DNS-onlyでVPSと一致するAAAAを使う場合だけ、proxyのpublish先へ`0.0.0.0`と`::`を指定します。
 
@@ -393,9 +405,9 @@ Accessoryは通常の`kamal deploy`では更新されないため、設定・ima
 
 ### ハードメンテナンス
 
-全生成アプリへRails非依存の`bin/kamal-maintenance`を既存の名称・subcommand契約のまま生成します。ソフトメンテナンスとは設定も文言も連動しません。`start`はKamal Proxyの`app maintenance --message`を先に実行し、Kamal既定の30秒drain timeoutでWebと条件付きWorkerを停止します。その後、primary・storage・条件付きqueue/cableをLitestream control socket経由で最終同期し、Accessoryを停止して、container停止と公開503・表示文言を検証します。Solid Cache DBはapp停止によって読み書き不能になりますが、再構築可能データなのでLitestream対象には追加しません。
+全生成アプリへRails非依存の`bin/kamal-maintenance`を既存の名称・subcommand契約のまま生成します。ソフトメンテナンスとは設定も文言も連動しません。`start`はKamal Proxyの`app maintenance --message`を先に実行し、Kamal既定の30秒drain timeoutでWebとWorkerを停止します。その後、primary・storage・queueと選択したcableをLitestream control socket経由で最終同期し、Accessoryを停止して、container停止と公開503・表示文言を検証します。Solid Cache DBはapp停止によって読み書き不能になりますが、再構築可能データなのでLitestream対象には追加しません。
 
-`finish`はLitestreamを起動してcontrol socketを確認し、Webと条件付きWorkerを起動して内部`/up`を検証した後に`app live`を実行し、公開`/up`が200になってからremote stateを削除します。途中失敗では503を維持し、`app live`後の公開確認失敗では直ちにmaintenance表示へ戻します。destination別JSON stateは`starting`・`active`・`finishing`・失敗状態、文言、開始・更新時刻、最後の成功step、失敗stepを保存します。`status`はRailsやDBを起動せず、state、Docker上のrole、Litestream、公開応答の不一致を失敗として報告します。
+`finish`はLitestreamを起動してcontrol socketを確認し、WebとWorkerを起動して内部`/up`を検証した後に`app live`を実行し、公開`/up`が200になってからremote stateを削除します。途中失敗では503を維持し、`app live`後の公開確認失敗では直ちにmaintenance表示へ戻します。destination別JSON stateは`starting`・`active`・`finishing`・失敗状態、文言、開始・更新時刻、最後の成功step、失敗stepを保存します。`status`はRailsやDBを起動せず、state、Docker上のrole、Litestream、公開応答の不一致を失敗として報告します。
 
 `start`・`message`・`finish`はTTYとGumの既定値「中止」の確認を必須とし、forceや非対話実行は提供しません。restoreとmaintenanceは共通のKamal runner・remote marker処理を使って相互排他にし、pre-deploy hookはどちらのmarkerでも通常deployを拒否します。CLIは停止したjobを自動retryしません。再開後、通常のSolid Queue jobはMission Control Jobs、Maintenance Taskは専用管理画面が有効な場合にそれぞれ手動復旧します。
 
@@ -403,13 +415,13 @@ Accessoryは通常の`kamal deploy`では更新されないため、設定・ima
 
 `mise exec -- bin/kamal-restore`は`--destination=production|staging`を必須とし、最新時点、`--timestamp=RFC3339`によるpoint-in-time、`--plan`によるdry-runを提供します。書き込み操作はTTYと`RESTORE <app_id> <destination> <target>`の完全一致入力を必須にし、確認回避やforce optionは提供しません。
 
-確認後はmaintenance化、Web/Worker停止、全DBの`sync -wait`、Accessory停止、deploy lock取得、全DBの一時領域へのrestoreとfull integrity check、同一volume内renameの順で処理します。primary、storage、条件付きqueue/cableを常に一組で扱い、部分的な復元は許可しません。切替途中の失敗は補償renameで元へ戻します。
+確認後はmaintenance化、Web/Worker停止、全DBの`sync -wait`、Accessory停止、deploy lock取得、全DBの一時領域へのrestoreとfull integrity check、同一volume内renameの順で処理します。primary、storage、queueと選択したcableを常に一組で扱い、部分的な復元は許可しません。切替途中の失敗は補償renameで元へ戻します。
 
 復元前DBとWAL/SHM/journalは操作ID別に保持し、destination付きの`mise exec -- bin/kamal-restore --rollback=OPERATION_ID`で確認付きrollbackを行います。復元中はdestination別remote markerと`pre-deploy` hookで新規deployを拒否し、破壊的な切替中はdeploy lockを保持します。切替後の起動失敗では自動rollbackせず、サービスとmarkerを停止状態で残して調査可能にします。
 
 ## Rails 8.1のSolid系既定値
 
-Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queue`、`solid_cable`をまとめて生成します。本プロジェクトではSolid QueueとSolid Cableがユーザー選択なので、Rails既定の一括導入をそのまま利用できません。
+Rails 8.1は、skip optionを指定しない場合に`solid_cache`、`solid_queue`、`solid_cable`をまとめて生成します。本プロジェクトではSolid CacheとSolid Cableがユーザー選択なので、Rails既定の一括導入をそのまま利用できません。
 
 `rails new`開始前にSolid系のgenerator optionを確定し、標準の一括導入を`--skip-solid`で抑止したうえで、選択したcomponentだけを公式install generatorで導入します。Solid Cacheは既定で使用し、質問で無効化できます。
 
@@ -421,4 +433,4 @@ Passkeyはdiscoverable credentialとして複数登録でき、platformとcross-
 
 `additional_login_methods`へ`siwe`を選択した場合だけ`siwe-rb` 0.2.xと`:siweable`を追加します。`:siweable`はDeviseの公開module登録契約に従ってmodel、controller、routeを登録し、Warden strategyは追加しません。mapper拡張をroutes評価前に読み込み、成功時は紐付いた既存Userの`active_for_authentication?`を確認してDeviseの`sign_in`を呼びます。
 
-`SiweIdentity`はUserごとに複数の名前付きEOA addressを保持します。signupは署名検証後にUserと最初のidentityをtransactionで作成し、loginは既存identityだけを受け付けます。loginで有効な署名を検証した後にidentityが見つからない場合、`POST /users/sign_in/siwe`は`401 { "error": "wallet_not_registered" }`を返し、画面は未登録であることと登録済みウォレットまたはアカウント作成の利用を案内します。署名不正、期限切れ、別session、無効なUserは登録状況を開示せず、汎用的な署名検証エラーを表示します。signupと追加登録ではEIP-6963 `ProviderInfo.name`をtrimし、1〜50文字なら初期名として保存します。欠落・不正・長すぎる名前と従来型`window.ethereum`は`Wallet`にし、同名を許可します。Provider情報は自己申告の表示情報としてのみ扱い、address・署名・認証器の信頼判定には使いません。名称変更はedit、解除は別資格情報による対象外再認証を行うshowへ分離します。SIWEで確立したsessionの認証元identityは一覧で「現在使用中」と表示し、解除導線を出さず、解除endpointでも拒否します。最後の資格情報にも解除導線を出しません。WebAuthn／SIWE challengeはpurpose、User、browser session、5分の期限、消費時刻、破壊操作では削除対象へbindingし、transaction内で一度だけ消費します。最後の資格情報、現在のsessionの認証元identity、対象自身による再認証、別User、期限切れ、replayを拒否します。RPC、ERC-1271、WalletConnect、外部SaaSは導入しません。
+`SiweIdentity`はUserごとに複数の名前付きEOA addressを保持します。signupは署名検証後にUserと最初のidentityをtransactionで作成し、loginは既存identityだけを受け付けます。loginで有効な署名を検証した後にidentityが見つからない場合、`POST /users/sign_in/siwe`は`401 { "error": "wallet_not_registered" }`を返し、画面は未登録であることと登録済みウォレットまたはアカウント作成の利用を案内します。署名不正、期限切れ、別session、無効なUserは登録状況を開示せず、汎用的な署名検証エラーを表示します。signupと追加登録ではEIP-6963 `ProviderInfo.name`をtrimし、1〜50文字なら初期名として保存します。欠落・不正・長すぎる名前と従来型`window.ethereum`は`Wallet`にし、同名を許可します。Provider情報は自己申告の表示情報としてのみ扱い、address・署名・認証器の信頼判定には使いません。名称変更はedit、解除は別資格情報による対象外再認証を行うshowへ分離します。SIWEで確立したsessionの認証元identityは一覧で「現在使用中」と表示し、解除導線を出さず、解除endpointでも拒否します。最後の資格情報にも解除導線を出しません。WebAuthn／SIWE challengeはpurpose、User、browser session、5分の期限、消費時刻、破壊操作では削除対象へbindingし、transaction内で一度だけ消費します。最後の資格情報、現在のsessionの認証元identity、対象自身による再認証、別User、期限切れ、replayを拒否します。SIWEログイン処理にはRPC、ERC-1271、WalletConnect、外部SaaSを導入しません。決済のBase Account接続・署名検証とは分離します。

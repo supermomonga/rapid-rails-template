@@ -57,7 +57,7 @@ module RapidRailsTemplate
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "thruster"
       result << "web-push" if configuration["web_push"] == "use"
-      result << "solid_queue" if configuration["active_job"] == "solid_queue"
+      result.concat(%w[solid_queue billing eth])
       result << "mission_control-jobs" if configuration["job_operations"] == "enable"
       result << "maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
       result << "solid_cache" if configuration["solid_cache"] == "use"
@@ -67,7 +67,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
+      result = %w[prepare_billing_engine declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
       result << "install_devise"
       result << "install_siwe" if configuration["additional_login_methods"].include?("siwe")
       result << "configure_roles"
@@ -80,11 +80,12 @@ module RapidRailsTemplate
       result << "configure_web_push" if configuration["web_push"] == "use"
       result << "configure_default_views"
       result << "configure_soft_maintenance"
-      result << "install_solid_queue" if configuration["active_job"] == "solid_queue"
+      result << "install_solid_queue"
       result << "install_job_operations" if configuration["job_operations"] == "enable"
       result << "install_maintenance_tasks" if configuration["maintenance_tasks"] == "enable"
       result << "install_solid_cache" if configuration["solid_cache"] == "use"
       result << "install_solid_cable" if configuration["action_cable"] == "solid_cable"
+      result << "configure_billing"
       result << "configure_database"
       result << "configure_active_storage_db"
       result << "configure_kamal"
@@ -103,6 +104,10 @@ module RapidRailsTemplate
 
     def build_artifacts
       result = %w[
+        engines/billing/billing.gemspec
+        engines/billing/lib/billing/engine.rb
+        engines/billing/app/services/billing/access.rb
+        engines/billing/db/migrate/*_create_billing.rb
         package.json
         package-lock.json
         .annotaterb.yml
@@ -506,18 +511,15 @@ module RapidRailsTemplate
     end
 
     def build_processes
-      result = ["web"]
-      result << "worker" if configuration["active_job"] == "solid_queue"
-      result
+      %w[web worker]
     end
 
     def build_production_requirements
-      result = []
-      if configuration["active_job"] == "solid_queue"
-        result << "Solid Queue worker/dispatcher/scheduler"
-        result << "finished jobs retained for 1 day; failed jobs retained until retry/discard"
-      end
-      result
+      [
+        "Solid Queue worker/dispatcher/scheduler",
+        "finished jobs retained for 1 day; failed jobs retained until retry/discard",
+        "Billing: per-environment execution key; RPC, collector, treasury and gas ceiling for each chain"
+      ]
     end
   end
 end

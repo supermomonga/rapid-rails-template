@@ -96,8 +96,8 @@ class QuestionnaireTest < Minitest::Test
       { header: "PWAを使用しますか？", selected: ["use"] }
     ], prompt.choose_calls.fetch(0)
     assert_equal [
-      %w[solid_queue skip],
-      { header: "ジョブ管理を使用しますか？", selected: ["solid_queue"] }
+      %w[enable disable],
+      { header: "管理者向けジョブ運用画面を使用しますか？", selected: ["enable"] }
     ], prompt.choose_calls.fetch(2)
   end
 
@@ -109,7 +109,7 @@ class QuestionnaireTest < Minitest::Test
 
     assert_equal "use", configuration["pwa"]
     assert_equal "use", configuration["web_push"]
-    assert_equal "solid_queue", configuration["active_job"]
+    refute configuration.values.key?("active_job")
     assert_equal "enable", configuration["job_operations"]
     assert_equal "enable", configuration["maintenance_tasks"]
     assert_equal "use", configuration["solid_cache"]
@@ -133,7 +133,7 @@ class QuestionnaireTest < Minitest::Test
 
   def test_asks_maintenance_tasks_with_enable_preselected_when_solid_queue_is_selected
     initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.merge(
-      "active_job" => "solid_queue"
+      "web_push" => "skip"
     ).reject { |key, _| key == "maintenance_tasks" }
     prompt = RecordingPrompt.new(answers: ["enable"])
 
@@ -148,7 +148,7 @@ class QuestionnaireTest < Minitest::Test
 
   def test_asks_job_operations_with_enable_preselected_when_solid_queue_is_selected
     initial_answers = RapidRailsTemplate::Configuration::DEFAULTS.merge(
-      "active_job" => "solid_queue"
+      "web_push" => "skip"
     ).reject { |key, _| key == "job_operations" }
     prompt = RecordingPrompt.new(answers: ["enable"])
 
@@ -161,12 +161,12 @@ class QuestionnaireTest < Minitest::Test
     ], prompt.choose_calls.fetch(0)
   end
 
-  def test_skips_job_operations_without_solid_queue
-    prompt = RecordingPrompt.new(answers: %w[skip skip])
+  def test_asks_job_operations_without_pwa
+    prompt = RecordingPrompt.new(answers: %w[skip enable])
     answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
 
-    refute answers.key?("job_operations")
-    refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("ジョブ運用画面") }
+    assert_equal "enable", answers["job_operations"]
+    assert prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("ジョブ運用画面") }
   end
 
   def test_asks_maintenance_tasks_when_web_push_requires_solid_queue
@@ -182,12 +182,12 @@ class QuestionnaireTest < Minitest::Test
     assert_equal "enable", answers["maintenance_tasks"]
   end
 
-  def test_skips_maintenance_tasks_without_solid_queue
-    prompt = RecordingPrompt.new(answers: %w[skip skip])
+  def test_asks_maintenance_tasks_without_pwa
+    prompt = RecordingPrompt.new(answers: %w[skip disable enable])
     answers = RapidRailsTemplate::Questionnaire.new(prompt:, output: StringIO.new).ask_all
 
-    refute answers.key?("maintenance_tasks")
-    refute prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("運用タスク") }
+    assert_equal "enable", answers["maintenance_tasks"]
+    assert prompt.choose_calls.any? { |(_, options)| options.fetch(:header).include?("運用タスク") }
   end
 
   def test_asks_only_applicable_options_missing_from_initial_answers

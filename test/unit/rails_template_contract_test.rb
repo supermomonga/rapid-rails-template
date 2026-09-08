@@ -138,7 +138,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, 'class: class_names("tabs tabs-lift min-w-max"'
     assert_includes helper, 'class: "tab-content sticky left-0 max-w-[100cqw] [contain:inline-size] bg-base-100 border-base-300 p-3"'
     assert_includes @source, '<div class="min-w-0 [container-type:inline-size]">'
-    assert_includes helper, 'tag.div(tablist, class: "overflow-x-auto")'
+    assert_includes helper, 'tag.div(tablist, class: "isolate overflow-x-auto")'
     assert_includes layout, '<html lang="<%= I18n.locale %>"'
     assert_includes layout, 'property="og:site_name" content="<%= application_identity.app_name %>"'
     assert_includes header, "link_to application_identity.app_name, application_routes.root_path"
@@ -531,7 +531,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_faqs, "class: action_button_classes(:primary)"
     assert_includes admin_faqs, "class: action_button_classes(:secondary)"
     assert_includes admin_faqs, "class: action_button_classes(:destructive)"
-    assert_includes footer_setting, "class: action_button_classes(:primary)"
+    assert_includes footer_setting, 'class_names(action_button_classes(:primary), "join-item")'
     assert_includes api_index, "class: action_button_classes(:primary)"
     assert_includes api_index, "class: action_button_classes(:secondary)"
     assert_includes notifications, "class: action_button_classes(:primary)"
@@ -547,7 +547,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes notification_history, 'frame_prefix: "history_personal_notification", compact: false'
     assert_includes notification_open, "locals: { delivery: @delivery, frame_prefix:, compact: }"
 
-    [passkey_new, admin_page_edit, admin_faq_form, footer_setting, profile_form, api_form,
+    [passkey_new, admin_page_edit, admin_faq_form, profile_form, api_form,
      notification_form, notification_show, account_delete].each do |view|
       assert_includes view, '<div class="card-actions flex-wrap justify-end">'
     end
@@ -563,8 +563,10 @@ class RailsTemplateContractTest < Minitest::Test
       'class: action_button_classes(:quiet)',
       'class: action_button_classes(:primary)')
     assert_source_order(api_form,
-      'class: action_button_classes(:quiet)',
-      'class: action_button_classes(:primary)')
+      'form.text_field :name',
+      'class_names(action_button_classes(:primary), "join-item")',
+      '</fieldset>',
+      'class: action_button_classes(:quiet)')
     assert_source_order(api_show,
       'class: action_button_classes(:quiet)',
       'class: action_button_classes(:secondary)',
@@ -670,7 +672,8 @@ class RailsTemplateContractTest < Minitest::Test
   def test_solid_queue_uses_the_test_adapter_only_in_test_environment
     solid = source_between("def install_solid_components", "def install_job_operations")
 
-    assert_includes @source, 'gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"'
+    assert_includes @source, 'gem "solid_queue", "1.6.0"'
+    refute_includes @source, 'VALUES.fetch("active_job")'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :solid_queue"'
     assert_includes solid, 'environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :test", env: "test"'
@@ -680,7 +683,7 @@ class RailsTemplateContractTest < Minitest::Test
   def test_solid_queue_configures_a_dedicated_development_database
     database = source_between("def configure_database", "def kamal_restore_cli_body")
 
-    assert_includes database, 'if VALUES.fetch("active_job") == "solid_queue"'
+    refute_includes database, 'VALUES.fetch("active_job")'
     assert_includes database, 'development_databases["queue"] = {'
     assert_includes database, '"database" => "storage/development_queue.sqlite3"'
     assert_includes database, '"migrations_paths" => "db/queue_migrate"'
@@ -1800,12 +1803,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes kamal, 'CMD ["./bin/thrust", "./bin/rails", "server"]'
     assert_includes kamal,
       "docker_build_packages = %w[build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev]"
-    assert_includes kamal, 'if VALUES.fetch("additional_login_methods").include?("siwe")'
+    refute_includes kamal, 'if VALUES.fetch("additional_login_methods").include?("siwe")'
     assert_includes kamal,
       "docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])"
     assert_includes kamal,
       'format(<<~\'DOCKERFILE\', build_packages: docker_build_packages.join(" "))'
     assert_includes dockerfile, "apt-get install --no-install-recommends -y %{build_packages}"
+    assert_includes dockerfile, "ARG RUBY_VERSION=4.0.6"
+    assert_source_order dockerfile, "COPY Gemfile Gemfile.lock ./", "COPY engines/billing ./engines/billing", "RUN bundle install"
     assert_operator dockerfile.index("%{build_packages}"), :<, dockerfile.rindex("FROM base")
     %w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev].each do |package|
       refute_includes dockerfile, package
@@ -2157,8 +2162,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes after_bundle, 'require "action_mailer"'
     assert_includes after_bundle, 'require "mail"'
     assert_operator after_bundle.index('append_to_file "sorbet/tapioca/require.rb"'),
-      :<, after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"')
-    assert_operator after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"'),
+      :<, after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser eth mail webauthn"')
+    assert_operator after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser eth mail webauthn"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"')
     assert_includes after_bundle, 'require "webauthn/fake_client"'
     assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),
@@ -2741,7 +2746,22 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes job_show, '<header class="flex flex-wrap items-start justify-between gap-4">'
     refute_includes api_form, "content_for :page_actions_primary"
     assert_includes api_form, '<div class="card-actions flex-wrap justify-end">'
-    assert_includes api_form, '<%= form.submit class: action_button_classes(:primary) %>'
+    assert_includes api_form, '<%= form.submit class: class_names(action_button_classes(:primary), "join-item") %>'
+  end
+
+  def test_single_input_actions_join_controls_without_changing_button_roles_or_labels
+    paths = %w[app/views/account/passkeys/edit.html.erb app/views/account/siwe_identities/edit.html.erb app/views/api_credentials/_form.html.erb]
+    paths.each do |path|
+      view = generated_file_source(path)
+      assert_includes view, '<div class="join w-full">', path
+      assert_includes view, 'class: "input join-item min-w-0 flex-1"', path
+      assert_includes view, 'class_names(action_button_classes(:primary), "join-item")', path
+      assert_operator view.index('form.label :name'), :<, view.index('<div class="join w-full">'), path
+      refute_match(/(?:input|btn)-(?:xs|sm)/, view, path)
+    end
+    %w[app/views/profiles/_form.html.erb app/views/admin/faqs/_form.html.erb].each do |path|
+      refute_includes generated_file_source(path), 'class="join w-full"', path
+    end
   end
 
   def test_with_menu_standard_surfaces_use_p_3_without_changing_nested_or_variant_cards

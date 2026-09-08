@@ -1,0 +1,13 @@
+<% content_for :page_title, t("billing.ui.audit_entries") %>
+<section class="card card-border bg-base-100"><div class="card-body p-3">
+  <p><%= t("billing.ui.audit_help") %></p>
+  <ul class="list"><% @entries.each do |entry| %><li class="list-row"><%= billing_icon("document-text") %>
+    <div class="list-col-grow min-w-0"><h2 class="font-semibold break-words"><%= t("billing.ui.audit_actions.#{entry.action}") %></h2><p class="break-words"><%= entry.actor_name %> · <%= l(entry.created_at, format: :long) %></p><p><%= t("billing.ui.audit_targets.#{entry.target_type.demodulize.underscore}") %> #<%= entry.target_id %></p></div>
+    <dl class="list-col-wrap grid gap-3 sm:grid-cols-2">
+      <% [["before_change", entry.before_values], ["after_change", entry.after_values]].each do |label, values| %>
+        <div class="min-w-0"><dt class="font-semibold"><%= t("billing.ui.#{label}") %></dt><dd><ul class="list"><% values.each do |field, value| %><li class="break-words"><span class="text-base-content/70"><%= t("billing.ui.audit_fields.#{field}") %>:</span> <%= billing_audit_value(field, value) %></li><% end %></ul></dd></div>
+      <% end %>
+    </dl>
+  </li><% end %></ul>
+  <%= render "billing/shared/pagination" %>
+</div></section>

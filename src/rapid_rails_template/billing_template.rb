@@ -1,0 +1,87 @@
+# frozen_string_literal: true
+
+def prepare_billing_engine
+  BILLING_FILES.each do |path, encoded|
+    create_file File.join("engines/billing", path), Base64.strict_decode64(encoded)
+  end
+  gem "billing", path: "engines/billing"
+end
+
+def configure_billing
+  # Use Rails' migration numbering after the host authentication tables exist.
+  # The generated migration stays in the engine, whose path Rails loads directly.
+  generate "migration", "CreateBilling"
+  migrations = Dir.glob("db/migrate/*_create_billing.rb")
+  raise "CreateBilling migrationが一意ではありません" unless migrations.one?
+
+  engine_migration = "engines/billing/db/migration_templates/create_billing.rb"
+  create_file File.join("engines/billing/db/migrate", File.basename(migrations.first)), File.binread(engine_migration)
+  remove_file engine_migration
+  remove_file migrations.first
+  route 'mount Billing::Engine => "/", as: :billing'
+  create_file "app/helpers/billing_helper.rb", <<~RUBY
+    module BillingHelper
+      include Billing::UiHelper
+    end
+  RUBY
+  create_file "sorbet/rbi/shims/billing_ui.rbi", <<~RUBY
+    # typed: true
+    module Billing::UiHelper
+      include ActionView::Helpers
+    end
+  RUBY
+  prepend_to_file "app/views/shared/_account_navigation.html.erb", <<~ERB
+    <%= billing_menu_item("subscriptions", Billing::Engine.routes.url_helpers.account_subscriptions_path, "credit-card", active: controller_path.start_with?("billing/account/")) %>
+  ERB
+  append_to_file "app/views/shared/_account_navigation.html.erb", <<~ERB
+    <%= billing_menu_item("merchant_area", Billing::Engine.routes.url_helpers.merchant_root_path, "building-storefront", active: false) %>
+  ERB
+  prepend_to_file "app/views/shared/_admin_navigation.html.erb", <<~ERB
+    <%= billing_menu_item("overview", Billing::Engine.routes.url_helpers.admin_root_path, "banknotes", active: controller_path.start_with?("billing/admin/")) %>
+  ERB
+  append_to_file "config/importmap.rb", <<~RUBY
+    pin "billing/base_account", to: "billing/base_account.js"
+    pin "billing/checkout_controller", to: "billing/checkout_controller.js"
+    pin "billing/navigation_controller", to: "billing/navigation_controller.js"
+  RUBY
+  append_to_file "app/javascript/controllers/index.js", <<~JS
+    import BillingCheckoutController from "billing/checkout_controller"
+    application.register("billing-checkout", BillingCheckoutController)
+    import BillingNavigationController from "billing/navigation_controller"
+    application.register("billing-navigation", BillingNavigationController)
+  JS
+  append_to_file "app/assets/tailwind/application.css", <<~CSS
+    @source "../../../engines/billing/app/views";
+  CSS
+  environment "config.x.billing.web_push_enabled = #{VALUES.fetch('web_push') == 'use'}"
+  if VALUES.fetch("web_push") == "use"
+    environment "config.x.billing.push_delivery = ->(**attributes) { ::PushNotifier.deliver_later(**attributes) if attributes.fetch(:user).push_subscriptions.exists? }"
+  end
+  append_to_file "config/initializers/filter_parameter_logging.rb", <<~RUBY
+
+    Rails.application.config.filter_parameters += [:signature, :raw_transaction, :superseded_payload, :billing_execution_private_key]
+  RUBY
+  inject_into_class "app/models/user.rb", "User", <<~RUBY
+    include Billing::UserAssociations
+  RUBY
+  inject_into_class "app/models/user_role.rb", "UserRole", <<~RUBY
+    include Billing::UserRoleGuard
+  RUBY
+  recurring = YAML.safe_load_file("config/recurring.yml", aliases: true)
+  %w[development production].each do |environment_name|
+    recurring[environment_name] ||= {}
+    recurring.fetch(environment_name)["billing_reconcile"] = {
+      "class" => "Billing::ReconcileJob", "schedule" => "every minute"
+    }
+  end
+  create_file "config/recurring.yml", YAML.dump(recurring), force: true
+  create_file "test/billing_engine_test.rb", <<~RUBY
+    require_relative "../engines/billing/test/integration/host_contract_test"
+  RUBY
+  append_to_file "test/support/evidence_capture.rb", <<~RUBY
+    require_relative "../../engines/billing/test/support/evidence_capture"
+  RUBY
+  create_file "sorbet/tapioca/compilers/billing_routes.rb", <<~RUBY
+    require_relative "../../../engines/billing/lib/tapioca/dsl/compilers/billing_routes"
+  RUBY
+end

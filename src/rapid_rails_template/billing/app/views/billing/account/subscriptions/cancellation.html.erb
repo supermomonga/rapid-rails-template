@@ -1,0 +1,8 @@
+<% content_for :page_title, t("billing.ui.cancel_subscription") %>
+<%= render "billing/shared/breadcrumbs", label: "contract_details", path: account_subscription_path(@subscription), icon: "credit-card", current: t("billing.ui.cancel_subscription") %>
+<section class="card card-border bg-base-100"><div class="card-body p-3">
+  <h2 class="card-title"><%= @subscription.plan_name %></h2>
+  <p><%= t("billing.ui.cancel_help") %></p>
+  <p><%= t("billing.ui.paid_until") %>: <strong><%= @subscription.paid_until ? l(@subscription.paid_until, format: :long) : t("billing.ui.not_paid") %></strong></p>
+  <%= form_with url: cancel_account_subscription_path(@subscription) do |form| %><div class="card-actions justify-end"><%= link_to t("billing.ui.keep_subscription"), account_subscription_path(@subscription), class: action_button_classes(:quiet) %><%= form.submit t("billing.ui.confirm_cancellation"), class: action_button_classes(:destructive_confirm) %></div><% end %>
+</div></section>

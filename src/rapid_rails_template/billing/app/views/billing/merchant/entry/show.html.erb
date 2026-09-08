@@ -1,0 +1,16 @@
+<% content_for :page_title, t("billing.ui.merchant_area") %>
+<% if Billing::MerchantAccess.eligible?(current_user) %>
+  <% content_for :page_actions_primary do %><%= link_to billing_label("merchant_registration", "building-storefront"), new_merchant_account_path, class: action_button_classes(:primary) %><% end %>
+  <%= render "billing/shared/empty", icon: "building-storefront", title: t("billing.ui.no_active_merchants"), description: t("billing.ui.no_active_merchants_help") %>
+<% else %>
+  <div class="alert alert-info alert-soft"><%= billing_icon("exclamation-triangle") %><span><%= t("billing.ui.restricted_help") %></span></div>
+<% end %>
+<section class="card card-border bg-base-100 mt-6"><div class="card-body p-3">
+  <h2 class="card-title"><%= billing_label("invitations", "clock") %></h2><p><%= t("billing.ui.invitation_help") %></p>
+  <div class="card-actions justify-end"><%= link_to billing_label("invitations", "clock"), merchant_invitations_path, class: action_button_classes(:secondary) %></div>
+</div></section>
+<% if @closed_merchants.any? %>
+  <section class="card card-border bg-base-100 mt-6"><div class="card-body p-3"><h2 class="card-title"><%= t("billing.ui.closed_merchants") %></h2>
+    <ul class="list"><% @closed_merchants.each do |merchant| %><li class="list-row"><%= billing_icon("building-storefront") %><div class="list-col-grow break-words"><%= link_to merchant.display_name, merchant_dashboard_path(merchant_id: merchant.public_id), class: "link" %></div></li><% end %></ul>
+  </div></section>
+<% end %>

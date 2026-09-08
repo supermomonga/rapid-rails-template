@@ -8,10 +8,12 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods api action_cable mail default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push job_operations maintenance_tasks solid_cache additional_login_methods api action_cable mail default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
+
+prepare_billing_engine
 
 gem "json", "~> 2.21"
 gem "pagy"
@@ -55,7 +57,7 @@ gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_met
 gem "haikunator"
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails"
 gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
-gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"
+gem "solid_queue", "1.6.0"
 gem "mission_control-jobs", "1.1.0" if VALUES.fetch("job_operations") == "enable"
 gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
@@ -2205,11 +2207,13 @@ def install_passkey_views
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend"><%= form.label :name, t("passkeys.name") %></legend>
-        <%= form.text_field :name, required: true, maxlength: 50, class: "input w-full" %>
+        <div class="join w-full">
+          <%= form.text_field :name, required: true, maxlength: 50, class: "input join-item min-w-0 flex-1" %>
+          <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
+        </div>
       </fieldset>
       <div class="card-actions flex-wrap justify-end">
         <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
-        <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -3571,11 +3575,13 @@ def install_siwe
         <% end %>
         <fieldset class="fieldset">
           <legend class="fieldset-legend"><%= form.label :name, t("siwe.identities.name") %></legend>
-          <%= form.text_field :name, required: true, maxlength: 50, class: "input w-full" %>
+          <div class="join w-full">
+            <%= form.text_field :name, required: true, maxlength: 50, class: "input join-item min-w-0 flex-1" %>
+            <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
+          </div>
         </fieldset>
         <div class="card-actions flex-wrap justify-end">
           <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
-          <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
         </div>
       <% end %>
     </section>
@@ -4566,7 +4572,7 @@ def configure_roles
           redirect_to admin_user_path(@user), notice: I18n.t("admin.user_roles.destroy.notice"), status: :see_other
         rescue KeyError
           head :unprocessable_content
-        rescue ActiveRecord::RecordNotDestroyed => error
+        rescue ActiveRecord::RecordNotDestroyed, ActiveRecord::RecordInvalid => error
           redirect_to admin_user_path(@user), alert: error.record.errors.full_messages.to_sentence, status: :see_other
         end
 
@@ -6650,9 +6656,11 @@ def configure_content_management
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend"><%= form.label :github_url, "GitHub" %></legend>
-              <%= form.url_field :github_url, class: "input w-full", placeholder: "https://example.com/github-account" %>
+              <div class="join w-full">
+                <%= form.url_field :github_url, class: "input join-item min-w-0 flex-1", placeholder: "https://example.com/github-account" %>
+                <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
+              </div>
             </fieldset>
-            <div class="card-actions flex-wrap justify-end"><%= form.submit t("common.update"), class: action_button_classes(:primary) %></div>
           <% end %>
         </div>
       </section>
@@ -8995,12 +9003,14 @@ def configure_api
       <% end %>
       <fieldset class="fieldset">
         <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= form.label :name %></legend>
-        <%= form.text_field :name, required: true, autocomplete: "off", class: "input w-full" %>
+        <div class="join w-full">
+          <%= form.text_field :name, required: true, autocomplete: "off", class: "input join-item min-w-0 flex-1" %>
+          <%= form.submit class: class_names(action_button_classes(:primary), "join-item") %>
+        </div>
         <p class="label"><%= t("api_credentials.name_hint") %></p>
       </fieldset>
       <div class="card-actions flex-wrap justify-end">
         <%= link_to t("common.cancel"), api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: action_button_classes(:quiet) %>
-        <%= form.submit class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -12166,11 +12176,23 @@ def configure_in_app_notifications
 end
 
 def configure_default_views
+  create_file "config/initializers/form_errors.rb", <<~'RUBY', force: true
+    require "nokogiri"
+
+    Rails.application.config.action_view.field_error_proc = proc do |html_tag, _instance|
+      fragment = Nokogiri::HTML.fragment(html_tag)
+      fragment.css("input:not([type='hidden']), select, textarea").each do |control|
+        control["aria-invalid"] = "true"
+      end
+      # Rails supplies escaped form markup; only a static ARIA attribute is added above.
+      fragment.to_html.html_safe # rubocop:disable Rails/OutputSafety
+    end
+  RUBY
+
   siwe_enabled = VALUES.fetch("additional_login_methods").include?("siwe")
   pwa_enabled = VALUES.fetch("pwa") == "use"
   web_push_enabled = VALUES.fetch("web_push") == "use"
   job_operations_enabled = VALUES.fetch("job_operations") == "enable"
-  solid_queue_enabled = VALUES.fetch("active_job") == "solid_queue"
   maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
   profile_enabled = true
@@ -12354,22 +12376,24 @@ def configure_default_views
     </li>
   ERB
   signed_in_condition = "user_signed_in?"
-  admin_controller_conditions = ['controller_path.start_with?("admin/")']
+  admin_controller_conditions = ['controller_path.start_with?("admin/")', 'controller_path.start_with?("billing/admin/")']
   admin_controller_conditions << 'controller_path.start_with?("mission_control/jobs/")' if job_operations_enabled
   admin_controller_conditions << 'controller_path.start_with?("maintenance_tasks/")' if maintenance_tasks_enabled
   admin_controller_condition = admin_controller_conditions.join(" || ")
   profile_owner = "current_user.profile"
   logout_path = "application_routes.destroy_user_session_path"
   guest_desktop_navigation = <<~ERB
+    <%= link_to t("billing.ui.plans"), Billing::Engine.routes.url_helpers.plans_path, class: "link" %>
     <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-outline" %>
     <% unless soft_site_maintenance? %>
       <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline" %>
     <% end %>
   ERB
   guest_mobile_navigation = <<~ERB
-    <li><%= link_to t("navigation.sign_in"), application_routes.new_user_session_path %></li>
+    <li><%= link_to Billing::Engine.routes.url_helpers.plans_path do %><%= billing_icon("squares-2x2") %><%= t("billing.ui.plans") %><% end %></li>
+    <li><%= link_to application_routes.new_user_session_path do %><%= billing_icon("user-circle") %><%= t("navigation.sign_in") %><% end %></li>
     <% unless soft_site_maintenance? %>
-      <li><%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path %></li>
+      <li><%= link_to application_routes.new_user_registration_path do %><%= billing_icon("user-circle") %><%= t("navigation.sign_up") %><% end %></li>
     <% end %>
   ERB
   profile_identity = if display_name_enabled || screen_name_enabled
@@ -12763,7 +12787,7 @@ def configure_default_views
 
         tablist = tag.div(safe_join(items), role: "tablist",
           class: class_names("tabs tabs-lift min-w-max", "tabs-#{size}" => size.present?))
-        tag.div(tablist, class: "overflow-x-auto")
+        tag.div(tablist, class: "isolate overflow-x-auto")
       end
     end
   RUBY
@@ -12774,6 +12798,35 @@ def configure_default_views
 
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
+
+      test "invalid fields preserve Join structure labels and escaped values" do
+        value = '"><script>alert(1)</script>'
+        profile = Profile.new(screen_name: value)
+        profile.errors.add(:screen_name, :invalid)
+        markup = fields_for(:profile, profile) do |form|
+          safe_join([
+            form.label(:screen_name),
+            tag.div(class: "join") { safe_join([form.text_field(:screen_name, class: "input join-item", aria: { describedby: "name-help" }), form.submit("Save", class: class_names(action_button_classes(:primary), "join-item"))]) },
+            form.select(:screen_name, [["Name", "name"]]),
+            form.text_area(:screen_name),
+            form.file_field(:screen_name),
+            form.hidden_field(:screen_name)
+          ])
+        end
+        fragment = Nokogiri::HTML.fragment(markup)
+        assert_empty fragment.css(".field_with_errors, script")
+        input = fragment.at_css(".join > input[type='text']")
+        assert input
+        assert_equal value, input["value"]
+        assert_equal "true", input["aria-invalid"]
+        assert_equal "name-help", input["aria-describedby"]
+        assert_equal input["id"], fragment.at_css("label")["for"]
+        assert_equal 1, fragment.css(".join > input[type='submit']").size
+        %w[select textarea input[type='file']].each do |selector|
+          assert_equal "true", fragment.at_css(selector)["aria-invalid"]
+        end
+        assert_empty fragment.css("label[aria-invalid], input[type='hidden'][aria-invalid]")
+      end
 
       test "maps semantic action button roles without a fallback" do
         expected = {
@@ -12983,6 +13036,7 @@ def configure_default_views
         assert_equal "Tab content", fragment.at_css(".tab-active + .tab-content p").text
         assert_equal "/account/siwe_identities", fragment.at_css(".tab-active")["href"]
         assert_includes fragment.at_css(".tab-active")["class"].split, "z-10"
+        assert_includes fragment.at_css("[role='tablist']").parent["class"].split, "isolate"
         refute_includes fragment.at_css(".tab:not(.tab-active)")["class"].split, "z-10"
         assert_equal "true", fragment.at_css(".tab-active")["aria-selected"]
         assert_equal "page", fragment.at_css(".tab-active")["aria-current"]
@@ -13222,7 +13276,9 @@ def configure_default_views
             </div>
             <details class="dropdown dropdown-end dropdown-hover">
     #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow">
-    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if #{admin_controller_condition} %>
+    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if controller_path.start_with?("billing/merchant/") %>
+                <%= render "billing/shared/merchant_navigation" %>
+              <% elsif #{admin_controller_condition} %>
                 <li class="menu-title"><%= application_translate("navigation.admin") %></li>
                 <%= render "shared/admin_navigation" %>
               <% else %>
@@ -13616,25 +13672,13 @@ def configure_default_views
         end
     RUBY
   else
-    production_worker_assertion = if solid_queue_enabled
-      %(assert_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read))
-    else
-      %(assert_no_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read))
-    end
-    solid_queue_cleanup_assertion = if solid_queue_enabled
-      <<~RUBY
-        recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
-          .fetch("production").fetch("clear_solid_queue_finished_jobs")
-        assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
-        assert_equal "every hour at minute 12", recurring.fetch("schedule")
-        #{production_worker_assertion}
-      RUBY
-    else
-      <<~RUBY
-        assert_not Rails.root.join("config/recurring.yml").exist?
-        #{production_worker_assertion}
-      RUBY
-    end
+    solid_queue_cleanup_assertion = <<~RUBY
+      recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
+        .fetch("production").fetch("clear_solid_queue_finished_jobs")
+      assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
+      assert_equal "every hour at minute 12", recurring.fetch("schedule")
+      assert_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read)
+    RUBY
     <<~RUBY
 
         test "does not expose Mission Control Jobs when the feature is disabled" do
@@ -14841,13 +14885,11 @@ def configure_web_push
 end
 
 def install_solid_components
-  if VALUES.fetch("active_job") == "solid_queue"
-    generate "solid_queue:install"
-    environment "config.active_job.queue_adapter = :solid_queue"
-    environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"
-    environment "config.active_job.queue_adapter = :test", env: "test"
-    append_to_file "config/puma.rb", "\nplugin :solid_queue if ENV.fetch(\"RAILS_ENV\", \"development\") == \"development\"\n"
-  end
+  generate "solid_queue:install"
+  environment "config.active_job.queue_adapter = :solid_queue"
+  environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"
+  environment "config.active_job.queue_adapter = :test", env: "test"
+  append_to_file "config/puma.rb", "\nplugin :solid_queue if ENV.fetch(\"RAILS_ENV\", \"development\") == \"development\"\n"
   generate "solid_cache:install" if VALUES.fetch("solid_cache") == "use"
   generate "solid_cable:install" if VALUES.fetch("action_cable") == "solid_cable"
 end
@@ -16955,6 +16997,7 @@ def configure_evidence_capture
             verify_maintenance_tasks_geometry if viewport_name == "desktop" && MAINTENANCE_TASKS
             verify_notification_geometry if viewport_name == "desktop"
             capture_authenticated_pages(viewport_name)
+            capture_billing_scenarios(viewport_name)
             capture_regular_user_navigation(viewport_name)
             Capybara.reset_sessions!
           end
@@ -17629,9 +17672,11 @@ def configure_evidence_capture
           assert_not @regular_user.reload.has_role?(:admin)
           accept_confirm { click_button translate("admin.users.grant") }
           assert_current_path admin_user_path(@regular_user)
+          assert_button translate("admin.users.revoke")
           assert @regular_user.reload.has_role?(:admin)
           accept_confirm { click_button translate("admin.users.revoke") }
           assert_current_path admin_user_path(@regular_user)
+          assert_button translate("admin.users.grant")
           assert_not @regular_user.reload.has_role?(:admin)
         end
 
@@ -19130,7 +19175,60 @@ def configure_evidence_capture
           T.must(singleton_class).define_method(:urlsafe_base64, T.must(original_method))
         end
 
+        def assert_joined_input_actions(identifier, viewport)
+          return unless %w[passkey-edit siwe-identity-edit api-credential-new api-credential-edit
+            billing-members billing-payouts billing-admin-merchant-fee billing-payments billing-refunds
+            billing-merchant-new billing-merchant-edit billing-settings billing-chain-settings billing-sales
+            billing-refund-new billing-refund-invalid admin-footer-setting].include?(identifier)
+
+          widths = viewport == "desktop" ? [320, 390, 640, 960, 961, VIEWPORTS.fetch(viewport).fetch("width")] : [VIEWPORTS.fetch(viewport).fetch("width")]
+          widths.each do |width|
+            page.current_window.resize_to(width, VIEWPORTS.fetch(viewport).fetch("height"))
+            groups = page.evaluate_script(<<~JAVASCRIPT)
+              (() => [...document.querySelectorAll('form')].flatMap(form => {
+                const field = [...form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]), select, textarea')]
+                  .filter(input => input.checkVisibility() && !input.readOnly).at(-1);
+                const button = form.querySelector('.btn[type="submit"]');
+                if (!field || !button || !field.matches('.input, .select, .file-input')) return [];
+                const group = field.parentElement;
+                if (!group.classList.contains('join') || button.parentElement !== group) return [{ joined: false, fieldName: field.name }];
+                const input = field.getBoundingClientRect();
+                const action = button.getBoundingClientRect();
+                const style = getComputedStyle(field);
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+                const minimumWidth = field.matches('select') ? Math.max(...[...field.options].map(option => context.measureText(option.text).width)) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2 : 64;
+                return [{ joined: true, fieldName: field.name, top: input.top, buttonTop: action.top, height: input.height, buttonHeight: action.height,
+                  gap: action.left - input.right, left: input.left, right: action.right, inputWidth: input.width,
+                  minimumWidth, labelCount: field.labels.length,
+                  buttonLabelMatches: !button.hasAttribute('aria-label') || button.getAttribute('aria-label').includes(button.value || button.textContent.trim()),
+                  overflow: document.documentElement.scrollWidth > innerWidth }];
+              }))()
+            JAVASCRIPT
+            assert_not_empty groups, "#{identifier} must join the input and submit button"
+            groups.each do |group|
+              assert group.fetch("joined"), "#{identifier}: #{group.fetch('fieldName')} and its submit button must share a Join"
+              assert_in_delta group.fetch("top"), group.fetch("buttonTop"), 1, "#{identifier} at #{width}px"
+              assert_in_delta group.fetch("height"), group.fetch("buttonHeight"), 1
+              assert_in_delta 0, group.fetch("gap"), 1
+              assert_operator group.fetch("inputWidth"), :>=, group.fetch("minimumWidth"), "#{identifier} input at #{width}px"
+              assert_operator group.fetch("left"), :>=, 0
+              assert_operator group.fetch("right"), :<=, width
+              assert_operator group.fetch("labelCount"), :>=, 1
+              assert group.fetch("buttonLabelMatches"), "#{identifier} accessible name must include the visible button label"
+              assert_not group.fetch("overflow"), "#{identifier} at #{width}px"
+            end
+          end
+        ensure
+          page.current_window.resize_to(VIEWPORTS.fetch(viewport).fetch("width"), VIEWPORTS.fetch(viewport).fetch("height")) if widths
+        end
+
         def capture_current_page(identifier, title, viewport)
+          assert_joined_input_actions(identifier, viewport)
+          if identifier.start_with?("billing-")
+            assert_billing_geometry(viewport)
+          end
           filename = "#{identifier}--#{viewport}.png"
           path = @output_directory.join(filename)
           page.driver.with_playwright_page do |playwright_page|
@@ -19468,6 +19566,10 @@ def configure_application_typechecking
     lib/**/*.rb
     test/**/*.rb
     db/seeds.rb
+    engines/billing/app/**/*.rb
+    engines/billing/lib/**/*.rb
+    engines/billing/config/**/*.rb
+    engines/billing/test/**/*.rb
   ]
   paths = patterns.flat_map { |pattern| Dir.glob(pattern) }.uniq.sort
   raise "application typecheckingの対象Ruby fileが見つかりません" if paths.empty?
@@ -19748,9 +19850,7 @@ def configure_database
     "primary" => { "database" => production_paths.fetch("primary") },
     "storage" => { "database" => production_paths.fetch("storage"), "migrations_paths" => "db/storage_migrate" }
   }
-  if VALUES.fetch("active_job") == "solid_queue"
-    databases["queue"] = { "database" => production_paths.fetch("queue"), "migrations_paths" => "db/queue_migrate" }
-  end
+  databases["queue"] = { "database" => production_paths.fetch("queue"), "migrations_paths" => "db/queue_migrate" }
   if VALUES.fetch("solid_cache") == "use"
     databases["cache"] = { "database" => production_paths.fetch("cache"), "migrations_paths" => "db/cache_migrate" }
   end
@@ -19771,12 +19871,10 @@ def configure_database
     "primary" => { "database" => "storage/development.sqlite3" },
     "storage" => { "database" => "storage/development_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
   }
-  if VALUES.fetch("active_job") == "solid_queue"
-    development_databases["queue"] = {
-      "database" => "storage/development_queue.sqlite3",
-      "migrations_paths" => "db/queue_migrate"
-    }
-  end
+  development_databases["queue"] = {
+    "database" => "storage/development_queue.sqlite3",
+    "migrations_paths" => "db/queue_migrate"
+  }
   config = {
     "default" => { "adapter" => "sqlite3", "pool" => "<%= ENV.fetch(\"RAILS_MAX_THREADS\", 5) %>", "timeout" => 5000 },
     "development" => development_databases,
@@ -20023,7 +20121,7 @@ def kamal_restore_cli_body
           run_kamal!("accessory", "start", "litestream")
           app_exec!("bin/wait-for-litestream")
           run_kamal!("app", "start", "-r", "web")
-          run_kamal!("app", "start", "-r", "worker") if HAS_WORKER
+          run_kamal!("app", "start", "-r", "worker")
           run_kamal!("app", "live")
           @quiesced = false
         end
@@ -20054,7 +20152,7 @@ def kamal_restore_cli_body
             ignore_kamal_failure("accessory", "start", "litestream")
             ignore_kamal_failure("app", "exec", "-p", "-r", "web", "bin/wait-for-litestream")
             ignore_kamal_failure("app", "start", "-r", "web")
-            ignore_kamal_failure("app", "start", "-r", "worker") if HAS_WORKER
+            ignore_kamal_failure("app", "start", "-r", "worker")
             ignore_kamal_failure("app", "live")
             @quiesced = false
           end
@@ -20369,7 +20467,6 @@ def configure_kamal_restore(app_id, databases)
     module KamalRestore
       APP_ID = #{app_id.inspect}
       DATABASES = #{databases.inspect}.freeze
-      HAS_WORKER = #{databases.any? { |database| database.fetch("name") == "queue" }}
   RUBY
   restore_cli << <<~'RUBY'
       SOCKET_PATH = "/rails/storage/.litestream.sock"
@@ -20398,7 +20495,6 @@ def configure_kamal_maintenance(app_id, databases)
     module KamalMaintenance
       APP_ID = #{app_id.inspect}
       DATABASES = #{databases.inspect}.freeze
-      HAS_WORKER = #{databases.any? { |database| database.fetch("name") == "queue" }}
       DEFAULT_MESSAGE = #{default_message_literal}
   RUBY
   maintenance_cli << <<~'RUBY'
@@ -20674,7 +20770,7 @@ def configure_kamal_maintenance(app_id, databases)
 
           @step_sequence = [
             "active", "litestream_started", "litestream_ready", "web_started",
-            *(HAS_WORKER ? ["worker_started"] : []),
+            "worker_started",
             "app_roles_verified", "internal_health_verified", "proxy_live", "public_health_verified"
           ]
           @proxy_live = false
@@ -20682,7 +20778,7 @@ def configure_kamal_maintenance(app_id, databases)
           perform_step("litestream_started") { run_kamal!("accessory", "start", "litestream") }
           perform_step("litestream_ready") { verify_litestream_ready! }
           perform_step("web_started") { run_kamal!("app", "start", "-r", "web") }
-          perform_step("worker_started") { run_kamal!("app", "start", "-r", "worker") } if HAS_WORKER
+          perform_step("worker_started") { run_kamal!("app", "start", "-r", "worker") }
           perform_step("app_roles_verified") { verify_running_roles! }
           perform_step("internal_health_verified") { app_exec!(*internal_health_command) }
           perform_step("proxy_live") do
@@ -20810,7 +20906,7 @@ def configure_kamal_maintenance(app_id, databases)
 
         def verify_running_roles!
           roles = @inspector.running_roles
-          required = HAS_WORKER ? %w[web worker] : %w[web]
+          required = %w[web worker]
           missing = required - roles
           raise Error, "application roles did not start: #{missing.join(", ")}" unless missing.empty?
         end
@@ -20843,7 +20939,7 @@ def configure_kamal_maintenance(app_id, databases)
               visible_body.include?(state.fetch("message"))
             raise Error, "remote state and running services are inconsistent" unless expected
           else
-            required = HAS_WORKER ? %w[web worker] : %w[web]
+            required = %w[web worker]
             expected = (required - roles).empty? && litestream && response.fetch("code") == 200
             raise Error, "inactive marker and running services are inconsistent" unless expected
           end
@@ -20873,6 +20969,9 @@ def configure_kamal_maintenance(app_id, databases)
 end
 
 def configure_deployment(app_id)
+  create_file "config/initializers/deployment_tools.rb", <<~RUBY, force: true
+    Rails.autoloaders.main.ignore(Rails.root.join("lib/deployment"))
+  RUBY
   create_file "lib/deployment/command_runner.rb", <<~'RUBY', force: true
     # typed: strict
     # frozen_string_literal: true
@@ -21372,12 +21471,14 @@ def configure_deployment(app_id)
     require "sorbet-runtime"
     require "stringio"
     require "tempfile"
+    require "yaml"
 
     module Deployment
       class KamalSecretsWriter
         extend T::Sig
 
         DEPLOY_SECRET_FIELDS = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY].freeze
+        BILLING_SECRET_FIELDS = %w[BILLING_EXECUTION_PRIVATE_KEY BILLING_ARBITRUM_RPC_URL BILLING_BASE_RPC_URL BILLING_ETHEREUM_RPC_URL BILLING_POLYGON_RPC_URL].freeze
 
         sig { params(root: Pathname, output: T.any(IO, StringIO)).void }
         def initialize(root:, output: $stdout)
@@ -21395,6 +21496,23 @@ def configure_deployment(app_id)
             R2_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{source} #{DEPLOY_SECRET_FIELDS.join(" ")})
             #{DEPLOY_SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $R2_SECRETS)" }.join("\n")}
           SECRETS
+          billing_path = @root.join("config/billing_secrets.#{destination}.yml")
+          if billing_path.file?
+            billing = YAML.safe_load_file(billing_path, aliases: false)
+            required = %w[account_id vault_id item_id]
+            unless billing.is_a?(Hash) && billing.keys.sort == required.sort &&
+                required.all? { |key| billing[key].is_a?(String) && !billing[key].empty? }
+              raise ArgumentError, "#{billing_path.relative_path_from(@root)} must contain account_id, vault_id and item_id"
+            end
+            unless billing.fetch("account_id") == account_id && billing.fetch("vault_id") == vault_id
+              raise ArgumentError, "Billing secrets must use the destination's 1Password account and vault"
+            end
+            billing_source = Shellwords.escape("#{vault_id}/#{billing.fetch('item_id')}")
+            content << <<~SECRETS
+              BILLING_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{billing_source} #{BILLING_SECRET_FIELDS.join(" ")})
+              #{BILLING_SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $BILLING_SECRETS)" }.join("\n")}
+            SECRETS
+          end
           Tempfile.create(["secrets-#{destination}", ".tmp"], path.dirname.to_s) do |file|
             file.write(content)
             file.flush
@@ -22487,7 +22605,6 @@ def configure_deployment(app_id)
     require "deployment/command_runner"
 
     module Deployment
-      HAS_WORKER = #{VALUES.fetch("active_job") == "solid_queue"}
   RUBY
   server_setup << <<~'RUBY'
       class ServerInstance < T::Struct
@@ -22728,7 +22845,7 @@ def configure_deployment(app_id)
         def proposed(instance:, hostname:, ipv6:)
           data = T.cast(Marshal.load(Marshal.dump(@data)), T::Hash[String, T.untyped])
           set_path(data, %w[servers web], [instance.main_ip])
-          set_path(data, %w[servers worker hosts], [instance.main_ip]) if HAS_WORKER
+          set_path(data, %w[servers worker hosts], [instance.main_ip])
           set_path(data, %w[proxy host], hostname)
           set_path(data, %w[proxy run bind_ips], ipv6 ? ["0.0.0.0", "::"] : ["0.0.0.0"])
           set_path(data, %w[env clear APPLICATION_ORIGIN], "https://#{hostname}")
@@ -23250,17 +23367,16 @@ def configure_deployment(app_id)
     # typed: true
     # frozen_string_literal: true
 
-    require Rails.root.join("lib/deployment/configurator")
-    require Rails.root.join("lib/deployment/server_setup")
-
     namespace :deployment do
       desc "デプロイ用の外部サービスと資格情報を構成する"
       task configure: :environment do
+        require Rails.root.join("lib/deployment/configurator")
         Deployment::Configurator.new(root: Rails.root).run!
       end
 
       desc "Vultr VPSを選択してSSHとKamal destinationを初期設定する"
       task :"setup-server" => :environment do
+        require Rails.root.join("lib/deployment/server_setup")
         Deployment::ServerSetup.new(root: Rails.root).run!
       end
     end
@@ -23412,7 +23528,7 @@ def configure_deployment(app_id)
           permission_group:,
           cloudflare_tokens: [{
             "id" => "token-id",
-            "name" => "sample-r2-production",
+            "name" => Deployment::Configurator.cloudflare_token_name(Deployment::Configurator::APP_ID, "production"),
             "status" => "active",
             "policies" => [policy]
           }],
@@ -23696,7 +23812,7 @@ def configure_deployment(app_id)
 
           assert_equal 45, written.fetch("deploy_timeout")
           assert_equal ["192.0.2.10"], written.dig("servers", "web")
-          assert_equal ["192.0.2.10"], written.dig("servers", "worker", "hosts") if Deployment::HAS_WORKER
+          assert_equal ["192.0.2.10"], written.dig("servers", "worker", "hosts")
           assert_equal ["0.0.0.0", "::"], written.dig("proxy", "run", "bind_ips")
           assert_equal "app.example.com", written.dig("proxy", "host")
           assert_equal "https://app.example.com", written.dig("env", "clear", "APPLICATION_ORIGIN")
@@ -23989,9 +24105,7 @@ def configure_kamal
     { "name" => "primary", "path" => "/rails/storage/production.sqlite3" },
     { "name" => "storage", "path" => "/rails/storage/production_storage.sqlite3" }
   ]
-  if VALUES.fetch("active_job") == "solid_queue"
-    databases << { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3" }
-  end
+  databases << { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3" }
   if VALUES.fetch("action_cable") == "solid_cable"
     databases << { "name" => "cable", "path" => "/rails/storage/production_cable.sqlite3" }
   end
@@ -24032,11 +24146,7 @@ def configure_kamal
   remove_file ".kamal/secrets"
   create_file ".kamal/secrets-common", kamal_secrets.join("\n") + "\n", force: true
 
-  worker_role = if VALUES.fetch("active_job") == "solid_queue"
-    "  worker:\n    cmd: bin/jobs --mode async\n"
-  else
-    ""
-  end
+  worker_role = "  worker:\n    cmd: bin/jobs --mode async\n"
   accessory_secret_lines = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY]
     .map { |name| "        - #{name}" }.join("\n")
   vapid_secret_lines = if VALUES.fetch("web_push") == "use"
@@ -24070,6 +24180,13 @@ def configure_kamal
       secret:
         - RAILS_MASTER_KEY
     #{vapid_secret_lines}
+    <% if File.file?(File.join("config", "billing_secrets.\#{ENV.fetch('KAMAL_DESTINATION')}.yml")) %>
+        - BILLING_EXECUTION_PRIVATE_KEY
+        - BILLING_ARBITRUM_RPC_URL
+        - BILLING_BASE_RPC_URL
+        - BILLING_ETHEREUM_RPC_URL
+        - BILLING_POLYGON_RPC_URL
+    <% end %>
     volumes:
       - "#{app_id}_<%= ENV.fetch(\"KAMAL_DESTINATION\") %>_storage:/rails/storage"
 
@@ -24103,14 +24220,12 @@ def configure_kamal
   IGNORE
 
   docker_build_packages = %w[build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev]
-  if VALUES.fetch("additional_login_methods").include?("siwe")
-    docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])
-  end
+  docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])
 
   create_file "Dockerfile", format(<<~'DOCKERFILE', build_packages: docker_build_packages.join(" ")), force: true
     # syntax=docker/dockerfile:1
     # check=error=true
-    ARG RUBY_VERSION=4.0.0
+    ARG RUBY_VERSION=4.0.6
     FROM ruby:${RUBY_VERSION}-slim AS base
     WORKDIR /rails
     RUN apt-get update -qq && \
@@ -24128,6 +24243,7 @@ def configure_kamal
         apt-get install --no-install-recommends -y %{build_packages} && \
         rm -rf /var/lib/apt/lists /var/cache/apt/archives
     COPY Gemfile Gemfile.lock ./
+    COPY engines/billing ./engines/billing
     RUN bundle install && rm -rf /root/.bundle
     COPY package.json package-lock.json ./
     RUN npm ci
@@ -24470,6 +24586,7 @@ after_bundle do
   install_solid_components
   install_job_operations if VALUES.fetch("job_operations") == "enable"
   install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"
+  configure_billing
   configure_database
   configure_active_storage_db
   configure_kamal
@@ -24484,8 +24601,9 @@ after_bundle do
     require "action_mailer"
     require "mail"
     require "webauthn/fake_client"
+    require "eth"
   RUBY
-  run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"
+  run_checked "bin/tapioca gem action_policy actionmailer browser eth mail webauthn"
   append_to_file "sorbet/config", <<~CONFIG
     --suppress-payload-superclass-redefinition-for=Net::IMAP::Literal
     --suppress-payload-superclass-redefinition-for=Net::IMAP::QuotedString

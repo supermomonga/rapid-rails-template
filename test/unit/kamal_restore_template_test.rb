@@ -115,7 +115,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_litestream_readiness_script_compiles
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "use"
     )
@@ -129,9 +128,8 @@ class KamalRestoreTemplateTest < Minitest::Test
     RubyVM::InstructionSequence.compile(files.fetch("test/lib/deployment/server_setup_test.rb"))
   end
 
-  def test_docker_build_packages_follow_siwe_selection
+  def test_docker_build_packages_always_support_billing_and_siwe
     common_values = {
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "use"
     }
@@ -143,8 +141,7 @@ class KamalRestoreTemplateTest < Minitest::Test
     ).fetch("Dockerfile")
 
     assert_includes without_siwe,
-      "apt-get install --no-install-recommends -y #{common_packages.join(" ")} && \\"
-    siwe_packages.each { |package| refute_includes without_siwe, package }
+      "apt-get install --no-install-recommends -y #{(common_packages + siwe_packages).join(" ")} && \\"
     assert_includes with_siwe,
       "apt-get install --no-install-recommends -y #{(common_packages + siwe_packages).join(" ")} && \\"
 
@@ -460,7 +457,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_generated_kamal_configuration_is_valid_and_keeps_cache_out_of_litestream
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "use"
     )
@@ -512,15 +508,14 @@ class KamalRestoreTemplateTest < Minitest::Test
     assert_includes files.fetch("docs/deployment.md"), "bin/kamal-maintenance status --destination=production"
 
     minimal_files = build_kamal_files(
-      "active_job" => "skip",
       "action_cable" => "async",
       "web_push" => "skip"
     )
     minimal_deploy = YAML.safe_load(ERB.new(minimal_files.fetch("config/deploy.yml")).result, aliases: true)
     minimal_litestream = YAML.safe_load(minimal_files.fetch("config/litestream.yml"), aliases: true)
-    refute minimal_deploy.fetch("servers").key?("worker")
-    assert_equal 2, minimal_litestream.fetch("dbs").length
-    assert_includes minimal_files.fetch("bin/kamal-maintenance"), "HAS_WORKER = false"
+    assert minimal_deploy.fetch("servers").key?("worker")
+    assert_equal 3, minimal_litestream.fetch("dbs").length
+    assert_includes minimal_files.fetch("bin/kamal-maintenance"), 'required = %w[web worker]'
   ensure
     original_environment&.each do |name, value|
       value.nil? ? ENV.delete(name) : ENV[name] = value
@@ -529,7 +524,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_deployment_configurator_artifacts_compile_and_use_environment_specific_names
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -561,7 +555,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_deployment_configurator_rejects_service_account_and_connect_authentication_before_commands
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -598,7 +591,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_deployment_configurator_without_initial_token_has_no_external_side_effects
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -624,7 +616,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_one_password_client_scopes_every_operation_to_the_selected_human_account
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -684,7 +675,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_human_one_password_identity_must_be_active_and_not_a_service_account
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -714,7 +704,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_vault_planning_reuses_one_exact_match_creates_missing_and_rejects_duplicates
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -752,7 +741,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_service_account_token_item_is_reused_only_when_unique_active_and_complete
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -827,7 +815,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_r2_credentials_are_created_or_reused_as_one_consistent_pair
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -933,7 +920,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_new_r2_credential_pair_creates_and_saves_once
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -989,7 +975,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_r2_credentials_reject_drift_before_apply
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1062,7 +1047,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_reused_r2_item_is_not_saved_and_is_described_as_existing
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1127,7 +1111,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_default_no_finishes_all_discovery_without_mutating_selected_or_unselected_environment
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1214,7 +1197,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_service_account_creation_uses_read_only_scope_and_saves_token_as_concealed_item
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1273,7 +1255,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_item_save_failure_reconciles_ambiguous_success_without_exposing_secret
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1314,7 +1295,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_item_save_failure_retries_after_reconciliation_finds_nothing
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1365,7 +1345,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_missing_service_account_token_response_stops_without_recreating_account
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1396,7 +1375,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_item_save_terminal_recovery_requires_two_confirmations_and_never_leaks_to_normal_output
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1445,7 +1423,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_kamal_secrets_writer_is_atomic_id_based_and_excludes_service_account_token
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1471,9 +1448,37 @@ class KamalRestoreTemplateTest < Minitest::Test
     Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
   end
 
+  def test_billing_secret_reference_survives_regeneration_and_uses_the_same_vault
+    files = build_kamal_files("action_cable" => "skip", "web_push" => "skip")
+    eval_deployment_files(files)
+    Dir.mktmpdir("billing-secret-reference") do |directory|
+      root = Pathname(directory)
+      FileUtils.mkdir_p(root.join("config"))
+      reference = { "account_id" => "account", "vault_id" => "vault", "item_id" => 'billing item $(not-a-command)' }
+      path = root.join("config/billing_secrets.production.yml")
+      path.write(YAML.dump(reference))
+      writer = Deployment::KamalSecretsWriter.new(root:, output: StringIO.new)
+      writer.write(destination: "production", account_id: "account", vault_id: "vault", item_id: "r2")
+      secrets = root.join(".kamal/secrets.production")
+      content = secrets.read
+      assert_includes content, "--from #{Shellwords.escape("vault/#{reference.fetch('item_id')}")}"
+      Deployment::KamalSecretsWriter::BILLING_SECRET_FIELDS.each { |field| assert_includes content, "#{field}=$(bin/kamal secrets extract" }
+      writer.write(destination: "production", account_id: "account", vault_id: "vault", item_id: "r2")
+      assert_equal content, secrets.read
+      reference["vault_id"] = "different-vault"
+      path.write(YAML.dump(reference))
+      assert_raises(ArgumentError) { writer.write(destination: "production", account_id: "account", vault_id: "vault", item_id: "r2") }
+      assert_equal content, secrets.read
+      path.write(YAML.dump(reference.merge("unexpected" => "value")))
+      assert_raises(ArgumentError) { writer.write(destination: "production", account_id: "account", vault_id: "vault", item_id: "r2") }
+      assert_equal content, secrets.read
+    end
+  ensure
+    Object.send(:remove_const, :Deployment) if Object.const_defined?(:Deployment)
+  end
+
   def test_cloudflare_client_uses_account_token_api_and_redacts_bearer_secret
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )
@@ -1518,7 +1523,6 @@ class KamalRestoreTemplateTest < Minitest::Test
 
   def test_wrangler_bucket_errors_are_not_misclassified_as_missing
     files = build_kamal_files(
-      "active_job" => "solid_queue",
       "action_cable" => "solid_cable",
       "web_push" => "skip"
     )

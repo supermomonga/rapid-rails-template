@@ -1,0 +1,29 @@
+<% content_for :page_title, t("billing.ui.overview") %>
+<% content_for :page_actions_primary do %><%= link_to billing_label("chain_settings", "wallet"), admin_chain_settings_path, class: action_button_classes(:secondary) %><% end %>
+<div class="space-y-6">
+  <% if @missing_configuration.any? %>
+    <div class="alert alert-warning alert-soft" role="status"><div>
+      <h2 class="font-semibold"><%= t("billing.ui.missing_configuration") %></h2>
+      <ul class="list-disc pl-5 break-all"><% @missing_configuration.each do |item| %><li><%= item %></li><% end %></ul>
+    </div></div>
+  <% end %>
+  <section class="card card-border bg-base-100 min-w-0"><div class="card-body p-3 min-w-0">
+    <h2 class="card-title"><%= t("billing.ui.pending_transactions") %></h2>
+    <p><%= t("billing.ui.latest_100") %></p>
+    <% if @transactions.empty? %><p><%= t("billing.ui.none") %></p><% end %>
+    <% @transactions.each do |transaction| %>
+      <div class="space-y-2 py-3">
+        <p><%= Billing::Chains.fetch(transaction.chain_setting.chain_id).name %> · <%= t("billing.kinds.#{transaction.kind}") %> · <%= t("billing.states.#{transaction.status}") %></p>
+        <%= link_to t("billing.ui.transaction", id: transaction.id), transaction.explorer_url, class: "link", target: "_blank", rel: "noopener noreferrer" %>
+        <% if transaction.error_code %><p class="break-words"><%= transaction.error_code %></p><% end %>
+        <% if transaction.status == "review" %><div class="card-actions justify-end"><%= button_to t("billing.ui.recheck"), recheck_admin_transaction_path(transaction), class: action_button_classes(:warning) %></div><% end %>
+      </div>
+    <% end %>
+  </div></section>
+  <section class="card card-border bg-base-100"><div class="card-body p-3">
+    <h2 class="card-title"><%= t("billing.ui.held_charges") %></h2>
+    <p><%= t("billing.ui.latest_100") %></p>
+    <% if @held_charges.empty? %><p><%= t("billing.ui.none") %></p><% end %>
+    <% @held_charges.each do |charge| %><p><%= link_to t("billing.ui.charge", id: charge.id), admin_subscription_path(charge.subscription), class: "link" %> · <%= charge.hold_reason %></p><% end %>
+  </div></section>
+</div>

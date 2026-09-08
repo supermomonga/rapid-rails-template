@@ -1,0 +1,6 @@
+<div class="space-y-3 py-6" data-billing-empty>
+  <%= billing_icon(icon) %>
+  <h2 class="text-lg font-semibold"><%= title %></h2>
+  <p class="text-base-content/70"><%= description %></p>
+  <% if local_assigns[:path] %><p><%= link_to label, path, class: action_button_classes(:secondary) %></p><% end %>
+</div>

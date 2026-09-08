@@ -1,0 +1,103 @@
+{
+  "verified_on": "2026-09-09",
+  "anvil_version": "1.7.1",
+  "test": "test/chain/billing_fork_test.rb",
+  "chains": [
+    {
+      "name": "arbitrum",
+      "chain_id": 42161,
+      "fork_block": 503062179,
+      "fork_rpc": "https://arb1.arbitrum.io/rpc",
+      "code": {
+        "manager": {
+          "bytes": 12610,
+          "sha256": "520b0eae2a326de078e396ef62549ffa6f591a7fb7cc4082ff8c7fc37e399ce3"
+        },
+        "factory": {
+          "bytes": 1810,
+          "sha256": "699f860e1e24337d21a9dd918417a25cdde4c6ac2f28b84d0773225d33d3b7e2"
+        },
+        "usdc": {
+          "bytes": 1852,
+          "sha256": "b46445c0c96a50cd0ae6245d2ceb5058fbbcd24afad9cb878974d8f17b4655c8"
+        }
+      },
+      "runs": 1,
+      "assertions": 32,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "base",
+      "chain_id": 8453,
+      "fork_block": 51045649,
+      "fork_rpc": "https://mainnet.base.org",
+      "code": {
+        "manager": {
+          "bytes": 12610,
+          "sha256": "18ed15016ab27b3ef33e86c8e621445dc020bcb346f137e943c7040cffc5edac"
+        },
+        "factory": {
+          "bytes": 1810,
+          "sha256": "699f860e1e24337d21a9dd918417a25cdde4c6ac2f28b84d0773225d33d3b7e2"
+        },
+        "usdc": {
+          "bytes": 1852,
+          "sha256": "98d785fcb1bf847f287adc2310759fd94cc13e754b974bc72131382e8266f607"
+        }
+      },
+      "runs": 1,
+      "assertions": 32,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "ethereum",
+      "chain_id": 1,
+      "fork_block": 25933490,
+      "fork_rpc": "https://ethereum.reth.rs/rpc",
+      "code": {
+        "manager": {
+          "bytes": 12610,
+          "sha256": "f4e824bad08493a16fb19aeeae0ba18bee6f1f937094678b5ee33563f080ed23"
+        },
+        "factory": {
+          "bytes": 1810,
+          "sha256": "699f860e1e24337d21a9dd918417a25cdde4c6ac2f28b84d0773225d33d3b7e2"
+        },
+        "usdc": {
+          "bytes": 2186,
+          "sha256": "c1bcd4dc4f30c4dcf6c9fe462abeaf2efefc065dcb4dec74996e471f1ce219b4"
+        }
+      },
+      "runs": 1,
+      "assertions": 32,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "polygon",
+      "chain_id": 137,
+      "fork_block": 93450487,
+      "fork_rpc": "https://polygon.drpc.org",
+      "code": {
+        "manager": {
+          "bytes": 12610,
+          "sha256": "9dcee7cc71e153f7942f0fc010613273cbfec69ba600c58e3af4965bc624a0ce"
+        },
+        "factory": {
+          "bytes": 1810,
+          "sha256": "699f860e1e24337d21a9dd918417a25cdde4c6ac2f28b84d0773225d33d3b7e2"
+        },
+        "usdc": {
+          "bytes": 1852,
+          "sha256": "dc2898fcd8071dd801212e8f34ce32f23aba05aadbad71ff84ef7faa2909a29c"
+        }
+      },
+      "runs": 1,
+      "assertions": 32,
+      "failures": 0,
+      "errors": 0
+    }
+  ]
+}

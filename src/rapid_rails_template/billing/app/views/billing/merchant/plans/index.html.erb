@@ -1,0 +1,4 @@
+<% content_for :page_title, t("billing.ui.seller_plans") %>
+<% content_for :page_actions_primary do %><%= link_to billing_label("new_plan", "squares-2x2"), new_merchant_plan_path, class: action_button_classes(:primary) if merchant_editable? && merchant_account.status == "active" && Billing::Setting.current.merchant_plan_creation_enabled? %><% end %>
+<% unless Billing::Setting.current.merchant_plan_creation_enabled %><div class="alert alert-info alert-soft mb-4"><%= billing_icon("exclamation-triangle") %><span><%= t("billing.ui.new_plans_paused") %></span></div><% end %>
+<%= render "billing/shared/managed_plans", area: "merchant" %>

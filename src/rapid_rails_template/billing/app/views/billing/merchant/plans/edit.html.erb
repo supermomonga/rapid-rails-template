@@ -1,0 +1,3 @@
+<% content_for :page_title, t("billing.ui.edit_plan") %>
+<%= render "billing/shared/breadcrumbs", label: "seller_plans", path: merchant_plans_path, icon: "squares-2x2", current: t("billing.ui.edit_plan") %>
+<%= render "billing/shared/plan_form", destination: merchant_plan_path(@plan), back: merchant_plans_path %>

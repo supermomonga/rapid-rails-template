@@ -1,0 +1,6 @@
+<% content_for :admin_content, flush: true do %>
+  <div data-controller="billing-navigation"><%= with_tab tabs: billing_tabs(:admin) do %>
+    <%= yield %>
+  <% end %></div>
+<% end %>
+<%= render template: "layouts/admin" %>

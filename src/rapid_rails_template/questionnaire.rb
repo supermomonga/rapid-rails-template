@@ -7,9 +7,8 @@ module RapidRailsTemplate
     QUESTIONS = [
       Question.new(:pwa, "PWAを使用しますか？", %w[use skip], "use", nil, false),
       Question.new(:web_push, "PWAでWeb Pushを使用しますか？", %w[use skip], "use", ->(a) { a["pwa"] == "use" }, false),
-      Question.new(:active_job, "ジョブ管理を使用しますか？", %w[solid_queue skip], "solid_queue", ->(a) { a["web_push"] != "use" }, false),
-      Question.new(:job_operations, "管理者向けジョブ運用画面を使用しますか？", %w[enable disable], "enable", ->(a) { a["web_push"] == "use" || a["active_job"] == "solid_queue" }, false),
-      Question.new(:maintenance_tasks, "管理者向け運用タスクを使用しますか？", %w[enable disable], "enable", ->(a) { a["web_push"] == "use" || a["active_job"] == "solid_queue" }, false),
+      Question.new(:job_operations, "管理者向けジョブ運用画面を使用しますか？", %w[enable disable], "enable", nil, false),
+      Question.new(:maintenance_tasks, "管理者向け運用タスクを使用しますか？", %w[enable disable], "enable", nil, false),
       Question.new(:solid_cache, "Solid Cacheを使用しますか？", %w[use skip], "use", nil, false),
       Question.new(:additional_login_methods, "追加するログイン方法を選択してください。", Configuration::ADDITIONAL_LOGIN_METHODS, Configuration::ADDITIONAL_LOGIN_METHODS, nil, true),
       Question.new(:api, "API機能を有効にしますか？", %w[enable disable], "enable", nil, false),

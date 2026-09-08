@@ -1,0 +1,8 @@
+[features]
+hooks = true
+
+[sandbox_workspace_write]
+network_access = true
+
+[mcp_servers.daisyui-blueprint]
+enabled = true

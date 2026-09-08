@@ -47,6 +47,11 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.steps, "configure_image_delivery"
     assert_includes plan.steps, "install_action_text"
     assert_includes plan.steps, "install_active_storage_db"
+    assert_includes plan.gems, "billing"
+    assert_includes plan.gems, "eth"
+    assert_operator plan.steps.index("prepare_billing_engine"), :<, plan.steps.index("declare_gems")
+    assert_operator plan.steps.index("install_maintenance_tasks"), :<, plan.steps.index("configure_billing")
+    assert_operator plan.steps.index("configure_billing"), :<, plan.steps.index("prepare_database")
     assert_includes plan.steps, "configure_database"
     assert_includes plan.steps, "configure_active_storage_db"
     assert_includes plan.steps, "configure_kamal"
@@ -223,7 +228,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "app/validators/avatar_upload_validator.rb"
     assert_equal [
       "Solid Queue worker/dispatcher/scheduler",
-      "finished jobs retained for 1 day; failed jobs retained until retry/discard"
+      "finished jobs retained for 1 day; failed jobs retained until retry/discard",
+      "Billing: per-environment execution key; RPC, collector, treasury and gas ceiling for each chain"
     ], plan.production_requirements
     assert_equal plan.production_requirements, plan.to_h.fetch("production_requirements")
   end
@@ -245,7 +251,6 @@ class ExecutionPlanTest < Minitest::Test
   def test_maintenance_tasks_enabled_plan_uses_existing_solid_queue_worker
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build(
-        "active_job" => "solid_queue",
         "maintenance_tasks" => "enable"
       ),
       app_id: "sample", app_name: "Sample App"
@@ -271,7 +276,6 @@ class ExecutionPlanTest < Minitest::Test
   def test_job_operations_enabled_plan_uses_existing_solid_queue_scheduler
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build(
-        "active_job" => "solid_queue",
         "job_operations" => "enable"
       ),
       app_id: "sample", app_name: "Sample App"
@@ -298,7 +302,6 @@ class ExecutionPlanTest < Minitest::Test
   def test_job_operations_disabled_plan_omits_related_gem_step_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build(
-        "active_job" => "solid_queue",
         "job_operations" => "disable"
       ),
       app_id: "sample", app_name: "Sample App"
@@ -321,7 +324,6 @@ class ExecutionPlanTest < Minitest::Test
   def test_maintenance_tasks_disabled_plan_omits_related_gem_step_and_artifacts
     plan = RapidRailsTemplate::ExecutionPlan.build(
       RapidRailsTemplate::Configuration.build(
-        "active_job" => "solid_queue",
         "maintenance_tasks" => "disable"
       ),
       app_id: "sample", app_name: "Sample App"
@@ -423,8 +425,8 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.gems, "solid_queue"
     assert_includes plan.gems, "solid_cache"
     assert_includes plan.gems, "solid_cable"
-    assert_equal "solid_queue", configuration["active_job"]
-    assert_equal "Web Pushの非同期送信に必要なため", configuration.reasons.fetch("active_job")
+    refute configuration.values.key?("active_job")
+    refute configuration.reasons.key?("active_job")
     assert_operator plan.steps.index("configure_pwa"), :<, plan.steps.index("configure_web_push")
     assert_operator plan.steps.index("configure_web_push"), :<, plan.steps.index("configure_default_views")
     assert_equal %w[web worker], plan.processes
@@ -443,7 +445,6 @@ class ExecutionPlanTest < Minitest::Test
       RapidRailsTemplate::Configuration.build(
         "web_push" => "skip",
         "action_cable" => "skip",
-        "active_job" => "skip"
       ),
       app_id: "sample", app_name: "Sample App"
     )

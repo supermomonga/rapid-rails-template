@@ -37,7 +37,6 @@ ruby /tmp/rapid-rails-bootstrap.rb \
   --app-name="My App" \
   --pwa=skip \
   --web-push=skip \
-  --active-job=skip \
   --job-operations=disable \
   --maintenance-tasks=disable \
   --solid-cache=use \

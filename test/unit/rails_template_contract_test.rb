@@ -670,7 +670,8 @@ class RailsTemplateContractTest < Minitest::Test
   def test_solid_queue_uses_the_test_adapter_only_in_test_environment
     solid = source_between("def install_solid_components", "def install_job_operations")
 
-    assert_includes @source, 'gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"'
+    assert_includes @source, 'gem "solid_queue", "1.6.0"'
+    refute_includes @source, 'VALUES.fetch("active_job")'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :solid_queue"'
     assert_includes solid, 'environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"'
     assert_includes solid, 'environment "config.active_job.queue_adapter = :test", env: "test"'
@@ -680,7 +681,7 @@ class RailsTemplateContractTest < Minitest::Test
   def test_solid_queue_configures_a_dedicated_development_database
     database = source_between("def configure_database", "def kamal_restore_cli_body")
 
-    assert_includes database, 'if VALUES.fetch("active_job") == "solid_queue"'
+    refute_includes database, 'VALUES.fetch("active_job")'
     assert_includes database, 'development_databases["queue"] = {'
     assert_includes database, '"database" => "storage/development_queue.sqlite3"'
     assert_includes database, '"migrations_paths" => "db/queue_migrate"'
@@ -1800,12 +1801,14 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes kamal, 'CMD ["./bin/thrust", "./bin/rails", "server"]'
     assert_includes kamal,
       "docker_build_packages = %w[build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev]"
-    assert_includes kamal, 'if VALUES.fetch("additional_login_methods").include?("siwe")'
+    refute_includes kamal, 'if VALUES.fetch("additional_login_methods").include?("siwe")'
     assert_includes kamal,
       "docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])"
     assert_includes kamal,
       'format(<<~\'DOCKERFILE\', build_packages: docker_build_packages.join(" "))'
     assert_includes dockerfile, "apt-get install --no-install-recommends -y %{build_packages}"
+    assert_includes dockerfile, "ARG RUBY_VERSION=4.0.6"
+    assert_source_order dockerfile, "COPY Gemfile Gemfile.lock ./", "COPY engines/billing ./engines/billing", "RUN bundle install"
     assert_operator dockerfile.index("%{build_packages}"), :<, dockerfile.rindex("FROM base")
     %w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev].each do |package|
       refute_includes dockerfile, package
@@ -2157,8 +2160,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes after_bundle, 'require "action_mailer"'
     assert_includes after_bundle, 'require "mail"'
     assert_operator after_bundle.index('append_to_file "sorbet/tapioca/require.rb"'),
-      :<, after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"')
-    assert_operator after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"'),
+      :<, after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser eth mail webauthn"')
+    assert_operator after_bundle.index('run_checked "bin/tapioca gem action_policy actionmailer browser eth mail webauthn"'),
       :<, after_bundle.index('run_checked "RAILS_ENV=test bin/rails db:prepare"')
     assert_includes after_bundle, 'require "webauthn/fake_client"'
     assert_operator after_bundle.index('run_checked "bundle exec tapioca init"'),

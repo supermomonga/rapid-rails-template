@@ -391,10 +391,10 @@ class KamalMaintenanceTemplateTest < Minitest::Test
     refute_includes store.calls, :delete
   end
 
-  def test_finish_without_worker_does_not_start_worker
+  def test_finish_keeps_maintenance_active_when_worker_is_missing
     load_generated_cli(
       default_locale: "en",
-      databases: @databases.reject { |database| database.fetch("name") == "queue" }
+      databases: @databases
     )
     store = FakeStateStore.new(state: active_state(message: KamalMaintenance::DEFAULT_MESSAGE))
     runner = FakeRunner.new
@@ -407,8 +407,11 @@ class KamalMaintenanceTemplateTest < Minitest::Test
       inspector:
     )
 
-    assert_equal 0, status
-    refute runner.commands.any? { |command| command == %w[app start -r worker] }
+    assert_equal 1, status
+    assert runner.commands.any? { |command| command == %w[app start -r worker] }
+    assert_equal "finish_failed", store.state.fetch("phase")
+    assert_equal "app_roles_verified", store.state.fetch("failed_step")
+    refute_includes store.calls, :delete
     assert_equal "We are currently performing maintenance. Please try again later.", KamalMaintenance::DEFAULT_MESSAGE
   end
 

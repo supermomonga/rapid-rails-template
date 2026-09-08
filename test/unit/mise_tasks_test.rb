@@ -14,7 +14,6 @@ class MiseTasksTest < Minitest::Test
     %w[
       --pwa=use
       --web-push=use
-      --active-job=solid_queue
       --job-operations=enable
       --maintenance-tasks=enable
       --solid-cache=use
@@ -25,6 +24,7 @@ class MiseTasksTest < Minitest::Test
       --default-locale=ja
     ].each { |option| assert_includes task, %Q("#{option}") }
     refute_includes task, "--deployment"
+    refute_includes task, "--active-job"
 
     assert_includes task, "generated = system RbConfig.ruby"
     assert_includes task, 'abort "sampleアプリの生成に失敗しました" unless generated'

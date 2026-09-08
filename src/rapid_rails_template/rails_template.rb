@@ -8,10 +8,12 @@ require "digest"
 CONFIG_PATH = ENV.fetch("RAPID_RAILS_TEMPLATE_CONFIG")
 PLAN = JSON.parse(File.read(CONFIG_PATH), freeze: true)
 VALUES = PLAN.fetch("configuration").fetch("values")
-EXPECTED_KEYS = %w[pwa web_push active_job job_operations maintenance_tasks solid_cache additional_login_methods api action_cable mail default_locale].freeze
+EXPECTED_KEYS = %w[pwa web_push job_operations maintenance_tasks solid_cache additional_login_methods api action_cable mail default_locale].freeze
 raise "configuration schema mismatch" unless VALUES.keys.sort == EXPECTED_KEYS.sort
 
 RUBOCOP_URL = "https://gist.githubusercontent.com/supermomonga/3ffe073e1c11cd9025d35d507038b9e2/raw/38a485963395626171243dce796e6dc541d61450/.rubocop.yml"
+
+prepare_billing_engine
 
 gem "json", "~> 2.21"
 gem "pagy"
@@ -55,7 +57,7 @@ gem "siwe-rb", "~> 0.2.0", require: "siwe" if VALUES.fetch("additional_login_met
 gem "haikunator"
 gem "boring_avatars", "~> 0.1.0", require: "boring_avatars/bindings/rails"
 gem "web-push", "~> 3.1" if VALUES.fetch("web_push") == "use"
-gem "solid_queue", "1.6.0" if VALUES.fetch("active_job") == "solid_queue"
+gem "solid_queue", "1.6.0"
 gem "mission_control-jobs", "1.1.0" if VALUES.fetch("job_operations") == "enable"
 gem "maintenance_tasks", "2.17.0" if VALUES.fetch("maintenance_tasks") == "enable"
 gem "solid_cache" if VALUES.fetch("solid_cache") == "use"
@@ -12170,7 +12172,6 @@ def configure_default_views
   pwa_enabled = VALUES.fetch("pwa") == "use"
   web_push_enabled = VALUES.fetch("web_push") == "use"
   job_operations_enabled = VALUES.fetch("job_operations") == "enable"
-  solid_queue_enabled = VALUES.fetch("active_job") == "solid_queue"
   maintenance_tasks_enabled = VALUES.fetch("maintenance_tasks") == "enable"
   api_enabled = VALUES.fetch("api") == "enable"
   profile_enabled = true
@@ -13616,25 +13617,13 @@ def configure_default_views
         end
     RUBY
   else
-    production_worker_assertion = if solid_queue_enabled
-      %(assert_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read))
-    else
-      %(assert_no_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read))
-    end
-    solid_queue_cleanup_assertion = if solid_queue_enabled
-      <<~RUBY
-        recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
-          .fetch("production").fetch("clear_solid_queue_finished_jobs")
-        assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
-        assert_equal "every hour at minute 12", recurring.fetch("schedule")
-        #{production_worker_assertion}
-      RUBY
-    else
-      <<~RUBY
-        assert_not Rails.root.join("config/recurring.yml").exist?
-        #{production_worker_assertion}
-      RUBY
-    end
+    solid_queue_cleanup_assertion = <<~RUBY
+      recurring = YAML.safe_load_file(Rails.root.join("config/recurring.yml"), aliases: true)
+        .fetch("production").fetch("clear_solid_queue_finished_jobs")
+      assert_equal "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)", recurring.fetch("command")
+      assert_equal "every hour at minute 12", recurring.fetch("schedule")
+      assert_match(/^  worker:$/, Rails.root.join("config/deploy.yml").read)
+    RUBY
     <<~RUBY
 
         test "does not expose Mission Control Jobs when the feature is disabled" do
@@ -14841,13 +14830,11 @@ def configure_web_push
 end
 
 def install_solid_components
-  if VALUES.fetch("active_job") == "solid_queue"
-    generate "solid_queue:install"
-    environment "config.active_job.queue_adapter = :solid_queue"
-    environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"
-    environment "config.active_job.queue_adapter = :test", env: "test"
-    append_to_file "config/puma.rb", "\nplugin :solid_queue if ENV.fetch(\"RAILS_ENV\", \"development\") == \"development\"\n"
-  end
+  generate "solid_queue:install"
+  environment "config.active_job.queue_adapter = :solid_queue"
+  environment "config.solid_queue.connects_to = { database: { writing: :queue } }", env: "development"
+  environment "config.active_job.queue_adapter = :test", env: "test"
+  append_to_file "config/puma.rb", "\nplugin :solid_queue if ENV.fetch(\"RAILS_ENV\", \"development\") == \"development\"\n"
   generate "solid_cache:install" if VALUES.fetch("solid_cache") == "use"
   generate "solid_cable:install" if VALUES.fetch("action_cable") == "solid_cable"
 end
@@ -19468,6 +19455,10 @@ def configure_application_typechecking
     lib/**/*.rb
     test/**/*.rb
     db/seeds.rb
+    engines/billing/app/**/*.rb
+    engines/billing/lib/**/*.rb
+    engines/billing/config/**/*.rb
+    engines/billing/test/**/*.rb
   ]
   paths = patterns.flat_map { |pattern| Dir.glob(pattern) }.uniq.sort
   raise "application typecheckingの対象Ruby fileが見つかりません" if paths.empty?
@@ -19748,9 +19739,7 @@ def configure_database
     "primary" => { "database" => production_paths.fetch("primary") },
     "storage" => { "database" => production_paths.fetch("storage"), "migrations_paths" => "db/storage_migrate" }
   }
-  if VALUES.fetch("active_job") == "solid_queue"
-    databases["queue"] = { "database" => production_paths.fetch("queue"), "migrations_paths" => "db/queue_migrate" }
-  end
+  databases["queue"] = { "database" => production_paths.fetch("queue"), "migrations_paths" => "db/queue_migrate" }
   if VALUES.fetch("solid_cache") == "use"
     databases["cache"] = { "database" => production_paths.fetch("cache"), "migrations_paths" => "db/cache_migrate" }
   end
@@ -19771,12 +19760,10 @@ def configure_database
     "primary" => { "database" => "storage/development.sqlite3" },
     "storage" => { "database" => "storage/development_storage.sqlite3", "migrations_paths" => "db/storage_migrate" }
   }
-  if VALUES.fetch("active_job") == "solid_queue"
-    development_databases["queue"] = {
-      "database" => "storage/development_queue.sqlite3",
-      "migrations_paths" => "db/queue_migrate"
-    }
-  end
+  development_databases["queue"] = {
+    "database" => "storage/development_queue.sqlite3",
+    "migrations_paths" => "db/queue_migrate"
+  }
   config = {
     "default" => { "adapter" => "sqlite3", "pool" => "<%= ENV.fetch(\"RAILS_MAX_THREADS\", 5) %>", "timeout" => 5000 },
     "development" => development_databases,
@@ -20023,7 +20010,7 @@ def kamal_restore_cli_body
           run_kamal!("accessory", "start", "litestream")
           app_exec!("bin/wait-for-litestream")
           run_kamal!("app", "start", "-r", "web")
-          run_kamal!("app", "start", "-r", "worker") if HAS_WORKER
+          run_kamal!("app", "start", "-r", "worker")
           run_kamal!("app", "live")
           @quiesced = false
         end
@@ -20054,7 +20041,7 @@ def kamal_restore_cli_body
             ignore_kamal_failure("accessory", "start", "litestream")
             ignore_kamal_failure("app", "exec", "-p", "-r", "web", "bin/wait-for-litestream")
             ignore_kamal_failure("app", "start", "-r", "web")
-            ignore_kamal_failure("app", "start", "-r", "worker") if HAS_WORKER
+            ignore_kamal_failure("app", "start", "-r", "worker")
             ignore_kamal_failure("app", "live")
             @quiesced = false
           end
@@ -20369,7 +20356,6 @@ def configure_kamal_restore(app_id, databases)
     module KamalRestore
       APP_ID = #{app_id.inspect}
       DATABASES = #{databases.inspect}.freeze
-      HAS_WORKER = #{databases.any? { |database| database.fetch("name") == "queue" }}
   RUBY
   restore_cli << <<~'RUBY'
       SOCKET_PATH = "/rails/storage/.litestream.sock"
@@ -20398,7 +20384,6 @@ def configure_kamal_maintenance(app_id, databases)
     module KamalMaintenance
       APP_ID = #{app_id.inspect}
       DATABASES = #{databases.inspect}.freeze
-      HAS_WORKER = #{databases.any? { |database| database.fetch("name") == "queue" }}
       DEFAULT_MESSAGE = #{default_message_literal}
   RUBY
   maintenance_cli << <<~'RUBY'
@@ -20674,7 +20659,7 @@ def configure_kamal_maintenance(app_id, databases)
 
           @step_sequence = [
             "active", "litestream_started", "litestream_ready", "web_started",
-            *(HAS_WORKER ? ["worker_started"] : []),
+            "worker_started",
             "app_roles_verified", "internal_health_verified", "proxy_live", "public_health_verified"
           ]
           @proxy_live = false
@@ -20682,7 +20667,7 @@ def configure_kamal_maintenance(app_id, databases)
           perform_step("litestream_started") { run_kamal!("accessory", "start", "litestream") }
           perform_step("litestream_ready") { verify_litestream_ready! }
           perform_step("web_started") { run_kamal!("app", "start", "-r", "web") }
-          perform_step("worker_started") { run_kamal!("app", "start", "-r", "worker") } if HAS_WORKER
+          perform_step("worker_started") { run_kamal!("app", "start", "-r", "worker") }
           perform_step("app_roles_verified") { verify_running_roles! }
           perform_step("internal_health_verified") { app_exec!(*internal_health_command) }
           perform_step("proxy_live") do
@@ -20810,7 +20795,7 @@ def configure_kamal_maintenance(app_id, databases)
 
         def verify_running_roles!
           roles = @inspector.running_roles
-          required = HAS_WORKER ? %w[web worker] : %w[web]
+          required = %w[web worker]
           missing = required - roles
           raise Error, "application roles did not start: #{missing.join(", ")}" unless missing.empty?
         end
@@ -20843,7 +20828,7 @@ def configure_kamal_maintenance(app_id, databases)
               visible_body.include?(state.fetch("message"))
             raise Error, "remote state and running services are inconsistent" unless expected
           else
-            required = HAS_WORKER ? %w[web worker] : %w[web]
+            required = %w[web worker]
             expected = (required - roles).empty? && litestream && response.fetch("code") == 200
             raise Error, "inactive marker and running services are inconsistent" unless expected
           end
@@ -21372,12 +21357,14 @@ def configure_deployment(app_id)
     require "sorbet-runtime"
     require "stringio"
     require "tempfile"
+    require "yaml"
 
     module Deployment
       class KamalSecretsWriter
         extend T::Sig
 
         DEPLOY_SECRET_FIELDS = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY].freeze
+        BILLING_SECRET_FIELDS = %w[BILLING_EXECUTION_PRIVATE_KEY BILLING_ARBITRUM_RPC_URL BILLING_BASE_RPC_URL BILLING_ETHEREUM_RPC_URL BILLING_POLYGON_RPC_URL].freeze
 
         sig { params(root: Pathname, output: T.any(IO, StringIO)).void }
         def initialize(root:, output: $stdout)
@@ -21395,6 +21382,23 @@ def configure_deployment(app_id)
             R2_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{source} #{DEPLOY_SECRET_FIELDS.join(" ")})
             #{DEPLOY_SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $R2_SECRETS)" }.join("\n")}
           SECRETS
+          billing_path = @root.join("config/billing_secrets.#{destination}.yml")
+          if billing_path.file?
+            billing = YAML.safe_load_file(billing_path, aliases: false)
+            required = %w[account_id vault_id item_id]
+            unless billing.is_a?(Hash) && billing.keys.sort == required.sort &&
+                required.all? { |key| billing[key].is_a?(String) && !billing[key].empty? }
+              raise ArgumentError, "#{billing_path.relative_path_from(@root)} must contain account_id, vault_id and item_id"
+            end
+            unless billing.fetch("account_id") == account_id && billing.fetch("vault_id") == vault_id
+              raise ArgumentError, "Billing secrets must use the destination's 1Password account and vault"
+            end
+            billing_source = Shellwords.escape("#{vault_id}/#{billing.fetch('item_id')}")
+            content << <<~SECRETS
+              BILLING_SECRETS=$(bin/kamal secrets fetch --adapter 1password --account #{account} --from #{billing_source} #{BILLING_SECRET_FIELDS.join(" ")})
+              #{BILLING_SECRET_FIELDS.map { |name| "#{name}=$(bin/kamal secrets extract #{name} $BILLING_SECRETS)" }.join("\n")}
+            SECRETS
+          end
           Tempfile.create(["secrets-#{destination}", ".tmp"], path.dirname.to_s) do |file|
             file.write(content)
             file.flush
@@ -22487,7 +22491,6 @@ def configure_deployment(app_id)
     require "deployment/command_runner"
 
     module Deployment
-      HAS_WORKER = #{VALUES.fetch("active_job") == "solid_queue"}
   RUBY
   server_setup << <<~'RUBY'
       class ServerInstance < T::Struct
@@ -22728,7 +22731,7 @@ def configure_deployment(app_id)
         def proposed(instance:, hostname:, ipv6:)
           data = T.cast(Marshal.load(Marshal.dump(@data)), T::Hash[String, T.untyped])
           set_path(data, %w[servers web], [instance.main_ip])
-          set_path(data, %w[servers worker hosts], [instance.main_ip]) if HAS_WORKER
+          set_path(data, %w[servers worker hosts], [instance.main_ip])
           set_path(data, %w[proxy host], hostname)
           set_path(data, %w[proxy run bind_ips], ipv6 ? ["0.0.0.0", "::"] : ["0.0.0.0"])
           set_path(data, %w[env clear APPLICATION_ORIGIN], "https://#{hostname}")
@@ -23412,7 +23415,7 @@ def configure_deployment(app_id)
           permission_group:,
           cloudflare_tokens: [{
             "id" => "token-id",
-            "name" => "sample-r2-production",
+            "name" => Deployment::Configurator.cloudflare_token_name(Deployment::Configurator::APP_ID, "production"),
             "status" => "active",
             "policies" => [policy]
           }],
@@ -23696,7 +23699,7 @@ def configure_deployment(app_id)
 
           assert_equal 45, written.fetch("deploy_timeout")
           assert_equal ["192.0.2.10"], written.dig("servers", "web")
-          assert_equal ["192.0.2.10"], written.dig("servers", "worker", "hosts") if Deployment::HAS_WORKER
+          assert_equal ["192.0.2.10"], written.dig("servers", "worker", "hosts")
           assert_equal ["0.0.0.0", "::"], written.dig("proxy", "run", "bind_ips")
           assert_equal "app.example.com", written.dig("proxy", "host")
           assert_equal "https://app.example.com", written.dig("env", "clear", "APPLICATION_ORIGIN")
@@ -23989,9 +23992,7 @@ def configure_kamal
     { "name" => "primary", "path" => "/rails/storage/production.sqlite3" },
     { "name" => "storage", "path" => "/rails/storage/production_storage.sqlite3" }
   ]
-  if VALUES.fetch("active_job") == "solid_queue"
-    databases << { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3" }
-  end
+  databases << { "name" => "queue", "path" => "/rails/storage/production_queue.sqlite3" }
   if VALUES.fetch("action_cable") == "solid_cable"
     databases << { "name" => "cable", "path" => "/rails/storage/production_cable.sqlite3" }
   end
@@ -24032,11 +24033,7 @@ def configure_kamal
   remove_file ".kamal/secrets"
   create_file ".kamal/secrets-common", kamal_secrets.join("\n") + "\n", force: true
 
-  worker_role = if VALUES.fetch("active_job") == "solid_queue"
-    "  worker:\n    cmd: bin/jobs --mode async\n"
-  else
-    ""
-  end
+  worker_role = "  worker:\n    cmd: bin/jobs --mode async\n"
   accessory_secret_lines = %w[CF_ACCOUNT_ID LITESTREAM_R2_BUCKET R2_ACCESS_KEY R2_SECRET_KEY]
     .map { |name| "        - #{name}" }.join("\n")
   vapid_secret_lines = if VALUES.fetch("web_push") == "use"
@@ -24070,6 +24067,13 @@ def configure_kamal
       secret:
         - RAILS_MASTER_KEY
     #{vapid_secret_lines}
+    <% if File.file?(File.join("config", "billing_secrets.\#{ENV.fetch('KAMAL_DESTINATION')}.yml")) %>
+        - BILLING_EXECUTION_PRIVATE_KEY
+        - BILLING_ARBITRUM_RPC_URL
+        - BILLING_BASE_RPC_URL
+        - BILLING_ETHEREUM_RPC_URL
+        - BILLING_POLYGON_RPC_URL
+    <% end %>
     volumes:
       - "#{app_id}_<%= ENV.fetch(\"KAMAL_DESTINATION\") %>_storage:/rails/storage"
 
@@ -24103,14 +24107,12 @@ def configure_kamal
   IGNORE
 
   docker_build_packages = %w[build-essential git nodejs npm pkg-config libsqlite3-dev libyaml-dev]
-  if VALUES.fetch("additional_login_methods").include?("siwe")
-    docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])
-  end
+  docker_build_packages.concat(%w[autoconf automake libffi-dev libgmp-dev libssl-dev libtool python3-dev])
 
   create_file "Dockerfile", format(<<~'DOCKERFILE', build_packages: docker_build_packages.join(" ")), force: true
     # syntax=docker/dockerfile:1
     # check=error=true
-    ARG RUBY_VERSION=4.0.0
+    ARG RUBY_VERSION=4.0.6
     FROM ruby:${RUBY_VERSION}-slim AS base
     WORKDIR /rails
     RUN apt-get update -qq && \
@@ -24128,6 +24130,7 @@ def configure_kamal
         apt-get install --no-install-recommends -y %{build_packages} && \
         rm -rf /var/lib/apt/lists /var/cache/apt/archives
     COPY Gemfile Gemfile.lock ./
+    COPY engines/billing ./engines/billing
     RUN bundle install && rm -rf /root/.bundle
     COPY package.json package-lock.json ./
     RUN npm ci
@@ -24470,6 +24473,7 @@ after_bundle do
   install_solid_components
   install_job_operations if VALUES.fetch("job_operations") == "enable"
   install_maintenance_tasks if VALUES.fetch("maintenance_tasks") == "enable"
+  configure_billing
   configure_database
   configure_active_storage_db
   configure_kamal
@@ -24484,8 +24488,9 @@ after_bundle do
     require "action_mailer"
     require "mail"
     require "webauthn/fake_client"
+    require "eth"
   RUBY
-  run_checked "bin/tapioca gem action_policy actionmailer browser mail webauthn"
+  run_checked "bin/tapioca gem action_policy actionmailer browser eth mail webauthn"
   append_to_file "sorbet/config", <<~CONFIG
     --suppress-payload-superclass-redefinition-for=Net::IMAP::Literal
     --suppress-payload-superclass-redefinition-for=Net::IMAP::QuotedString

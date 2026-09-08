@@ -86,18 +86,14 @@ RailsアプリIDは有限選択の設定値とは分離して扱います。キ�
 2. 表示用アプリ名
 3. PWAを使うか
 4. PWAでWeb Pushを使うか
-5. ジョブ管理を使うか（Web Pushを使わない場合）
-6. 管理者向けジョブ運用画面を使うか（Solid Queueを使う場合）
-7. 管理者向け運用タスクを使うか（Solid Queueを使う場合）
-8. Solid Cacheを使うか
-9. アカウント管理方法
-10. プロフィール機能
-11. 画像配信方式
-12. API機能を有効にするか
-13. Action Cableを使うか
-14. メール機能
-15. デプロイ方法
-16. 既定locale
+5. 管理者向けジョブ運用画面を使うか
+6. 管理者向け運用タスクを使うか
+7. Solid Cacheを使うか
+8. 追加ログイン方法
+9. API機能を有効にするか
+10. Action Cableを使うか
+11. メール機能
+12. 既定locale
 
 この順序で適用可能な質問をすべて完了するまで、実行予定の確認へ進みません。表示条件を満たさない質問は利用者へ表示せず、全質問完了後の正規化で仕様どおりの値を設定します。
 
@@ -137,20 +133,18 @@ Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成さ�
 
 `pwa == skip`の場合は質問せず、値を`skip`へ正規化します。ただしCLIで`--pwa=skip --web-push=use`を明示した場合は、矛盾を生成開始前に拒否します。`use`の場合はVAPID鍵を自動生成し、git管理外の`mise.local.toml`の`[env]`へ`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、開発用`VAPID_SUBJECT=https://localhost`として保存します。
 
-Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push選択時はActive Job質問を省略し、未指定値を理由付きで`solid_queue`へ正規化します。CLIで`--web-push=use --active-job=skip`を明示した場合は拒否し、同期送信や別adapterへのフォールバックは追加しません。
+Web Pushは購読1件につき1件のActive Jobを作成し、全構成で常設するSolid Queueを使用します。
 
 アプリ内通知は`web_push`を含むConfigurationやQuestionnaireの選択結果に依存せず、すべての生成アプリへ常設します。Web Pushの購読設定、送信service、jobとはmodel・route・画面を共有しません。
 
-## `active_job`
+## 常設の決済EngineとSolid Queue
 
-- CLI引数: `--active-job=solid_queue|skip`
-- 質問文: ジョブ管理を使用しますか？
-- 選択肢: `solid_queue`、`skip`
-- 既定値: `solid_queue`
-- 表示条件: `web_push != use`
-- 影響する処理: `solid_queue` gemとinstall generator、SQLite queue database、Active Job adapter、development用Puma plugin、production worker
+- 選択肢・CLI引数: なし。`--active-job`は不明なoptionとして拒否する
+- 影響する処理: `Billing::Engine`、`eth`、`solid_queue`、SQLite queue database、Active Job adapter、development用Puma plugin、production worker、毎分の決済照合job
 
-`solid_queue`の場合、applicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentには`storage/development_queue.sqlite3`を専用queue databaseとして定義し、`db/queue_schema.rb`を`db:prepare`で読み込んだうえでPuma pluginからSolid Queueを起動します。productionではPumaから起動せず、Kamalの`worker` roleで`bin/jobs --mode async`を実行します。
+全構成でapplicationのActive Job adapterを`solid_queue`に設定し、test環境だけenqueue assertionと外部worker非依存の決定的なテストのため`test` adapterへ明示的に上書きします。developmentには`storage/development_queue.sqlite3`を専用queue databaseとして定義し、`db/queue_schema.rb`を`db:prepare`で読み込んだうえでPuma pluginからSolid Queueを起動します。productionではPumaから起動せず、Kamalの`worker` roleで`bin/jobs --mode async`を実行します。
+
+`engines/billing`へ決済Engineを常設します。運営者決済・販売者決済・販売者の新規プラン作成は生成時の質問にせず、生成アプリの独立した管理設定として初期値をすべてONにします。接続情報の不足でOFFへ変更しません。詳細は[billing.md](billing.md)を参照してください。
 
 ## `job_operations`
 
@@ -158,10 +152,10 @@ Web Pushは購読1件につき1件のActive Jobを必須とします。Web Push�
 - 質問文: 管理者向けジョブ運用画面を使用しますか？
 - 選択肢: `enable`、`disable`
 - 既定値: 適用可能な場合は`enable`
-- 表示条件: `web_push == use`または`active_job == solid_queue`
+- 表示条件: 常に表示
 - 影響する処理: Mission Control Jobs、`/admin/jobs`の管理画面、管理者用navigation、ジョブ運用文書
 
-Mission Control JobsはSolid Queueのqueue、job、worker、定期task、失敗とretry状況を監視・操作するため、実効値が`active_job == solid_queue`の場合だけ利用できます。Solid Queueを使用しない場合は質問せず`disable`へ正規化し、確認画面へ理由を表示します。CLIで`--job-operations=enable`とSolid Queueを使用しない設定を同時に明示した場合は、`rails new`開始前に矛盾として拒否します。inline、async、別queue adapterへの切替は行いません。
+Mission Control Jobsは常設のSolid Queueのqueue、job、worker、定期task、失敗とretry状況を監視・操作します。この管理画面の有無は、Queueや決済処理の有無に影響しません。
 
 `enable`ではMission Control Jobs 1.1.0を`/admin/jobs`だけへmountし、公式`base_controller_class` extension pointから既存の`Admin::BaseController`、管理者role、Action Policyへ接続します。Mission Control標準のHTTP Basic認証は無効化し、追加のusername/passwordは要求しません。host側のdaisyUI View overrideは見出し、tab、table、状態、日時、操作、確認文、ARIA labelをja/enで生成し、既定localeに従って表示します。engineがrequest内で使用する英語専用I18n設定は専用layoutの描画中だけhostのI18n設定へ切り替え、header、footer、HTML metadataへ波及させません。engine controllerが生成する操作後通知と例外message、route、操作契約は変更しません。Bulma stylesheetとBulma classは生成しません。
 
@@ -172,10 +166,10 @@ Solid Queue 1.6.0の公式install generatorは`config/recurring.yml`へ、完了
 - CLI引数: `--maintenance-tasks=enable|disable`
 - 既定値: 適用可能な場合は`enable`
 - 選択肢: `enable`、`disable`
-- 表示条件: `web_push == use`または`active_job == solid_queue`
+- 表示条件: 常に表示
 - 影響する処理: Shopify Maintenance Tasks、標準Run migration、`/admin/maintenance_tasks`の管理画面、カウントダウンTaskサンプル、管理者用navigation
 
-Maintenance TasksはActive Jobを介して実行するため、実効値が`active_job == solid_queue`の場合だけ利用できます。Solid Queueを使用しない場合は質問せず`disable`へ正規化し、確認画面へ理由を表示します。CLIで`--maintenance-tasks=enable`とSolid Queueを使用しない設定を同時に明示した場合は、`rails new`開始前に矛盾として拒否します。同期実行やinline adapterへの切替は行いません。
+Maintenance Tasksは常設のSolid Queueで実行します。管理者向け運用タスクの有無は、Queueや決済処理の有無に影響しません。
 
 `enable`では`maintenance_tasks` 2.17.0の公式install generatorを実行し、Gem標準のRun modelとmigrationでstatus、cursor、error、job ID、arguments、metadataを管理します。engineは`/admin/maintenance_tasks`だけへmountし、既存のadmin認証、Action Policy、admin layoutを再利用します。管理画面はBulmaを読み込まず、host側のdaisyUI View overrideを使用します。生成直後から動作を確認できるよう、10から1までを順番にapplication logへ記録する`Maintenance::CountdownTask`も生成します。
 
@@ -186,7 +180,7 @@ Maintenance TasksはActive Jobを介して実行するため、実効値が`acti
 - 選択肢: `siwe`の複数選択
 - 既定値: `siwe`
 - 表示条件: 常に表示する
-- 影響する処理: Deviseの`:siweable` module、`siwe-rb`、SIWE credential・challenge・route・管理画面、Dockerのbuild stageに追加するネイティブ拡張のビルド用パッケージ
+- 影響する処理: Deviseの`:siweable` module、`siwe-rb`、SIWE credential・challenge・route・管理画面
 
 SIWEのsignup・loginでsessionを確立した場合は、検証済みの`SiweIdentity`を認証元としてsessionへ記録します。ウォレット一覧ではそのidentityを「現在使用中」と表示して解除導線を出さず、直接の解除要求も拒否します。最後のログイン方法にも解除導線を出しません。Passkeyで確立したsessionでは現在使用中のウォレットは存在しません。
 
@@ -194,7 +188,7 @@ Devise 5.0.4、`devise-i18n`、`webauthn ~> 3.4`、`browser ~> 6.2`によるPass
 
 `PasskeyCredential`はUserごとに複数登録でき、credential IDを全Userで一意にします。登録画面に名称入力は設けず、serverが既知AAGUIDの提供元名、登録User-AgentのOS名、`Passkey`の順で初期名を決定します。同じ名前のcredentialを許可し、登録後のeditだけが名称を変更します。AAGUID一覧は`passkeydeveloper/passkey-authenticator-aaguids`のcommit `6eb68689ae67a5f261eebae490f34633063d9da0`から名前だけを固定し、実行時取得しません。AAGUIDとUser-Agentは化粧的な表示名にだけ使い、認証・認可・認証器制限には使いません。登録時のBackup Eligibilityは変更不可で、認証時にも不変性を検証します。Backup State、sign count、last usedは認証成功時だけ更新し、`BE=0/BS=1`はdatabase・model・認証境界で拒否します。全資格情報が`BS=0`のPasskey 1件だけならログイン後に紛失リスク警告を表示します。
 
-`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。生成するDockerfileのbuild stageには、`rbsecp256k1`をビルドするための`autoconf`、`automake`、`libffi-dev`、`libgmp-dev`、`libssl-dev`、`libtool`、`python3-dev`も追加します。これらはmulti-stage buildの最終runtime imageには含めません。SIWEは新規登録とログインを別purposeにし、ログインは既存identityだけを受け付けます。名前付きEOA walletをUserごとに複数登録でき、addressは全Userで一意かつ変更不可です。全SIWE操作でEIP-6963 Providerを収集し、1件なら直接、複数なら選択modalを経て同じProviderでaddress・chain ID取得と署名を行います。登録時はProviderの自己申告名を初期名にし、EIP-6963非対応の`window.ethereum`と不正なProvider名は`Wallet`にします。Provider名は表示専用であり、登録後の編集画面で変更できます。
+`siwe`を選択した場合だけ`siwe-rb` 0.2.xとDeviseの`:siweable` moduleを追加します。決済署名の`eth`が全構成で必要なため、SIWEの選択にかかわらずDockerfileのbuild stageには、`rbsecp256k1`をビルドするための`autoconf`、`automake`、`libffi-dev`、`libgmp-dev`、`libssl-dev`、`libtool`、`python3-dev`も追加します。これらはmulti-stage buildの最終runtime imageには含めません。SIWEは新規登録とログインを別purposeにし、ログインは既存identityだけを受け付けます。名前付きEOA walletをUserごとに複数登録でき、addressは全Userで一意かつ変更不可です。全SIWE操作でEIP-6963 Providerを収集し、1件なら直接、複数なら選択modalを経て同じProviderでaddress・chain ID取得と署名を行います。登録時はProviderの自己申告名を初期名にし、EIP-6963非対応の`window.ethereum`と不正なProvider名は`Wallet`にします。Provider名は表示専用であり、登録後の編集画面で変更できます。
 
 WebAuthnとSIWEのchallengeはdatabaseへtoken digest、purpose、User、browser session、5分の期限、消費時刻、必要に応じて削除対象を保存します。発行・検証はPOST＋CSRF、`Cache-Control: no-store`、IP＋sessionごとのrate limitで保護します。Passkey・walletの解除は削除対象自身を候補から除外した別資格情報、アカウント削除は任意の現存資格情報による操作単位の再認証を要求します。最後の資格情報、別Userの対象、期限切れ・再利用challengeは拒否します。
 
@@ -208,7 +202,7 @@ Profileは質問・CLI引数を持たず、全構成でUserとの1対1 associati
 
 全構成で`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、汎用`image_crop` Stimulus controller、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
-添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。両variantは`preprocessed: true`でattachment commit後にActive Storage標準の`TransformJob`へenqueueし、profile更新response内では画像変換を待ちません。Solid Queue選択時は既存workerが処理し、未選択時は既存Active Job adapterを使用します。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
+添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。両variantは`preprocessed: true`でattachment commit後にActive Storage標準の`TransformJob`へenqueueし、profile更新response内では画像変換を待ちません。常設のSolid Queue workerが処理します。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
 
 通常のユーザーupload画像はnamed variantの非同期preprocessを標準とし、request内で全variantを同期生成しません。variant完成前の一時的な競合はActive Storage標準のbest effortとして扱います。将来、記事公開などでvariant完成前の公開を禁止する要件が生じた場合だけ、その機能に限定した`processing`から`published`への状態遷移を設計し、汎用single-flightや処理状態基盤は先行追加しません。
 
@@ -268,9 +262,9 @@ avatarの選択元画像は静止画JPEG、PNG、WebPだけを許可し、5 MiB�
 
 デプロイ方法は質問・CLI optionにせず、全構成でKamal V2へ固定します。`--deployment`は廃止済みであり、指定した場合は不明なoptionとして`rails new`開始前に失敗します。
 
-Rails標準のDocker/Kamal生成を有効にし、Application TemplateがKamal `~> 2.11`、`minimum_version: 2.11.0`、必須の`production`・`staging` destination、単一Linux host、destination別SQLite volume、Web primary role、条件付きSolid Queue worker roleを確定します。Litestream 0.5.15は同じvolumeをmountするAccessoryとし、アプリimageへ含めません。
+Rails標準のDocker/Kamal生成を有効にし、Application TemplateがKamal `~> 2.11`、`minimum_version: 2.11.0`、必須の`production`・`staging` destination、単一Linux host、destination別SQLite volume、Web primary role、常設のSolid Queue worker roleを確定します。Litestream 0.5.15は同じvolumeをmountするAccessoryとし、アプリimageへ含めません。
 
-primary SQLite databaseとActive Storageのstorage SQLite databaseは常にLitestream対象とし、queueとcableは対応機能を選択した場合だけ追加します。cacheは復元時点を揃える必要がない再構築可能データなので対象外です。replicaはCloudflare R2へ固定し、各DBのobject prefixを分けます。destinationごとに別bucketを使い、Cloudflareの`Workers R2 Storage Bucket Item Write`だけを対象bucketへ許可したaccount-owned API tokenを分離します。
+primary、Active Storageのstorage、queueのSQLite databaseを常にLitestream対象とし、cableは選択した場合だけ追加します。cacheは復元時点を揃える必要がない再構築可能データなので対象外です。replicaはCloudflare R2へ固定し、各DBのobject prefixを分けます。destinationごとに別bucketを使い、Cloudflareの`Workers R2 Storage Bucket Item Write`だけを対象bucketへ許可したaccount-owned API tokenを分離します。
 
 生成する`deployment:configure`は、1Passwordの設定操作をすべて人間ユーザーとして実行します。開始時に`OP_SERVICE_ACCOUNT_TOKEN`、`OP_CONNECT_HOST`、`OP_CONNECT_TOKEN`のいずれかが設定されていれば停止します。1Password CLIへ追加済みのaccountを選択し、`op user get --me`がactiveな人間ユーザーを返すことを確認して、以後すべての`op`操作へ選択account IDを渡します。対象destinationだけについてaccount内の全vaultから`<正規化済みapp_id>-<destination>`の完全一致を調べ、0件なら作成予定、1件ならIDで再利用、複数件なら変更前に停止します。
 
@@ -296,7 +290,7 @@ Cloudflare APIからpermission group IDを解決して対象bucketだけのallow
 
 ハードメンテナンスも質問やgenerator optionにはせず、全構成へRails非依存の`bin/kamal-maintenance`を生成します。既存の名称と`start`・`status`・`message`・`finish`の契約を維持し、`production|staging` destinationを必須にします。変更操作はTTYとGumの既定値「中止」の確認を必須とし、forceや非対話実行、自動終了、任意DB command実行、Rails管理画面は提供しません。文言は生成時の既定localeに対応する初期値を持つ1行500文字以下のplain textとし、Kamal Proxyへargvで渡します。ソフトメンテナンスとは状態も文言も連動しません。
 
-`start`はProxyを503へ切り替えて全app roleを停止し、primary・storage・条件付きqueue/cableを最終同期してLitestreamを停止します。cacheはapp停止によってアクセス不能になりますが、backup・restore対象にはしません。`finish`はLitestreamのsocket、Web・条件付きWorker、内部health、Proxy live、公開`/up`の順に確認し、全成功後だけremote stateを削除します。remote stateはphase、文言、時刻、最後の成功step、失敗stepを保持し、同じsubcommandの再実行で続行します。restore markerとmaintenance stateは相互排他で、pre-deploy hookはどちらが存在しても通常deployを拒否します。
+`start`はProxyを503へ切り替えて全app roleを停止し、primary・storage・queueと選択したcableを最終同期してLitestreamを停止します。cacheはapp停止によってアクセス不能になりますが、backup・restore対象にはしません。`finish`はLitestreamのsocket、Web・Worker、内部health、Proxy live、公開`/up`の順に確認し、全成功後だけremote stateを削除します。remote stateはphase、文言、時刻、最後の成功step、失敗stepを保持し、同じsubcommandの再実行で続行します。restore markerとmaintenance stateは相互排他で、pre-deploy hookはどちらが存在しても通常deployを拒否します。
 
 ## テスト要件
 
@@ -322,22 +316,19 @@ Cloudflare APIからpermission group IDを解決して対象bucketだけのallow
 - 承認後に質問が行われず、確定済み設定と実行計画が変化しないこと。
 - `mail == auto`が追加ログイン方法にかかわらず`skip`へ正規化されること。
 - PWAを使わない場合、Web Pushを質問せず`web-push` gemを追加しないこと。
-- `pwa=skip + web_push=use`と`web_push=use + active_job=skip`の明示矛盾を変更開始前に拒否すること。
-- Web Push使用時はActive Jobを質問せず、未指定値を理由付きでSolid Queueへ正規化すること。
-- Solid Queue使用時だけMaintenance Tasksを質問し、適用可能な場合は`enable`を既定値とすること。
-- Solid Queue使用時だけジョブ運用画面を質問し、適用可能な場合は`enable`を既定値とすること。
-- Solid Queueを使わない場合はジョブ運用画面を`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
+- `pwa=skip + web_push=use`の明示矛盾を変更開始前に拒否すること。
+- `--active-job`を不明なoptionとして拒否し、EngineとSolid Queueを全構成へ生成すること。
+- Maintenance Tasksとジョブ運用画面は独立して質問し、いずれも`enable`を既定値とすること。
 - ジョブ運用画面を使わない場合、Mission Control JobsのGem、initializer、controller、helper、policy、route、daisyUI View override、navigation、locale、文書を生成しないこと。
-- Solid Queueを使わない場合はMaintenance Tasksを`disable`へ正規化し、明示`enable`との矛盾を変更開始前に拒否すること。
 - PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
 - Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。
 - Passkey-only構成とPasskey＋SIWE構成で購読APIと共通設定UIをDevise認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。
-- Solid Queueを使わない場合、queue database、Puma plugin、production workerを生成しないこと。
+- queue database、development用Puma plugin、production worker、決済の定期jobを全構成で生成すること。
 - Maintenance Tasksを使わない場合、Gem、migration、initializer、controller、route、navigationを生成しないこと。
 - Action Cableを使わない場合、Solid Cableとcable databaseを生成しないこと。
 - 全構成でRails標準のThruster Gemと`bin/thrust`を生成し、`--skip-thruster`を使用しないこと。
 - `--deployment`が不明なoptionとして拒否され、全構成でKamal/Docker/Litestream成果物を生成すること。
-- Solid Queue使用時だけKamalの`worker` roleを追加すること。
-- primaryとActive Storageのstorageを常にreplicateし、queueとcableを選択に応じて追加し、cacheを除外すること。
+- 全構成でKamalの`worker` roleを追加すること。
+- primary、Active Storageのstorage、queueを常にreplicateし、cableを選択に応じて追加し、cacheを除外すること。
 - 手動復元が非TTY、確認不一致、backup欠落、integrity failure、lock競合で本番DBを変更しないこと。
 - maintenanceの変更操作が非TTY、確認取消、不正なdestination・文言、restore競合でremote processを変更せず、失敗時はstateと503を保持すること。

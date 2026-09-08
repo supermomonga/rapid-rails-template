@@ -8,7 +8,6 @@ module RapidRailsTemplate
     VALID_VALUES = {
       "pwa" => %w[use skip],
       "web_push" => %w[use skip],
-      "active_job" => %w[solid_queue skip],
       "job_operations" => %w[enable disable],
       "maintenance_tasks" => %w[enable disable],
       "solid_cache" => %w[use skip],
@@ -22,7 +21,6 @@ module RapidRailsTemplate
     DEFAULTS = {
       "pwa" => "use",
       "web_push" => "use",
-      "active_job" => "solid_queue",
       "job_operations" => "enable",
       "maintenance_tasks" => "enable",
       "solid_cache" => "use",
@@ -49,16 +47,7 @@ module RapidRailsTemplate
       raise InvalidConfiguration, "不明な設定です: #{unknown_keys.join(', ')}" if unknown_keys.any?
 
       validate_explicit_dependencies!(provided_answers)
-      resolved_defaults = DEFAULTS.dup
-      if !provided_answers.key?("maintenance_tasks") &&
-          (provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue")
-        resolved_defaults["maintenance_tasks"] = "enable"
-      end
-      if !provided_answers.key?("job_operations") &&
-          (provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue")
-        resolved_defaults["job_operations"] = "enable"
-      end
-      @answers = resolved_defaults.merge(provided_answers).transform_values do |value|
+      @answers = DEFAULTS.merge(provided_answers).transform_values do |value|
         value.is_a?(Array) ? value.dup.freeze : value
       end.freeze
       @values = @answers.dup
@@ -101,18 +90,6 @@ module RapidRailsTemplate
         @reasons["web_push"] = "PWAを使用しないため"
       end
 
-      if @values["web_push"] == "use"
-        @values["active_job"] = "solid_queue"
-        @reasons["active_job"] = "Web Pushの非同期送信に必要なため"
-      end
-
-      unless @values["active_job"] == "solid_queue"
-        @values["job_operations"] = "disable"
-        @reasons["job_operations"] = "Solid Queueを使用しないため"
-        @values["maintenance_tasks"] = "disable"
-        @reasons["maintenance_tasks"] = "Solid Queueを使用しないため"
-      end
-
       return unless @values["mail"] == "auto"
 
       @values["mail"] = "skip"
@@ -123,18 +100,6 @@ module RapidRailsTemplate
       if provided_answers["pwa"] == "skip" && provided_answers["web_push"] == "use"
         raise InvalidConfiguration, "PWA無効時にWeb Pushは使用できません"
       end
-
-      if provided_answers["web_push"] == "use" && provided_answers["active_job"] == "skip"
-        raise InvalidConfiguration, "Web Push使用時にActive Jobを無効化できません"
-      end
-      if provided_answers["job_operations"] == "enable" &&
-          provided_answers["web_push"] != "use" && provided_answers["active_job"] != "solid_queue"
-        raise InvalidConfiguration, "ジョブ運用画面使用時はSolid Queueが必要です"
-      end
-      return unless provided_answers["maintenance_tasks"] == "enable"
-      return if provided_answers["web_push"] == "use" || provided_answers["active_job"] == "solid_queue"
-
-      raise InvalidConfiguration, "Maintenance Tasks使用時はSolid Queueが必要です"
     end
   end
 end

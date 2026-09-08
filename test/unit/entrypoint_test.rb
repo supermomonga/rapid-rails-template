@@ -259,7 +259,7 @@ class EntrypointTest < Minitest::Test
     )
 
     assert_equal 1, status
-    assert_includes error.string, "Maintenance Tasks使用時はSolid Queueが必要です"
+    assert_includes error.string, "不明なオプションです: --active-job"
   end
 
   def test_rejects_job_operations_without_solid_queue_before_runner_initialization
@@ -282,7 +282,7 @@ class EntrypointTest < Minitest::Test
     )
 
     assert_equal 1, status
-    assert_includes error.string, "ジョブ運用画面使用時はSolid Queueが必要です"
+    assert_includes error.string, "不明なオプションです: --active-job"
   end
 
   def test_non_applicable_option_can_be_omitted_without_reading_input

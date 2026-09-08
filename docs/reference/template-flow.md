@@ -54,7 +54,7 @@ Railsが`>= 8.1, < 8.2`、Rubyが`>= 4.0, < 4.1`であることを確認しま�
 
 `--app-id`が未指定の場合は、`APP_PATH`のbasenameを初期値として`Gum.input`でRailsアプリIDを質問します。続いて`--app-name`が未指定の場合は、確定済みのRailsアプリIDを初期値として表示用アプリ名を質問します。CLI引数で指定された個別設定を事前回答とし、依存順に未指定の適用可能な質問だけを`Gum.choose`で行います。単一選択では仕様上の既定値、複数選択では利用可能な全featureを選択済みとして表示し、`no_limit: true`を使用します。選択なしと`--additional-login-methods=`は追加ログイン方法を無効にする明示回答です。Profileは質問を持たず常設します。RailsアプリID、表示用アプリ名を含むすべての適用可能な項目がCLI引数で確定している場合は、対話と最終承認を省略します。回答は後続質問の表示条件にだけ使用し、質問中はGum実行可能ファイル以外の外部command、Gem追加、generator、file actionを実行しません。依存条件を満たさない質問は、仕様で定めた明示値へ正規化します。
 
-全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。Job OperationsとMaintenance TasksはWeb PushによってSolid Queueが必須になった場合、またはSolid Queueが選択済みの場合だけ質問し、それ以外では`disable`へ正規化します。明示`enable`とSolid Queueなしの矛盾はこの段階で拒否します。画像配信は質問を持たず、Active Storage DB、libvips、`rails_storage_proxy`へ固定します。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production process、production要件を一覧で提示します。
+全質問が完了してから、回答の検証、`Auto`値の解決、generator optionとstepの構築を行います。Solid Queueと決済Engineは常設し、Job OperationsとMaintenance Tasksは独立した質問として既定値を`enable`にします。画像配信は質問を持たず、Active Storage DB、libvips、`rails_storage_proxy`へ固定します。確認画面には質問時の回答だけでなく、正規化後の実効値、解決理由、Gem、generator option、step、生成物、production process、production要件を一覧で提示します。
 
 利用者が`Gum.confirm`で承認した時点で設定と実行計画を不変化します。確認の既定値は拒否とします。承認後に質問を追加したり、回答を再解釈したり、実行計画を暗黙に変更したりしません。
 
@@ -66,7 +66,7 @@ RailsアプリID、表示用アプリ名、固定構成、回答からgenerator 
 
 ### `pre_bundle`
 
-Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。Action Textのeditorとして`lexxy ~> 0.9.21`を固定で宣言します。Sorbetは全構成で常設し、`sorbet-runtime`をapplication Gem、`sorbet`をdevelopment Gem、`tapioca`をdevelopment/test Gemとして宣言します。
+Rails Application Templateの`gem`などを利用して、bundle installに必要な依存関係を宣言します。このフェーズより前にGemfileを変更しません。`prepare_billing_engine`で専用payloadから`engines/billing`を展開し、初回bundleより前に`billing`のpath gemと`eth`を宣言します。Action Textのeditorとして`lexxy ~> 0.9.21`を固定で宣言します。Sorbetは全構成で常設し、`sorbet-runtime`をapplication Gem、`sorbet`をdevelopment Gem、`tapioca`をdevelopment/test Gemとして宣言します。
 
 `haikunator`を常設し、Profile modelのUser作成時に`screen_name`と`display_name`の既定値を生成します。`boring_avatars ~> 0.1.0`もRails binding付きで常設し、画像未設定時のSVG生成に使用します。Rails標準Gemfileの`image_processing`とThrusterを全構成で利用し、外部画像処理serviceや開発用sidecarは追加しません。
 
@@ -79,6 +79,8 @@ development依存にはGumとローカルWrangler v4を固定します。Kamal/L
 最初にAction Textの公式install generatorを実行し、Active StorageとAction Textのmigrationを常設します。直後に`active_storage_db`の公式migration taskを実行し、生成されたファイル本体用migrationを`db/storage_migrate`へ移します。続けてLexxyとActive StorageをImportmapへ登録します。全構成でImportmapの公式`pin` commandによりCropper.js 2.1.1とtransitive dependencyを`vendor/javascript`へ固定し、任意または自由なアスペクト比とoptionalな出力寸法をvaluesで設定できる`image_crop` Stimulus controllerを生成します。プロフィールViewはこのcontrollerへ1:1と512×512を指定します。Deviseの公式generatorは全構成で実行し、migrationとUser modelをPasskey専用契約へ構造的に置き換えます。WebAuthn credential・database challenge・route・管理画面に加え、AAGUIDと登録User-Agentから初期表示名を決定するserviceを常設し、SIWE選択時だけ`:siweable`、SIWE identity・challenge・route・管理画面、EIP-6963 Provider名から初期表示名を決定するserviceを追加します。認証・管理画面の生成後、主DBに固定IDの設定を持つソフトメンテナンスを標準追加し、サイト停止判定、条件付きAPI停止判定、ログイン成功前のadmin判定、管理画面、共通503 Viewを既存のcontroller境界へ組み込みます。
 
 認証生成より前にApplication Identity、ja/en locale、request locale境界、canonical originを設定します。認証Userを生成した直後にAction Policy、`UserRole`、policy、`/admin`のOverviewと基本統計、ユーザー一覧・詳細・Profile編集画面、`users.id`を受け取るadmin付与taskを生成し、全機能をDeviseの`current_user`へ接続します。ユーザー一覧はProfileのavatar attachmentとblobをroleとともに事前読込し、role変更は詳細画面だけで確認後に実行します。管理者による更新もProfileの表示名、スクリーンネーム、アバターだけを受け付け、User本体と認証credentialは変更しません。生成するUser modelはdevelopment環境に限り、admin roleを持つUserが存在しない場合に、新しく作成されたUserへ`after_create` callbackでadmin roleを付与します。全部入りsampleがseedするUserは自動付与を明示的に除外し、seed後の最初のサインアップでadminを確定します。callbackはUser作成transaction内で実行し、test・productionでは自動付与しません。Overviewは`UserPolicy#overview?`で認可し、全ユーザー、管理者、直近30日の新規ユーザー、公開FAQ、管理対象ページをrequestごとに集計します。Profile設定後、既定View生成前に選択肢を持たない`configure_in_app_notifications`を必ず実行します。このstepは既に設定済みのAction TextとLexxyを通知本文に使用し、Userの全体通知最終確認日時、個別通知だけの配信行、2タブのpopoverと履歴を生成します。全体通知のためのUser列挙、配信行の後追い同期、Active Jobの依存は追加しません。固定ページ、FAQ、footer設定、Profile、アプリ内通知、API、PWA、Web Push、Solid系機能は追加ログイン方法を参照しません。Maintenance Tasks metadataには`triggered_by_user_id`を保存します。
+
+Solid Queueのinstall後に`configure_billing`を実行し、ホストのUser関連付け・削除制約、Engineの一度だけのmount、毎分の決済jobを設定します。Railsのmigration generatorでホストの認証migrationより後の番号を取得し、Engine内のmigrationへ適用します。Engineのmigration pathはRailsの初期化時に主DBへ登録し、`db:prepare`でホストと一緒に実行します。
 
 databaseとannotationを確定し、config DSLのreceiverをRuby本体の`T.bind`で接続してからTapiocaを初期化します。Action Policyのtest helper、Passkey名のUser-Agent解析、mailをskipした構成でもannotationが参照する型を生成できるよう、Action Mailer、Browser、Mail、WebAuthnのGem RBIを明示的に再生成します。test databaseを準備してtest環境のRails DSL RBIを全体生成した後、controller、concern、helper、model、policy、service、job、mailer、task、validator、application-owned `lib`、config、test、`db/seeds.rb`の先頭へ`# typed: true`以上を付与し、純粋なserviceは`# typed: strict`へ上げます。framework wiring、Boring Avatarsの不足型alias、SIWE依存のHTTPX Gem RBIから参照されるBundler同梱fork hookを責務別のshimで補ってTapioca初期placeholderの`todo.rbi`を削除し、`srb tc`で未解決定数を含む全体整合性を検証します。migration、schemaだけは`typed: false`に留め、DSL／Gem／annotation RBIは手動編集しません。role付与の処理本体は型検査対象の`AdminRoleGrant`へ置き、`.rake`は呼び出しだけを担います。
 

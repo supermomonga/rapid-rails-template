@@ -23,7 +23,7 @@ module RapidRailsTemplate
     end
 
     def fingerprint_paths(root)
-      source_paths = Dir[File.join(root, "src/rapid_rails_template/**/*.rb")]
+      source_paths = Dir[File.join(root, "src/rapid_rails_template/**/*")].select { |path| File.file?(path) }
       (source_paths + [File.join(root, "bin/update-evidence")]).sort
     end
 

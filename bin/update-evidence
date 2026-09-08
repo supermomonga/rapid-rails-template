@@ -17,7 +17,6 @@ COMMON_OPTIONS = [
   "--app-name=Sample App",
   "--pwa=use",
   "--web-push=use",
-  "--active-job=solid_queue",
   "--job-operations=enable",
   "--maintenance-tasks=enable",
   "--solid-cache=use",

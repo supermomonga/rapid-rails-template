@@ -1,0 +1,30 @@
+ja:
+  billing:
+    title: サブスク決済
+    operator: 運営者
+    saved: 保存しました。
+    refund_recorded: 手動返金の記録を保存しました。
+    cancel_requested: 解約を受け付けました。支払済み期間は引き続き利用できます。送信済みの決済は確定まで確認します。
+    setup_submitted: 集金口座の作成を送信しました。確定後に受付できるようになります。
+    recheck_requested: 取引の再照合を受け付けました。
+    errors:
+      active_contracts: 購入・販売の契約、利用期間、または未完了の決済処理が残っているため削除できません。
+      unavailable: 現在このチェーンでの契約を受け付けできません。
+      duplicate: このプランの契約が既にあります。現在の契約と利用期間が終了してから再契約してください。
+      invalid: 入力内容を確認してください。
+      authorization: 支払許可を受け付けできませんでした。契約の状態と署名を確認してください。
+      setup: 集金口座の設定または接続を確認してください。取引の状態は管理画面で確認できます。
+    notifications:
+      payment_settled: サブスク決済が確定しました。
+      payment_failed: サブスク決済を完了できませんでした。残高と支払許可を確認してください。
+      contract_expired: 支払期限を過ぎたため、契約の更新を停止しました。
+      collection_held: 引き落としを保留しています。設定、ガス代の上限、接続状況を確認してください。
+      connection_failed: 取引の送信または照合を完了できませんでした。確定状態を継続して確認します。
+      verification_failed: 取引の検証結果を確認する必要があります。自動処理を保留しました。
+      late_period: 送信済み取引が後の請求周期で確定しました。実際に支払った周期を契約へ反映しました。
+  errors:
+    messages:
+      billing_period: は対象プラン・契約の周期より短くしてください
+      billing_contracts: は契約・利用期間・未完了処理が残る間はOFFにできません
+      billing_creation_disabled: 現在、販売者の新規プラン作成を停止しています
+      billing_separate_treasury: は実行鍵および集金口座と異なる売上保管先を指定してください

@@ -3,6 +3,9 @@ number: 9
 title: Solid 系コンポーネントと運用画面を必要な構成だけに導入する
 status: accepted
 date: 2026-09-02
+links:
+- target: 13
+  kind: amendedby
 ---
 
 # Solid 系コンポーネントと運用画面を必要な構成だけに導入する

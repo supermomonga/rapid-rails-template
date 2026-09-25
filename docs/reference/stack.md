@@ -27,7 +27,7 @@ JSON処理には`json ~> 2.21`を全構成で使用します。Rails 8.1.3.1の`
 | Asset Pipeline | `propshaft` | Sprocketsへ切り替えない |
 | JavaScript配布 | `importmap-rails` | Node.jsを前提とするJS bundlerを導入しない |
 | Hotwire | `turbo-rails`、`stimulus-rails` | TurboとStimulusを使用する |
-| CSS・UI | `tailwindcss-rails`、`shadcn_view_components` 0.2.0 | Rails統合版Tailwind CSS 4とgemのViewComponentを使用する |
+| CSS・UI | `tailwindcss-rails`、`shadcn_view_components` 0.2.2 | Rails統合版Tailwind CSS 4とgemのViewComponentを使用する |
 | テスト | Minitest | Rails標準のtest frameworkを維持する |
 | 型検査 | `sorbet`、`sorbet-runtime`、`tapioca` | 漸進的型付けとGem／Rails DSL RBI生成に使用する |
 | システムテスト | `capybara`、`capybara-playwright-driver` | SeleniumではなくPlaywright driverを使用する |
@@ -43,13 +43,13 @@ JSON処理には`json ~> 2.21`を全構成で使用します。Rails 8.1.3.1の`
 
 Rails 8.1では、SQLite、Puma、Propshaft、Importmap、Turbo、Stimulus、Minitestが標準構成に含まれます。これらをGemfileへ重複追加せず、対象の`rails new`オプションと生成結果を検証します。Tailwind CSSは`--css=tailwind`を指定し、Railsが提供する`tailwindcss:install`処理を利用します。
 
-`shadcn_view_components` 0.2.0はApplication Templateのpost-bundleフェーズでgemのinstall generatorを実行して導入します。Tailwind入力にはgemが生成するCSS importを置き、`tw-animate-css`をnpmで導入します。生成された`package.json`と`package-lock.json`を管理します。gemのStimulus controllerはImportmap経由で登録し、JavaScript bundlerは導入しません。Node.jsはnpm依存のinstallとasset buildに使用し、`node_modules`はGitおよびDocker build contextへ含めません。
+`shadcn_view_components` 0.2.2はApplication Templateのpost-bundleフェーズでgemのinstall generatorを実行して導入します。Tailwind入力にはgemが生成するCSS importを置き、`tw-animate-css`をnpmで導入します。生成された`package.json`と`package-lock.json`を管理します。gemのStimulus controllerはImportmap経由で登録し、JavaScript bundlerは導入しません。Node.jsはnpm依存のinstallとasset buildに使用し、`node_modules`はGitおよびDocker build contextへ含めません。
 
 Kamal用のproduction imageではbuild stageにNode.jsとnpmを導入し、lockfileに対して`npm ci`を実行してから`assets:precompile`を行います。生成済みCSSだけをfinal stageへ引き継ぎ、`node_modules`とNode.js runtimeはfinal imageへ含めません。
 
 ### shadcnの既定テーマとvariant
 
-色、角丸、基本の文字組みは`shadcn_view_components` 0.2.0のEngine CSSの既定値を使用します。生成アプリから`:root`のsemantic tokenや`@layer base`を追加して上書きしません。補足文などはgemの`muted-foreground`を参照し、入力欄とbuttonはgemの公開コンポーネントまたはclass APIを使用します。`DESIGN.md`の旧配色・文字組みは生成アプリへ適用しません。
+色、角丸、基本の文字組みは`shadcn_view_components` 0.2.2のEngine CSSの既定値を使用します。生成アプリから`:root`のsemantic tokenや`@layer base`を追加して上書きしません。補足文などはgemの`muted-foreground`を参照し、入力欄とbuttonはgemの公開コンポーネントまたはclass APIを使用します。`DESIGN.md`の旧配色・文字組みは生成アプリへ適用しません。
 
 通常の文字付き操作button・button相当のlinkは、共通の`ApplicationHelper#action_button_classes(role)`で次のroleとgemのButton variantを対応させます。未知のroleは明示的に失敗させ、既定roleへのfallbackは行いません。
 
@@ -68,7 +68,7 @@ theme tokenの`secondary`は補助面の色、button roleの`:secondary`は副�
 
 文字付きbuttonとbutton相当のlinkは、通常時にも操作できる要素と判別できる表示にします。iconだけの慣例的なtriggerにはaccessible nameを付けます。本文linkは下線などで認識できるようにし、navigation内のlinkは配置とactive表示を確認します。
 
-入力と付属操作を一体に表示する箇所は`Shadcn::InputGroup`、`InputGroup::Input`、`InputGroup::Addon`を使用します。通常のform操作は入力の下に右寄せで置き、label、補足文、validation errorを入力と関連付けます。各Viewの実際の操作構成に応じて選びます。
+入力と付属操作を一体に表示する箇所は`Shadcn::InputGroup`、`InputGroup::Input`、`InputGroup::Addon`を使用します。単一入力を確定する操作をAddon内へ置く場合は、`InputGroup::Button`に`type: :submit`と用途に合うvariantを指定します。通常のform操作は入力の下に右寄せで置き、label、補足文、validation errorを入力と関連付けます。各Viewの実際の操作構成に応じて選びます。
 
 再確認した対象と境界は次のとおりです。
 
@@ -267,7 +267,7 @@ model、policy、service、job、mailer、validator、application-owned `lib`は
 
 `sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`はTapioca専有の生成物として手動編集しません。アプリがRubyで定義するmethodは元の`.rb`へinline signatureを書きます。手書きRBIは、Devise、Action Policy、Action View、route helper、fixture DSLなどのruntime wiringを表す`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIがRails binding内で参照する型aliasを補う`sorbet/rbi/shims/boring_avatars.rbi`、FFIまたはHTTPXのGem RBIが参照するRuby同梱Bundlerのfork hookを表す`sorbet/rbi/shims/bundler_connection_pool.rbi`に分離します。Bundler shimは認証optionに依存せず常に生成します。同じ定義が生成RBIへ追加された場合は`bin/tapioca check-shims`が重複として検出します。反復的な独自macroが複数classへmethodを生成するようになった場合だけcustom DSL compilerへ昇格します。
 
-`shadcn_view_components` 0.2.0のSorbet RBIは`**args`をHash引数として型検査するため、公開キーワードAPIの呼び出しで型エラーになります。生成アプリの`sorbet/rbi/shims/shadcn_view_components.rbi`は該当する`initialize`と`classes`のシグネチャだけを補正します。gem更新時は`bin/tapioca check-shims`と`srb tc`を実行し、gem側で正しいシグネチャが提供されたらこのshimを削除します。
+`shadcn_view_components` 0.2.2のSorbet RBIは`**args`をHash引数として型検査するため、公開キーワードAPIの呼び出しで型エラーになります。生成アプリの`sorbet/rbi/shims/shadcn_view_components.rbi`は該当する`initialize`と`classes`のシグネチャだけを補正します。gem更新時は`bin/tapioca check-shims`と`srb tc`を実行し、gem側で正しいシグネチャが提供されたらこのshimを削除します。
 
 生成時に`# typed: true`以上を付ける対象はcontroller、concern、helper、model、policy、service、job、mailer、task、validator、application-owned `lib`、config、test、`db/seeds.rb`です。configではPuma、Importmap、Rails CI、Maintenance Tasksが`instance_eval`するreceiverをRuby本体の`T.bind`で明示し、RailsがApplication subclassへ動的に委譲する`config_for`だけを`framework_bindings.rbi`で表現します。migration、schemaはRails DSLと実行順依存が強いため`typed: false`に留めます。`.rake`内にapplication logicを置かず、`roles:grant_admin`は`typed: strict`な`AdminRoleGrant`を呼び出します。
 

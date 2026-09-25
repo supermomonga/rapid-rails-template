@@ -224,7 +224,7 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_installs_shadcn_view_components_and_its_asset_dependencies
     install = source_between("def install_shadcn_view_components", "def configure_generator_templates")
-    assert_includes @source, 'gem "shadcn_view_components", "0.2.0"'
+    assert_includes @source, 'gem "shadcn_view_components", "0.2.2"'
     assert_includes install, 'npm install --save-dev tw-animate-css'
     assert_includes install, 'bin/rails generate shadcn_view_components:install'
     assert_includes install, 'import { register as registerShadcnComponents } from "@supermomonga/shadcn-view-components"'

@@ -10,7 +10,9 @@
         <%= render(Shadcn::Field::Label.new(for: form.field_id(:fee_percent))) { t("billing.ui.fee_percent") } %>
         <%= render(Shadcn::InputGroup.new) do %>
           <%= form.text_field :fee_percent, value: @merchant.fee_basis_points.nil? ? "" : Billing::Amount.format(@merchant.fee_basis_points, decimals: 2), inputmode: "decimal", class: Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes), data: { slot: "input-group-control" } %>
-          <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) { form.submit t("billing.ui.save"), class: action_button_classes(:primary) } %>
+          <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) do %>
+            <%= render(Shadcn::InputGroup::Button.new(type: :submit, variant: :default)) { t("billing.ui.save") } %>
+          <% end %>
         <% end %>
       <% end %>
     <% end %>

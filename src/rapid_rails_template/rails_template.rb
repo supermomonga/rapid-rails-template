@@ -26,7 +26,7 @@ gem "active_storage_db"
 gem "prism"
 gem "rails-i18n"
 gem "sorbet-runtime"
-gem "shadcn_view_components", "0.2.0"
+gem "shadcn_view_components", "0.2.2"
 
 gem_group :development do
   gem "annotaterb"
@@ -19429,11 +19429,14 @@ def configure_evidence_capture
                     parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2 :
                   field.matches('input[type="checkbox"], input[type="radio"]') ? 16 : 64
                 const inputGroup = field.closest('[data-slot="input-group"]')
+                const joined = inputGroup?.contains(button) || false
+                const inputGroupBox = joined ? inputGroup.getBoundingClientRect() : null
                 return [{ fieldName: field.name, inputTop: input.top, inputBottom: input.bottom,
                   inputLeft: input.left, inputRight: input.right, inputWidth: input.width,
                   buttonTop: action.top, buttonBottom: action.bottom, buttonLeft: action.left,
                   buttonRight: action.right, buttonHeight: action.height,
-                  joined: inputGroup?.contains(button) || false, minimumWidth,
+                  joined, groupTop: inputGroupBox?.top, groupBottom: inputGroupBox?.bottom,
+                  groupRight: inputGroupBox?.right, buttonSize: button.dataset.size, minimumWidth,
                   labelCount: field.labels.length,
                   buttonLabel: button.value || button.textContent.trim(),
                   buttonAriaLabel: button.getAttribute('aria-label') || '',
@@ -19454,7 +19457,10 @@ def configure_evidence_capture
               assert_operator group.fetch("buttonRight"), :<=, width
               assert_operator group.fetch("buttonTop"), :>=, group.fetch("inputTop") - 1
               if group.fetch("joined")
-                assert_in_delta group.fetch("inputTop"), group.fetch("buttonTop"), 1
+                assert_equal "xs", group.fetch("buttonSize")
+                assert_operator group.fetch("buttonTop") - group.fetch("groupTop"), :>=, 2
+                assert_operator group.fetch("groupBottom") - group.fetch("buttonBottom"), :>=, 2
+                assert_operator group.fetch("groupRight") - group.fetch("buttonRight"), :>=, 2
                 assert_in_delta 0, group.fetch("buttonLeft") - group.fetch("inputRight"), 1
               else
                 overlap_width = [group.fetch("inputRight"), group.fetch("buttonRight")].min -
@@ -19951,7 +19957,7 @@ def configure_sorbet_shims
   create_file "sorbet/rbi/shims/shadcn_view_components.rbi", <<~'RBI', force: true
     # typed: true
 
-    # shadcn_view_components 0.2.0 declares rest keyword arguments as a Hash in its
+    # shadcn_view_components 0.2.2 declares rest keyword arguments as a Hash in its
     # Sorbet signatures. Sorbet then type-checks each keyword value as the Hash.
     # These signatures preserve the gem's public keyword API for the generated app.
     class Shadcn::BaseComponent
@@ -19977,6 +19983,16 @@ def configure_sorbet_shims
     class Shadcn::Dialog::Content
       sig { params(show_close_button: T::Boolean, args: T.untyped).void }
       def initialize(show_close_button: true, **args); end
+    end
+
+    class Shadcn::Card
+      sig { params(size: T.any(Symbol, String), args: T.untyped).void }
+      def initialize(size: :default, **args); end
+    end
+
+    class Shadcn::DropdownMenu::Item
+      sig { params(variant: T.nilable(T.any(Symbol, String)), args: T.untyped).void }
+      def initialize(variant: nil, **args); end
     end
   RBI
 

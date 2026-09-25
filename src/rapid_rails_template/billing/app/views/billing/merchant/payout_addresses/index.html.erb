@@ -19,7 +19,11 @@
                 <%= render(Shadcn::Field::Label.new(for: "payout_#{chain.id}")) { t("billing.ui.payout_address_for", chain: chain.name) } %>
                 <%= render(Shadcn::InputGroup.new) do %>
                   <%= form.text_field :address, id: "payout_#{chain.id}", required: true, class: Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes), data: { slot: "input-group-control" }, spellcheck: false, autocomplete: "off", aria: { invalid: payout.errors[:address].any? } %>
-                  <% if merchant_manageable? %><%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) { form.submit t("billing.ui.save"), class: action_button_classes(:primary), aria: { label: t("billing.ui.save_chain", chain: chain.name) } } %><% end %>
+                  <% if merchant_manageable? %>
+                    <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) do %>
+                      <%= render(Shadcn::InputGroup::Button.new(type: :submit, variant: :default, aria: { label: t("billing.ui.save_chain", chain: chain.name) })) { t("billing.ui.save") } %>
+                    <% end %>
+                  <% end %>
                 <% end %>
               <% end %>
             <% end %>

@@ -29,12 +29,12 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 
 ## View実装と目視検証
 
-- 生成アプリのUIは`shadcn_view_components` 0.2.0の公開コンポーネントと既定テーマを使用します。HTML構造を持つ要素には`Shadcn::*`を描画し、Rails form helperが生成するinputなどには`Shadcn::Input.classes`のような公開class APIまたは`ShadcnViewComponents::Classes.resolve`を使用します。コンポーネントAPI、variant、`data-slot`は同梱gemの実装を確認してください。
+- 生成アプリのUIは`shadcn_view_components` 0.2.2の公開コンポーネントと既定テーマを使用します。HTML構造を持つ要素には`Shadcn::*`を描画し、Rails form helperが生成するinputなどには`Shadcn::Input.classes`のような公開class APIまたは`ShadcnViewComponents::Classes.resolve`を使用します。コンポーネントAPI、variant、`data-slot`は同梱gemの実装を確認してください。
 - 色は`background`、`foreground`、`muted`、`border`、`primary`、`destructive`などのsemantic tokenを使います。状態表示のAlertは`Shadcn::Alert`と`Shadcn::Alert::Description`を使用し、エラーには`variant: :destructive`、状態変化には適切な`role`を指定します。Web Pushの状態表示は`data-tone`を切り替えます。
 - 生成アプリの通常の文字付き操作button・button相当のlinkは、`ApplicationHelper#action_button_classes(role)`を使用します。許可するroleは`:primary`、`:secondary`、`:quiet`、`:warning`、`:destructive`、`:destructive_confirm`だけです。未知のroleを既定値へ読み替えません。`:warning`は公開outline variantを使い、不可逆処理の確定だけ`:destructive_confirm`を使用します。
 - card、form、modal、row内のaction groupは右寄せし、狭幅で折り返せるようにします。DOM順は`quiet`、`secondary`、`warning`、`primary`または`destructive`とし、確認画面の`destructive_confirm`を最後にします。Card内で使える場合は`Shadcn::Card::Footer`を使用します。
 - 文字付き操作は通常時にもbuttonまたはlinkと判別できる表示にします。iconだけの慣例的なtriggerにはaccessible nameを付けます。通常の本文linkは下線などで認識できるようにし、navigation内のlinkは配置とactive表示を確認します。
-- 通知popover、受信者選択、Copy操作、header、dropdown、icon-only button、modal backdrop、Wallet Providerの操作は`action_button_classes`の対象外です。該当する公開コンポーネントとvariantを直接指定します。table rowを理由に通常の操作buttonを縮小しません。
+- `InputGroup::Addon`内の`InputGroup::Button`、通知popover、受信者選択、Copy操作、header、dropdown、icon-only button、modal backdrop、Wallet Providerの操作は`action_button_classes`の対象外です。該当する公開コンポーネントとvariantを直接指定します。table rowを理由に通常の操作buttonを縮小しません。
 - ページ全体に作用する追加・絞り込み・一括操作は、Viewで`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ設定します。slotは配置先でありroleや配色ではありません。個別model、table row、formの操作はそのcard、row、form内に残します。standalone scaffoldのindex、new、editにあるheader actionはこの規約の例外です。
 - page actionsは共通layout/helperが、640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列で配置します。タブなしでは見出し直下の`Shadcn::Card`内、タブ付きではactive画面のCard::Content先頭へ配置します。View側で同じlayoutを組み立てません。
 - 標準の表示面は`Shadcn::Card`を使用し、Card::Contentの既定余白を維持します。端まで表示するtableなど、意図的に余白を変える場合だけ個別に扱います。borderの状態色はsemantic tokenを使用します。ページ移動には`NavigationMenu`、同一画面内のパネル切替には`Tabs`を使い、公開variantを用途で選びます。

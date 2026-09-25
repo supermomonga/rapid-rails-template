@@ -49,7 +49,7 @@ module Billing
     end
 
     def self.review(subscription)
-      I18n.t('billing.ui.permission_review', amount: Amount.format(subscription.amount_units),
+      I18n.t('billing.ui.permission_review', amount: Amount.display(subscription.amount_units),
                                              days: subscription.period_seconds / 86400, chain: Chains.fetch(subscription.chain_id).name,
                                              wallet: subscription.payer_address, starts_at: I18n.l(subscription.starts_at, format: :long))
     end

@@ -27,7 +27,7 @@ JSON処理には`json ~> 2.21`を全構成で使用します。Rails 8.1.3.1の`
 | Asset Pipeline | `propshaft` | Sprocketsへ切り替えない |
 | JavaScript配布 | `importmap-rails` | Node.jsを前提とするJS bundlerを導入しない |
 | Hotwire | `turbo-rails`、`stimulus-rails` | TurboとStimulusを使用する |
-| CSS | `tailwindcss-rails`、`daisyui` | Rails統合版Tailwind CSS 4と最新のdaisyUI 5を使用する |
+| CSS・UI | `tailwindcss-rails`、`shadcn_view_components` 0.2.2 | Rails統合版Tailwind CSS 4とgemのViewComponentを使用する |
 | テスト | Minitest | Rails標準のtest frameworkを維持する |
 | 型検査 | `sorbet`、`sorbet-runtime`、`tapioca` | 漸進的型付けとGem／Rails DSL RBI生成に使用する |
 | システムテスト | `capybara`、`capybara-playwright-driver` | SeleniumではなくPlaywright driverを使用する |
@@ -43,105 +43,90 @@ JSON処理には`json ~> 2.21`を全構成で使用します。Rails 8.1.3.1の`
 
 Rails 8.1では、SQLite、Puma、Propshaft、Importmap、Turbo、Stimulus、Minitestが標準構成に含まれます。これらをGemfileへ重複追加せず、対象の`rails new`オプションと生成結果を検証します。Tailwind CSSは`--css=tailwind`を指定し、Railsが提供する`tailwindcss:install`処理を利用します。
 
-daisyUIはTailwind CSS 4用pluginとして、Application Templateのpost-bundleフェーズで`npm install --save-dev daisyui@latest`により導入します。生成された`package.json`と`package-lock.json`を管理し、`app/assets/tailwind/application.css`へ組み込みthemeを無効化した`@plugin "daisyui"`と`@plugin "daisyui/theme"`によるcustom themeを登録します。JavaScript配布は引き続きImportmapを使用し、Node.jsはJavaScript bundlerではなくTailwind CSS plugin依存のinstallとasset buildにのみ使用します。`node_modules`はGitおよびDocker build contextへ含めません。
+`shadcn_view_components` 0.2.2はApplication Templateのpost-bundleフェーズでgemのinstall generatorを実行して導入します。Tailwind入力にはgemが生成するCSS importを置き、`tw-animate-css`をnpmで導入します。生成された`package.json`と`package-lock.json`を管理します。gemのStimulus controllerはImportmap経由で登録し、JavaScript bundlerは導入しません。Node.jsはnpm依存のinstallとasset buildに使用し、`node_modules`はGitおよびDocker build contextへ含めません。
 
 Kamal用のproduction imageではbuild stageにNode.jsとnpmを導入し、lockfileに対して`npm ci`を実行してから`assets:precompile`を行います。生成済みCSSだけをfinal stageへ引き継ぎ、`node_modules`とNode.js runtimeはfinal imageへ含めません。
 
-### daisyUIカスタムテーマ
+### shadcnの既定テーマとvariant
 
-組み込みthemeは`rapid-rails`という名前のlight themeとし、これだけを既定themeとして有効にします。daisyUI custom themeが要求する変数へ、`DESIGN.md`のZenn系デザインを次のように対応させます。
+色、角丸、基本の文字組みは`shadcn_view_components` 0.2.2のEngine CSSの既定値を使用します。生成アプリから`:root`のsemantic tokenや`@layer base`を追加して上書きしません。補足文などはgemの`muted-foreground`を参照し、入力欄とbuttonはgemの公開コンポーネントまたはclass APIを使用します。`DESIGN.md`の旧配色・文字組みは生成アプリへ適用しません。
 
-| theme token | 値 | 用途 |
+通常の文字付き操作button・button相当のlinkは、共通の`ApplicationHelper#action_button_classes(role)`で次のroleとgemのButton variantを対応させます。未知のroleは明示的に失敗させ、既定roleへのfallbackは行いません。
+
+| role | Button variant | 用途 |
 | --- | --- | --- |
-| `base-100` | `#ffffff` | page・card背景 |
-| `base-200` | `#f1f5f9` | section・sub-layout背景 |
-| `base-300` | `#d6e3ed` | border・separator |
-| `base-content` | `rgba(0, 0, 0, 0.82)` | 本文 |
-| `neutral` | `rgba(0, 0, 0, 0.55)` | 補足文・label |
-| `primary` | `#3ea8ff` | 主要CTAとlink |
-| `secondary` | `#0f83fd` | primaryのhover・press |
-| `success` | `#10b981` | 成功通知 |
-| `warning` | `#f59e0b` | 警告通知 |
-| `error` | `#f43f5e` | error・危険操作 |
+| `:primary` | `default` | 作成、保存、登録など、その画面の主操作 |
+| `:secondary` | `secondary` | 編集、詳細、同格の代替操作 |
+| `:quiet` | `outline` | 戻る、キャンセルなどの低強調操作 |
+| `:warning` | `outline` | pause、retryなど注意を伴う実行操作 |
+| `:destructive` | `destructive` | 削除・解除への導線、または別の確認を挟む危険操作 |
+| `:destructive_confirm` | `destructive` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
 
-field radiusは`0.5rem`、box radiusは`0.75rem`、borderは`1px`、depthとnoiseは`0`に固定します。本文は16px・line-height 1.8、見出しはline-height 1.5、codeは14px・line-height 1.5とし、指定のsystem/Japanese font stackを使用します。本文へ`palt`を適用せず、`word-break: break-all`と`overflow-wrap: break-word`を設定します。補足文はopacityを重ねず`neutral`を直接使用して実効alphaを`0.55`に保ちます。入力欄はdaisyUI標準の`input`を使用し、独自のborder・focus・typography classは追加しません。buttonはdaisyUI標準の`btn`を使用し、サイズ変更が必要な場合は`btn-xs`から`btn-xl`までの公式size modifierを組み合わせます。標準card surfaceは`card card-border bg-base-100`を使用します。`.card-border`は幅と線種をdaisyUIの既定値に任せ、Tailwind CSSのutilities layerに置く`:where(.card-border)`で`border-color: var(--color-base-300)`だけを指定します。低specificityにすることで、`border-error`などのsemantic color modifierを維持します。
+theme tokenの`secondary`は補助面の色、button roleの`:secondary`は副操作の見た目、`page_actions_secondary`は補助的なページ操作の配置先を表します。slot名からbuttonの色は決めません。
 
-通常の文字付き操作button・button相当のlinkは、共通の`ApplicationHelper#action_button_classes(role)`で次のroleとclassを一対一に対応させます。未知のroleは明示的に失敗させ、既定roleへのfallbackは行いません。
+`:warning`は公開Buttonのoutline variantを使用します。不可逆処理の確定には`:destructive_confirm`を使用します。状態の意味はラベルと文脈で伝えます。
 
-| role | class | 用途 |
-| --- | --- | --- |
-| `:primary` | `btn btn-primary` | 作成、保存、登録など、その画面の主操作 |
-| `:secondary` | `btn` | 編集、詳細、同格の代替操作 |
-| `:quiet` | `btn btn-outline` | 戻る、キャンセルなどの低強調操作 |
-| `:warning` | `btn btn-outline btn-warning` | pause、retryなど注意を伴う実行操作 |
-| `:destructive` | `btn btn-outline btn-error` | 削除・解除への導線、または別の確認を挟む危険操作 |
-| `:destructive_confirm` | `btn btn-error` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
+文字付きbuttonとbutton相当のlinkは、通常時にも操作できる要素と判別できる表示にします。iconだけの慣例的なtriggerにはaccessible nameを付けます。本文linkは下線などで認識できるようにし、navigation内のlinkは配置とactive表示を確認します。
 
-theme tokenの`secondary`はprimary色のhover・press用の色、button roleの`:secondary`は副操作の見た目、`page_actions_secondary`は補助的なページ操作の配置先を表します。同じ`secondary`という語を含みますが別の契約であり、slot名からbuttonの色を決めたり、`:secondary`へtheme tokenの`secondary`色を適用したりしません。
-
-`:warning`は注意を促すsemantic colorを維持しつつ、画面内でオレンジ色の占有面積が過度に大きくならないよう`btn-outline`を必須とします。通常のコンテンツ操作へ塗りつぶしの`btn-warning`は使用しません。
-
-文字付きのbuttonとbutton相当のlinkは、hoverしていない通常時にも背景または輪郭で操作可能な要素だと判別できる表示を必須とし、`btn-ghost`を使用しません。この規約は通知popover、受信者selector・badge、header、menu、dropdownなど`action_button_classes`を使用しないcompact用途にも適用します。`btn-ghost`は、accessible nameを持つベルやアバターなど、文字を持たない慣例的な操作triggerだけに限定します。色modifierを持たない`btn-outline`は、文字色を`base-content`のまま維持し、通常時のborderだけを`base-300`へ上書きします。`btn-primary`、`btn-secondary`、`btn-accent`、`btn-neutral`、`btn-info`、`btn-success`、`btn-warning`、`btn-error`のいずれかを併用するoutlineには適用せず、各semantic colorのborderを維持します。
-
-入力・選択部品とその直後の確定buttonは、daisyUI標準の`join w-full`と`join-item`で横一列につなぎます。複数項目のformでも、最後のinput・select・通常のfile-inputと確定buttonを対象にします。入力側を`min-w-0 flex-1`で伸縮させ、既定のcontrol sizeを維持します。label、補足文、validation errorはjoinの外へ置き、戻る・キャンセル・条件のリセットは別の操作として表示します。短いbutton文言を使う場合も、対象を含むaccessible nameにはその表示文言を含めます。共通layoutへ個別formの配置処理は追加しません。
+入力と付属操作を一体に表示する箇所は`Shadcn::InputGroup`、`InputGroup::Input`、`InputGroup::Addon`を使用します。単一入力を確定する操作をAddon内へ置く場合は、`InputGroup::Button`に`type: :submit`と用途に合うvariantを指定します。通常のform操作は入力の下に右寄せで置き、label、補足文、validation errorを入力と関連付けます。各Viewの実際の操作構成に応じて選びます。
 
 再確認した対象と境界は次のとおりです。
 
-- Join：Passkey・EVMウォレット名、APIキー名、販売者の役割変更とメンバー招待、送金先、個別料率、チェーン・契約状態の絞り込み、チェーン設定、決済設定、返金記録、販売者画像、外部リンク設定。
-- 独立した確定操作を維持：最後がcheckbox群のプラン・FAQ、textareaのメンテナンス告知、rich textの固定ページ、画像の切り抜き確認を伴う通常プロフィール、候補検索・選択結果・下書き指定を伴う通知編集、専用の解約・閉鎖・集金口座作成確認。これらは直前の単一入力とbuttonという構成ではありません。
-- 任意の属性型やcustom partialを扱うscaffold・Maintenance Tasksは、その拡張内容を確認せず最後の部品をJoinへ変換しません。自動送信するジョブ検索、入力を持たない認証・通知・pagination操作も対象外です。
+- 入力に付属する操作：APIキーのCopy、外部リンク設定など、`InputGroup`の構造が合う箇所を使用します。
+- 独立した確定操作を維持：プラン・FAQ、メンテナンス告知、固定ページ、プロフィール、通知編集、解約・閉鎖・集金口座作成確認は、対応する入力や確認画面のform内に操作を置きます。
+- scaffoldとMaintenance Tasksの任意の属性型やcustom partialは、内容を確認せず入力とbuttonの結合形へ変換しません。自動送信するジョブ検索、認証、通知、paginationも各操作に合うコンポーネントを使います。
 
-既存のdesktop・mobile撮影シナリオと320・390・640・960・961pxのgeometry検証で、入力とbuttonの接続、高さ、viewport内への収まりを確認します。メンバーページは役割変更と招待をformごとに検査し、別formのJoinだけで合格しないようにします。
+desktop・mobile撮影シナリオと320・390・640・960・961pxのgeometry検証で、入力と操作の配置、操作要素の高さ、viewport内への収まりを確認します。
 
-入力エラー時はRails標準の`config.action_view.field_error_proc`で、入力を`div.field_with_errors`へ包まず、元のcontrolへ`aria-invalid="true"`を付けます。Railsが生成したHTMLをNokogiriで構造として編集し、valueのescape、labelの関連付け、既存classと説明参照を維持します。labelやhidden inputには`aria-invalid`を付けず、エラー本文は既存のAlertで表示します。これにより、Joinを含むformのDOM構造を正常時とエラー時で揃えます。host・Engine共通の描画設定とし、個別Viewや共通layoutにラッパー補正を追加しません。
+入力エラー時はRails標準の`config.action_view.field_error_proc`で、入力を`div.field_with_errors`へ包まず、元のcontrolへ`aria-invalid="true"`を付けます。Railsが生成したHTMLをNokogiriで構造として編集し、valueのescape、labelの関連付け、既存classと説明参照を維持します。labelやhidden inputには`aria-invalid`を付けず、エラー本文は`Shadcn::Alert`で表示します。host・Engine共通の描画設定とします。
 
-daisyUIのAlertは、`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合に`alert-soft`を必須とし、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。静的View、flash、JavaScriptによる状態切り替え、engineの上書きViewを同じ契約に含めます。JavaScriptで状態色を切り替える場合も`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはこのAlert固有の規約の対象外です。
-
-`DESIGN.md`は任意のCSS Custom Propertiesへ依存しない方針ですが、daisyUI custom themeとcomponent自体が公式の`--color-*`、`--radius-*`、`--size-*`、`--input-color`等をcontractとします。daisyUIのtheme・component contractに必要な変数だけを例外として使用し、独自の追加変数やView内のraw palette colorは定義しません。
+状態表示には`Shadcn::Alert`と`Shadcn::Alert::Description`を使用します。エラーは`variant: :destructive`と`role="alert"`、操作結果は適切な`role`で伝えます。Web Pushの状態は`data-tone`と本文で伝えます。badge、progress、buttonは用途に応じた公開variantを使用します。ページ移動用の項目には`NavigationMenu`、同一画面内でパネルを切り替える箇所には`Tabs`を使い、後者のListは表示に合う`default`または`line`を選びます。
 
 ### 標準View構成
 
-生成アプリケーションには、共通application layout、認証用sub-layout、メニュー付き画面用の`with_menu` partial layout、account用sub-layout、admin用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。全Viewは`data-theme="rapid-rails"`配下でdaisyUI componentとsemantic colorを使用します。
+生成アプリケーションには、共通application layout、認証用sub-layout、メニュー付き画面用の`with_menu` partial layout、account用sub-layout、admin用sub-layout、header、flash、footer、公開home、認証必須の`/account`を必ず生成します。Viewの共通部品は`shadcn_view_components`を使用し、色は生成アプリのtheme tokenを参照します。
 
-Viewはcomponent-firstで構築します。daisyUIに意図が一致するcomponentやpart、modifierがある場合は、Tailwind CSS utilityだけで同等のUIを再実装しません。headerは`navbar`、guest向けdesktopの`button`群、guest向けmobileと認証後の`dropdown` + `menu dropdown-content`、footerは内側幅をheaderと共有する`footer`と`footer-title`、homeの導入部は`hero`、情報ブロックは`card`、FAQはnativeの`details`を使う`collapse`、account navigationは`menu-title`と`menu-active`を含む`menu`、formは`fieldset`、`fieldset-legend`、`input`、`file-input`、`checkbox`、`button`、補助導線は`divider`と`menu`、通知は`alert`を使用します。
+Viewはcomponent-firstで構築します。対応する`shadcn_view_components`の部品がある場合は、その部品とpartを使用します。headerの認証後・guest向けmobileメニューは`DropdownMenu`、account・adminのサイドナビゲーションは`NavigationMenu`で描画します。両方に現れるリンクは共通helperで表示場所に応じた部品を選び、現在位置を`aria-current="page"`で伝えます。footerはheaderと内側幅を共有するsemanticなgrid、公開ページは`Card`、FAQはnative `details`を出力する`Accordion`を使用します。フォームと状態表示には`Input`、`Switch`、`Alert`など対応する部品を使用します。
 
-Rails 8.1.3の公式templateを基準に、`generate scaffold`用controllerと6 View、`generate controller NAME ACTION`用Viewを上書きします。生成アプリケーションの`lib/templates/rails/scaffold_controller`、`lib/templates/erb/scaffold`、`lib/templates/erb/controller`へ変更したtemplateだけを配置し、mailerなどの未変更copyは配置しません。scaffoldの一覧は主キー昇順で25件ずつPagy paginationを適用し、`table table-sm table-pin-rows`を`overflow-x-auto`で囲みます。paginationは共通`ApplicationHelper#pagination`が`with_pagination`と`pagination_item_classes`を使用し、Pagyの7枠seriesをdaisyUIの`join`と`btn join-item`で描画します。`with_pagination`は空でない`aria_label`、任意のsummary、右寄せした1段の`join`、navigation内だけの横overflowを担当します。`pagination_item_classes`は共通classとactive・disabled・square modifierを一元管理します。各engine固有の件数計算、cursor、URL生成は共通helperへ移しません。active・disabled状態と、accessible name付きHeroicons矢印を持つ正方形の前後操作もhelperが一括生成し、個別Viewでは再構築しません。paginationはaction button roleの対象外とし、daisyUI標準のbutton modifierへ従います。詳細・編集画面は`card`、属性表示は`list`、formは属性型に対応する`input`、`textarea`、`file-input`、`checkbox`を使用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。scaffoldのindex、new、editにあるheader actionはpage actionsへ移さず、standalone scaffoldだけの例外として維持し、他のViewへ一般化しません。
+Rails 8.1.3の公式templateを基準に、`generate scaffold`用controllerと6 View、`generate controller NAME ACTION`用Viewを上書きします。変更したtemplateだけを`lib/templates`へ配置します。scaffold一覧は主キー昇順で25件ずつPagy paginationを適用し、`Shadcn::Table`を使用します。共通`ApplicationHelper#pagination`は`Shadcn::Pagination`とそのItem、Linkを描画し、active・disabled状態、accessible name付きHeroicons矢印、navigation内の横overflowを管理します。各engine固有の件数計算、cursor、URL生成は共通helperへ移しません。詳細・編集画面は`Shadcn::Card`を使い、formは属性型に対応する公開classを適用します。Rails標準のgenerator変数、添付ファイル、password digest、`dom_id`、route helperのcontractは維持します。scaffoldのindex、new、editにあるheader actionはstandalone scaffoldだけの例外として維持します。
 
 全生成Viewの主見出しは`content_for :page_title`へ文字列を1回だけ設定し、Viewまたは`with_menu` layoutの`h1`とdocument titleから再利用します。document titleと`og:title`は通常ページで「page title | application name」、`page_title`を持たない公開homeだけapplication nameとします。主見出し直前のeyebrowは置かず、カードや機能紹介など主見出しではないsection headingは維持します。
 
-account navigationはdaisyUIの`menu with icons`として構築し、各linkの先頭へHeroiconsの24px outline SVGを`size-5`で配置します。マイページには`home`、常設のプロフィールには`user-circle`、アカウント設定には`cog-6-tooth`、Web Push使用時の通知には`bell`を使用し、SVGは装飾要素として`aria-hidden="true"`にします。管理者には`UserPolicy#overview?`を満たす場合だけ、`/admin`のOverviewへ移動する「管理画面」を単一のbridge linkとして追加し、account sidebarと通常画面のheader dropdownへ同じpartialから表示します。accountとadminの`with_menu` navigationは960px以下でカテゴリ名を横スクロール領域の上へ固定表示し、リンク一覧をdaisyUIの`menu-horizontal`で1段表示します。はみ出したリンクだけをnavigation内で横スクロールさせ、page全体には横overflowを発生させません。961px以上ではカテゴリ名を`menu-title`として含む`menu-vertical`へ戻し、従来の2column sidebarを維持します。headerの認証後dropdownは、admin controllerでは見出し「管理画面」と管理項目だけを表示し、それ以外ではaccount項目と管理者限定bridge linkだけを表示します。ユーザー情報はlinkやbuttonではなく直接の`menu-title`として表示し、hoverやactiveの対象にしません。ログアウトの前は空の`li`によるdaisyUI `menu`標準のseparatorで区切り、ログアウトにはHeroiconsの`arrow-right-start-on-rectangle`を表示します。認証後headerでは常にdaisyUI `avatar`をtriggerにします。サイト全体のheaderにhome導線があるため、account navigation内へ「ホームへ戻る」は重複配置しません。
+account navigationは`Shadcn::NavigationMenu`で構築し、各linkへHeroiconsの24px outline SVGを`size-5`で配置します。管理者には`UserPolicy#overview?`を満たす場合だけ管理画面へのbridge linkを末尾へ追加します。accountとadminの`with_menu` navigationは960px以下でカテゴリ名を横スクロール領域の上へ固定し、項目を1段表示します。961px以上では2column sidebarへ戻します。headerでは`Shadcn::DropdownMenu`のLabel、Separator、Item、TriggerとAvatarを使います。ユーザー情報はlinkにせず、ログアウト前にSeparatorを置きます。
 
-component内部の高さ、padding、配置はdaisyUIの既定値を優先します。特に`menu`直下のitemへ`min-h-*`や`p-*`を追加せず、サイズ変更が必要な場合は`menu-sm`から`menu-xl`までの公式modifierを選びます。Tailwind CSS utilityはpage placement、responsive layout、または`DESIGN.md`で値が明示された見た目の調整だけに使用し、component既定値を上書きする場合は理由を設計文書とテストへ残します。
+component内部の寸法とpaddingは公開コンポーネントの既定値を使用します。サイズ変更は公開size指定を先に検討し、Tailwind CSS utilityは画面上の配置とresponsive layoutに限定します。端まで表示する表など、既定の余白では目的を満たせない箇所だけ個別に調整します。危険状態のCardはgemの`ring-1`に合わせてsemantic tokenの`ring-destructive!`で色を変えます。
+
+960pxと961pxのnavigation切替にはTailwind CSSの`desktop` breakpoint（`60.0625rem`）を定義します。`sm:`より後に適用される順序を保ち、footerやside navigationの列数を961pxで切り替えます。横スクロールするNavigationMenuは開始位置に項目を揃え、表示中の項目をStimulusで見える位置へ移します。Mission Control Jobs画面ではengine専用Importmapにもこのcontrollerを登録します。
 
 「管理画面」のbridge linkは、選択機能によって増減するaccount項目をすべて並べた後の末尾へ配置する。
 
 - `/`は追加ログイン方法にかかわらず公開する。
 - `/account`は認証必須とし、account sub-layoutで表示する。
 - Userと1対1のProfile、`screen_name`、`display_name`、`avatar`、表示／編集／更新画面を全構成へ生成する。Active StorageはAction Textとともに常設し、Boring AvatarsとProfileの添付画像機能も常設する。
-- 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、themeのbase-100、primary、base-200、secondary、base-300に対応する5色を使う。seedはDBへ保存しない。設定済み画像を削除した場合は同じ既定アバターへ戻す。
+- 画像未設定時はUser IDの文字列表現から`beam` variantのBoring Avatarを生成し、semantic tokenに対応する5色を使用します。seedはDBへ保存しません。設定済み画像を削除した場合は同じ既定アバターへ戻します。
 - `haikunator`を常設し、User作成と同時に必須かつ一意な`screen_name`を生成し、そのCamelCaseを`display_name`の初期値とする。
-- API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、credentialの一覧、作成、詳細、名称変更、削除、secret再発行をaccount sub-layoutで提供する。一覧は`table`、formは`fieldset`と`input`、secretの一度限りの表示は`alert`、操作は`button`を使用する。
-- Passkeyのlogin・account登録はauthentication sub-layout、認証後のPasskey管理はaccount settings sub-layoutで表示する。ユーザーID、password、password recoveryは生成しない。認証画面ではPasskeyを既定の認証方法として`:primary`、SIWEを選択した場合のWallet署名を代替手段として`:secondary`で表示し、この優先順位を画面ごとに変えない。loginとaccount登録を切り替える案内文とlinkは`content_for :authentication_switch`へ渡し、認証方法をまとめる主cardとは1rem離した同幅の別cardに表示する。案内文は主cardの説明文と同じ`text-sm text-base-content/70`とし、切替cardは主cardと同じ`p-6 sm:p-8`を使用する。認証方法間ではない空のdividerを置かない。
+- API機能を有効にした場合は、account navigationへ「APIキーの管理」を追加し、一覧、作成、詳細、名称変更、削除、secret再発行を提供します。一覧は`Shadcn::Table`、formは公開InputとLabel、secretの一度限りの表示は`Shadcn::Alert`、操作はButtonを使用します。
+- Passkeyのlogin・account登録はauthentication sub-layout、認証後の管理はaccount settings sub-layoutで表示します。ユーザーID、password、password recoveryは生成しません。Passkeyを主操作、SIWEを代替操作として表示し、認証方法の切替案内は同幅の別Cardへ置きます。
 - ブラウザ側はWebAuthn Level 3の`parseCreationOptionsFromJSON`、`parseRequestOptionsFromJSON`、credentialの`toJSON`を使用する。未対応ブラウザは利用不可を明示し、独自変換のfallbackは追加しない。
-- SIWE選択時だけsignup・login画面へ明示的な署名buttonを追加する。全SIWE操作でEIP-6963 Providerを収集し、複数Providerの場合は共通`with_modal`による名前一覧から選択したProviderだけを接続・署名に使用する。EIP-6963非対応時だけ`window.ethereum`を使用する。「アカウント設定」の`tabs-lift`でPasskeys、EVMウォレット、アカウント削除を切り替え、解除・削除は操作ごとの別資格情報による再認証画面へ分離する。
-- bodyのpage背景は`base-100`、main content sectionは`base-200`とし、cardは`base-100`へ戻して境界を明示する。
-- headerとfooterは全幅のbackground・borderと、`max-w-6xl`の内側componentを分離する。メニュー付き画面はRailsの`render layout:`で`with_menu` partial layoutを適用し、accountとadminのsub-layoutが`content_for :with_menu_navigation`へ固有menuを1回だけ設定して本文をlayout blockとして渡す。`with_menu`は呼出元を判定せず、`max-w-6xl`、水平padding、`220px + minmax(0, 1fr)`のgrid、名前付きnavigation、`content_for(:page_title)`の主見出し、layout blockの本文を配置する。961px未満では1列へ切り替え、左ペインの`menu`を本文より先に表示する。
-- ページ全体に作用する追加、単一controlの簡易絞り込み、一括操作はViewから`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ渡す。primaryは基本操作、secondaryは簡易絞り込みやapplication/server選択などの補助操作とする。slotは配置する操作群だけを表し、buttonのroleや配色を決定しないため、primary側へ置く一括削除も`:primary`ではなく操作の意味に対応するroleを使用する。複数fieldまたは複数行になる複雑な検索formはpage actionsへ入れず、content areaの`card card-border bg-base-100`内へ配置する。個別model・table row・formに属する編集、削除、pause、run、保存、戻る操作は移動しない。共通rendererは未指定slotを出力せず、複数回設定されたfragmentを各列内で縦に並べる。640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列とする。
-- card、form、modal、row内のaction groupは右寄せし、狭幅では折り返せるようにする。DOM順は低強調から高影響の`:quiet`、`:secondary`、`:warning`、`:primary`または`:destructive`とし、その画面の最終操作を右端へ置く。専用の確認・再認証画面では`:destructive_confirm`を最終操作とする。daisyUIの`card-actions`・`modal-action`を優先し、通常の文字付き操作をtable row内だけ小さくする`btn-sm`は使用しない。
-- `action_button_classes`のcompact例外は、通知popover、受信者selector・badge、inputへ連結するCopy操作、header、menu、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuに限定する。これらは該当するdaisyUI componentとmodifierを直接使用し、文字付き操作には通常時から操作面が分かるmodifierを指定する。例外を通常のcontent actionへ広げない。
-- `with_menu`は本文blockを先にcaptureしてタブ有無を確定し、タブなしのpage actionsだけを主見出し直下の`card card-border bg-base-100`と`card-body p-3`へ配置する。タブなしページの最外周表示面となる標準`.card.card-border > .card-body`も`p-3`とし、activeな`tab-content`と内部余白を0.75remへ統一する。入れ子のcard、error variant、tableを端まで表示する意図的な`p-0`、`with_menu`外のcardは対象外とする。`with_tab`はactiveな`tab-content`の先頭へpage actionsをcardなしで配置して内部markerを設定し、`with_menu`による二重出力を防ぐ。両slotが空ならcardもaction containerも生成しない。
-- account sub-layoutの左ペインにはユーザー向けmenuと、`UserPolicy#overview?`を満たすUserだけに表示する単一の管理画面bridge linkを末尾へ置き、個別の管理項目は混在させない。admin sub-layoutの左ペインには見出し「管理画面」と管理menuを表示し、全管理項目の後の末尾にだけマイページへのbridge linkを置く。現在のControllerに対応する管理linkは`menu-active`と`aria-current="page"`で示す。
-- 複数Viewで共通する階層メニューは個別Viewへ複製せず、その画面群の機能単位nested layoutで1回だけ定義する。`with_menu`が主見出しを描画してからnested layoutを本文blockとして受け取るため、表示順は主見出し、subnavigation、本文となる。
-- tabpanelを伴うタブは`ApplicationHelper#with_tab`だけで生成する。helperは各tabのoptionalな`is_active` lambdaを優先し、未指定時は`request.path.start_with?(path)`で候補を判定する。複数候補では最長pathを選び、同長競合または候補なしは明示的に失敗させる。必要な場合だけoptionalな`size:`でdaisyUI公式の`tabs-xs`から`tabs-xl`を選ぶ。Railsの`capture`で取得した本文はactiveな`tab`の直後へ1件だけ`tab-content sticky [contain:inline-size] bg-base-100 border-base-300 p-3`として置く。stickyなtabpanelの上borderが共有境界へ重なってもactive tabの下へ線が出ないよう、active tabへ`z-10`を付ける。inline-size containmentによりtabpanel本文のmax-content幅をtablistの必要幅から除外する。`tabs tabs-lift min-w-max`を`overflow-x-auto`で囲み、狭幅でも折り返さず横スクロールできるようにする。inactive用の空tabpanelや個別Viewの幅補正は生成しない。各画面の最外周へ同じbase borderを持つcardは重ねない。tabpanelを伴わないtab形式selectorは対象外とする。
-- native dialogを使うdaisyUI modalは`ApplicationHelper#with_modal`だけで生成する。helperは一意な`id`、title、optionalなdescription、block本文、optionalなactions、dialog用data属性を受け取り、`modal`、`modal-box`、`modal-action`、`modal-backdrop`、ARIA参照を一括生成する。backdrop用`form[method=dialog]`を通常formへ入れ子にしないため、modal helperの出力は通常formの外へ置く。各Viewで同じmodal shellを組み立てず、helperはtriggerや個別Stimulus controllerの動作を担当しない。
-- Cropper.js 2.1.1は全構成でImportmapの公式`pin` commandによりtransitive dependencyごと`vendor/javascript`へ固定し、実行時CDNとJavaScript bundlerを使用しない。汎用`image_crop` Stimulus controllerはoptionalなアスペクト比と出力幅・高さ、初期coverage、許可MIME type、容量・寸法上限、lossy品質をvaluesで受け取り、画像移動、zoom、reset、canvas出力、File置換、Object URLとCropper lifecycleを担当する。アスペクト比未指定時は自由cropとし、プロフィールViewだけが1:1と512×512を設定する。変換前のraw画像はformへ残さず、設定不正や変換失敗時にraw uploadへfallbackしない。
-- `640px`以下をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱う。desktopとmobileの両方で1columnへ縮退できることを必須とする。44pxのtouch targetを満たすためにcomponent itemへ一律の`min-h-*`を追加せず、必要な場合はdaisyUIの公式size modifierまたはtheme tokenでcomponent全体として調整する。
+- SIWE選択時だけsignup・login画面へ署名buttonを追加します。EIP-6963 Providerを収集し、複数Providerは共通`with_modal`で選択します。非対応時だけ`window.ethereum`を使用します。アカウント設定は`with_tab`でPasskeys、EVMウォレット、削除を切り替え、解除・削除は別資格情報による再認証画面へ分離します。
+- bodyとmain contentの背景は`background`、Cardは`card`のsemantic tokenを使用します。NavigationMenuの選択状態が背景から見えることを確認します。
+- headerとfooterは全幅のbackground・borderと`max-w-6xl`の内側領域を分離します。メニュー付き画面は`with_menu` partial layoutを適用し、accountとadminのsub-layoutがnavigationを1回設定します。961px未満では1列、961px以上では`220px + minmax(0, 1fr)`の2列へ切り替えます。
+- ページ全体に作用する追加、簡易絞り込み、一括操作は`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ渡します。slotは配置先だけを表します。複雑な検索formと個別modelの操作は本文内に残します。640px未満では1列、640px以上では2列に配置します。
+- Card、form、dialog、row内のaction groupは右寄せし、狭幅で折り返せるようにします。DOM順は`:quiet`、`:secondary`、`:warning`、`:primary`または`:destructive`とします。Card内では`Shadcn::Card::Footer`を使用できる場合は使用します。
+- `action_button_classes`の対象外は通知popover、受信者選択、Copy操作、header、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuです。各公開コンポーネントのvariantを直接指定します。
+- `with_menu`は本文blockを先にcaptureし、タブなしのpage actionsを主見出し直下の`Shadcn::Card`へ配置します。`with_tab`はactive画面の`Card::Content`先頭へpage actionsを配置して二重出力を防ぎます。
+- account sub-layoutの左ペインにはユーザー向けnavigationと管理者限定のbridge linkを置き、admin sub-layoutには管理navigationとマイページへのbridge linkを置きます。現在の項目は`data-active`と`aria-current="page"`で示し、狭幅では現在の項目までnavigation内をスクロールします。Dropdown menuでは現在地をfocus表示と区別します。
+- 複数Viewで共通する階層navigationは個別Viewへ複製せず、機能単位のnested layoutで1回だけ定義します。
+- タブ付き画面は`ApplicationHelper#with_tab`で描画します。active判定は`is_active` lambdaを優先し、未指定時はpath prefixを使い、同長競合や候補なしでは失敗します。`Shadcn::NavigationMenu`を横スクロール可能な1段のリストとし、active画面は直下の`Shadcn::Card`へ描画します。desktopでは全項目が1段に並び、狭幅ではnavigation内のみスクロールします。
+- dialogは`ApplicationHelper#with_modal`で描画します。helperは`Shadcn::Dialog`の共通DOM、見出し、説明、actions、ARIA参照、閉じる操作を生成します。actionsを指定する画面では閉じる操作を1つだけ置きます。gemのDialogは背景クリックを処理しないため、共通`dialog-backdrop` controllerがdialogの外側をクリックした場合だけ閉じます。開閉triggerと画面固有のStimulus controllerは呼び出し側が担当し、formを入れ子にしません。
+- Cropper.js 2.1.1は全構成でImportmapの公式`pin` commandによりtransitive dependencyごと`vendor/javascript`へ固定し、実行時CDNとJavaScript bundlerを使用しない。汎用`image_crop` Stimulus controllerはoptionalなアスペクト比と出力幅・高さ、初期coverage、許可MIME type、容量・寸法上限、lossy品質をvaluesで受け取り、画像移動、zoom、reset、canvas出力、File置換、Object URLとCropper lifecycleを担当する。Cropper.jsが選択範囲の比率に合わせて指定出力寸法を再計算し1pxずれる場合は、完成canvasを指定寸法へ描画する。アスペクト比未指定時は自由cropとし、プロフィールViewだけが1:1と512×512を設定する。変換前のraw画像はformへ残さず、設定不正や変換失敗時にraw uploadへfallbackしない。
+- `640px`未満をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱います。Tailwind CSS 4の`@theme`で`--breakpoint-desktop: 60.0625rem`を定義し、`desktop:`/`max-desktop:`を使用します。任意値の`min-[961px]:`は`sm:`より先に出力されるため、同じプロパティを指定するとdesktop側が上書きされません。全幅でviewport内へ収め、公開コンポーネントのsize指定と余白を確認します。
 
 ### 管理画面Overview
 
 `/admin`はIDを持たない単一画面として`Admin::OverviewController#show`へ割り当て、`Admin::BaseController`の認証と`UserPolicy#overview?`の管理者認可を適用します。`OverviewsController`や`Overview` modelは生成しません。Overviewは全ユーザー数、admin roleを持つ重複なしのUser数、`created_at >= 30.days.ago`のUser数、公開FAQ数、管理対象Page数をrequestごとに集計し、cache、期間切替、graph、詳細drill-downは追加しません。
 
-基本統計は`card card-border bg-base-100`内のdaisyUI `stats`、`stat`、`stat-title`、`stat-value`で表示し、390pxでは1列、広幅では2〜3列へ配置します。admin navigationの先頭には「概要」を置き、`admin/overview`で`menu-active`と`aria-current="page"`を設定します。
+基本統計は`Shadcn::Card`の見出しと数値で表示し、390pxでは1列、広幅では2〜3列へ配置します。admin navigationの先頭には「概要」を置き、`admin/overview`で`NavigationMenu::Link`の`data-active`と`aria-current="page"`を設定します。
 
 ### Action Text、固定ページ、FAQ、footer設定
 
@@ -163,7 +148,7 @@ Importmapへ`lexxy`と`@rails/activestorage`を登録します。管理formはRa
 
 `Faq`は質問、表示順、公開状態、Action Text回答を持ちます。新規recordは非公開とし、公開画面`/faq`は公開済みrecordだけを表示順とIDの昇順で表示します。管理画面はCRUD、公開切替、表示順変更を提供します。
 
-footerはロゴやbrand用asideを持たず、About、Guides、Links、Legalの4列を`footer`、`footer-title`、`link link-hover`で構成します。内部linkは固定routeを使用します。`FooterSetting`は固定keyのsingletonとしてseedし、XとGitHubの任意HTTPS URLを管理します。URLはhostを必須とし、userinfoとHTTPを拒否します。各linkは未設定なら非表示とし、両方未設定ならLinks列も表示しません。
+footerはロゴやbrand用asideを持たず、About、Guides、Links、Legalの4列をsemanticな`footer`と`nav`で構成します。文字付きlinkは通常時にも下線を表示します。内部linkは固定routeを使用します。`FooterSetting`は固定keyのsingletonとしてseedし、XとGitHubの任意HTTPS URLを管理します。URLはhostを必須とし、userinfoとHTTPを拒否します。各linkは未設定なら非表示とし、両方未設定ならLinks列も表示しません。
 
 ### API認証とApiCredential
 
@@ -192,7 +177,7 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 `haikunator`はapplication Gemとして常設します。`screen_name`は`Haikunator.haikunate(9999, "_")`の候補から既存値と衝突しない値を採用し、そのCamelCaseも`display_name`として未使用であることを確認して同時に設定します。model validationに加えてdatabaseの`NOT NULL`制約とunique indexで不変条件を保証します。
 
-`boring_avatars`は全構成でRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。theme色はserver-side generatorが要求する16進色の定数として一元化し、CSS themeとの一致を契約テストで保証します。
+`boring_avatars`は全構成でRails bindingを明示的に読み込みます。共通View helperがActive Storage添付を優先し、未添付時だけ`User#id.to_s`をseedとしてSVGを生成します。SVG内部IDはgemの衝突回避へ委ね、avatar seed用の永続化項目は追加しません。SVGのpaletteはserver-side generatorが要求する16進色の中立色定数として一元化します。
 
 ### アプリ内通知
 
@@ -200,11 +185,11 @@ SentryのDSNやenvironmentなど、秘密情報と環境依存値はリポジト
 
 Userの`global_notifications_read_at`はUser作成時の`created_at`と同じ値で初期化し、全体通知の未読を`published_at > global_notifications_read_at`で判定します。これにより、後登録のUserも過去の全体通知を一覧表示できますが、User作成前の通知は未読になりません。最終確認日時は、「お知らせ」表示取得時のcutoff以前を対象とする条件付き単一SQLで単調に更新し、並行する古いrequestで巻き戻しません。既読後の本文編集、下書き化・再公開、通知先の切替えは未読を再生成せず、`published_at`を明示的に後へ変更した場合だけ判定へ影響します。過去の`published_at`を指定して後から公開した全体通知は一覧には表示されますが未読にはなりません。
 
-認証済み画面のheaderにはHeroiconsのbellと、公開済みの未読個別通知、または最終確認日時より新しい公開済み全体通知がある場合だけdaisyUIの`indicator`と`status`を表示します。native Popover APIとdaisyUI `dropdown`内のTurbo Frameは閉じている間に通信せず、開くたびに初期タブの「あなたへの通知」へ戻って最新10件を読み込みます。popoverと`/notifications`は`tab=personal|announcements`を受け付け、「あなたへの通知」に個別配信、「お知らせ」に全体通知を公開日時・ID降順で表示します。省略時は`personal`、不正値は`400 Bad Request`とし、一覧はタブ別に25件ずつpaginateします。個別通知のみ既読表示・個別既読・一括既読を持ちます。「お知らせ」のGET取得では最終確認日時を変更せず、表示成功後の専用`PATCH /notifications/global-read`が取得時のcutoffまで単調更新し、Turbo Streamでnavbarとタブの未読表示を更新します。previewや読込失敗では更新せず、失敗時は未読表示を残して再試行できるエラーを表示します。popoverの「もっと見る」は現在タブを履歴へ引き継ぎます。管理CRUDとProfile表示名による最大20件の受信者検索はAction Policyでadminに限定し、User IDは画面へ表示しません。管理一覧の対象表示は全体通知を「全ユーザー」、個別通知を受信者数とし、受信者selectorは個別通知の場合だけ有効にします。
+認証済み画面のheaderにはHeroiconsのbellと、公開済みの未読個別通知、または最終確認日時より新しい公開済み全体通知がある場合だけ`Shadcn::Badge`による未読表示を表示します。native Popover APIと`Shadcn::DropdownMenu`内のTurbo Frameは閉じている間に通信せず、開くたびに初期タブの「あなたへの通知」へ戻って最新10件を読み込みます。popoverと`/notifications`は`tab=personal|announcements`を受け付け、「あなたへの通知」に個別配信、「お知らせ」に全体通知を公開日時・ID降順で表示します。省略時は`personal`、不正値は`400 Bad Request`とし、一覧はタブ別に25件ずつpaginateします。個別通知のみ既読表示・個別既読・一括既読を持ちます。「お知らせ」のGET取得では最終確認日時を変更せず、表示成功後の専用`PATCH /notifications/global-read`が取得時のcutoffまで単調更新し、Turbo Streamでnavbarとタブの未読表示を更新します。previewや読込失敗では更新せず、失敗時は未読表示を残して再試行できるエラーを表示します。popoverの「もっと見る」は現在タブを履歴へ引き継ぎます。管理CRUDとProfile表示名による最大20件の受信者検索はAction Policyでadminに限定し、User IDは画面へ表示しません。管理一覧の対象表示は全体通知を「全ユーザー」、個別通知を受信者数とし、受信者selectorは個別通知の場合だけ有効にします。
 
 ### PWAとWeb Push
 
-`pwa=use`ではRails 8.1標準のPWA controllerを利用し、`/manifest.json`と`/service-worker`を明示的にrouteへ接続します。manifestはApplication Identityの表示用アプリ名と既定locale、`/icon.png`、scopeとstart URL `/`、`standalone`表示、theme色`#3ea8ff`を持ちます。Service Workerの`push` handlerは`{ title, options }`を表示し、`notificationclick` handlerはpayloadの`options.data.path`を同一origin内へ制限した上で、既存windowのfocus・navigateまたは新規windowのopenを行います。
+`pwa=use`ではRails 8.1標準のPWA controllerを利用し、`/manifest.json`と`/service-worker`を明示的にrouteへ接続します。manifestはApplication Identityの表示用アプリ名と既定locale、`/icon.png`、scopeとstart URL `/`、`standalone`表示を持ちます。独自のtheme色は指定しません。Service Workerの`push` handlerは`{ title, options }`を表示し、`notificationclick` handlerはpayloadの`options.data.path`を同一origin内へ制限した上で、既存windowのfocus・navigateまたは新規windowのopenを行います。
 
 `web_push=use`では`web-push ~> 3.1`を導入し、常設のSolid Queueを使用します。`PushSubscription`はUser、安定したbrowser ID、endpoint、`p256dh`、`auth`を保持し、browser IDとendpointをそれぞれ一意にします。登録時は両キーの既存recordをlockし、同一ブラウザの別accountログインや同一endpointの再登録を現在のUserへ移します。User削除時はassociationとdatabase外部キーの両方で購読を削除します。
 
@@ -235,7 +220,7 @@ PushNotifier.deliver_later(
 | `DELETE /push_subscription` | 現在のUser範囲でbrowser IDを冪等削除して`204` |
 | `POST /push_subscription/test` | 現在のUserとbrowser IDに一致する購読へ固定通知をenqueueして`202`。未登録は`404`、設定不足は`503`、5回/分超過は`429` |
 
-追加ログイン方法にかかわらず、Web Pushを有効にした場合だけDevise認証必須の`/web-push`を生成し、account navigationの独立項目「Web Push設定」から開きます。アプリ内通知の`/notifications`やheader popover、`Notification`、`NotificationDelivery`とは共有しません。全体通知の日時カーソルはWeb Pushの配信対象や過去配信には使用しません。設定画面はdaisyUIの`card`、`toggle`、`btn`、`alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
+追加ログイン方法にかかわらず、Web Pushを有効にした場合だけDevise認証必須の`/web-push`を生成し、account navigationの独立項目「Web Push設定」から開きます。アプリ内通知の`/notifications`やheader popover、`Notification`、`NotificationDelivery`とは共有しません。全体通知の日時カーソルはWeb Pushの配信対象や過去配信には使用しません。設定画面は`Shadcn::Card`、`Shadcn::Switch`、公開Button class、`Shadcn::Alert`とHeroiconsのbellを表示します。通知許可はtoggleをONにしたユーザー操作内だけで要求し、unsupported、default、granted、denied、通信中、失敗を画面へ反映します。
 
 ### Roleと認可
 
@@ -282,6 +267,8 @@ model、policy、service、job、mailer、validator、application-owned `lib`は
 
 `sorbet/rbi/dsl`、`sorbet/rbi/gems`、`sorbet/rbi/annotations`はTapioca専有の生成物として手動編集しません。アプリがRubyで定義するmethodは元の`.rb`へinline signatureを書きます。手書きRBIは、Devise、Action Policy、Action View、route helper、fixture DSLなどのruntime wiringを表す`sorbet/rbi/shims/framework_bindings.rbi`、Boring AvatarsのGem RBIがRails binding内で参照する型aliasを補う`sorbet/rbi/shims/boring_avatars.rbi`、FFIまたはHTTPXのGem RBIが参照するRuby同梱Bundlerのfork hookを表す`sorbet/rbi/shims/bundler_connection_pool.rbi`に分離します。Bundler shimは認証optionに依存せず常に生成します。同じ定義が生成RBIへ追加された場合は`bin/tapioca check-shims`が重複として検出します。反復的な独自macroが複数classへmethodを生成するようになった場合だけcustom DSL compilerへ昇格します。
 
+`shadcn_view_components` 0.2.2のSorbet RBIは`**args`をHash引数として型検査するため、公開キーワードAPIの呼び出しで型エラーになります。生成アプリの`sorbet/rbi/shims/shadcn_view_components.rbi`は該当する`initialize`と`classes`のシグネチャだけを補正します。gem更新時は`bin/tapioca check-shims`と`srb tc`を実行し、gem側で正しいシグネチャが提供されたらこのshimを削除します。
+
 生成時に`# typed: true`以上を付ける対象はcontroller、concern、helper、model、policy、service、job、mailer、task、validator、application-owned `lib`、config、test、`db/seeds.rb`です。configではPuma、Importmap、Rails CI、Maintenance Tasksが`instance_eval`するreceiverをRuby本体の`T.bind`で明示し、RailsがApplication subclassへ動的に委譲する`config_for`だけを`framework_bindings.rbi`で表現します。migration、schemaはRails DSLと実行順依存が強いため`typed: false`に留めます。`.rake`内にapplication logicを置かず、`roles:grant_admin`は`typed: strict`な`AdminRoleGrant`を呼び出します。
 
 生成時と通常のRails testで、`bin/tapioca gems --verify`、`RAILS_ENV=test bin/tapioca dsl --verify --environment=test`、`bin/tapioca check-shims`、`bundle exec srb tc`を実行します。`dsl --verify`はRails DSL生成物の鮮度、`check-shims`は手書き定義の重複、`srb tc`はRuby本体・inline signature・全RBIを合わせた整合性をそれぞれ保証します。Gem更新時は`bin/tapioca gems`、model、migration、routeなどRails DSL変更時はtest database準備後に`RAILS_ENV=test bin/tapioca dsl --environment=test`を実行し、更新されたRBIをcommitします。検証失敗時に古いRBIや型エラーを許容するfallbackは設けません。
@@ -326,7 +313,7 @@ productionではPuma pluginを有効化せず、Kamalの常設`worker` roleで`b
 
 `MissionControl::Jobs.base_controller_class`には`Admin::JobOperationsController`を設定します。このcontrollerは既存`Admin::BaseController`を継承し、全engine actionを`JobOperationPolicy#manage?`で認可します。追加ログイン方法にかかわらずDeviseの`current_user`を既存Action Policy contextへ渡し、controller内でroleを直接判定しません。Mission Control標準のHTTP Basic認証は明示的に無効化し、別系統の認証は追加しません。
 
-Mission Controlの公式ViewはBulma classを出力するため、Rails 8.1 Enginesの公式View lookup順序を利用し、Mission Control Jobs 1.1.0向けのhost Viewでlayout、application/server選択、section tab、flash、queue、状態別job、filter、worker、定期task、詳細、paginationをshadowします。Bulma stylesheetや専用CSSは生成せず、既存Tailwind CSS 4／daisyUI 5の`tabs`、`tab-content`、`card`、`card-border`、`table`、`badge`、`btn`、`fieldset`、`alert`、`collapse`、`mockup-code`、`join`へ統一します。上書きViewの見出し、tab、table、状態、日時、操作、確認文、ARIA labelは生成するja/en localeを正本とします。engineの英語専用I18n設定は専用layoutの描画範囲だけ通常のI18n設定へ切り替え、`ensure`で復元することで、hostのheader、footer、HTML metadataを既定localeのまま維持します。engine controller由来の操作後通知と例外message、route、controller、adapter、retry/discard/pause/resume/run操作契約は変更しません。専用layoutはlocaleに対応したqueue、状態別job、worker、定期taskのsection tabを既定sizeの`with_tab`へ渡し、desktopのsection tabを1段へ収め、狭幅ではhelperのscroll container内で横スクロールさせます。画面固有の小型modifierは追加せず、操作buttonもdaisyUI標準のsizeとtypographyを使用します。`current_section`を参照するlambdaでactiveを判定してengine本文blockを直後のtabpanelへ渡します。各engine Viewは実際の画面名を`page_title`へ設定します。application/server選択はtabpanelを伴わないselectorなのでhelper対象外とし、tab content本文内に残します。通常画面ではhost Importmap、engine画面ではMission Control Importmapだけを出力し、専用layoutから既存admin layoutへnested renderします。document titleは翻訳済みpage titleとapplication nameを組み合わせます。
+Mission Controlの公式ViewはBulma classを出力するため、Rails 8.1 Enginesの公式View lookup順序を利用し、Mission Control Jobs 1.1.0向けのhost Viewでlayout、application/server選択、section tab、flash、queue、状態別job、filter、worker、定期task、詳細、paginationをshadowします。Bulma stylesheetや専用CSSは生成せず、Tailwind CSS 4と`shadcn_view_components`のNavigationMenu、Card、Table、Badge、Button、Field、Alert、Collapsible、Paginationへ統一します。上書きViewの見出し、tab、table、状態、日時、操作、確認文、ARIA labelは生成するja/en localeを正本とします。engineの英語専用I18n設定は専用layoutの描画範囲だけ通常のI18n設定へ切り替え、`ensure`で復元することで、hostのheader、footer、HTML metadataを既定localeのまま維持します。engine controller由来の操作後通知と例外message、route、controller、adapter、retry/discard/pause/resume/run操作契約は変更しません。専用layoutはlocaleに対応したqueue、状態別job、worker、定期taskのsection tabを`with_tab`へ渡し、desktopでは1段へ収め、狭幅ではNavigationMenu内だけで横スクロールさせます。操作buttonは公開Buttonの既定sizeを使用します。`current_section`を参照するlambdaでactiveを判定し、engine本文をactive画面のCardへ渡します。各engine Viewは実際の画面名を`page_title`へ設定します。application/server選択は画面切替navigationではないためhelper対象外とし、本文内に残します。通常画面とengine画面は同じhost Importmapを出力します。Mission Control Jobsのform controllerはhostのStimulusへ登録し、専用layoutから既存admin layoutへnested renderします。document titleは翻訳済みpage titleとapplication nameを組み合わせます。
 
 Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Control Jobsはqueueとjobの監視・retry/discard、Maintenance Tasksは運用taskの開始・進捗管理を担当し、`/admin/jobs`と`/admin/maintenance_tasks`のroute、policy、navigationを独立させます。
 
@@ -336,7 +323,9 @@ Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Contr
 
 engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksController`を`MaintenanceTasks.parent_controller`へ設定します。parent controllerは既存`Admin::BaseController`を継承し、全engine actionを`MaintenanceTaskPolicy#manage?`で認可します。metadataには`triggered_by_user_id`として`users.id`を保存し、追加ログイン方法にかかわらずDeviseの`current_user`を利用します。
 
-engineのroute、controller、helper API、Run操作は2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。Bulma stylesheetは読み込まず、Bulma classを出力するtask、run、errorのViewと表示helperをhost側でshadowして、既存Tailwind CSS 4／daisyUI 5のcard、badge、collapse、form、alert componentへ統一します。3秒ごとの`data-refresh`更新はhostのStimulus controllerで行い、外部stylesheet用CSP例外やinline scriptは追加しません。
+engineのroute、controller、helper API、Run操作は2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。Bulma stylesheetは読み込まず、Bulma classを出力するtask、run、errorのViewと表示helperをhost側でshadowして、Tailwind CSS 4と`shadcn_view_components`のCard、Badge、Collapsible、form、Alertへ統一します。3秒ごとの`data-refresh`更新はhostのStimulus controllerで行い、外部stylesheet用CSP例外やinline scriptは追加しません。
+
+タスクのパラメータ名はActive Modelの翻訳を使用し、進捗の定型文はアプリのlocaleで表示します。個別タスクの属性名は、そのタスクを作る側がlocaleファイルへ定義します。全部入りsampleの検証用タスクには日本語・英語の属性名を用意します。
 
 Maintenance TaskはKamalの既存Solid Queue `worker` roleで実行し、専用roleを追加しません。
 

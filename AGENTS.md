@@ -29,53 +29,23 @@ Ruby は2スペースでインデントします。ファイル、メソッド�
 
 ## View実装と目視検証
 
-- Viewを実装するときは、意図に合うdaisyUI component、part、modifierが存在するかを先に確認し、存在する場合はそれらを使用してください。daisyUI componentで表現できるUIをTailwind CSS utilityだけで再実装しません。
-- daisyUI componentの内部寸法とpaddingは既定値を優先し、`menu` itemなどへ`min-h-*`や`p-*`を追加しません。サイズ変更が必要な場合はTailwind CSS utilityより先にdaisyUIの公式size modifierまたはtheme tokenを使用し、既定値を上書きする理由を`docs/`とテストへ残してください。
-- 生成アプリケーションの通常の文字付き操作button・button相当のlinkは、`ApplicationHelper#action_button_classes(role)`を使用し、次のroleだけを指定してください。未知のroleを既定値へ読み替えるfallbackや、同じ配色をViewへ直接記述することは禁止します。
-
-| role | class | 用途 |
-| --- | --- | --- |
-| `:primary` | `btn btn-primary` | 作成、保存、登録など、その画面の主操作 |
-| `:secondary` | `btn` | 編集、詳細、同格の代替操作 |
-| `:quiet` | `btn btn-outline` | 戻る、キャンセルなどの低強調操作 |
-| `:warning` | `btn btn-outline btn-warning` | pause、retryなど注意を伴う実行操作 |
-| `:destructive` | `btn btn-outline btn-error` | 削除・解除への導線、または別の確認を挟む危険操作 |
-| `:destructive_confirm` | `btn btn-error` | 専用の確認・再認証画面で不可逆処理を確定する操作 |
-
-- card、form、modal、row内のaction groupは右寄せし、狭幅で折り返せるようにします。DOM順は低強調から高影響の`quiet`、`secondary`、`warning`、`primary`または`destructive`とし、専用確認画面では`destructive_confirm`を最終操作として右端へ置きます。daisyUIの`card-actions`・`modal-action`が使える場合はそれを使用し、同じ配置を独自utilityの集合で再実装しません。
-- `:warning`は注意を促しつつ画面内で色の占有面積を抑えるため、常に`btn-outline`と組み合わせます。通常のコンテンツ操作へ塗りつぶしの`btn-warning`を使用しません。
-- 文字付きのbuttonとbutton相当のlinkは、hoverしていない通常時にも背景または輪郭で操作可能な要素だと判別できる表示にし、`btn-ghost`を使用しません。この規約は通知popover、受信者selector・badge、header、menu、dropdownなど`action_button_classes`の対象外にも適用します。`btn-ghost`は、accessible nameを持つベルやアバターなど、文字を持たない慣例的な操作triggerだけに限定します。
-- button相当ではない文字付きlinkは、hoverしていない通常時にもリンクだと判別できるよう、原則としてdaisyUIの`link`を使用し、hover時だけ下線を表示する`link-hover`は使用しません。ただし、header・footerなどのnavigation内やdaisyUIの`menu` component内など、配置と周囲の表示から通常時にもリンクだと明確に分かる箇所では、`link-hover`を使用できます。
-- 色modifierを持たない`btn-outline`は、文字色を`base-content`のまま維持し、通常時のborderだけを`base-300`へ上書きします。`btn-primary`、`btn-secondary`、`btn-accent`、`btn-neutral`、`btn-info`、`btn-success`、`btn-warning`、`btn-error`のいずれかを併用するoutlineには適用せず、各semantic colorのborderを維持してください。
-- daisyUIのAlertで`alert-info`、`alert-success`、`alert-warning`、`alert-error`のいずれかを使用する場合は、常に`alert-soft`と組み合わせ、すべての状態を淡い色面で一貫して伝えます。既定の塗りつぶしや`alert-outline`は使用しません。この規約は静的Viewだけでなく、flash、JavaScriptによる状態切り替え、engineの上書きViewにも適用し、状態色を切り替えるときも`alert-soft`を維持します。badge、progress、button、cardのsemantic colorはAlertではないため対象外です。
-- `action_button_classes`の対象外は、通知popover、受信者selector・badge、inputへ連結するCopy操作、header、menu、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuです。これらは該当するdaisyUI componentと必要なmodifierを直接使用します。table rowを理由に`btn-sm`へ縮小することは例外に含めません。
-- paginationは通常の操作buttonではなく、共通の`ApplicationHelper#with_pagination`と`pagination_item_classes`で`join`、`btn join-item`、active・disabled状態、正方形の前後操作を一括生成します。個別Viewでpagination buttonを組み立てません。
-- buttonまたはpaginationの規約を変更するときは、生成Viewのcontract testとdesktop・mobileの証跡を同時に更新してください。compact用途などの例外を追加する場合は、理由と対象範囲を`docs/`へ記録し、その境界をtestで固定してください。
-- ページ全体に作用する追加・絞り込み・一括操作は、Viewで`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ設定し、任意の場所へ直接配置しません。基本操作はprimary、絞り込みやapplication/server選択などの補助操作はsecondaryを使用します。個別model・table row・formに属する編集、削除、pause、run、保存、戻る操作は対象のcard、row、form内に残します。
-- `page_actions_primary`と`page_actions_secondary`は配置先を表し、buttonのroleや配色を表しません。たとえば一括削除をprimary側へ配置しても`action_button_classes(:primary)`にはせず、操作の意味に対応するroleを使用します。生成する`lib/templates/erb/scaffold`のindex、new、editにあるheader actionだけはpage actionsへ移さず、standalone scaffold固有の配置として維持します。この例外を他のViewへ一般化しません。
-- page actionsは共通layout/helperが、640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列で配置します。タブなしではページ名直下の`card card-border bg-base-100`内、tabpanelを伴うタブではactiveな`tab-content`内の上部へcardを重ねず配置し、View側で同じresponsive layoutやcard shellを再構築しません。
-- 標準card surfaceはdaisyUIの`card card-border bg-base-100`を使用します。`.card-border`は幅と線種をdaisyUIの既定値に任せ、`@layer utilities`内の`:where(.card-border)`で境界色だけを`var(--color-base-300)`へ変更します。`border-error`などのsemantic color modifierはこの低specificityな規則より優先させてください。`with_menu`配下でタブなしページの最外周表示面となる`.card.card-border > .card-body`は、`tab-content`と内部余白を揃えるため`p-3`を明示します。入れ子のcard、error variant、tableを端まで表示する意図的な`p-0`、`with_menu`外のcardには適用せず、それぞれのdaisyUI classと余白を維持してください。
-- タブ付きコンテンツは生成アプリの`ApplicationHelper#with_tab`を使用し、Viewやlayoutで`tab`と`tab-content`を直接組み立てません。active判定は各tabの`path`によるprefix判定、またはoptionalな`is_active` lambdaで指定し、block本文はhelperがactive tab直後へ配置します。横スクロール用の`overflow-x-auto`、1段表示用の`min-w-max`、tabpanel用の`sticky`もhelperが一括して生成し、個別Viewでは重複させません。tabpanelを伴わないtab形式selectorは対象外です。
-- native dialogを使うdaisyUI modalは生成アプリの`ApplicationHelper#with_modal`を使用し、Viewやlayoutで`modal`、`modal-box`、`modal-action`、`modal-backdrop`を直接組み立てません。helperは共通DOM、見出し、説明、actions、ARIA参照、backdrop close formだけを担当し、開閉triggerや個別Stimulus controllerの処理を持ちません。`form[method=dialog]`を通常formへ入れ子にしないよう、modal helperの出力は通常formの外へ配置してください。
-- `tabs-lift`と`tab-content`を組み合わせる画面では、DOM上の隣接だけでなく、証跡画像上でもactive tabとtabpanelが視覚的に接続していることを確認します。active tabとtabpanelの間に別行のtabが入る折り返し、孤立したtab、borderの分断・重複、tabpanelの上borderがactive tabの下へ透ける表示は不合格です。全体画像だけで判断せず、共有境界を等倍以上で確認し、computed border幅に加えてstacking order上もactive tabが共有境界を覆うことを検証します。
-- desktop証跡では、同一tablist内の全tabが同じ行に配置され、active tabの下端とtabpanelの上端が接続していることをcomputed geometryで検証します。
-- 参考画像や明示された画面要件と異なる表示を、daisyUIの既定動作やresponsive時の一般的な挙動であることを理由に許容しません。
-- visual assertionが失敗した場合、現在の出力を通すためにassertionを弱めたり削除したりしません。要件を変更する必要がある場合は、先にユーザーの承認を得てください。
-- `evidence:update`後は変更対象のdesktop・mobile画像を実際に開き、タブの段組み、active tabとtabpanelの接続、border、overflowを個別に確認してから「目視確認済み」と報告してください。
-- 狭幅でtabを1段に維持できない場合、折り返しを暗黙に許容せず、horizontal navigationや別のresponsive navigationを設計してください。
-- アイコンを使用する場合は、原則として[Heroicons](https://heroicons.com/)のSVGアイコンを利用してください。装飾目的のSVGには`aria-hidden="true"`を設定し、linkやbuttonの意味は隣接するtextまたはaccessible nameで伝えてください。
-
-responsive navigationを変更した場合は、DOM構造のテストだけで完了とせず、組み込みブラウザで最低限、390px幅の未ログインdropdown展開、390px幅のログイン後dropdown展開、390px幅のaccount menu active表示を目視します。さらに320・640・960pxでviewport内へ収まること、961pxでdesktop navigationへ切り替わること、横スクロールがないことをcomputed geometryで確認してください。
-
-機能を追加・変更した場合は、その変更によって`docs/evidence/`の撮影対象に不足や不要なシナリオが生じていないかを必ず検討してください。新しい画面、表示状態、認証・権限別の分岐、重要な操作結果を目視確認する必要がある場合は、選択可能な機能をすべて有効にした日本語sampleの撮影runnerと期待シナリオを適切に追加・変更し、`rake evidence:update`で証跡を更新してください。既存シナリオが不要になった場合も放置せず削除し、`rake evidence:verify`で画像、Markdown、manifest、生成元fingerprintの整合性を確認してください。
-
-### DaisyUI Blueprint MCP
-
-daisyUIを使うHTML/ERBの実装前に、関連するBlueprint MCPツールで構文とコンポーネント選択を確認してください。
-
-- ページ構成の変更には `daisyui_page_architect` を使用
-- コンポーネント実装には `daisyui_component_syntax_expert` を使用
-- 実装後の確認には `daisyui_rules_enforcer` または `daisyui_quality_inspector` を使用
+- 生成アプリのUIは`shadcn_view_components` 0.2.2の公開コンポーネントと既定テーマを使用します。HTML構造を持つ要素には`Shadcn::*`を描画し、Rails form helperが生成するinputなどには`Shadcn::Input.classes`のような公開class APIまたは`ShadcnViewComponents::Classes.resolve`を使用します。コンポーネントAPI、variant、`data-slot`は同梱gemの実装を確認してください。
+- 色は`background`、`foreground`、`muted`、`border`、`primary`、`destructive`などのsemantic tokenを使います。状態表示のAlertは`Shadcn::Alert`と`Shadcn::Alert::Description`を使用し、エラーには`variant: :destructive`、状態変化には適切な`role`を指定します。Web Pushの状態表示は`data-tone`を切り替えます。
+- 生成アプリの通常の文字付き操作button・button相当のlinkは、`ApplicationHelper#action_button_classes(role)`を使用します。許可するroleは`:primary`、`:secondary`、`:quiet`、`:warning`、`:destructive`、`:destructive_confirm`だけです。未知のroleを既定値へ読み替えません。`:warning`は公開outline variantを使い、不可逆処理の確定だけ`:destructive_confirm`を使用します。
+- card、form、modal、row内のaction groupは右寄せし、狭幅で折り返せるようにします。DOM順は`quiet`、`secondary`、`warning`、`primary`または`destructive`とし、確認画面の`destructive_confirm`を最後にします。Card内で使える場合は`Shadcn::Card::Footer`を使用します。
+- 文字付き操作は通常時にもbuttonまたはlinkと判別できる表示にします。iconだけの慣例的なtriggerにはaccessible nameを付けます。通常の本文linkは下線などで認識できるようにし、navigation内のlinkは配置とactive表示を確認します。
+- `InputGroup::Addon`内の`InputGroup::Button`、通知popover、受信者選択、Copy操作、header、dropdown、icon-only button、modal backdrop、Wallet Providerの操作は`action_button_classes`の対象外です。該当する公開コンポーネントとvariantを直接指定します。table rowを理由に通常の操作buttonを縮小しません。
+- ページ全体に作用する追加・絞り込み・一括操作は、Viewで`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ設定します。slotは配置先でありroleや配色ではありません。個別model、table row、formの操作はそのcard、row、form内に残します。standalone scaffoldのindex、new、editにあるheader actionはこの規約の例外です。
+- page actionsは共通layout/helperが、640px未満ではsecondaryからprimaryの順に1列、640px以上では左secondary・右primaryの2列で配置します。タブなしでは見出し直下の`Shadcn::Card`内、タブ付きではactive画面のCard::Content先頭へ配置します。View側で同じlayoutを組み立てません。
+- 標準の表示面は`Shadcn::Card`を使用し、Card::Contentの既定余白を維持します。端まで表示するtableなど、意図的に余白を変える場合だけ個別に扱います。borderの状態色はsemantic tokenを使用します。ページ移動には`NavigationMenu`、同一画面内のパネル切替には`Tabs`を使い、公開variantを用途で選びます。
+- タブ付き画面の画面切り替えには`ApplicationHelper#with_tab`を使用します。これは`Shadcn::NavigationMenu`とactive画面の`Shadcn::Card`を描画します。active判定は各項目のpath prefix、または`is_active` lambdaで指定します。項目は1段で横スクロール可能にし、View側で同じnavigationを再構築しません。tabpanelを伴わないselectorは対象外です。
+- dialogは`ApplicationHelper#with_modal`を使用します。共通helperは`Shadcn::Dialog`のDOM、見出し、説明、actions、ARIA参照、閉じる操作を担当します。開閉triggerと個別Stimulus controllerの処理は呼び出し側に残します。通常formとdialog内formを入れ子にしません。
+- desktop証跡では同じnavigation内の全項目が1行に並び、active項目が見え、Cardがnavigationの下で同じ幅に収まることをcomputed geometryで検証します。狭幅でも項目を折り返さず、navigation内だけを横スクロールさせ、ページ全体に横スクロールを発生させません。
+- 参考画像や明示された画面要件と異なる表示を、コンポーネントの既定動作を理由に許容しません。visual assertionが失敗した場合、出力を通すためにassertionを弱めたり削除したりしません。要件を変更する必要がある場合は先にユーザーの承認を得てください。
+- `evidence:update`後は変更対象のdesktop・mobile画像を実際に開き、navigationの段組み、active表示、border、overflowを個別に確認してから「目視確認済み」と報告してください。
+- responsive navigationを変更した場合は、組み込みブラウザで390px幅の未ログイン・ログイン後dropdown展開とaccount menu active表示を目視します。320・640・960pxでviewport内へ収まること、961pxでdesktop navigationへ切り替わること、横スクロールがないことをcomputed geometryで確認します。
+- 機能を追加・変更した場合は`docs/evidence/`の撮影対象を見直します。新しい画面や状態があれば、全機能を有効にした日本語sampleのrunnerと期待シナリオを更新し、`rake evidence:update`と`rake evidence:verify`を実行します。不要になったシナリオは削除します。
+- アイコンは原則としてHeroiconsのSVGを使用します。装飾SVGには`aria-hidden="true"`を指定し、操作の意味はtextまたはaccessible nameで伝えます。
 
 ## テスト方針
 

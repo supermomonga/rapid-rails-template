@@ -1,9 +1,17 @@
 <% content_for :page_title, t("billing.ui.close_merchant") %>
-<section class="card card-border bg-base-100 border-error"><div class="card-body p-3">
-  <h2 class="card-title break-words"><%= merchant_account.display_name %></h2>
-  <div class="alert alert-warning alert-soft"><%= billing_icon("exclamation-triangle") %><span><%= t("billing.ui.closure_help") %></span></div>
-  <%= form_with url: merchant_closure_path do |form| %>
-    <fieldset class="fieldset"><%= form.label :confirmation, t("billing.ui.confirm_merchant_name"), class: "label" %><%= form.text_field :confirmation, required: true, autocomplete: "off", class: "input w-full" %></fieldset>
-    <div class="card-actions justify-end"><%= link_to t("billing.ui.back"), edit_merchant_profile_path, class: action_button_classes(:quiet) %><%= form.submit t("billing.ui.begin_closure"), class: action_button_classes(:destructive_confirm) %></div>
+<%= render(Shadcn::Card.new(class: "ring-destructive/50!")) do %>
+  <%= render(Shadcn::Card::Header.new) { render(Shadcn::Card::Title.new(tag: :h2, class: "break-words")) { merchant_account.display_name } } %>
+  <%= render(Shadcn::Card::Content.new(class: "space-y-4")) do %>
+    <%= render(Shadcn::Alert.new) do %>
+      <%= billing_icon("exclamation-triangle") %>
+      <%= render(Shadcn::Alert::Description.new) { t("billing.ui.closure_help") } %>
+    <% end %>
+    <%= form_with url: merchant_closure_path do |form| %>
+      <%= render(Shadcn::Field.new) do %>
+        <%= render(Shadcn::Field::Label.new(for: form.field_id(:confirmation))) { t("billing.ui.confirm_merchant_name") } %>
+        <%= form.text_field :confirmation, required: true, autocomplete: "off", class: Shadcn::Input.classes(extra: "w-full") %>
+      <% end %>
+      <div class="mt-4 flex flex-wrap justify-end gap-2"><%= link_to t("billing.ui.back"), edit_merchant_profile_path, class: action_button_classes(:quiet) %><%= form.submit t("billing.ui.begin_closure"), class: action_button_classes(:destructive_confirm) %></div>
+    <% end %>
   <% end %>
-</div></section>
+<% end %>

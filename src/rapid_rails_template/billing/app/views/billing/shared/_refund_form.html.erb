@@ -1,16 +1,31 @@
 <%= render "billing/shared/errors", errors: @refund.errors.full_messages %>
 <%= form_with model: @refund, scope: :refund_record, url: area == "admin" ? admin_charge_refund_records_path(charge) : merchant_charge_refund_records_path(charge), id: "refund_#{charge.id}" do |form| %>
-  <fieldset class="fieldset">
-    <legend class="fieldset-legend"><%= t("billing.ui.manual_refund") %></legend>
-    <p><%= t("billing.ui.refund_help") %></p>
-    <%= form.label :amount_usdc, t("billing.ui.refund_amount"), class: "label" %><%= form.text_field :amount_usdc, value: params.dig(:refund_record, :amount_usdc), required: true, inputmode: "decimal", class: "input w-full", aria: { invalid: @refund.errors[:amount_units].any? } %>
-    <%= form.label :reason, t("billing.ui.reason"), class: "label" %><%= form.text_area :reason, required: true, maxlength: 5000, rows: 4, class: "textarea w-full", aria: { invalid: @refund.errors[:reason].any? } %>
-    <%= form.label :chain_id, t("billing.ui.chain"), class: "label" %><%= form.select :chain_id, Billing::Chains::ALL.values.map { |chain| [chain.name, chain.id] }, {}, class: "select w-full" %>
-    <%= form.label :transaction_hash, t("billing.ui.transaction_hash"), class: "label" %>
-    <div class="join w-full">
-      <%= form.text_field :transaction_hash, required: true, class: "input join-item min-w-0 flex-1", spellcheck: false, autocomplete: "off", aria: { invalid: @refund.errors[:transaction_hash].any? } %>
-      <%= form.submit t("billing.ui.record_refund"), class: class_names(action_button_classes(:primary), "join-item") %>
-    </div>
-  </fieldset>
-  <div class="card-actions justify-end"><%= link_to t("billing.ui.back"), back, class: action_button_classes(:quiet) %></div>
+  <%= render(Shadcn::Field::Set.new) do %>
+    <%= render(Shadcn::Field::Legend.new) { t("billing.ui.manual_refund") } %>
+    <%= render(Shadcn::Field::Description.new) { t("billing.ui.refund_help") } %>
+    <%= render(Shadcn::Field::Group.new) do %>
+      <%= render(Shadcn::Field.new) do %>
+        <%= render(Shadcn::Field::Label.new(for: form.field_id(:amount_usdc))) { t("billing.ui.refund_amount") } %>
+        <%= form.text_field :amount_usdc, value: params.dig(:refund_record, :amount_usdc), required: true, inputmode: "decimal", class: Shadcn::Input.classes(extra: "w-full"), aria: { invalid: @refund.errors[:amount_units].any? } %>
+      <% end %>
+      <%= render(Shadcn::Field.new) do %>
+        <%= render(Shadcn::Field::Label.new(for: form.field_id(:reason))) { t("billing.ui.reason") } %>
+        <%= form.text_area :reason, required: true, maxlength: 5000, rows: 4, class: Shadcn::Textarea.classes(extra: "w-full"), aria: { invalid: @refund.errors[:reason].any? } %>
+      <% end %>
+      <%= render(Shadcn::Field.new) do %>
+        <%= render(Shadcn::Field::Label.new(for: form.field_id(:chain_id))) { t("billing.ui.chain") } %>
+        <%= render(Shadcn::NativeSelect.new(id: form.field_id(:chain_id), name: form.field_name(:chain_id), class: "w-full")) do %>
+          <% Billing::Chains::ALL.values.each do |chain| %><%= render(Shadcn::NativeSelect::Option.new(value: chain.id, selected: @refund.chain_id.to_s == chain.id.to_s)) { chain.name } %><% end %>
+        <% end %>
+      <% end %>
+      <%= render(Shadcn::Field.new) do %>
+        <%= render(Shadcn::Field::Label.new(for: form.field_id(:transaction_hash))) { t("billing.ui.transaction_hash") } %>
+        <%= form.text_field :transaction_hash, required: true, class: Shadcn::Input.classes, spellcheck: false, autocomplete: "off", aria: { invalid: @refund.errors[:transaction_hash].any? } %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <div class="mt-4 flex flex-wrap justify-end gap-2">
+    <%= link_to t("billing.ui.back"), back, class: action_button_classes(:quiet) %>
+    <%= form.submit t("billing.ui.record_refund"), class: action_button_classes(:primary) %>
+  </div>
 <% end %>

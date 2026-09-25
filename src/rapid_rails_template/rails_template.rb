@@ -26,6 +26,7 @@ gem "active_storage_db"
 gem "prism"
 gem "rails-i18n"
 gem "sorbet-runtime"
+gem "shadcn_view_components", "0.2.2"
 
 gem_group :development do
   gem "annotaterb"
@@ -336,19 +337,19 @@ def configure_application_identity
       },
       "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営者情報", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
       "home" => {
-        "badge" => "Railsアプリケーションテンプレート", "heading" => "迷わず始められる、モダンなRails開発環境。",
+        "badge" => "Railsアプリケーションテンプレート", "heading" => { "before" => "迷わず始める、", "emphasis" => "モダン", "after" => "なRails開発。" },
         "description" => "Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。",
         "start_devise" => "無料で始める", "features_link" => "構成を見る", "starter" => "スターターキット", "features_title" => "最初から揃う開発基盤",
-        "features" => { "rails" => { "title" => "Railsネイティブ", "description" => "Generator APIを中心に、安全な初期構成を生成します。" }, "ui" => { "title" => "読みやすいUI", "description" => "daisyUIとsemantic colorで、読みやすい画面を用意します。" }, "production" => { "title" => "本番運用対応", "description" => "SQLiteとLitestreamを前提に、運用経路まで設計します。" } }
+        "features" => { "rails" => { "title" => "Railsネイティブ", "description" => "Generator APIを中心に、安全な初期構成を生成します。" }, "ui" => { "title" => "読みやすいUI", "description" => "shadcnのコンポーネントで、読みやすい画面を用意します。" }, "production" => { "title" => "本番運用対応", "description" => "SQLiteとLitestreamを前提に、運用経路まで設計します。" } }
       },
       "accounts" => {
-        "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "サイドメニューから利用設定を管理できます。", "action_with_profile" => "サイドメニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
+        "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "メニューから利用設定を管理できます。", "action_with_profile" => "メニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
         "delete" => { "title" => "アカウント削除", "description" => "この操作は取り消せません。現在使えるログイン方法で再認証してください。", "with_passkey" => "Passkeyでアカウントを削除", "with_wallet" => "EVMウォレットでアカウントを削除" },
         "destroy" => { "notice" => "アカウントを削除しました", "last_admin" => "最後の管理者はアカウントを削除できません" }
       },
       "credential_risk" => { "warning" => "現在のログイン方法は未バックアップのPasskey 1件だけです。端末の紛失・故障に備えて別のログイン方法を追加してください。", "add_login_method" => "ログイン方法を追加" },
       "siwe" => { "statement" => "Login to %{app_name}" },
-      "common" => { "show" => "詳細", "edit" => "編集", "delete" => "削除", "destroy" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
+      "common" => { "show" => "詳細", "edit" => "編集", "delete" => "削除", "destroy" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "table_scroll_hint" => "表を左右にスクロールすると、ほかの項目や操作を表示できます。", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
     },
     en: {
       "meta" => { "description" => "The web application for %{app_name}." },
@@ -360,10 +361,10 @@ def configure_application_identity
       },
       "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Operator information", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
       "home" => {
-        "badge" => "Rails application template", "heading" => "A modern Rails environment without the guesswork.",
+        "badge" => "Rails application template", "heading" => { "before" => "A ", "emphasis" => "modern Rails", "after" => " environment without the guesswork." },
         "description" => "Build on Rails 8.1 defaults with reproducible authentication, UI, testing, and deployment foundations.",
         "start_devise" => "Get started", "features_link" => "View features", "starter" => "Starter kit", "features_title" => "A complete development foundation",
-        "features" => { "rails" => { "title" => "Rails native", "description" => "Generate a safe baseline centered on the Generator API." }, "ui" => { "title" => "Readable UI", "description" => "Start with readable screens built with daisyUI and semantic colors." }, "production" => { "title" => "Production ready", "description" => "Include an operational path designed for SQLite and Litestream." } }
+        "features" => { "rails" => { "title" => "Rails native", "description" => "Generate a safe baseline centered on the Generator API." }, "ui" => { "title" => "Readable UI", "description" => "Start with readable screens built with shadcn components." }, "production" => { "title" => "Production ready", "description" => "Include an operational path designed for SQLite and Litestream." } }
       },
       "accounts" => {
         "show" => { "title" => "Dashboard", "description" => "Review the state of your application.", "description_with_profile" => "Review your profile and application state.", "next_step" => "Next step", "action" => "Manage your preferences from the side menu.", "action_with_profile" => "Manage your profile and preferences from the side menu.", "back_home" => "Back to home" },
@@ -372,7 +373,7 @@ def configure_application_identity
       },
       "credential_risk" => { "warning" => "Your only sign-in method is a passkey that is not backed up. Add another sign-in method in case this device is lost or damaged.", "add_login_method" => "Add sign-in method" },
       "siwe" => { "statement" => "Sign in to %{app_name}" },
-      "common" => { "show" => "Show", "edit" => "Edit", "delete" => "Delete", "destroy" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
+      "common" => { "show" => "Show", "edit" => "Edit", "delete" => "Delete", "destroy" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "table_scroll_hint" => "Scroll the table sideways to see more fields and actions.", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
     }
   )
 
@@ -655,98 +656,37 @@ def configure_lexxy
   ERB
 end
 
-def install_daisyui
+def install_shadcn_view_components
   stylesheet_path = "app/assets/tailwind/application.css"
   stylesheet = File.binread(stylesheet_path)
   import_statement = '@import "tailwindcss";'
   raise "#{stylesheet_path}のTailwind CSS importが一意ではありません" unless stylesheet.lines.count { |line| line.strip == import_statement } == 1
-  raise "#{stylesheet_path}には既にdaisyUI pluginが登録されています" if stylesheet.include?('@plugin "daisyui"')
 
   create_file "package.json", JSON.pretty_generate("private" => true) + "\n"
-  run_checked "npm install --save-dev daisyui@latest"
+  run_checked "npm install --save-dev tw-animate-css"
   run_checked "npm install --save-dev wrangler@^4"
   package = JSON.parse(File.read("package.json"))
-  raise "package.jsonにdaisyUIが登録されていません" unless package.dig("devDependencies", "daisyui")
+  raise "package.jsonにtw-animate-cssが登録されていません" unless package.dig("devDependencies", "tw-animate-css")
   raise "package.jsonにWrangler v4が登録されていません" unless package.dig("devDependencies", "wrangler")&.match?(/\A\^?4\./)
   raise "package-lock.jsonが生成されませんでした" unless File.file?("package-lock.json")
 
+  run_checked "bin/rails generate shadcn_view_components:install"
+  stylesheet = File.binread(stylesheet_path)
+  raise "#{stylesheet_path}にgemのCSS importがありません" unless stylesheet.include?('@import "../builds/tailwind/shadcn_view_components";')
+
+  javascript_path = "app/javascript/application.js"
+  javascript = File.binread(javascript_path)
+  raise "#{javascript_path}のStimulus importが見つかりません" unless javascript.include?('import "controllers"')
+  append_to_file javascript_path, <<~JAVASCRIPT
+
+    import { application } from "controllers/application"
+    import { register as registerShadcnComponents } from "@supermomonga/shadcn-view-components"
+    registerShadcnComponents(application)
+  JAVASCRIPT
+
   append_to_file stylesheet_path, <<~CSS
-    @plugin "daisyui" {
-      themes: false;
-      logs: false;
-    }
-
-    @plugin "daisyui/theme" {
-      name: "rapid-rails";
-      default: true;
-      prefersdark: false;
-      color-scheme: light;
-
-      --color-base-100: #ffffff;
-      --color-base-200: #f1f5f9;
-      --color-base-300: #d6e3ed;
-      --color-base-content: rgba(0, 0, 0, 0.82);
-      --color-primary: #3ea8ff;
-      --color-primary-content: #ffffff;
-      --color-secondary: #0f83fd;
-      --color-secondary-content: #ffffff;
-      --color-accent: #3ea8ff;
-      --color-accent-content: #ffffff;
-      --color-neutral: rgba(0, 0, 0, 0.55);
-      --color-neutral-content: #ffffff;
-      --color-info: #3ea8ff;
-      --color-info-content: #ffffff;
-      --color-success: #10b981;
-      --color-success-content: rgba(0, 0, 0, 0.82);
-      --color-warning: #f59e0b;
-      --color-warning-content: rgba(0, 0, 0, 0.82);
-      --color-error: #f43f5e;
-      --color-error-content: #ffffff;
-
-      --radius-selector: 0.5rem;
-      --radius-field: 0.5rem;
-      --radius-box: 0.75rem;
-      --size-selector: 0.25rem;
-      --size-field: 0.25rem;
-      --border: 1px;
-      --depth: 0;
-      --noise: 0;
-    }
-
-    @layer base {
-      html {
-        font-size: 16px;
-      }
-
-      body {
-        font-family: -apple-system, system-ui, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
-        font-size: 1rem;
-        line-height: 1.8;
-        letter-spacing: normal;
-        font-feature-settings: normal;
-        word-break: break-all;
-        overflow-wrap: break-word;
-      }
-
-      h1, h2, h3, h4, h5, h6 {
-        line-height: 1.5;
-      }
-
-      code, pre, kbd, samp {
-        font-family: SFMono-Regular, Consolas, Menlo, monospace;
-        font-size: 0.875rem;
-        line-height: 1.5;
-      }
-    }
-
-    @layer utilities {
-      :where(.card-border) {
-        border-color: var(--color-base-300);
-      }
-
-      .btn-outline:not(:is(.btn-neutral, .btn-primary, .btn-secondary, .btn-accent, .btn-info, .btn-success, .btn-warning, .btn-error)) {
-        --btn-border: var(--color-base-300);
-      }
+    @theme {
+      --breakpoint-desktop: 60.0625rem;
     }
   CSS
   append_to_file ".gitignore", "\n/node_modules\n" unless File.read(".gitignore").lines.map(&:strip).include?("/node_modules")
@@ -823,55 +763,54 @@ def configure_generator_templates
   create_file "lib/templates/erb/scaffold/_form.html.erb.tt", <<~ERB, force: true
     <%%= form_with(model: <%= model_resource_name %>, class: "space-y-5") do |form| %>
       <%% if <%= singular_table_name %>.errors.any? %>
-        <div class="alert alert-error alert-soft" role="alert">
-          <div>
+        <%%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <%%= render(Shadcn::Alert::Description.new) do %>
             <h2 class="font-semibold leading-[1.5]"><%%= pluralize(<%= singular_table_name %>.errors.count, "error") %> prohibited this <%= singular_table_name %> from being saved:</h2>
             <ul class="mt-2 list-disc pl-5">
               <%% <%= singular_table_name %>.errors.each do |error| %>
                 <li><%%= error.full_message %></li>
               <%% end %>
             </ul>
-          </div>
-        </div>
+          <%% end %>
+        <%% end %>
       <%% end %>
 
     <% attributes.each do |attribute| -%>
     <% if attribute.password_digest? -%>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%%= form.label :password %></legend>
-        <%%= form.password_field :password, class: "input w-full" %>
-      </fieldset>
+      <%%= render(Shadcn::Field::Set.new) do %>
+        <%%= render(Shadcn::Field::Legend.new) { form.label :password } %>
+        <%%= form.password_field :password, class: ShadcnViewComponents::Classes.resolve(:input, extra: "w-full") %>
+      <%% end %>
 
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%%= form.label :password_confirmation %></legend>
-        <%%= form.password_field :password_confirmation, class: "input w-full" %>
-      </fieldset>
+      <%%= render(Shadcn::Field::Set.new) do %>
+        <%%= render(Shadcn::Field::Legend.new) { form.label :password_confirmation } %>
+        <%%= form.password_field :password_confirmation, class: ShadcnViewComponents::Classes.resolve(:input, extra: "w-full") %>
+      <%% end %>
     <% elsif attribute.field_type == :checkbox -%>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= attribute.human_name %></legend>
-        <label class="label cursor-pointer justify-start gap-3">
-          <%%= form.checkbox :<%= attribute.column_name %>, class: "checkbox" %>
+      <%%= render(Shadcn::Field::Set.new) do %>
+        <%%= render(Shadcn::Field::Legend.new) { <%= attribute.human_name.inspect %> } %>
+        <label class="flex cursor-pointer items-center gap-3">
+          <%%= form.checkbox :<%= attribute.column_name %>, class: ShadcnViewComponents::Classes.resolve(:checkbox) %>
           <span><%= attribute.human_name %></span>
         </label>
-      </fieldset>
+      <%% end %>
     <% else -%>
     <% field_class = case attribute.field_type
-       when :textarea, :rich_textarea then "textarea w-full"
-       when :file_field then "file-input w-full"
-       else "input w-full"
+       when :textarea, :rich_textarea then :textarea
+       else :input
        end -%>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%%= form.label :<%= attribute.column_name %> %></legend>
+      <%%= render(Shadcn::Field::Set.new) do %>
+        <%%= render(Shadcn::Field::Legend.new) { form.label :<%= attribute.column_name %> } %>
     <% if attribute.attachments? -%>
-        <%%= form.<%= attribute.field_type %> :<%= attribute.column_name %>, multiple: true, class: "<%= field_class %>" %>
+        <%%= form.<%= attribute.field_type %> :<%= attribute.column_name %>, multiple: true, class: ShadcnViewComponents::Classes.resolve(:<%= field_class %>, extra: "w-full") %>
     <% else -%>
-        <%%= form.<%= attribute.field_type %> :<%= attribute.column_name %>, class: "<%= field_class %>" %>
+        <%%= form.<%= attribute.field_type %> :<%= attribute.column_name %>, class: ShadcnViewComponents::Classes.resolve(:<%= field_class %>, extra: "w-full") %>
     <% end -%>
-      </fieldset>
+      <%% end %>
 
     <% end -%>
     <% end -%>
-      <div class="card-actions flex-wrap justify-end">
+      <div class="flex flex-wrap justify-end">
         <%%= form.submit class: action_button_classes(:primary) %>
       </div>
     <%% end %>
@@ -886,23 +825,22 @@ def configure_generator_templates
         <%%= link_to "New <%= human_name.downcase %>", <%= new_helper(type: :path) %>, class: action_button_classes(:primary) %>
       </header>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
-          <div class="overflow-x-auto">
-            <table class="table table-sm table-pin-rows min-w-max">
-              <thead>
-                <tr>
+      <%%= render(Shadcn::Card.new) do %>
+        <%%= render(Shadcn::Card::Content.new) do %>
+          <%%= render(Shadcn::Table.new) do %>
+            <%%= render(Shadcn::Table::Header.new) do %>
+              <%%= render(Shadcn::Table::Row.new) do %>
     <% attributes.reject(&:password_digest?).each do |attribute| -%>
-                  <th scope="col"><%= attribute.human_name %></th>
+                <%%= render(Shadcn::Table::Head.new(scope: "col")) { <%= attribute.human_name.inspect %> } %>
     <% end -%>
-                  <th scope="col"><span class="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody id="<%= plural_table_name %>">
+                <%%= render(Shadcn::Table::Head.new(scope: "col")) { tag.span("Actions", class: "sr-only") } %>
+              <%% end %>
+            <%% end %>
+            <%%= render(Shadcn::Table::Body.new(id: "<%= plural_table_name %>")) do %>
                 <%% @<%= plural_table_name %>.each do |<%= singular_table_name %>| %>
-                  <tr id="<%%= dom_id <%= singular_table_name %> %>">
+              <%%= render(Shadcn::Table::Row.new(id: dom_id(<%= singular_table_name %>))) do %>
     <% attributes.reject(&:password_digest?).each do |attribute| -%>
-                    <td>
+                <%%= render(Shadcn::Table::Cell.new) do %>
     <% if attribute.attachment? -%>
                       <%%= link_to <%= singular_table_name %>.<%= attribute.column_name %>.filename, <%= singular_table_name %>.<%= attribute.column_name %> if <%= singular_table_name %>.<%= attribute.column_name %>.attached? %>
     <% elsif attribute.attachments? -%>
@@ -912,20 +850,19 @@ def configure_generator_templates
     <% else -%>
                       <%%= <%= singular_table_name %>.<%= attribute.column_name %> %>
     <% end -%>
-                    </td>
+                <%% end %>
     <% end -%>
-                    <td>
+                <%%= render(Shadcn::Table::Cell.new) do %>
                       <div class="flex flex-wrap justify-end gap-2">
                         <%%= link_to "Show this <%= human_name.downcase %>", <%= model_resource_name(singular_table_name) %>, class: action_button_classes(:secondary) %>
                       </div>
-                    </td>
-                  </tr>
                 <%% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+              <%% end %>
+                <%% end %>
+            <%% end %>
+          <%% end %>
+        <%% end %>
+      <%% end %>
 
       <%%= pagination(@pagy, aria_label: "<%= human_name.pluralize %> pagination") %>
     </div>
@@ -933,11 +870,11 @@ def configure_generator_templates
 
   create_file "lib/templates/erb/scaffold/partial.html.erb.tt", <<~ERB, force: true
     <div id="<%%= dom_id <%= singular_name %> %>">
-      <ul class="list">
+      <dl class="divide-y divide-border">
     <% attributes.reject(&:password_digest?).each do |attribute| -%>
-        <li class="list-row">
-          <span class="text-sm text-neutral"><%= attribute.human_name %></span>
-          <div class="list-col-grow min-w-0">
+        <div class="grid gap-1 py-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] sm:gap-4">
+          <dt class="text-sm text-muted-foreground"><%= attribute.human_name %></dt>
+          <dd class="min-w-0">
     <% if attribute.attachment? -%>
             <%%= link_to <%= singular_name %>.<%= attribute.column_name %>.filename, <%= singular_name %>.<%= attribute.column_name %> if <%= singular_name %>.<%= attribute.column_name %>.attached? %>
     <% elsif attribute.attachments? -%>
@@ -947,10 +884,10 @@ def configure_generator_templates
     <% else -%>
             <%%= <%= singular_name %>.<%= attribute.column_name %> %>
     <% end -%>
-          </div>
-        </li>
+          </dd>
+        </div>
     <% end -%>
-      </ul>
+      </dl>
     </div>
   ERB
 
@@ -960,16 +897,16 @@ def configure_generator_templates
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <h1 class="text-2xl font-bold leading-[1.5]"><%%= content_for(:page_title) %></h1>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
+      <%%= render(Shadcn::Card.new) do %>
+        <%%= render(Shadcn::Card::Content.new) do %>
           <%%= render @<%= singular_table_name %> %>
-          <div class="card-actions flex-wrap justify-end">
+          <div class="flex flex-wrap justify-end gap-2">
             <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: action_button_classes(:quiet) %>
             <%%= link_to "Edit this <%= human_name.downcase %>", <%= edit_helper(type: :path) %>, class: action_button_classes(:secondary) %>
             <%%= button_to "Destroy this <%= human_name.downcase %>", <%= model_resource_name(prefix: "@") %>, method: :delete, class: action_button_classes(:destructive) %>
           </div>
-        </div>
-      </section>
+        <%% end %>
+      <%% end %>
     </div>
   ERB
 
@@ -982,11 +919,11 @@ def configure_generator_templates
         <%%= link_to "Back to <%= human_name.pluralize.downcase %>", <%= index_helper(type: :path) %>, class: action_button_classes(:quiet) %>
       </header>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
+      <%%= render(Shadcn::Card.new) do %>
+        <%%= render(Shadcn::Card::Content.new) do %>
           <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
-        </div>
-      </section>
+        <%% end %>
+      <%% end %>
     </div>
   ERB
 
@@ -1002,11 +939,11 @@ def configure_generator_templates
         </div>
       </header>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
+      <%%= render(Shadcn::Card.new) do %>
+        <%%= render(Shadcn::Card::Content.new) do %>
           <%%= render "form", <%= singular_table_name %>: @<%= singular_table_name %> %>
-        </div>
-      </section>
+        <%% end %>
+      <%% end %>
     </div>
   ERB
 
@@ -1014,12 +951,12 @@ def configure_generator_templates
     <%% content_for :page_title, "<%= class_name %>#<%= @action %>" %>
 
     <div class="mx-auto w-full max-w-[820px] px-5 py-10 md:py-14">
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
-          <h1 class="card-title text-2xl leading-[1.5]"><%%= content_for(:page_title) %></h1>
-          <p class="text-neutral">Find me in <%= @path %></p>
-        </div>
-      </section>
+      <%%= render(Shadcn::Card.new) do %>
+        <%%= render(Shadcn::Card::Content.new) do %>
+          <h1 class="text-2xl font-semibold leading-[1.5]"><%%= content_for(:page_title) %></h1>
+          <p class="text-muted-foreground">Find me in <%= @path %></p>
+        <%% end %>
+      <%% end %>
     </div>
   ERB
 end
@@ -2145,7 +2082,7 @@ def install_passkey_views
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
         <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="siwe-sign-in#authenticate"><%= t("passkeys.delete_with_wallet") %></button>
-        <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", class: "mt-4 hidden", data: { siwe_sign_in_target: "error" })) %>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-passkey-provider-picker" %>
       </div>
     ERB
@@ -2160,22 +2097,22 @@ def install_passkey_views
     <% end %>
 
     <section class="space-y-5">
-      <p class="text-base-content/70"><%= t("passkeys.description") %></p>
+      <p class="text-muted-foreground"><%= t("passkeys.description") %></p>
 
-      <ul class="list gap-3">
+      <%= render(Shadcn::Item::Group.new(tag: :ul)) do %>
         <% @passkeys.each do |passkey| %>
-          <li class="list-row border-base-300 border">
-            <div class="list-col-grow">
+          <%= render(Shadcn::Item.new(tag: :li)) do %>
+            <%= render(Shadcn::Item::Content.new) do %>
               <p class="font-semibold"><%= passkey.name %></p>
-              <span class="badge badge-outline"><%= t(passkey.backup_state? ? "passkeys.backed_up" : "passkeys.not_backed_up") %></span>
-            </div>
-            <div class="flex flex-wrap justify-end gap-2">
+              <%= render(Shadcn::Badge.new(variant: :outline)) { t(passkey.backup_state? ? "passkeys.backed_up" : "passkeys.not_backed_up") } %>
+            <% end %>
+            <%= render(Shadcn::Item::Actions.new(class: "flex-wrap justify-end")) do %>
               <%= link_to t("common.edit"), edit_account_passkey_path(passkey), class: action_button_classes(:secondary) %>
               <%= link_to t("passkeys.delete"), account_passkey_path(passkey), class: action_button_classes(:destructive) %>
-            </div>
-          </li>
+            <% end %>
+          <% end %>
         <% end %>
-      </ul>
+      <% end %>
     </section>
   ERB
 
@@ -2189,9 +2126,9 @@ def install_passkey_views
              data-passkey-verify-url-value="<%= account_passkeys_path %>"
              data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
              data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-      <p class="text-base-content/70"><%= t("passkeys.new_description") %></p>
-      <div class="alert alert-error alert-soft hidden" role="alert" data-passkey-target="error"></div>
-      <div class="card-actions flex-wrap justify-end">
+      <p class="text-muted-foreground"><%= t("passkeys.new_description") %></p>
+      <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", class: "hidden", data: { passkey_target: "error" })) %>
+      <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
         <button type="button" class="<%= action_button_classes(:primary) %>" data-action="passkey#authenticate"><%= t("passkeys.register") %></button>
       </div>
@@ -2203,17 +2140,17 @@ def install_passkey_views
 
     <%= form_with model: @passkey, url: account_passkey_path(@passkey), class: "space-y-5" do |form| %>
       <% if @passkey.errors.any? %>
-        <div class="alert alert-error alert-soft" role="alert"><span><%= @passkey.errors.full_messages.to_sentence %></span></div>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <%= render(Shadcn::Alert::Description.new) { @passkey.errors.full_messages.to_sentence } %>
+        <% end %>
       <% end %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :name, t("passkeys.name") %></legend>
-        <div class="join w-full">
-          <%= form.text_field :name, required: true, maxlength: 50, class: "input join-item min-w-0 flex-1" %>
-          <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
-        </div>
-      </fieldset>
-      <div class="card-actions flex-wrap justify-end">
+      <div class="grid gap-2">
+        <%= form.label :name, t("passkeys.name"), class: Shadcn::Label.classes %>
+        <%= form.text_field :name, required: true, maxlength: 50, class: Shadcn::Input.classes(extra: "w-full") %>
+      </div>
+      <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
+        <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -2223,7 +2160,7 @@ def install_passkey_views
 
     <section class="space-y-5">
       <p class="font-semibold"><%= @passkey.name %></p>
-      <p class="text-base-content/70"><%= t("passkeys.delete_description") %></p>
+      <p class="text-muted-foreground"><%= t("passkeys.delete_description") %></p>
       <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.back"), account_passkeys_path, class: action_button_classes(:quiet) %>
         <% if CredentialDestruction.passkeys_for(user: current_user, action: "delete_passkey", target: @passkey).exists? %>
@@ -2236,7 +2173,7 @@ def install_passkey_views
                data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
                data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
             <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="passkey#authenticate"><%= t("passkeys.delete_with_passkey") %></button>
-            <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
+            <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", class: "mt-4 hidden", data: { passkey_target: "error" })) %>
           </div>
         <% end %>
     #{siwe_destruction.lines.map { |line| "    #{line}" }.join}  </div>
@@ -2602,16 +2539,16 @@ def install_passkey_tests
         click_button I18n.t("authentication.sign_up_with_passkey")
 
         assert_current_path root_path
-        assert_selector ".alert-warning.alert-soft", text: I18n.t("credential_risk.warning")
+        assert_selector '[data-slot="alert"][role="alert"]', text: I18n.t("credential_risk.warning")
         assert_link I18n.t("credential_risk.add_login_method"), href: account_passkeys_path
-        assert_no_selector ".alert-warning.alert-soft .btn"
+        assert_no_selector '[data-slot="alert"][role="alert"] a[data-slot="button"]'
         assert_equal [false, false], PasskeyCredential.order(:id).last.then { |passkey| [passkey.backup_eligible?, passkey.backup_state?] }
 
         open_account_menu_and_sign_out
         visit new_user_session_path
         click_button I18n.t("authentication.sign_in_with_passkey")
         assert_current_path root_path
-        assert_selector ".alert-warning.alert-soft", text: I18n.t("credential_risk.warning")
+        assert_selector '[data-slot="alert"][role="alert"]', text: I18n.t("credential_risk.warning")
       end
 
       test "updates backup state after authentication and stops warning for a synced passkey" do
@@ -2619,7 +2556,7 @@ def install_passkey_tests
         visit new_user_registration_path
         configure_webauthn_for_current_page
         click_button I18n.t("authentication.sign_up_with_passkey")
-        assert_selector ".alert-warning.alert-soft", text: I18n.t("credential_risk.warning")
+        assert_selector '[data-slot="alert"][role="alert"]', text: I18n.t("credential_risk.warning")
 
         credential_id = cdp.send_message("WebAuthn.getCredentials", params: { authenticatorId: @authenticator_id })
           .fetch("credentials").sole.fetch("credentialId")
@@ -2632,13 +2569,13 @@ def install_passkey_tests
         click_button I18n.t("authentication.sign_in_with_passkey")
 
         assert_current_path root_path
-        assert_no_selector ".alert-warning", text: I18n.t("credential_risk.warning")
+        assert_no_selector '[data-slot="alert"]', text: I18n.t("credential_risk.warning")
         assert_predicate T.must(PasskeyCredential.order(:id).last).reload, :backup_state?
       end
 
       private
         def open_account_menu_and_sign_out
-          find("header details.dropdown > summary", visible: :visible).click
+          find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
           click_link I18n.t("navigation.sign_out")
           assert_current_path root_path
           assert_selector %(header a[href="#{new_user_session_path}"]), visible: :visible
@@ -3375,7 +3312,7 @@ def install_siwe
           const providers = Array.from(this.providers.values())
           if (providers.length > 1) {
             this.renderProviderChoices(providers)
-            this.providerDialogTarget.showModal()
+            this.providerDialogController().show()
             return
           }
 
@@ -3393,7 +3330,7 @@ def install_siwe
         try {
           const selected = this.providers.get(event.params.providerUuid)
           if (!selected) throw new Error(this.walletMissingValue)
-          this.providerDialogTarget.close()
+          this.providerDialogController().close()
           await this.authenticateWith(selected)
         } catch (error) {
           this.showError(error.message)
@@ -3415,16 +3352,21 @@ def install_siwe
         return typeof window.ethereum?.request === "function" ? { info: null, provider: window.ethereum } : null
       }
 
+      providerDialogController() {
+        return this.application.getControllerForElementAndIdentifier(
+          this.providerDialogTarget.closest('[data-controller~="shadcn--dialog"]'), "shadcn--dialog"
+        )
+      }
+
       renderProviderChoices(providers) {
         this.providerListTarget.replaceChildren(...providers.map(({ info }) => {
-          const item = document.createElement("li")
           const button = document.createElement("button")
           button.type = "button"
+          button.className = this.providerListTarget.dataset.siweProviderButtonClass
           button.textContent = this.providerName(info)
           button.dataset.action = "siwe-sign-in#selectProvider"
           button.dataset.siweSignInProviderUuidParam = info.uuid
-          item.append(button)
-          return item
+          return button
         }))
       }
 
@@ -3502,7 +3444,7 @@ def install_siwe
       close_label: t("siwe.provider_picker.close"),
       dialog_data: { siwe_sign_in_target: "providerDialog" }
     ) do %>
-      <ul class="menu mt-4 w-full" data-siwe-sign-in-target="providerList"></ul>
+      <div class="mt-4 grid gap-2" data-siwe-sign-in-target="providerList" data-siwe-provider-button-class="<%= Shadcn::Button.classes(variant: :outline, extra: "w-full justify-start") %>"></div>
     <% end %>
   ERB
 
@@ -3513,32 +3455,34 @@ def install_siwe
     <% end %>
 
     <section class="space-y-5">
-        <p class="text-base-content/70"><%= t("siwe.identities.description") %></p>
+        <p class="text-muted-foreground"><%= t("siwe.identities.description") %></p>
 
         <% if @siwe_identities.any? %>
-          <ul class="list gap-3">
+          <%= render(Shadcn::Item::Group.new(tag: :ul)) do %>
             <% @siwe_identities.each do |identity| %>
-              <li class="list-row border-base-300 border">
-                <div class="list-col-grow">
+              <%= render(Shadcn::Item.new(tag: :li)) do %>
+                <%= render(Shadcn::Item::Content.new) do %>
                   <p class="font-semibold"><%= identity.name %></p>
-                  <p class="break-all font-mono text-sm text-base-content/70"><%= identity.address %></p>
+                  <p class="break-all font-mono text-sm text-muted-foreground"><%= identity.address %></p>
                   <% if current_authentication_credential?(identity) %>
-                    <span class="badge badge-primary badge-outline"><%= t("siwe.identities.current") %></span>
+                    <%= render(Shadcn::Badge.new(variant: :secondary)) { t("siwe.identities.current") } %>
                   <% elsif !@removable_siwe_identity_ids.include?(identity.id) %>
-                    <span class="badge badge-outline"><%= t("siwe.identities.last_credential_label") %></span>
+                    <%= render(Shadcn::Badge.new(variant: :outline)) { t("siwe.identities.last_credential_label") } %>
                   <% end %>
-                </div>
-                <div class="flex flex-wrap justify-end gap-2">
+                <% end %>
+                <%= render(Shadcn::Item::Actions.new(class: "flex-wrap justify-end")) do %>
                   <%= link_to t("common.edit"), edit_account_siwe_identity_path(identity), class: action_button_classes(:secondary) %>
                   <% if @removable_siwe_identity_ids.include?(identity.id) %>
                     <%= link_to t("siwe.identities.delete"), account_siwe_identity_path(identity), class: action_button_classes(:destructive) %>
                   <% end %>
-                </div>
-              </li>
+                <% end %>
+              <% end %>
             <% end %>
-          </ul>
+          <% end %>
         <% else %>
-          <div class="alert" role="status"><span><%= t("siwe.identities.empty") %></span></div>
+          <%= render(Shadcn::Empty.new) do %>
+            <%= render(Shadcn::Empty::Header.new) { render(Shadcn::Empty::Title.new) { t("siwe.identities.empty") } } %>
+          <% end %>
         <% end %>
     </section>
   ERB
@@ -3554,9 +3498,9 @@ def install_siwe
              data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
              data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
              data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-      <p class="text-base-content/70"><%= t("siwe.identities.new_description") %></p>
-      <div class="alert alert-error alert-soft hidden" role="alert" data-siwe-sign-in-target="error"></div>
-      <div class="card-actions flex-wrap justify-end">
+      <p class="text-muted-foreground"><%= t("siwe.identities.new_description") %></p>
+      <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", class: "hidden", data: { siwe_sign_in_target: "error" })) %>
+      <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
         <button type="button" class="<%= action_button_classes(:primary) %>" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.connect") %></button>
       </div>
@@ -3568,20 +3512,20 @@ def install_siwe
     <% content_for :page_title, t("siwe.identities.edit_title") %>
 
     <section class="space-y-5">
-      <p class="break-all font-mono text-sm text-base-content/70"><%= @siwe_identity.address %></p>
+      <p class="break-all font-mono text-sm text-muted-foreground"><%= @siwe_identity.address %></p>
       <%= form_with model: [:account, @siwe_identity], class: "space-y-5" do |form| %>
         <% if @siwe_identity.errors.any? %>
-          <div class="alert alert-error alert-soft" role="alert"><span><%= @siwe_identity.errors.full_messages.to_sentence %></span></div>
+          <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+            <%= render(Shadcn::Alert::Description.new) { @siwe_identity.errors.full_messages.to_sentence } %>
+          <% end %>
         <% end %>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend"><%= form.label :name, t("siwe.identities.name") %></legend>
-          <div class="join w-full">
-            <%= form.text_field :name, required: true, maxlength: 50, class: "input join-item min-w-0 flex-1" %>
-            <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
-          </div>
-        </fieldset>
-        <div class="card-actions flex-wrap justify-end">
+        <div class="grid gap-2">
+          <%= form.label :name, t("siwe.identities.name"), class: Shadcn::Label.classes %>
+          <%= form.text_field :name, required: true, maxlength: 50, class: Shadcn::Input.classes(extra: "w-full") %>
+        </div>
+        <div class="flex flex-wrap justify-end gap-2">
           <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
+          <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
         </div>
       <% end %>
     </section>
@@ -3592,8 +3536,8 @@ def install_siwe
 
     <section class="space-y-5">
       <p class="font-semibold"><%= @siwe_identity.name %></p>
-      <p class="break-all font-mono text-sm text-base-content/70"><%= @siwe_identity.address %></p>
-      <p class="text-base-content/70"><%= t("siwe.identities.delete_description") %></p>
+      <p class="break-all font-mono text-sm text-muted-foreground"><%= @siwe_identity.address %></p>
+      <p class="text-muted-foreground"><%= t("siwe.identities.delete_description") %></p>
       <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.back"), account_siwe_identities_path, class: action_button_classes(:quiet) %>
         <% if current_user.passkey_credentials.exists? %>
@@ -3606,7 +3550,7 @@ def install_siwe
                data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
                data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
             <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="passkey#authenticate"><%= t("siwe.identities.delete_with_passkey") %></button>
-            <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
+            <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", class: "mt-4 hidden", data: { passkey_target: "error" })) %>
           </div>
         <% end %>
         <% if current_user.siwe_identities.where.not(id: @siwe_identity.id).exists? %>
@@ -3620,7 +3564,7 @@ def install_siwe
                data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
                data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
             <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="siwe-sign-in#authenticate"><%= t("siwe.identities.delete_with_wallet") %></button>
-            <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+            <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", class: "mt-4 hidden", data: { siwe_sign_in_target: "error" })) %>
             <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-identity-provider-picker" %>
           </div>
         <% end %>
@@ -3963,53 +3907,52 @@ def install_siwe
 
         get account_passkeys_url
         assert_response :success
-        assert_select '.tab-active[aria-current="page"][href=?]', account_passkeys_path, count: 1
-        assert_select '.tab[href=?]', account_siwe_identities_path, count: 1
-        assert_select '.tabs.tabs-lift > .tab-active + .tab-content[role="tabpanel"]', count: 1
+        assert_select 'nav[aria-label=?] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', I18n.t("navigation.account_settings"), account_passkeys_path, count: 1
+        assert_select 'nav[aria-label=?] a[data-slot="navigation-menu-link"][href=?]', I18n.t("navigation.account_settings"), account_siwe_identities_path, count: 1
+        assert_select '.space-y-3 > [data-slot="card"] > [data-slot="card-content"]', count: 1
 
         get account_siwe_identities_url
         assert_response :success
         assert_select "a[href=?]", new_account_siwe_identity_path, count: 1
-        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"] a[href=?]',
+        assert_select '[data-slot="card-content"] > [data-page-actions-container="tab"] [data-page-actions-column="primary"] a[href=?]',
           new_account_siwe_identity_path, count: 1
         assert_select '[data-page-actions-container="card"]', count: 0
-        assert_select "ul.list.gap-3 > li.list-row", count: 0
+        assert_select 'ul[data-slot="item-group"] > li[data-slot="item"]', count: 0
         assert_select "form", count: 0
-        assert_select '.tab-active[aria-current="page"][href=?]', account_siwe_identities_path, count: 1
-        assert_select '.tabs.tabs-lift > .tab-active + .tab-content[role="tabpanel"]', count: 1
-        assert_select '.tabs.tabs-lift > .tab-content', count: 1
-        assert_select '.tab-content > .card-border.border-base-300', count: 0
-        assert_select 'nav[aria-label=?] a.menu-active[href=?]', I18n.t("navigation.account_menu"),
+        assert_select 'nav[aria-label=?] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', I18n.t("navigation.account_settings"), account_siwe_identities_path, count: 1
+        assert_select '.space-y-3 > [data-slot="card"] > [data-slot="card-content"]', count: 1
+        assert_select '[data-slot="card-content"] > [data-page-actions-container="tab"]', count: 1
+        assert_select 'nav[aria-label=?] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', I18n.t("navigation.account_menu"),
           account_passkeys_path, count: 1
 
         get new_account_siwe_identity_url
         assert_response :success
         assert_select '[data-controller="siwe-sign-in"][data-siwe-sign-in-mode-value="link"]', count: 1
         assert_select 'dialog[data-siwe-sign-in-target="providerDialog"]', count: 1
-        assert_select 'dialog ul.menu[data-siwe-sign-in-target="providerList"]', count: 1
+        assert_select 'dialog [data-siwe-sign-in-target="providerList"]', count: 1
         assert_select 'input[name="current_password"], input[name="name"]', count: 0
-        assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
+        assert_select 'a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', account_siwe_identities_path, count: 1
 
         identity = users(:one).siwe_identities.create!(
           name: "Main",
           address: "0xabcdef0123456789abcdef0123456789abcdef01"
         )
         get account_siwe_identities_url
-        assert_select "ul.list.gap-3 > li.list-row", count: 1
+        assert_select 'ul[data-slot="item-group"] > li[data-slot="item"]', count: 1
         assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 1
 
         get edit_account_siwe_identity_url(identity)
         assert_response :success
         assert_select 'form input[name="siwe_identity[name]"]', count: 1
         assert_select 'form input[name="current_password"]', count: 0
-        assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
+        assert_select 'a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', account_siwe_identities_path, count: 1
 
         get account_siwe_identity_url(identity)
         assert_response :success
         assert_select 'form input[type="password"]', count: 0
         assert_select '[data-passkey-destruction-action-value="delete_siwe"]', count: 1
         assert_select 'form input[name="siwe_identity[name]"]', count: 0
-        assert_select '.tab-active[href=?]', account_siwe_identities_path, count: 1
+        assert_select 'a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', account_siwe_identities_path, count: 1
       end
 
       test "renames only an identity owned by the current user" do
@@ -4103,7 +4046,7 @@ def install_siwe
 
         get account_siwe_identities_url
         assert_response :success
-        assert_select ".badge", text: I18n.t("siwe.identities.last_credential_label"), count: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("siwe.identities.last_credential_label"), count: 1
         assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 0
 
         post account_siwe_credential_destruction_challenge_url,
@@ -4164,7 +4107,7 @@ def install_siwe
         assert_equal "MetaMask", identity.name
         get account_siwe_identities_url
         assert_response :success
-        assert_select ".badge", text: I18n.t("siwe.identities.current"), count: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("siwe.identities.current"), count: 1
         assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 0
       end
 
@@ -4184,7 +4127,7 @@ def install_siwe
         assert_response :success
         get account_siwe_identities_url
         assert_response :success
-        assert_select ".badge", text: I18n.t("siwe.identities.current"), count: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("siwe.identities.current"), count: 1
         assert_select "a[href=?]", account_siwe_identity_path(identity), text: I18n.t("siwe.identities.delete"), count: 0
         assert_select "a[href=?]", account_siwe_identity_path(other), text: I18n.t("siwe.identities.delete"), count: 1
 
@@ -4275,7 +4218,7 @@ def install_siwe
 end
 def configure_roles
   user_scope = "User.includes(:user_roles, profile: { avatar_attachment: :blob })"
-  profile_header = '<th scope="col"><%= t("admin.users.profile_name") %></th>'
+  profile_header = '<%= render(Shadcn::Table::Head.new(scope: :col)) { t("admin.users.profile_name") } %>'
 
   generate "action_policy:install"
   inject_into_class "app/policies/application_policy.rb", "ApplicationPolicy", <<~RUBY
@@ -4602,7 +4545,7 @@ def configure_roles
     <% content_for :page_title, t("admin.overview.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm text-neutral"><%= t("admin.overview.description") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("admin.overview.description") %></p>
       </header>
 
       <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="<%= t('admin.overview.statistics.label') %>" data-admin-overview-stats>
@@ -4613,16 +4556,10 @@ def configure_roles
           [t("admin.overview.statistics.published_faqs"), @published_faqs],
           [t("admin.overview.statistics.managed_pages"), @managed_pages]
         ].each do |title, value| %>
-          <article class="card card-border bg-base-100">
-            <div class="card-body p-3">
-              <div class="stats w-full">
-                <div class="stat">
-                  <div class="stat-title"><%= title %></div>
-                  <div class="stat-value"><%= number_with_delimiter(value) %></div>
-                </div>
-              </div>
-            </div>
-          </article>
+          <%= render(Shadcn::Card.new(tag: :article, data: { admin_statistic: true })) do %>
+            <%= render(Shadcn::Card::Header.new) { render(Shadcn::Card::Title.new(tag: :h2)) { title } } %>
+            <%= render(Shadcn::Card::Content.new) { tag.p(number_with_delimiter(value), class: "text-2xl font-semibold tabular-nums", data: { admin_statistic_value: true }) } %>
+          <% end %>
         <% end %>
       </section>
     </div>
@@ -4632,48 +4569,44 @@ def configure_roles
     <% content_for :page_title, t("admin.users.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm text-neutral"><%= t("admin.users.description") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("admin.users.description") %></p>
       </header>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <div class="overflow-x-auto">
-            <table class="table table-sm table-pin-rows min-w-max">
-              <thead>
-                <tr>
-                  <th scope="col">ID</th>
-                  #{profile_header}
-                  <th scope="col"><%= t("admin.users.role") %></th>
-                </tr>
-              </thead>
-              <tbody>
-                <% @users.each do |user| %>
-                  <tr>
-                    <td><%= user.id %></td>
-                    <td>
-                      <%= link_to admin_user_path(user), class: "link inline-flex items-center gap-3" do %>
-                        <span class="avatar">
-                          <span class="w-10 rounded-full">
-                            <%= profile_avatar(T.must(user.profile), size: 40, alt: "") %>
-                          </span>
-                        </span>
-                        <span><%= T.must(user.profile).display_name %></span>
-                      <% end %>
-                    </td>
-                    <td>
-                      <% if user.has_role?(:admin) %>
-                        <span class="badge"><%= t("admin.users.admin") %></span>
-                      <% else %>
-                        <span class="text-sm text-neutral"><%= t("common.none") %></span>
-                      <% end %>
-                    </td>
-                  </tr>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
+          <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+            <%= render(Shadcn::Table::Header.new) do %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { "ID" } %>
+                #{profile_header}
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { t("admin.users.role") } %>
+              <% end %>
+            <% end %>
+            <%= render(Shadcn::Table::Body.new) do %>
+              <% @users.each do |user| %>
+                <%= render(Shadcn::Table::Row.new) do %>
+                  <%= render(Shadcn::Table::Cell.new) { user.id.to_s } %>
+                  <%= render(Shadcn::Table::Cell.new) do %>
+                    <%= link_to admin_user_path(user), class: "inline-flex items-center gap-3 text-primary underline underline-offset-4" do %>
+                      <%= render(Shadcn::Avatar.new(size: :lg)) { profile_avatar(T.must(user.profile), size: 40, alt: "") } %>
+                      <span><%= T.must(user.profile).display_name %></span>
+                    <% end %>
+                    <% if user.has_role?(:admin) %><%= render(Shadcn::Badge.new(variant: :secondary, class: "desktop:hidden")) { t("admin.users.admin") } %><% end %>
+                  <% end %>
+                  <%= render(Shadcn::Table::Cell.new) do %>
+                    <% if user.has_role?(:admin) %>
+                      <%= render(Shadcn::Badge.new(variant: :outline)) { t("admin.users.admin") } %>
+                    <% else %>
+                      <span class="text-sm text-muted-foreground"><%= t("common.none") %></span>
+                    <% end %>
+                  <% end %>
                 <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+              <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
 
       <%= pagination(@pagy, aria_label: t("admin.users.pagination")) %>
     </div>
@@ -4684,92 +4617,68 @@ def configure_roles
     <% content_for :page_title, t("admin.users.show_title", name: profile.display_name) %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm text-neutral"><%= t("admin.users.show_description") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("admin.users.show_description") %></p>
       </header>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <h2 class="card-title text-base leading-[1.5]"><%= t("admin.users.user_information") %></h2>
-          <ul class="list">
-            <li class="list-row">
-              <span class="text-sm text-neutral"><%= t("admin.users.user_id") %></span>
-              <strong><%= @user.id %></strong>
-            </li>
-            <li class="list-row">
-              <span class="text-sm text-neutral"><%= t("admin.users.webauthn_id") %></span>
-              <code class="break-all"><%= @user.webauthn_id %></code>
-            </li>
-            <li class="list-row">
-              <span class="text-sm text-neutral"><%= t("admin.users.registered_at") %></span>
-              <time datetime="<%= @user.created_at.iso8601 %>"><%= @user.created_at.to_fs(:long) %></time>
-            </li>
-          </ul>
-          <div class="card-actions flex-wrap justify-end">
-            <%= link_to t("common.back"), admin_users_path, class: action_button_classes(:quiet) %>
-            <%= link_to t("admin.users.edit"), edit_admin_user_path(@user), class: action_button_classes(:secondary) %>
-          </div>
-        </div>
-      </section>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Header.new) { render(Shadcn::Card::Title.new(tag: :h2)) { t("admin.users.user_information") } } %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <dl class="divide-y">
+            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("admin.users.user_id") %></dt><dd class="font-semibold"><%= @user.id %></dd></div>
+            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("admin.users.webauthn_id") %></dt><dd><code class="break-all"><%= @user.webauthn_id %></code></dd></div>
+            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("admin.users.registered_at") %></dt><dd><time datetime="<%= @user.created_at.iso8601 %>"><%= l(@user.created_at, format: :long) %></time></dd></div>
+          </dl>
+        <% end %>
+        <%= render(Shadcn::Card::Footer.new(class: "flex-wrap justify-end gap-2")) do %>
+          <%= link_to t("common.back"), admin_users_path, class: action_button_classes(:quiet) %>
+          <%= link_to t("admin.users.edit"), edit_admin_user_path(@user), class: action_button_classes(:secondary) %>
+        <% end %>
+      <% end %>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <h2 class="card-title text-base leading-[1.5]"><%= t("admin.users.profile_information") %></h2>
-          <ul class="list">
-            <li class="list-row">
-              <span class="text-sm text-neutral"><%= t("profiles.avatar_label") %></span>
-              <span class="avatar">
-                <span class="w-16 rounded-full">
-                  <%= profile_avatar(profile, size: 64, alt: t("profiles.current_avatar")) %>
-                </span>
-              </span>
-            </li>
-            <li class="list-row">
-              <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:display_name) %></span>
-              <strong><%= profile.display_name %></strong>
-            </li>
-            <li class="list-row">
-              <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:screen_name) %></span>
-              <strong>@<%= profile.screen_name %></strong>
-            </li>
-          </ul>
-        </div>
-      </section>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Header.new) { render(Shadcn::Card::Title.new(tag: :h2)) { t("admin.users.profile_information") } } %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <dl class="divide-y">
+            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("profiles.avatar_label") %></dt><dd><%= render(Shadcn::Avatar.new(class: "size-16")) { profile_avatar(profile, size: 64, alt: t("profiles.current_avatar")) } %></dd></div>
+            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= Profile.human_attribute_name(:display_name) %></dt><dd class="font-semibold"><%= profile.display_name %></dd></div>
+            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= Profile.human_attribute_name(:screen_name) %></dt><dd class="font-semibold">@<%= profile.screen_name %></dd></div>
+          </dl>
+        <% end %>
+      <% end %>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <h2 class="card-title text-base leading-[1.5]"><%= t("admin.users.role_information") %></h2>
-          <p class="text-sm text-neutral"><%= t("admin.users.role_description") %></p>
-          <div>
-            <% if @user.has_role?(:admin) %>
-              <span class="badge"><%= t("admin.users.admin") %></span>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Header.new) do %>
+          <%= render(Shadcn::Card::Title.new(tag: :h2)) { t("admin.users.role_information") } %>
+          <%= render(Shadcn::Card::Description.new) { t("admin.users.role_description") } %>
+        <% end %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <% if @user.has_role?(:admin) %>
+            <%= render(Shadcn::Badge.new(variant: :outline)) { t("admin.users.admin") } %>
+          <% else %>
+            <span class="text-sm text-muted-foreground"><%= t("common.none") %></span>
+          <% end %>
+        <% end %>
+        <%= render(Shadcn::Card::Footer.new(class: "flex-wrap justify-end gap-2")) do %>
+          <% if @user.has_role?(:admin) %>
+            <% if @user == authorization_user %>
+              <button type="button" class="<%= action_button_classes(:secondary) %>" disabled><%= t("admin.users.self_forbidden") %></button>
             <% else %>
-              <span class="text-sm text-neutral"><%= t("common.none") %></span>
+              <%= button_to t("admin.users.revoke"), admin_user_role_path(@user, "admin"), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("admin.users.revoke_confirm", name: profile.display_name) } %>
             <% end %>
-          </div>
-          <div class="card-actions flex-wrap justify-end">
-            <% if @user.has_role?(:admin) %>
-              <% if @user == authorization_user %>
-                <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-disabled") %>" disabled><%= t("admin.users.self_forbidden") %></button>
-              <% else %>
-                <%= button_to t("admin.users.revoke"), admin_user_role_path(@user, "admin"), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("admin.users.revoke_confirm", name: profile.display_name) } %>
-              <% end %>
-            <% else %>
-              <%= button_to t("admin.users.grant"), admin_user_roles_path(@user), params: { role: "admin" }, class: action_button_classes(:warning), data: { turbo_confirm: t("admin.users.grant_confirm", name: profile.display_name) } %>
-            <% end %>
-          </div>
-        </div>
-      </section>
+          <% else %>
+            <%= button_to t("admin.users.grant"), admin_user_roles_path(@user), params: { role: "admin" }, class: action_button_classes(:warning), data: { turbo_confirm: t("admin.users.grant_confirm", name: profile.display_name) } %>
+          <% end %>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
   create_file "app/views/admin/users/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("admin.users.edit_title", name: @profile.display_name) %>
     <div class="space-y-6">
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <%= render "profiles/form", profile: @profile, form_url: admin_user_path(@user), cancel_path: admin_user_path(@user) %>
-        </div>
-      </section>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) { render "profiles/form", profile: @profile, form_url: admin_user_path(@user), cancel_path: admin_user_path(@user) } %>
+      <% end %>
       <%= render "profiles/avatar_delete", profile: @profile, avatar_path: admin_user_avatar_path(@user) %>
     </div>
   ERB
@@ -4825,9 +4734,9 @@ def configure_roles
           "statistics" => { "label" => "基本統計", "total_users" => "ユーザー数", "administrators" => "管理者数", "new_users_last_30_days" => "直近30日の新規ユーザー", "published_faqs" => "公開FAQ数", "managed_pages" => "管理対象ページ数" }
         },
         "users" => {
-          "title" => "ユーザー管理", "description" => "ユーザー情報、プロフィール、管理者roleを管理します。", "profile_name" => "表示名", "role" => "Role", "admin" => "管理者",
+          "title" => "ユーザー管理", "description" => "ユーザー情報、プロフィール、管理者権限を管理します。", "profile_name" => "表示名", "role" => "権限", "admin" => "管理者",
           "show_title" => "%{name}の詳細", "show_description" => "ユーザー情報とプロフィールを確認できます。", "edit_title" => "%{name}を編集", "edit" => "ユーザーを編集",
-          "user_information" => "ユーザー情報", "profile_information" => "プロフィール情報", "role_information" => "Role", "user_id" => "ユーザーID", "webauthn_id" => "WebAuthn ID", "registered_at" => "登録日時",
+          "user_information" => "ユーザー情報", "profile_information" => "プロフィール情報", "role_information" => "権限", "user_id" => "ユーザーID", "webauthn_id" => "WebAuthn ID", "registered_at" => "登録日時",
           "role_description" => "管理者roleはアプリケーション全体の管理権限を付与します。", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "「%{name}」の管理者roleを解除しますか？",
           "grant" => "管理者にする", "grant_confirm" => "「%{name}」を管理者にしますか？", "pagination" => "ユーザー一覧のページング", "update" => { "notice" => "ユーザーのプロフィールを更新しました" },
           "avatar" => { "destroy" => { "notice" => "ユーザーのアバター画像を削除しました" } }
@@ -5115,18 +5024,18 @@ def configure_roles
 
           get admin_root_url
           assert_response :success
-          assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_root_path,
+          assert_select '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', admin_root_path,
             text: I18n.t("navigation.overview"), count: 1
           admin_navigation_links = css_select('[data-layout="with-menu"] nav a')
           assert_equal account_path, admin_navigation_links.last["href"]
           assert_equal I18n.t("navigation.dashboard"), admin_navigation_links.last.text.strip
-          assert_select '[data-admin-overview-stats] > article.card.card-border.bg-base-100', count: 5
-          statistics = css_select("[data-admin-overview-stats] .stat")
+          assert_select '[data-admin-overview-stats] > article[data-slot="card"][data-admin-statistic]', count: 5
+          statistics = css_select("[data-admin-overview-stats] [data-admin-statistic]")
           assert_equal 5, statistics.size
           expected.each do |title, value|
-            matching = statistics.select { |statistic| statistic.at_css(".stat-title")&.text == title }
+            matching = statistics.select { |statistic| statistic.at_css('[data-slot="card-title"]')&.text == title }
             assert_equal 1, matching.size
-            assert_equal value.to_s, matching.first.at_css(".stat-value").text
+            assert_equal value.to_s, matching.first.at_css("[data-admin-statistic-value]").text
           end
         end
       end
@@ -5186,20 +5095,19 @@ def configure_roles
         end
         assert_response :success
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="with-menu"] nav[aria-label=?] li.menu-title', I18n.t("navigation.admin_menu"), text: I18n.t("navigation.admin"), count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?] [data-with-menu-desktop-category]', I18n.t("navigation.admin_menu"), text: I18n.t("navigation.admin"), count: 1
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.account_menu"), count: 0
-        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_users_path, text: I18n.t("navigation.users"), count: 1
-        assert_select 'header li.menu-title', text: I18n.t("navigation.admin"), count: 1
+        assert_select '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', admin_users_path, text: I18n.t("navigation.users"), count: 1
+        assert_select 'header [data-slot="dropdown-menu-label"]', text: I18n.t("navigation.admin"), count: 1
         assert_select 'a[href=?]', account_path, text: I18n.t("navigation.dashboard"), count: 2
-        assert_select "table.table.table-sm.table-pin-rows"
-        assert_select ".badge", text: I18n.t("admin.users.admin"), minimum: 1
-        assert_select 'a.link[href=?]', admin_user_path(@regular), text: T.must(@regular.profile).display_name, count: 1 do
-          assert_select '.avatar svg[width="40"][height="40"][aria-hidden="true"]', count: 1
+        assert_select 'table[data-slot="table"]'
+        assert_select '[data-slot="badge"]', text: I18n.t("admin.users.admin"), minimum: 1
+        assert_select 'a[href=?]', admin_user_path(@regular), text: T.must(@regular.profile).display_name, count: 1 do
+          assert_select '[data-slot="avatar"] svg[width="40"][height="40"][aria-hidden="true"]', count: 1
         end
-        assert_select 'a.link-hover[href=?]', admin_user_path(@regular), count: 0
         assert_select 'form[action=?]', admin_user_roles_path(@regular), count: 0
         assert_select 'form[action=?]', admin_user_role_path(@admin, "admin"), count: 0
-        assert_select ".join", count: 0
+        assert_select '[data-slot="pagination"]', count: 0
       end
 
       test "renders user profile and role details" do
@@ -5210,11 +5118,11 @@ def configure_roles
         get admin_user_url(@regular)
 
         assert_response :success
-        assert_select 'section.card.card-border.bg-base-100', count: 3
+        assert_select 'section[data-slot="card"]', count: 3
         assert_select 'a[href=?]', edit_admin_user_path(@regular), text: I18n.t("admin.users.edit"), count: 1
-        assert_select '.list .avatar svg[width="64"][height="64"]', count: 1
+        assert_select '[data-slot="avatar"] svg[width="64"][height="64"]', count: 1
         assert_select 'code', text: @regular.webauthn_id, count: 1
-        assert_select 'button.btn.btn-outline.btn-warning[data-turbo-confirm=?]',
+        assert_select 'form[action=?] button[data-turbo-confirm=?]', admin_user_roles_path(@regular),
           I18n.t("admin.users.grant_confirm", name: profile.display_name), text: I18n.t("admin.users.grant"), count: 1
 
         get edit_admin_user_url(@regular)
@@ -5226,13 +5134,13 @@ def configure_roles
         get admin_user_url(@regular)
 
         assert_response :success
-        assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm=?]',
+        assert_select 'form[action=?] button[data-turbo-confirm=?]', admin_user_role_path(@regular, "admin"),
           I18n.t("admin.users.revoke_confirm", name: profile.display_name), text: I18n.t("admin.users.revoke"), count: 1
 
         get admin_user_url(@admin)
 
         assert_response :success
-        assert_select 'button.btn-disabled[disabled]', text: I18n.t("admin.users.self_forbidden"), count: 1
+        assert_select 'button[disabled]', text: I18n.t("admin.users.self_forbidden"), count: 1
       end
 
       test "updates only the users profile" do
@@ -5263,7 +5171,7 @@ def configure_roles
         }
 
         assert_response :unprocessable_content
-        assert_select '.alert.alert-error.alert-soft[role="alert"] ul.list-disc', count: 1
+        assert_select '[data-slot="alert"][role="alert"] ul.list-disc', count: 1
         assert_select 'form[action=?]', admin_user_path(@regular), count: 1
         assert_equal original_names, profile.reload.values_at(:screen_name, :display_name)
       end
@@ -5285,7 +5193,7 @@ def configure_roles
 
         assert_response :unprocessable_content
         error_text = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.undecodable")
-        assert_select '.alert.alert-error.alert-soft[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
+        assert_select '[data-slot="alert"][role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
         assert_equal original_blob, profile.reload.avatar.blob
       ensure
         profile&.avatar&.purge
@@ -5299,12 +5207,12 @@ def configure_roles
         get admin_users_url
 
         assert_response :success
-        assert_select 'nav[aria-label=?] .join', I18n.t("admin.users.pagination"), count: 1
-        assert_select '.join > .join-item.btn', count: 4
-        assert_select '.join > .btn-active[aria-current="page"]', text: "1", count: 1
-        assert_select '.join > .btn-disabled[aria-label=?][aria-disabled="true"]', I18n.t("common.previous"), count: 1
-        assert_select '.join > a[href=?]', admin_users_path(page: 2), text: "2", count: 1
-        assert_select '.join > a[href=?][aria-label=?]', admin_users_path(page: 2), I18n.t("common.next"), count: 1
+        assert_select 'nav[data-slot="pagination"][aria-label=?] [data-slot="pagination-content"]', I18n.t("admin.users.pagination"), count: 1
+        assert_select '[data-slot="pagination-content"] > [data-slot="pagination-item"]', count: 4
+        assert_select '[data-slot="pagination-link"][aria-current="page"]', text: "1", count: 1
+        assert_select '[data-slot="pagination-link"][aria-label=?][aria-disabled="true"]', I18n.t("common.previous"), count: 1
+        assert_select '[data-slot="pagination-link"][href=?]', admin_users_path(page: 2), text: "2", count: 1
+        assert_select '[data-slot="pagination-link"][href=?][aria-label=?]', admin_users_path(page: 2), I18n.t("common.next"), count: 1
       end
     end
   RUBY
@@ -5347,7 +5255,7 @@ def configure_roles
         assert_redirected_to admin_user_url(@regular)
         assert_not @profile.reload.avatar.attached?
         follow_redirect!
-        assert_select '.alert.alert-success.alert-soft', text: I18n.t("admin.users.avatar.destroy.notice"), count: 1
+        assert_select '[data-slot="alert"][role="status"]', text: I18n.t("admin.users.avatar.destroy.notice"), count: 1
       end
     end
   RUBY
@@ -6472,9 +6380,11 @@ def configure_content_management
       <header>
         <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       </header>
-      <section class="card card-border bg-base-100">
-        <div class="card-body"><%= @page.content %></div>
-      </section>
+      <%= render(Shadcn::Card.new) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
+        <%= @page.content %>
+      <% end %>
+      <% end %>
     </div>
   ERB
   create_file "app/views/pages/about.html.erb", "<%= render \"pages/page\" %>\n", force: true
@@ -6491,16 +6401,20 @@ def configure_content_management
         <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       </header>
       <% if @faqs.any? %>
-        <div class="space-y-3">
+        <%= render(Shadcn::Accordion.new) do %>
           <% @faqs.each do |faq| %>
-            <details class="collapse collapse-arrow border border-base-300 bg-base-100">
-              <summary class="collapse-title font-semibold"><%= faq.question %></summary>
-              <div class="collapse-content"><%= faq.answer %></div>
-            </details>
+            <%= render(Shadcn::Accordion::Item.new) do %>
+              <%= render(Shadcn::Accordion::Trigger.new) { faq.question } %>
+              <%= render(Shadcn::Accordion::Content.new) do %>
+                <%= faq.answer %>
+              <% end %>
+            <% end %>
           <% end %>
-        </div>
+        <% end %>
       <% else %>
-        <div class="alert"><span><%= t("content_management.faqs.empty") %></span></div>
+        <%= render(Shadcn::Alert.new) do %>
+          <%= render(Shadcn::Alert::Description.new) { t("content_management.faqs.empty") } %>
+        <% end %>
       <% end %>
     </div>
   ERB
@@ -6508,24 +6422,32 @@ def configure_content_management
   create_file "app/views/admin/pages/index.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.pages.title") %>
     <div class="space-y-6">
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <div class="overflow-x-auto">
-            <table class="table min-w-max">
-              <thead><tr><th scope="col"><%= t("content_management.admin.pages.page") %></th><th scope="col"><%= t("content_management.admin.pages.url") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
-              <tbody>
-                <% @pages.each do |page| %>
-                  <tr>
-                    <td><%= page.title %></td>
-                    <td><code>/<%= page.slug %></code></td>
-                    <td><div class="flex flex-wrap justify-end gap-2"><%= link_to t("common.edit"), edit_admin_page_path(page), class: action_button_classes(:secondary) %></div></td>
-                  </tr>
+            <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+              <%= render(Shadcn::Table::Header.new) do %>
+                <%= render(Shadcn::Table::Row.new) do %>
+                  <%= render(Shadcn::Table::Head.new(scope: :col)) { t("content_management.admin.pages.page") } %>
+                  <%= render(Shadcn::Table::Head.new(scope: :col)) { t("content_management.admin.pages.url") } %>
+                  <%= render(Shadcn::Table::Head.new(scope: :col)) { tag.span(t("content_management.admin.pages.actions"), class: "sr-only") } %>
                 <% end %>
-              </tbody>
-            </table>
+              <% end %>
+              <%= render(Shadcn::Table::Body.new) do %>
+                <% @pages.each do |page| %>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Cell.new) { page.title } %>
+                    <%= render(Shadcn::Table::Cell.new) { tag.code("/" + page.slug) } %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
+                      <div class="flex flex-wrap justify-end gap-2"><%= link_to t("common.edit"), edit_admin_page_path(page), class: action_button_classes(:secondary) %></div>
+                    <% end %>
+                  <% end %>
+                <% end %>
+              <% end %>
+            <% end %>
           </div>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
@@ -6533,52 +6455,51 @@ def configure_content_management
     <% content_for :page_title, @page.title %>
     <div class="max-w-[820px] space-y-6">
       <header>
-        <p class="text-sm text-neutral"><%= t("content_management.admin.pages.edit_description") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("content_management.admin.pages.edit_description") %></p>
       </header>
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <%= form_with model: [:admin, @page], class: "space-y-5" do |form| %>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= form.label :content, t("content_management.admin.pages.body") %></legend>
+            <div class="grid gap-2">
+              <%= form.label :content, t("content_management.admin.pages.body"), class: Shadcn::Label.classes %>
               <%= form.rich_text_area :content %>
-            </fieldset>
-            <div class="card-actions flex-wrap justify-end">
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
               <%= link_to t("common.back"), admin_pages_path, class: action_button_classes(:quiet) %>
               <%= form.submit t("common.update"), class: action_button_classes(:primary) %>
             </div>
           <% end %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/_form.html.erb", <<~ERB, force: true
     <%= form_with model: [:admin, faq], class: "space-y-5" do |form| %>
       <% if faq.errors.any? %>
-        <div class="alert alert-error alert-soft" role="alert">
-          <ul><% faq.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
-        </div>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <%= render(Shadcn::Alert::Description.new) do %>
+            <ul><% faq.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
+          <% end %>
+        <% end %>
       <% end %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :question, t("content_management.admin.faqs.question") %></legend>
-        <%= form.text_field :question, class: "input w-full", required: true %>
-      </fieldset>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :answer, t("content_management.admin.faqs.answer") %></legend>
+      <div class="grid gap-2">
+        <%= form.label :question, t("content_management.admin.faqs.question"), class: Shadcn::Label.classes %>
+        <%= form.text_field :question, class: Shadcn::Input.classes(extra: "w-full"), required: true %>
+      </div>
+      <div class="grid gap-2">
+        <%= form.label :answer, t("content_management.admin.faqs.answer"), class: Shadcn::Label.classes %>
         <%= form.rich_text_area :answer %>
-      </fieldset>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :position, t("content_management.admin.faqs.position") %></legend>
-        <%= form.number_field :position, class: "input w-full", min: 0, required: true %>
-      </fieldset>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= t("content_management.admin.faqs.publication") %></legend>
-        <label class="label cursor-pointer justify-start gap-3">
-          <%= form.checkbox :published, class: "checkbox" %>
-          <span><%= t("content_management.admin.faqs.publish") %></span>
-        </label>
-      </fieldset>
-      <div class="card-actions flex-wrap justify-end">
+      </div>
+      <div class="grid gap-2">
+        <span class="text-sm font-medium"><%= t("content_management.admin.faqs.publication") %></span>
+        <div class="flex items-center gap-3">
+          <%= form.hidden_field :published, value: "0", id: nil %>
+          <%= render(Shadcn::Checkbox.new(id: form.field_id(:published), name: form.field_name(:published), value: "1", checked: faq.published?)) %>
+          <%= form.label :published, t("content_management.admin.faqs.publish"), class: Shadcn::Label.classes %>
+        </div>
+      </div>
+      <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.back"), admin_faqs_path, class: action_button_classes(:quiet) %>
         <%= form.submit(faq.persisted? ? t("common.update") : t("common.create"), class: action_button_classes(:primary)) %>
       </div>
@@ -6591,48 +6512,60 @@ def configure_content_management
       <%= link_to t("content_management.admin.faqs.add"), new_admin_faq_path, class: action_button_classes(:primary) %>
     <% end %>
     <div class="space-y-6">
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <% if @faqs.any? %>
+            <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
             <div class="overflow-x-auto">
-              <table class="table min-w-max">
-                <thead><tr><th scope="col"><%= t("content_management.admin.faqs.position") %></th><th scope="col"><%= t("content_management.admin.faqs.question") %></th><th scope="col"><%= t("content_management.admin.faqs.status") %></th><th scope="col"><span class="sr-only"><%= t("content_management.admin.pages.actions") %></span></th></tr></thead>
-                <tbody>
+              <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+                <%= render(Shadcn::Table::Header.new) do %>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { t("content_management.admin.faqs.position") } %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { t("content_management.admin.faqs.question") } %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { t("content_management.admin.faqs.status") } %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { tag.span(t("content_management.admin.pages.actions"), class: "sr-only") } %>
+                  <% end %>
+                <% end %>
+                <%= render(Shadcn::Table::Body.new) do %>
                   <% @faqs.each do |faq| %>
-                    <tr>
-                      <td><%= faq.position %></td>
-                      <td><%= faq.question %></td>
-                      <td><span class="badge"><%= faq.published? ? t("content_management.admin.faqs.published") : t("content_management.admin.faqs.unpublished") %></span></td>
-                      <td>
+                    <%= render(Shadcn::Table::Row.new) do %>
+                      <%= render(Shadcn::Table::Cell.new) { faq.position.to_s } %>
+                      <%= render(Shadcn::Table::Cell.new) { link_to faq.question, edit_admin_faq_path(faq), class: "text-primary underline underline-offset-4" } %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <%= render(Shadcn::Badge.new(variant: faq.published? ? :default : :secondary)) { faq.published? ? t("content_management.admin.faqs.published") : t("content_management.admin.faqs.unpublished") } %>
+                      <% end %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
                         <div class="flex flex-wrap justify-end gap-2">
                           <%= link_to t("common.edit"), edit_admin_faq_path(faq), class: action_button_classes(:secondary) %>
                           <%= button_to t("common.delete"), admin_faq_path(faq), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("content_management.admin.faqs.confirm") } %>
                         </div>
-                      </td>
-                    </tr>
+                      <% end %>
+                    <% end %>
                   <% end %>
-                </tbody>
-              </table>
+                <% end %>
+              <% end %>
             </div>
           <% else %>
-            <div class="alert"><span><%= t("content_management.admin.faqs.empty") %></span></div>
+            <%= render(Shadcn::Alert.new) do %>
+              <%= render(Shadcn::Alert::Description.new) { t("content_management.admin.faqs.empty") } %>
+            <% end %>
           <% end %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.add") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
+      <%= render(Shadcn::Card.new) { render(Shadcn::Card::Content.new) { render("form", faq: @faq) } } %>
     </div>
   ERB
 
   create_file "app/views/admin/faqs/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("content_management.admin.faqs.edit") %>
     <div class="max-w-[820px] space-y-6">
-      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", faq: @faq %></div></section>
+      <%= render(Shadcn::Card.new) { render(Shadcn::Card::Content.new) { render("form", faq: @faq) } } %>
     </div>
   ERB
 
@@ -6640,30 +6573,30 @@ def configure_content_management
     <% content_for :page_title, t("content_management.admin.footer_settings.title") %>
     <div class="max-w-[820px] space-y-6">
       <header>
-        <p class="text-sm text-neutral"><%= t("content_management.admin.footer_settings.description") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("content_management.admin.footer_settings.description") %></p>
       </header>
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <%= form_with model: [:admin, @footer_setting], url: admin_footer_setting_path, class: "space-y-5" do |form| %>
             <% if @footer_setting.errors.any? %>
-              <div class="alert alert-error alert-soft" role="alert">
-                <ul><% @footer_setting.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
-              </div>
+              <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+                <%= render(Shadcn::Alert::Description.new) do %>
+                  <ul><% @footer_setting.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
+                <% end %>
+              <% end %>
             <% end %>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= form.label :x_url, "X(Twitter)" %></legend>
-              <%= form.url_field :x_url, class: "input w-full", placeholder: "https://example.com/x-account" %>
-            </fieldset>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend"><%= form.label :github_url, "GitHub" %></legend>
-              <div class="join w-full">
-                <%= form.url_field :github_url, class: "input join-item min-w-0 flex-1", placeholder: "https://example.com/github-account" %>
-                <%= form.submit t("common.update"), class: class_names(action_button_classes(:primary), "join-item") %>
-              </div>
-            </fieldset>
+            <div class="grid gap-2">
+              <%= form.label :x_url, "X(Twitter)", class: Shadcn::Label.classes %>
+              <%= form.url_field :x_url, class: Shadcn::Input.classes(extra: "w-full"), placeholder: "https://example.com/x-account" %>
+            </div>
+            <div class="grid gap-2">
+              <%= form.label :github_url, "GitHub", class: Shadcn::Label.classes %>
+              <%= form.url_field :github_url, class: Shadcn::Input.classes(extra: "w-full"), placeholder: "https://example.com/github-account" %>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("common.update"), class: action_button_classes(:primary) %></div>
           <% end %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
@@ -6926,8 +6859,8 @@ def configure_content_management
       test "hides unset external links and renders configured links safely" do
         get about_url
 
-        assert_select "footer .footer-title", text: I18n.t("footer.links_section"), count: 0
-        assert_select "footer .footer-title", count: 3
+        assert_select "footer[data-site-footer] nav > h2", text: I18n.t("footer.links_section"), count: 0
+        assert_select "footer[data-site-footer] nav > h2", count: 3
 
         footer_settings(:default).update!(
           x_url: "https://social.example/x",
@@ -6935,7 +6868,7 @@ def configure_content_management
         )
         get about_url
 
-        assert_select "footer .footer-title", text: I18n.t("footer.links_section"), count: 1
+        assert_select "footer[data-site-footer] nav > h2", text: I18n.t("footer.links_section"), count: 1
         assert_select 'footer a[href="https://social.example/x"][target="_blank"][rel="noopener noreferrer"]', text: "X(Twitter)", count: 1
         assert_select 'footer a[href="https://code.example/repository"][target="_blank"][rel="noopener noreferrer"]', text: "GitHub", count: 1
       end
@@ -6943,8 +6876,8 @@ def configure_content_management
       test "footer uses the generated application name and fixed internal routes" do
         get about_url
 
-        assert_select 'footer.footer.footer-vertical[class~="sm:footer-horizontal"]'
-        assert_select "footer .footer-title", text: I18n.t("footer.about_section"), count: 1
+        assert_select 'footer[data-site-footer][class~="sm:grid-cols-2"]'
+        assert_select "footer[data-site-footer] nav > h2", text: I18n.t("footer.about_section"), count: 1
         assert_select "footer a[href=?]", about_path, text: I18n.t("footer.about", app_name: Rails.configuration.x.application_identity.app_name), count: 1
         assert_select "footer a[href=?]", corp_path, text: I18n.t("footer.company"), count: 1
         assert_select "footer a[href=?]", manual_path, text: I18n.t("footer.manual"), count: 1
@@ -6965,10 +6898,10 @@ def configure_content_management
         get faq_url
 
         assert_response :success
-        assert_select ".alert", text: I18n.t("content_management.faqs.empty"), count: 1
+        assert_select '[data-slot="alert"]', text: I18n.t("content_management.faqs.empty"), count: 1
       end
 
-      test "renders only published FAQs in order using collapse" do
+      test "renders only published FAQs in order using accordion" do
         Faq.create!(question: "2番目", answer: "回答2", position: 20, published: true)
         Faq.create!(question: "非公開", answer: "秘密", position: 0, published: false)
         Faq.create!(question: "1番目", answer: "回答1", position: 10, published: true)
@@ -6976,7 +6909,7 @@ def configure_content_management
         get faq_url
 
         assert_response :success
-        assert_equal ["1番目", "2番目"], css_select("details.collapse.collapse-arrow > summary.collapse-title").map { |node| node.text.strip }
+        assert_equal ["1番目", "2番目"], css_select('details[data-slot="accordion-item"] > summary[data-slot="accordion-trigger"]').map { |node| node.text.strip }
         assert_select ".lexxy-content", text: "秘密", count: 0
       end
     end
@@ -7007,7 +6940,7 @@ def configure_content_management
         get edit_admin_page_url(page)
         assert_response :success
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_pages_path, text: I18n.t("navigation.pages"), count: 1
+        assert_select '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', admin_pages_path, text: I18n.t("navigation.pages"), count: 1
         assert_select "lexxy-editor", count: 1
 
         patch admin_page_url(page), params: {
@@ -7037,7 +6970,7 @@ def configure_content_management
         get new_admin_faq_url
         assert_response :success
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', admin_faqs_path, text: I18n.t("navigation.faqs"), count: 1
+        assert_select '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', admin_faqs_path, text: I18n.t("navigation.faqs"), count: 1
         assert_select "lexxy-editor", count: 1
 
         assert_difference("Faq.count", 1) do
@@ -7085,7 +7018,7 @@ def configure_content_management
         get edit_admin_footer_setting_url
         assert_response :success
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', edit_admin_footer_setting_path, text: I18n.t("content_management.admin.footer_settings.title"), count: 1
+        assert_select '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', edit_admin_footer_setting_path, text: I18n.t("content_management.admin.footer_settings.title"), count: 1
 
         patch admin_footer_setting_url, params: {
           footer_setting: { x_url: " https://social.example/x ", github_url: "" }
@@ -7104,7 +7037,7 @@ def configure_content_management
         }
 
         assert_response :unprocessable_content
-        assert_select ".alert.alert-error.alert-soft", count: 1
+        assert_select 'form [data-slot="alert"][role="alert"]', count: 1
         assert_nil footer_settings(:default).reload.github_url
       end
 
@@ -7206,7 +7139,9 @@ def install_image_cropper
           const image = await this.loadSourceImage(selectedFile)
           this.sourceFile = selectedFile
           this.cropperTarget.replaceChildren(image)
-          this.dialogTarget.showModal()
+          this.application.getControllerForElementAndIdentifier(
+            this.dialogTarget.closest('[data-controller~="shadcn--dialog"]'), "shadcn--dialog"
+          ).show()
           this.cropper = new Cropper(image, {
             container: this.cropperTarget,
             template: `
@@ -7260,10 +7195,6 @@ def install_image_cropper
         selection.aspectRatio = this.configuredAspectRatio()
       }
 
-      cancel() {
-        this.dialogTarget.close()
-      }
-
       close() {
         this.destroyCropper()
         this.revokeSourceObjectUrl()
@@ -7277,7 +7208,8 @@ def install_image_cropper
         this.clearError()
         try {
           this.validateConfiguration()
-          const canvas = await this.cropperSelection().$toCanvas(this.canvasOptions())
+          const croppedCanvas = await this.cropperSelection().$toCanvas(this.canvasOptions())
+          const canvas = this.exactOutputCanvas(croppedCanvas)
           const blob = await this.canvasToBlob(canvas, this.sourceFile.type)
           if (!blob || blob.type !== this.sourceFile.type || blob.size === 0 || blob.size > this.maxBytesValue) {
             throw new Error("Cropped image does not satisfy the upload contract")
@@ -7384,6 +7316,21 @@ def install_image_cropper
         if (this.hasOutputWidthValue) options.width = this.outputWidthValue
         if (this.hasOutputHeightValue) options.height = this.outputHeightValue
         return options
+      }
+
+      exactOutputCanvas(croppedCanvas) {
+        if (!this.hasOutputWidthValue || !this.hasOutputHeightValue ||
+            (croppedCanvas.width === this.outputWidthValue && croppedCanvas.height === this.outputHeightValue)) {
+          return croppedCanvas
+        }
+
+        const canvas = document.createElement("canvas")
+        canvas.width = this.outputWidthValue
+        canvas.height = this.outputHeightValue
+        const context = canvas.getContext("2d")
+        if (!context) throw new Error("Canvas 2D context is unavailable")
+        context.drawImage(croppedCanvas, 0, 0, canvas.width, canvas.height)
+        return canvas
       }
 
       cropperImage() {
@@ -7877,14 +7824,14 @@ def configure_profile
       module AvatarHelper
         extend T::Sig
 
-        BORING_AVATAR_COLORS = %w[#ffffff #3ea8ff #f1f5f9 #0f83fd #d6e3ed].freeze
+        BORING_AVATAR_COLORS = %w[#ffffff #f5f5f5 #e5e5e5 #737373 #262626].freeze
         AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze
 
         sig { params(profile: Profile, size: Integer, alt: String).returns(String) }
         def profile_avatar(profile, size:, alt:)
           variant = AVATAR_VARIANTS.fetch(size)
           if profile.avatar.attached?
-            image_tag profile.avatar.variant(variant), alt: alt, class: "object-cover", width: size, height: size
+            render(Shadcn::Avatar::Image.new(src: url_for(profile.avatar.variant(variant)), alt: alt, width: size, height: size))
           else
             accessibility = alt.present? ? { label: alt } : { hidden: true }
             boring_avatar(
@@ -7892,7 +7839,7 @@ def configure_profile
               variant: :beam,
               colors: BORING_AVATAR_COLORS,
               size: size,
-              class: "object-cover",
+              class: "size-full rounded-full",
               aria: accessibility
             )
           end
@@ -8056,7 +8003,7 @@ def configure_profile
             variant: :beam,
             colors: AvatarHelper::BORING_AVATAR_COLORS,
             size: 64,
-            class: "object-cover",
+            class: "size-full rounded-full",
             aria: { label: "デフォルトアバター" }
           )
 
@@ -8522,26 +8469,26 @@ def configure_profile
   form_fields = []
   if features.include?("screen_name")
     form_fields << <<~ERB
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :screen_name %></legend>
-        <%= form.text_field :screen_name, class: "input w-full", pattern: "[a-z0-9_]+", autocomplete: "username", required: true %>
-        <p class="label"><%= t("profiles.screen_name_hint") %></p>
-      </fieldset>
+      <div class="grid gap-2">
+        <%= form.label :screen_name, class: Shadcn::Label.classes %>
+        <%= form.text_field :screen_name, class: Shadcn::Input.classes(extra: "w-full"), pattern: "[a-z0-9_]+", autocomplete: "username", required: true %>
+        <p class="text-sm text-muted-foreground"><%= t("profiles.screen_name_hint") %></p>
+      </div>
     ERB
   end
   if features.include?("display_name")
     form_fields << <<~ERB
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :display_name %></legend>
-        <%= form.text_field :display_name, class: "input w-full", autocomplete: "name", required: true %>
-      </fieldset>
+      <div class="grid gap-2">
+        <%= form.label :display_name, class: Shadcn::Label.classes %>
+        <%= form.text_field :display_name, class: Shadcn::Input.classes(extra: "w-full"), autocomplete: "name", required: true %>
+      </div>
     ERB
   end
   if avatar_enabled
     form_fields << <<~ERB
-      <fieldset class="fieldset min-w-0 grid-cols-1">
-        <legend class="fieldset-legend"><%= form.label :avatar_upload %></legend>
-        <div class="avatar">
+      <div class="grid min-w-0 gap-2">
+        <%= form.label :avatar_upload, class: Shadcn::Label.classes %>
+        <div>
           <div class="w-16 rounded-full" data-image-crop-target="currentPreview">
             <%= profile_avatar(profile, size: 64, alt: t("profiles.current_avatar")) %>
           </div>
@@ -8549,10 +8496,10 @@ def configure_profile
             <img class="object-cover" width="64" height="64" alt="<%= t("profiles.avatar_crop.preview") %>" data-image-crop-target="pendingPreview">
           </div>
         </div>
-        <%= form.file_field :avatar_upload, class: "file-input min-w-0 w-full", accept: "image/jpeg,image/png,image/webp", data: { image_crop_target: "input", action: "change->image-crop#select" } %>
-        <p class="label"><span class="min-w-0 whitespace-normal"><%= t("profiles.avatar_hint") %></span></p>
-        <p class="alert alert-error alert-soft" role="alert" data-image-crop-target="error" hidden></p>
-      </fieldset>
+        <%= form.file_field :avatar_upload, class: Shadcn::Input.classes(extra: "min-w-0 w-full"), accept: "image/jpeg,image/png,image/webp", data: { image_crop_target: "input", action: "change->image-crop#select" } %>
+        <p class="text-sm text-muted-foreground"><%= t("profiles.avatar_hint") %></p>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", data: { image_crop_target: "error" }, hidden: true)) %>
+      </div>
     ERB
   end
   form_fields = form_fields.join("\n").lines.map { |line| "  #{line}" }.join
@@ -8581,19 +8528,18 @@ def configure_profile
     <<~ERB
 
         <% avatar_crop_actions = capture do %>
-          <button type="button" class="<%= action_button_classes(:quiet) %>" data-action="image-crop#cancel"><%= t("profiles.avatar_crop.cancel") %></button>
           <button type="button" class="<%= action_button_classes(:primary) %>" data-image-crop-target="apply" data-action="image-crop#apply"><%= t("profiles.avatar_crop.apply") %></button>
         <% end %>
         <%= with_modal(
           id: "avatar-crop-modal",
           title: t("profiles.avatar_crop.title"),
           description: t("profiles.avatar_crop.description"),
-          close_label: t("profiles.avatar_crop.close"),
+          close_label: t("profiles.avatar_crop.cancel"),
           actions: avatar_crop_actions,
           dialog_data: { image_crop_target: "dialog", action: "close->image-crop#close" }
         ) do %>
-          <div class="alert alert-error alert-soft mt-4" role="alert" data-image-crop-target="error" hidden></div>
-          <div class="mt-4 aspect-square w-full overflow-hidden rounded-box bg-base-200" data-image-crop-target="cropper"></div>
+          <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", class: "mt-4", data: { image_crop_target: "error" }, hidden: true)) %>
+          <div class="mt-4 aspect-square w-full overflow-hidden rounded-md bg-muted" data-image-crop-target="cropper"></div>
           <div class="mt-4 flex flex-wrap gap-2">
             <button type="button" class="<%= action_button_classes(:secondary) %>" data-action="image-crop#zoomOut"><%= t("profiles.avatar_crop.zoom_out") %></button>
             <button type="button" class="<%= action_button_classes(:secondary) %>" data-action="image-crop#zoomIn"><%= t("profiles.avatar_crop.zoom_in") %></button>
@@ -8607,16 +8553,18 @@ def configure_profile
   create_file "app/views/profiles/_form.html.erb", <<~ERB, force: true
     #{form_wrapper_open}  <%= form_with model: profile, url: form_url, class: "space-y-5" do |form| %>
         <% if profile.errors.any? %>
-          <div class="alert alert-error alert-soft" role="alert">
-            <ul class="list-disc pl-5">
-              <% profile.errors.full_messages.each do |message| %>
-                <li><%= message %></li>
-              <% end %>
-            </ul>
-          </div>
+          <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+            <%= render(Shadcn::Alert::Description.new) do %>
+              <ul class="list-disc pl-5">
+                <% profile.errors.full_messages.each do |message| %>
+                  <li><%= message %></li>
+                <% end %>
+              </ul>
+            <% end %>
+          <% end %>
         <% end %>
 
-    #{form_fields.lines.map { |line| "  #{line}" }.join}    <div class="card-actions flex-wrap justify-end">
+    #{form_fields.lines.map { |line| "  #{line}" }.join}    <div class="flex flex-wrap justify-end gap-2">
           <%= link_to t("common.cancel"), cancel_path, class: action_button_classes(:quiet) %>
           <%= form.submit t("common.save"), class: action_button_classes(:primary) %>
         </div>
@@ -8627,71 +8575,75 @@ def configure_profile
   profile_rows = []
   if avatar_enabled
     profile_rows << <<~ERB
-      <li class="list-row">
-        <span class="text-sm text-neutral"><%= t("profiles.avatar_label") %></span>
-        <div class="avatar">
+      <%= render(Shadcn::Item.new(tag: :li)) do %>
+        <%= render(Shadcn::Item::Content.new) do %>
+          <span class="text-sm text-muted-foreground"><%= t("profiles.avatar_label") %></span>
           <div class="w-16 rounded-full">
             <%= profile_avatar(@profile, size: 64, alt: t("profiles.current_avatar")) %>
           </div>
-        </div>
-      </li>
+        <% end %>
+      <% end %>
     ERB
   end
   if features.include?("display_name")
     profile_rows << <<~ERB
-      <li class="list-row">
-        <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:display_name) %></span>
-        <strong><%= @profile.display_name.presence || t("common.not_set") %></strong>
-      </li>
+      <%= render(Shadcn::Item.new(tag: :li)) do %>
+        <%= render(Shadcn::Item::Content.new) do %>
+          <span class="text-sm text-muted-foreground"><%= Profile.human_attribute_name(:display_name) %></span>
+          <strong><%= @profile.display_name.presence || t("common.not_set") %></strong>
+        <% end %>
+      <% end %>
     ERB
   end
   if features.include?("screen_name")
     profile_rows << <<~ERB
-      <li class="list-row">
-        <span class="text-sm text-neutral"><%= Profile.human_attribute_name(:screen_name) %></span>
-        <strong><%= @profile.screen_name.present? ? "@\#{@profile.screen_name}" : t("common.not_set") %></strong>
-      </li>
+      <%= render(Shadcn::Item.new(tag: :li)) do %>
+        <%= render(Shadcn::Item::Content.new) do %>
+          <span class="text-sm text-muted-foreground"><%= Profile.human_attribute_name(:screen_name) %></span>
+          <strong><%= @profile.screen_name.present? ? "@\#{@profile.screen_name}" : t("common.not_set") %></strong>
+        <% end %>
+      <% end %>
     ERB
   end
   profile_rows = profile_rows.join("\n").lines.map { |line| "        #{line}" }.join
   if avatar_enabled
     create_file "app/views/profiles/_avatar_delete.html.erb", <<~ERB, force: true
       <% if profile.avatar.attached? %>
-        <section class="card card-border border-error bg-base-100">
-          <div class="card-body">
-            <h2 class="card-title text-base leading-[1.5]"><%= t("profiles.avatar_delete_title") %></h2>
-            <p class="text-sm text-neutral"><%= t("profiles.avatar_delete_description") %></p>
-            <div class="card-actions flex-wrap justify-end">
+        <%= render(Shadcn::Card.new(tag: :section, class: "ring-destructive!")) do %>
+          <%= render(Shadcn::Card::Header.new) do %>
+            <%= render(Shadcn::Card::Title.new(tag: :h2)) { t("profiles.avatar_delete_title") } %>
+            <%= render(Shadcn::Card::Description.new) { t("profiles.avatar_delete_description") } %>
+          <% end %>
+          <%= render(Shadcn::Card::Footer.new(class: "flex-wrap justify-end gap-2")) do %>
               <%= button_to t("profiles.avatar_delete"), avatar_path, method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("profiles.avatar_delete_confirm") } %>
-            </div>
-          </div>
-        </section>
+          <% end %>
+        <% end %>
       <% end %>
     ERB
   end
   create_file "app/views/profiles/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("profiles.title") %>
     <div class="space-y-6">
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <ul class="list">
-    #{profile_rows}      </ul>
-          <div class="card-actions flex-wrap justify-end">
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <%= render(Shadcn::Item::Group.new(tag: :ul)) do %>
+    #{profile_rows}      <% end %>
+          <div class="flex flex-wrap justify-end gap-2">
             <%= link_to t("profiles.edit"), edit_profile_path, class: action_button_classes(:secondary) %>
           </div>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
   create_file "app/views/profiles/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("profiles.edit_title") %>
     <div class="space-y-6">
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <%= render "form", profile: @profile, form_url: profile_path, cancel_path: profile_path %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
       <%= render "avatar_delete", profile: @profile, avatar_path: profile_avatar_path %>
     </div>
   ERB
@@ -8993,24 +8945,22 @@ def configure_api
   create_file "app/views/api_credentials/_form.html.erb", <<~ERB, force: true
     <%= form_with model: api_credential, class: "space-y-5" do |form| %>
       <% if api_credential.errors.any? %>
-        <div class="alert alert-error alert-soft" role="alert">
-          <ul class="list-disc pl-5">
-            <% api_credential.errors.full_messages.each do |message| %>
-              <li><%= message %></li>
-            <% end %>
-          </ul>
-        </div>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <%= render(Shadcn::Alert::Description.new) do %>
+            <ul class="list-disc pl-5">
+              <% api_credential.errors.full_messages.each do |message| %><li><%= message %></li><% end %>
+            </ul>
+          <% end %>
+        <% end %>
       <% end %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend text-sm font-semibold leading-[1.5]"><%= form.label :name %></legend>
-        <div class="join w-full">
-          <%= form.text_field :name, required: true, autocomplete: "off", class: "input join-item min-w-0 flex-1" %>
-          <%= form.submit class: class_names(action_button_classes(:primary), "join-item") %>
-        </div>
-        <p class="label"><%= t("api_credentials.name_hint") %></p>
-      </fieldset>
-      <div class="card-actions flex-wrap justify-end">
+      <div class="grid gap-2">
+        <%= form.label :name, class: Shadcn::Label.classes %>
+        <%= form.text_field :name, required: true, autocomplete: "off", class: Shadcn::Input.classes(extra: "w-full") %>
+        <p class="text-sm text-muted-foreground"><%= t("api_credentials.name_hint") %></p>
+      </div>
+      <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.cancel"), api_credential.persisted? ? api_credential_path(api_credential) : api_credentials_path, class: action_button_classes(:quiet) %>
+        <%= form.submit class: action_button_classes(:primary) %>
       </div>
     <% end %>
   ERB
@@ -9021,36 +8971,52 @@ def configure_api
       <%= link_to t("api_credentials.new"), new_api_credential_path, class: action_button_classes(:primary) %>
     <% end %>
     <div class="space-y-6">
-      <p class="text-sm text-neutral"><%= t("api_credentials.description") %></p>
+      <p class="text-sm text-muted-foreground"><%= t("api_credentials.description") %></p>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <% if @api_credentials.any? %>
+            <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
             <div class="overflow-x-auto">
-              <table class="table min-w-max">
-                <thead><tr><th><%= ApiCredential.human_attribute_name(:name) %></th><th><%= t("api_credentials.api_key") %></th><th><%= t("api_credentials.last_used") %></th><th></th></tr></thead>
-                <tbody>
-                  <% @api_credentials.each do |credential| %>
-                    <tr>
-                      <td class="font-semibold"><%= credential.name %></td>
-                      <td>
-                        <div class="join w-80" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
-                          <input type="text" value="<%= credential.api_key %>" readonly autocomplete="off" aria-label="<%= t('api_credentials.api_key_label', name: credential.name) %>" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-                          <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
-                        </div>
-                      </td>
-                      <td><%= credential.last_used_at ? l(credential.last_used_at, format: :short) : t("common.unused") %></td>
-                      <td><div class="flex flex-wrap justify-end gap-2"><%= link_to t("api_credentials.show"), api_credential_path(credential), class: action_button_classes(:secondary) %></div></td>
-                    </tr>
+              <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+                <%= render(Shadcn::Table::Header.new) do %>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { ApiCredential.human_attribute_name(:name) } %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { t("api_credentials.api_key") } %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { t("api_credentials.last_used") } %>
+                    <%= render(Shadcn::Table::Head.new(scope: :col)) { tag.span(t("common.actions"), class: "sr-only") } %>
                   <% end %>
-                </tbody>
-              </table>
+                <% end %>
+                <%= render(Shadcn::Table::Body.new) do %>
+                  <% @api_credentials.each do |credential| %>
+                    <%= render(Shadcn::Table::Row.new) do %>
+                      <%= render(Shadcn::Table::Cell.new(class: "font-semibold")) { link_to credential.name, api_credential_path(credential), class: "text-primary underline underline-offset-4" } %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <div class="w-80" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
+                          <%= render(Shadcn::InputGroup.new) do %>
+                            <input type="text" value="<%= credential.api_key %>" readonly autocomplete="off" aria-label="<%= t('api_credentials.api_key_label', name: credential.name) %>" class="<%= Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes) %> font-mono" data-slot="input-group-control" data-clipboard-target="source">
+                            <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) do %>
+                              <button type="button" class="<%= action_button_classes(:secondary) %>" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
+                            <% end %>
+                          <% end %>
+                        </div>
+                      <% end %>
+                      <%= render(Shadcn::Table::Cell.new) { credential.last_used_at ? l(credential.last_used_at, format: :short) : t("common.unused") } %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <div class="flex flex-wrap justify-end gap-2"><%= link_to t("api_credentials.show"), api_credential_path(credential), class: action_button_classes(:secondary) %></div>
+                      <% end %>
+                    <% end %>
+                  <% end %>
+                <% end %>
+              <% end %>
             </div>
           <% else %>
-            <div class="alert alert-info alert-soft" role="status"><span><%= t("api_credentials.empty") %></span></div>
+            <%= render(Shadcn::Empty.new) do %>
+              <%= render(Shadcn::Empty::Header.new) { render(Shadcn::Empty::Title.new) { t("api_credentials.empty") } } %>
+            <% end %>
           <% end %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
@@ -9058,55 +9024,61 @@ def configure_api
     <% content_for :page_title, @api_credential.name %>
     <div class="space-y-6">
       <% if @api_secret.present? %>
-        <div class="alert alert-warning alert-soft alert-vertical grid-cols-1 justify-items-stretch" role="status">
-          <p class="font-bold"><%= t("api_credentials.secret_once") %></p>
-          <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
-            <legend class="fieldset-legend">API Secret</legend>
-            <div class="join w-full">
-              <input type="text" value="<%= @api_secret %>" readonly autocomplete="off" aria-label="API Secret" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-              <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
+        <%= render(Shadcn::Alert.new(role: "status")) do %>
+          <%= render(Shadcn::Alert::Title.new) { t("api_credentials.secret_once") } %>
+          <%= render(Shadcn::Alert::Description.new(class: "w-full")) do %>
+            <div class="grid gap-2" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
+              <label class="text-sm font-medium" for="api-secret">API Secret</label>
+              <%= render(Shadcn::InputGroup.new) do %>
+                <input id="api-secret" type="text" value="<%= @api_secret %>" readonly autocomplete="off" aria-label="API Secret" class="<%= Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes) %> font-mono" data-slot="input-group-control" data-clipboard-target="source">
+                <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) do %>
+                  <button type="button" class="<%= action_button_classes(:secondary) %>" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
+                <% end %>
+              <% end %>
             </div>
-          </fieldset>
-        </div>
+          <% end %>
+        <% end %>
       <% end %>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <h2 class="card-title text-base leading-[1.5]"><%= t("api_credentials.information") %></h2>
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <%= render(Shadcn::Card::Title.new(tag: :h2, class: "text-base leading-[1.5]")) { t("api_credentials.information") } %>
           <div class="mt-3 grid gap-4">
-            <fieldset class="fieldset w-full" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
-              <legend class="fieldset-legend">API key</legend>
-              <div class="join w-full">
-                <input type="text" value="<%= @api_credential.api_key %>" readonly autocomplete="off" aria-label="API key" class="input join-item min-w-0 flex-1 font-mono" data-clipboard-target="source">
-                <button type="button" class="btn join-item" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
-              </div>
-            </fieldset>
+            <div class="grid gap-2" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
+              <label class="text-sm font-medium" for="api-key">API key</label>
+              <%= render(Shadcn::InputGroup.new) do %>
+                <input id="api-key" type="text" value="<%= @api_credential.api_key %>" readonly autocomplete="off" aria-label="API key" class="<%= Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes) %> font-mono" data-slot="input-group-control" data-clipboard-target="source">
+                <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) do %>
+                  <button type="button" class="<%= action_button_classes(:secondary) %>" data-clipboard-target="button" data-action="clipboard#copy"><%= t("common.copy") %></button>
+                <% end %>
+              <% end %>
+            </div>
             <dl>
-            <div><dt class="text-sm text-neutral"><%= t("api_credentials.last_used") %></dt><dd><%= @api_credential.last_used_at ? l(@api_credential.last_used_at, format: :short) : t("common.unused") %></dd></div>
+              <div><dt class="text-sm text-muted-foreground"><%= t("api_credentials.last_used") %></dt><dd><%= @api_credential.last_used_at ? l(@api_credential.last_used_at, format: :short) : t("common.unused") %></dd></div>
             </dl>
           </div>
-          <div class="card-actions mt-4 flex-wrap justify-end">
+          <div class="mt-4 flex flex-wrap justify-end gap-2">
             <%= link_to t("api_credentials.back"), api_credentials_path, class: action_button_classes(:quiet) %>
             <%= link_to t("common.edit"), edit_api_credential_path(@api_credential), class: action_button_classes(:secondary) %>
             <%= button_to t("api_credentials.revoke"), revoke_api_credential_path(@api_credential), method: :patch, class: action_button_classes(:warning), data: { turbo_confirm: t("api_credentials.revoke_confirm") } %>
             <%= button_to t("common.delete"), api_credential_path(@api_credential), method: :delete, class: action_button_classes(:destructive), data: { turbo_confirm: t("api_credentials.delete_confirm") } %>
           </div>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
   create_file "app/views/api_credentials/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.new") %>
     <div class="space-y-6">
-      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
+      <%= render(Shadcn::Card.new) { render(Shadcn::Card::Content.new) { render("form", api_credential: @api_credential) } } %>
     </div>
   ERB
 
   create_file "app/views/api_credentials/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("api_credentials.edit") %>
     <div class="space-y-6">
-      <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", api_credential: @api_credential %></div></section>
+      <%= render(Shadcn::Card.new) { render(Shadcn::Card::Content.new) { render("form", api_credential: @api_credential) } } %>
     </div>
   ERB
 
@@ -9203,8 +9175,8 @@ def configure_api
       test "creates updates revokes and deletes an API credential" do
         get api_credentials_url
         assert_response :success
-        assert_select "table.table", count: 0
-        assert_select '[data-page-actions-container="card"].card.card-border.bg-base-100 [data-page-actions-column="primary"] a[href=?]',
+        assert_select 'table[data-slot="table"]', count: 0
+        assert_select '[data-page-actions-container="card"][data-slot="card"] [data-page-actions-column="primary"] a[href=?]',
           new_api_credential_path, count: 1
         assert_select '[data-page-actions-container="tab"]', count: 0
 
@@ -9213,10 +9185,10 @@ def configure_api
         end
         assert_response :created
         credential = @user.api_credentials.find_by!(name: "CLI")
-        assert_select '.alert.alert-warning.alert-soft input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
+        assert_select '[data-slot="alert"] input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
         assert_select 'input[aria-label="API key"][readonly][value=?]', credential.api_key, count: 1
         assert_select 'button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 2
-        assert_select ".alert.alert-warning", text: /Bearer token/, count: 0
+        assert_select '[data-slot="alert"]', text: /Bearer token/, count: 0
         original_digest = credential.api_secret_digest
 
         patch api_credential_url(credential), params: { api_credential: { name: "Batch" } }
@@ -9224,18 +9196,18 @@ def configure_api
 
         patch revoke_api_credential_url(credential)
         assert_response :success
-        assert_select '.alert.alert-warning.alert-soft input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
+        assert_select '[data-slot="alert"] input[aria-label="API Secret"][readonly][value^="ras_"]', count: 1
         refute_equal original_digest, credential.reload.api_secret_digest
 
         get api_credential_url(credential)
         assert_response :success
-        assert_select ".alert.alert-warning", count: 0
+        assert_select '[data-slot="alert"] input[aria-label="API Secret"]', count: 0
         assert_select 'input[aria-label="API key"][readonly][value=?]', credential.api_key, count: 1
 
         get api_credentials_url
         assert_response :success
-        assert_select 'table.table input[aria-label=?][readonly][value=?]', I18n.t("api_credentials.api_key_label", name: "Batch"), credential.api_key, count: 1
-        assert_select 'table.table button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 1
+        assert_select 'table[data-slot="table"] input[aria-label=?][readonly][value=?]', I18n.t("api_credentials.api_key_label", name: "Batch"), credential.api_key, count: 1
+        assert_select 'table[data-slot="table"] button[data-action="clipboard#copy"]', text: I18n.t("common.copy"), count: 1
 
         assert_difference("ApiCredential.count", -1) do
           delete api_credential_url(credential)
@@ -9545,14 +9517,18 @@ def configure_soft_maintenance
       static values = { initialSite: Boolean, initialApi: Boolean, confirmationRequired: Boolean }
 
       connect() {
-        if (this.confirmationRequiredValue) this.dialogTarget.showModal()
+        if (this.confirmationRequiredValue) {
+          requestAnimationFrame(() => {
+            if (this.element.isConnected) this.openDialog()
+          })
+        }
       }
 
       submit(event) {
         if (!this.activationRequired() || this.confirmationTarget.value === "1") return
 
         event.preventDefault()
-        this.dialogTarget.showModal()
+        this.openDialog()
       }
 
       confirm() {
@@ -9561,12 +9537,14 @@ def configure_soft_maintenance
         this.formTarget.requestSubmit()
       }
 
-      cancelConfirmation() {
-        this.dialogTarget.close()
-      }
-
       resetConfirmation() {
         this.confirmationTarget.value = "0"
+      }
+
+      openDialog() {
+        this.application.getControllerForElementAndIdentifier(
+          this.dialogTarget.closest('[data-controller~="shadcn--dialog"]'), "shadcn--dialog"
+        ).show()
       }
 
       activationRequired() {
@@ -9579,11 +9557,12 @@ def configure_soft_maintenance
 
   api_toggle = if api_enabled
     <<~ERB
-      <fieldset class="fieldset min-w-0 grid-cols-1">
-        <legend class="fieldset-legend"><%= t("soft_maintenance.admin.api_label") %></legend>
-        <label class="label cursor-pointer justify-between gap-4 rounded-box bg-base-200 p-4">
+      <fieldset class="grid min-w-0 gap-2">
+        <legend class="text-sm font-medium"><%= t("soft_maintenance.admin.api_label") %></legend>
+        <label class="flex cursor-pointer items-center justify-between gap-4 rounded-md border border-border p-4">
           <span class="min-w-0 whitespace-normal"><%= t("soft_maintenance.admin.api_description") %></span>
-          <%= form.check_box :api_enabled, class: "toggle shrink-0", data: { soft_maintenance_form_target: "api", action: "change->soft-maintenance-form#resetConfirmation" } %>
+          <%= form.hidden_field :api_enabled, value: "0", id: nil %>
+          <%= render(Shadcn::Switch.new(id: form.field_id(:api_enabled), name: form.field_name(:api_enabled), value: "1", checked: @setting.api_enabled?, data: { soft_maintenance_form_target: "api", action: "change->soft-maintenance-form#resetConfirmation" })) %>
         </label>
       </fieldset>
     ERB
@@ -9601,51 +9580,53 @@ def configure_soft_maintenance
     <div data-controller="soft-maintenance-form"
          data-soft-maintenance-form-initial-site-value="<%= @initial_site_enabled %>"#{api_data_value}
          data-soft-maintenance-form-confirmation-required-value="<%= @activation_confirmation_required || false %>">
-      <div class="alert alert-info alert-soft mb-6" role="alert">
-        <div>
+      <%= render(Shadcn::Alert.new(class: "mb-6", role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) do %>
           <h2 class="font-semibold leading-[1.5]"><%= t("soft_maintenance.admin.guidance_title") %></h2>
           <p><%= t("soft_maintenance.admin.guidance", command: "bin/kamal-maintenance") %></p>
-        </div>
-      </div>
+        <% end %>
+      <% end %>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <%= form_with model: @setting, url: admin_soft_maintenance_path,
             data: { soft_maintenance_form_target: "form", action: "submit->soft-maintenance-form#submit" } do |form| %>
             <%= hidden_field_tag :activation_confirmed, "0", data: { soft_maintenance_form_target: "confirmation" } %>
             <% if @setting.errors.any? %>
-              <div class="alert alert-error alert-soft" role="alert">
-                <ul class="list-disc pl-5">
-                  <% @setting.errors.full_messages.each do |message| %><li><%= message %></li><% end %>
-                </ul>
-              </div>
+              <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+                <%= render(Shadcn::Alert::Description.new) do %>
+                  <ul class="list-disc pl-5">
+                    <% @setting.errors.full_messages.each do |message| %><li><%= message %></li><% end %>
+                  </ul>
+                <% end %>
+              <% end %>
             <% end %>
 
-            <fieldset class="fieldset min-w-0 grid-cols-1">
-              <legend class="fieldset-legend"><%= t("soft_maintenance.admin.site_label") %></legend>
-              <label class="label cursor-pointer justify-between gap-4 rounded-box bg-base-200 p-4">
+            <fieldset class="grid min-w-0 gap-2">
+              <legend class="text-sm font-medium"><%= t("soft_maintenance.admin.site_label") %></legend>
+              <label class="flex cursor-pointer items-center justify-between gap-4 rounded-md border border-border p-4">
                 <span class="min-w-0 whitespace-normal"><%= t("soft_maintenance.admin.site_description") %></span>
-                <%= form.check_box :site_enabled, class: "toggle shrink-0", data: { soft_maintenance_form_target: "site", action: "change->soft-maintenance-form#resetConfirmation" } %>
+                <%= form.hidden_field :site_enabled, value: "0", id: nil %>
+                <%= render(Shadcn::Switch.new(id: form.field_id(:site_enabled), name: form.field_name(:site_enabled), value: "1", checked: @setting.site_enabled?, data: { soft_maintenance_form_target: "site", action: "change->soft-maintenance-form#resetConfirmation" })) %>
               </label>
             </fieldset>
 
-    #{api_toggle.lines.map { |line| "        #{line}" }.join}        <fieldset class="fieldset min-w-0 grid-cols-1">
-              <legend class="fieldset-legend"><%= form.label :message, t("soft_maintenance.admin.message_label") %></legend>
-              <%= form.text_area :message, class: "textarea min-h-32 w-full", maxlength: 500, required: true,
-                data: { action: "input->soft-maintenance-form#resetConfirmation" } %>
-              <p class="label whitespace-normal"><%= t("soft_maintenance.admin.message_hint") %></p>
-            </fieldset>
+    #{api_toggle.lines.map { |line| "        #{line}" }.join}        <div class="grid gap-2">
+              <%= form.label :message, t("soft_maintenance.admin.message_label"), class: Shadcn::Label.classes %>
+              <%= form.text_area :message, class: Shadcn::Textarea.classes(extra: "min-h-32 w-full"), maxlength: 500, required: true,
+                data: { slot: "textarea", action: "input->soft-maintenance-form#resetConfirmation" } %>
+              <p class="text-sm text-muted-foreground"><%= t("soft_maintenance.admin.message_hint") %></p>
+            </div>
 
-            <div class="card-actions flex-wrap justify-end">
+            <div class="flex flex-wrap justify-end gap-2">
               <%= form.submit t("common.save"), class: action_button_classes(:primary) %>
             </div>
           <% end %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
 
       <% confirmation_actions = capture do %>
-        <button type="button" class="<%= action_button_classes(:quiet) %>" data-action="soft-maintenance-form#cancelConfirmation"><%= t("common.cancel") %></button>
-        <button type="button" class="<%= action_button_classes(:warning) %>" data-action="soft-maintenance-form#confirm"><%= t("soft_maintenance.admin.confirm") %></button>
+        <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="soft-maintenance-form#confirm"><%= t("soft_maintenance.admin.confirm") %></button>
       <% end %>
       <%= with_modal(
         id: "soft-maintenance-confirmation",
@@ -9655,14 +9636,17 @@ def configure_soft_maintenance
         actions: confirmation_actions,
         dialog_data: { soft_maintenance_form_target: "dialog" }
       ) do %>
-        <div class="alert alert-warning alert-soft" role="alert"><%= t("soft_maintenance.admin.confirm_warning") %></div>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+          <%= render(Shadcn::Alert::Title.new(tag: :h3)) { t("soft_maintenance.admin.confirm_warning") } %>
+        <% end %>
       <% end %>
     </div>
   ERB
 
   create_file "app/views/layouts/soft_maintenance.html.erb", <<~ERB, force: true
     <!DOCTYPE html>
-    <html lang="<%= I18n.locale %>" data-theme="rapid-rails">
+    <html lang="<%= I18n.locale %>">
       <head>
         <title><%= document_title %></title>
         <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -9671,7 +9655,7 @@ def configure_soft_maintenance
         <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
       </head>
-      <body class="min-h-screen bg-base-200 text-base-content antialiased" data-layout="soft-maintenance">
+      <body class="min-h-screen bg-muted text-foreground antialiased" data-layout="soft-maintenance">
         <main class="grid min-h-screen place-items-center px-5 py-10">
           <%= yield %>
         </main>
@@ -9681,13 +9665,13 @@ def configure_soft_maintenance
 
   create_file "app/views/soft_maintenance/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, @soft_maintenance_preview ? t("soft_maintenance.preview_title") : t("soft_maintenance.title") %>
-    <section class="card card-border bg-base-100 w-full max-w-xl">
-      <div class="card-body p-6 text-center sm:p-8">
+    <%= render(Shadcn::Card.new(class: "w-full max-w-xl")) do %>
+      <%= render(Shadcn::Card::Content.new(class: "space-y-4 text-center")) do %>
         <p class="text-sm font-semibold text-primary"><%= application_identity.app_name %></p>
-        <h1 class="card-title justify-center text-2xl leading-[1.5]"><%= t("soft_maintenance.title") %></h1>
-        <p class="whitespace-pre-wrap text-base-content/70"><%= @soft_maintenance_setting.message %></p>
-      </div>
-    </section>
+        <%= render(Shadcn::Card::Title.new(tag: :h1, class: "text-2xl leading-[1.5]")) { t("soft_maintenance.title") } %>
+        <p class="whitespace-pre-wrap text-muted-foreground"><%= @soft_maintenance_setting.message %></p>
+      <% end %>
+    <% end %>
   ERB
 
   create_locale_pair(
@@ -9820,11 +9804,11 @@ def configure_soft_maintenance
         get admin_soft_maintenance_url
 
         assert_response :success
-        assert_select 'input[type="checkbox"].toggle[name="soft_maintenance_setting[site_enabled]"]', count: 1
-    #{api_enabled ? "    assert_select 'input[type=\"checkbox\"].toggle[name=\"soft_maintenance_setting[api_enabled]\"]', count: 1\n" : "    assert_select 'input[name=\"soft_maintenance_setting[api_enabled]\"]', count: 0\n"}        assert_select 'textarea.textarea[name="soft_maintenance_setting[message]"][maxlength="500"][required]', text: @setting.message, count: 1
-        assert_select 'a.btn[target="_blank"][rel="noopener"][href=?]', preview_admin_soft_maintenance_path, count: 1
-        assert_select ".alert.alert-info.alert-soft", text: %r{bin/kamal-maintenance}, count: 1
-        assert_select "dialog#soft-maintenance-confirmation.modal", count: 1
+        assert_select 'input[type="checkbox"][role="switch"][data-slot="switch"][name="soft_maintenance_setting[site_enabled]"]', count: 1
+    #{api_enabled ? "    assert_select 'input[type=\"checkbox\"][role=\"switch\"][data-slot=\"switch\"][name=\"soft_maintenance_setting[api_enabled]\"]', count: 1\n" : "    assert_select 'input[name=\"soft_maintenance_setting[api_enabled]\"]', count: 0\n"}        assert_select 'textarea[data-slot="textarea"][name="soft_maintenance_setting[message]"][maxlength="500"][required]', text: @setting.message, count: 1
+        assert_select 'a[target="_blank"][rel="noopener"][href=?]', preview_admin_soft_maintenance_path, count: 1
+        assert_select '[data-slot="alert"]', text: %r{bin/kamal-maintenance}, count: 1
+        assert_select 'dialog#soft-maintenance-confirmation[data-slot="dialog-content"]', count: 1
       end
 
       test "requires confirmation only when a mode turns on" do
@@ -9861,7 +9845,7 @@ def configure_soft_maintenance
 
         assert_response :unprocessable_content
         assert_equal "Scheduled maintenance", @setting.reload.message
-        assert_select ".alert.alert-error.alert-soft", count: 1
+        assert_select 'form [data-slot="alert"].text-destructive[role="alert"]', count: 1
       end
 
       test "renders the saved maintenance body as a 200 preview" do
@@ -10163,7 +10147,11 @@ def configure_devise_views
   SVG
   siwe_login = if VALUES.fetch("additional_login_methods").include?("siwe")
     <<~ERB
-      <div class="divider"><%= t("authentication.or") %></div>
+      <div class="my-4 flex items-center gap-3">
+        <%= render(Shadcn::Separator.new(class: "flex-1")) %>
+        <span class="text-sm text-muted-foreground"><%= t("authentication.or") %></span>
+        <%= render(Shadcn::Separator.new(class: "flex-1")) %>
+      </div>
       <div data-controller="siwe-sign-in"
            data-siwe-sign-in-mode-value="login"
            data-siwe-sign-in-challenge-url-value="<%= user_siwe_challenge_path %>"
@@ -10172,8 +10160,8 @@ def configure_devise_views
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>"
            data-siwe-sign-in-wallet-not-registered-value="<%= t('siwe.errors.wallet_not_registered') %>">
-        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate">#{evm_wallet_icon}<%= t("authentication.sign_in_with_wallet") %></button>
-        <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <button type="button" class="<%= class_names(action_button_classes(:secondary), "w-full") %>" data-action="siwe-sign-in#authenticate">#{evm_wallet_icon}<%= t("authentication.sign_in_with_wallet") %></button>
+        <%= render(Shadcn::Alert.new(variant: :destructive, class: "mt-4 hidden", role: "alert", data: { siwe_sign_in_target: "error" })) %>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-login-provider-picker" %>
       </div>
     ERB
@@ -10182,7 +10170,11 @@ def configure_devise_views
   end
   siwe_signup = if VALUES.fetch("additional_login_methods").include?("siwe")
     <<~ERB
-      <div class="divider"><%= t("authentication.or") %></div>
+      <div class="my-4 flex items-center gap-3">
+        <%= render(Shadcn::Separator.new(class: "flex-1")) %>
+        <span class="text-sm text-muted-foreground"><%= t("authentication.or") %></span>
+        <%= render(Shadcn::Separator.new(class: "flex-1")) %>
+      </div>
       <div data-controller="siwe-sign-in"
            data-siwe-sign-in-mode-value="signup"
            data-siwe-sign-in-challenge-url-value="<%= user_siwe_registration_challenge_path %>"
@@ -10190,8 +10182,8 @@ def configure_devise_views
            data-siwe-sign-in-wallet-missing-value="<%= t('siwe.errors.wallet_missing') %>"
            data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
            data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
-        <button type="button" class="<%= class_names(action_button_classes(:secondary), "btn-block") %>" data-action="siwe-sign-in#authenticate">#{evm_wallet_icon}<%= t("authentication.sign_up_with_wallet") %></button>
-        <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+        <button type="button" class="<%= class_names(action_button_classes(:secondary), "w-full") %>" data-action="siwe-sign-in#authenticate">#{evm_wallet_icon}<%= t("authentication.sign_up_with_wallet") %></button>
+        <%= render(Shadcn::Alert.new(variant: :destructive, class: "mt-4 hidden", role: "alert", data: { siwe_sign_in_target: "error" })) %>
         <%= render "shared/siwe_provider_picker", modal_id: "siwe-signup-provider-picker" %>
       </div>
     ERB
@@ -10203,7 +10195,7 @@ def configure_devise_views
     <% content_for :page_title, t("authentication.sign_in_title") %>
     <header class="mb-8">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-      <p class="mt-2 text-sm text-base-content/70"><%= t("authentication.sign_in_description") %></p>
+      <p class="mt-2 text-sm text-muted-foreground"><%= t("authentication.sign_in_description") %></p>
     </header>
 
     <div data-controller="passkey"
@@ -10212,20 +10204,20 @@ def configure_devise_views
          data-passkey-verify-url-value="<%= user_passkey_session_path %>"
          data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
          data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-      <label class="label mb-4 cursor-pointer justify-start gap-3 text-base-content">
-        <input type="checkbox" class="checkbox checkbox-sm" data-passkey-target="rememberMe">
+      <label class="mb-4 flex cursor-pointer items-center gap-3">
+        <input type="checkbox" class="<%= ShadcnViewComponents::Classes.resolve(:checkbox) %>" data-passkey-target="rememberMe">
         <span><%= t("authentication.remember_me") %></span>
       </label>
-      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate">#{passkey_icon}<%= t("authentication.sign_in_with_passkey") %></button>
-      <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
+      <button type="button" class="<%= class_names(action_button_classes(:primary), "w-full") %>" data-action="passkey#authenticate">#{passkey_icon}<%= t("authentication.sign_in_with_passkey") %></button>
+      <%= render(Shadcn::Alert.new(variant: :destructive, class: "mt-4 hidden", role: "alert", data: { passkey_target: "error" })) %>
     </div>
 
     #{siwe_login}
 
     <% unless soft_site_maintenance? %>
       <% content_for :authentication_switch do %>
-        <p class="mb-4 text-sm text-base-content/70"><%= t("authentication.new_account_prompt") %></p>
-        <%= link_to t("authentication.create_account"), new_user_registration_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+        <p class="mb-4 text-sm text-muted-foreground"><%= t("authentication.new_account_prompt") %></p>
+        <%= link_to t("authentication.create_account"), new_user_registration_path, class: class_names(action_button_classes(:secondary), "w-full") %>
       <% end %>
     <% end %>
   ERB
@@ -10234,7 +10226,7 @@ def configure_devise_views
     <% content_for :page_title, t("authentication.sign_up_title") %>
     <header class="mb-8">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-      <p class="mt-2 text-sm text-base-content/70"><%= t("authentication.sign_up_description") %></p>
+      <p class="mt-2 text-sm text-muted-foreground"><%= t("authentication.sign_up_description") %></p>
     </header>
 
     <div data-controller="passkey"
@@ -10243,15 +10235,15 @@ def configure_devise_views
          data-passkey-verify-url-value="<%= user_passkey_registration_path %>"
          data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
          data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
-      <button type="button" class="<%= class_names(action_button_classes(:primary), "btn-block") %>" data-action="passkey#authenticate">#{passkey_icon}<%= t("authentication.sign_up_with_passkey") %></button>
-      <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
+      <button type="button" class="<%= class_names(action_button_classes(:primary), "w-full") %>" data-action="passkey#authenticate">#{passkey_icon}<%= t("authentication.sign_up_with_passkey") %></button>
+      <%= render(Shadcn::Alert.new(variant: :destructive, class: "mt-4 hidden", role: "alert", data: { passkey_target: "error" })) %>
     </div>
 
     #{siwe_signup}
 
     <% content_for :authentication_switch do %>
-      <p class="mb-4 text-sm text-base-content/70"><%= t("authentication.existing_account_prompt") %></p>
-      <%= link_to t("authentication.back_to_sign_in"), new_user_session_path, class: class_names(action_button_classes(:secondary), "btn-block") %>
+      <p class="mb-4 text-sm text-muted-foreground"><%= t("authentication.existing_account_prompt") %></p>
+      <%= link_to t("authentication.back_to_sign_in"), new_user_session_path, class: class_names(action_button_classes(:secondary), "w-full") %>
     <% end %>
   ERB
 
@@ -10851,7 +10843,6 @@ def configure_in_app_notifications
       error(event) {
         event.preventDefault()
         const content = this.errorTarget.content.cloneNode(true)
-        content.querySelector("[data-notification-load-error]").classList.add("alert-error", "alert-soft")
         this.frameTarget.replaceChildren(content)
       }
     }
@@ -10897,7 +10888,7 @@ def configure_in_app_notifications
 
     export default class extends Controller {
       static targets = ["audience", "count", "empty", "frame", "hidden", "search", "selector"]
-      static values = { removeLabel: String, selected: Object, url: String }
+      static values = { contentClass: String, itemClass: String, removeButtonClass: String, removeLabel: String, selected: Object, url: String }
 
       connect() {
         this.renderHiddenInputs()
@@ -10947,18 +10938,19 @@ def configure_in_app_notifications
         this.hiddenTarget.hidden = entries.length === 0
         this.hiddenTarget.replaceChildren(...entries.map(([id, label]) => {
           const row = document.createElement("li")
-          row.className = "list-row items-center"
+          row.className = this.itemClassValue
+          row.dataset.slot = "item"
           const input = document.createElement("input")
           input.type = "hidden"
           input.name = "notification[recipient_ids][]"
           input.value = id
           input.disabled = this.audienceTarget.value !== "selected_users"
           const name = document.createElement("span")
-          name.className = "list-col-grow min-w-0 break-words"
+          name.className = this.contentClassValue
           name.textContent = label
           const button = document.createElement("button")
           button.type = "button"
-          button.className = "btn btn-outline btn-sm"
+          button.className = this.removeButtonClassValue
           button.textContent = this.removeLabelValue
           button.dataset.userId = id
           button.dataset.action = "notification-recipients#remove"
@@ -10970,9 +10962,9 @@ def configure_in_app_notifications
   JAVASCRIPT
 
   create_file "app/views/notifications/_unread_status.html.erb", <<~ERB, force: true
-    <span id="notification_unread_status" class="indicator-item">
+    <span id="notification_unread_status" class="absolute -right-0.5 -top-0.5">
       <% if current_user.has_unread_notifications? %>
-        <span class="status status-primary status-sm" aria-label="<%= t('notifications.unread_status') %>"></span>
+        <span class="block size-2.5 rounded-full bg-primary" aria-label="<%= t('notifications.unread_status') %>" data-notification-unread-indicator></span>
       <% end %>
     </span>
   ERB
@@ -10980,7 +10972,7 @@ def configure_in_app_notifications
   create_file "app/views/notifications/_tab_unread_status.html.erb", <<~ERB, force: true
     <span id="<%= status_id %>" class="inline-flex size-3 items-center justify-center">
       <% if unread %>
-        <span class="status status-primary status-xs" aria-label="<%= t('notifications.tab_unread_status', tab: label) %>"></span>
+        <span class="block size-2 rounded-full bg-primary" aria-label="<%= t('notifications.tab_unread_status', tab: label) %>" data-tab-unread-indicator></span>
       <% end %>
     </span>
   ERB
@@ -10994,27 +10986,29 @@ def configure_in_app_notifications
     <% compact = local_assigns.fetch(:compact) %>
     <% frame_id = [frame_prefix, delivery.notification_id].join("_") %>
     <%= turbo_frame_tag frame_id do %>
-      <li class="list-row items-start">
-        <div class="list-col-grow min-w-0">
+      <%= render(Shadcn::Item.new(tag: :li, class: "items-start")) do %>
+        <%= render(Shadcn::Item::Content.new(class: "min-w-0")) do %>
           <div class="break-words <%= 'font-semibold' unless delivery.opened? %>"><%= delivery.notification.message %></div>
-          <p class="mt-1 text-xs text-neutral"><%= time_tag delivery.notification.published_at, l(delivery.notification.published_at, format: :short) %></p>
-        </div>
-        <% unless delivery.opened? %>
-          <%= button_to t("notifications.open"), open_notification_path(delivery.notification), method: :patch,
-            params: { origin_frame: frame_id }, class: (compact ? "btn btn-outline btn-sm" : action_button_classes(:quiet)),
-            form: { data: { turbo_stream: true } } %>
+          <p class="mt-1 text-xs text-muted-foreground"><%= time_tag delivery.notification.published_at, l(delivery.notification.published_at, format: :short) %></p>
         <% end %>
-      </li>
+        <% unless delivery.opened? %>
+          <%= render(Shadcn::Item::Actions.new) do %>
+            <%= button_to t("notifications.open"), open_notification_path(delivery.notification), method: :patch,
+              params: { origin_frame: frame_id }, class: (compact ? Shadcn::Button.classes(variant: :outline, size: :sm) : action_button_classes(:quiet)),
+              form: { data: { turbo_stream: true } } %>
+          <% end %>
+        <% end %>
+      <% end %>
     <% end %>
   ERB
 
   create_file "app/views/notifications/_announcement.html.erb", <<~ERB, force: true
-    <li class="list-row items-start">
-      <div class="list-col-grow min-w-0">
+    <%= render(Shadcn::Item.new(tag: :li, class: "items-start")) do %>
+      <%= render(Shadcn::Item::Content.new(class: "min-w-0")) do %>
         <div class="break-words"><%= announcement.message %></div>
-        <p class="mt-1 text-xs text-neutral"><%= time_tag announcement.published_at, l(announcement.published_at, format: :short) %></p>
-      </div>
-    </li>
+        <p class="mt-1 text-xs text-muted-foreground"><%= time_tag announcement.published_at, l(announcement.published_at, format: :short) %></p>
+      <% end %>
+    <% end %>
   ERB
 
   create_file "app/views/notifications/_announcements_panel.html.erb", <<~ERB, force: true
@@ -11027,31 +11021,35 @@ def configure_in_app_notifications
       <% end %>
       <%= render "notifications/announcement_read_error", surface:, compact:, visible: false %>
       <% if announcements.empty? %>
-        <p class="text-sm text-neutral"><%= t("notifications.announcements_empty") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("notifications.announcements_empty") %></p>
       <% else %>
-        <ul class="list <%= 'max-h-96 overflow-y-auto' if compact %>">
+        <%= render(Shadcn::Item::Group.new(tag: :ul, class: ("max-h-96 overflow-y-auto" if compact))) do %>
           <% announcements.each do |announcement| %>
             <%= render "notifications/announcement", announcement: %>
           <% end %>
-        </ul>
+        <% end %>
         <%= pagination(pagy, aria_label: t("notifications.announcements_pagination")) if pagy %>
       <% end %>
     </div>
   ERB
 
   create_file "app/views/notifications/_announcement_read_error.html.erb", <<~ERB, force: true
-    <div id="<%= surface %>_announcement_read_error"
-      class="alert alert-error alert-soft mb-3 <%= 'hidden' unless visible %>" role="alert"
-      data-notification-announcements-target="error">
-      <span><%= t("notifications.announcement_read_failed") %></span>
-      <button type="button" class="<%= compact ? 'btn btn-sm' : action_button_classes(:secondary) %>"
-        data-action="notification-announcements#retry"><%= t("notifications.retry") %></button>
-    </div>
+    <%= render(Shadcn::Alert.new(id: [surface, "announcement_read_error"].join("_"), variant: :destructive,
+      class: class_names("mb-3", hidden: !visible), role: "alert",
+      data: { notification_announcements_target: "error" })) do %>
+      <%= render(Shadcn::Alert::Description.new) do %>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span><%= t("notifications.announcement_read_failed") %></span>
+          <button type="button" class="<%= compact ? Shadcn::Button.classes(variant: :secondary, size: :sm) : action_button_classes(:secondary) %>"
+            data-action="notification-announcements#retry"><%= t("notifications.retry") %></button>
+        </div>
+      <% end %>
+    <% end %>
   ERB
 
   create_file "app/views/notifications/_popover.html.erb", <<~ERB, force: true
     <%= turbo_frame_tag "notifications_popover" do %>
-      <div class="border-b border-base-300 p-3">
+      <div class="border-b border-border p-3">
         <h2 class="font-semibold leading-[1.5]"><%= t("notifications.title") %></h2>
       </div>
       <% personal_label = t("notifications.tabs.personal") %>
@@ -11069,24 +11067,24 @@ def configure_in_app_notifications
         )
       ] %>
       <div class="p-3">
-        <%= with_tab(tabs:, size: :sm) do %>
+        <%= with_tab(tabs:, aria_label: t("notifications.title")) do %>
           <% if tab == "personal" %>
             <% if deliveries.any? { |delivery| !delivery.opened? } %>
               <div class="mb-2 flex justify-end">
                 <%= button_to t("notifications.open_all"), open_all_notifications_path, method: :patch,
-                  params: { origin_frame: "notifications_popover" }, class: "btn btn-outline btn-sm",
+                  params: { origin_frame: "notifications_popover" }, class: Shadcn::Button.classes(variant: :outline, size: :sm),
                   form: { data: { turbo_stream: true } } %>
               </div>
             <% end %>
             <% if deliveries.empty? %>
-              <p class="text-sm text-neutral"><%= t("notifications.personal_empty") %></p>
+              <p class="text-sm text-muted-foreground"><%= t("notifications.personal_empty") %></p>
             <% else %>
-              <ul class="list max-h-96 overflow-y-auto">
+              <%= render(Shadcn::Item::Group.new(tag: :ul, class: "max-h-96 overflow-y-auto")) do %>
                 <% deliveries.each do |delivery| %>
                   <%= render "notifications/notification", delivery:,
                     frame_prefix: "popover_personal_notification", compact: true %>
                 <% end %>
-              </ul>
+              <% end %>
             <% end %>
           <% else %>
             <%= render "notifications/announcements_panel", announcements:, cutoff:, surface:,
@@ -11094,8 +11092,8 @@ def configure_in_app_notifications
           <% end %>
         <% end %>
       </div>
-      <div class="border-t border-base-300 p-2 text-center">
-        <%= link_to t("notifications.more"), notifications_path(tab:), class: "btn btn-outline btn-sm", data: { turbo_frame: "_top" } %>
+      <div class="border-t border-border p-2 text-center">
+        <%= link_to t("notifications.more"), notifications_path(tab:), class: Shadcn::Button.classes(variant: :outline, size: :sm), data: { turbo_frame: "_top" } %>
       </div>
     <% end %>
   ERB
@@ -11110,10 +11108,10 @@ def configure_in_app_notifications
     <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
       <header>
         <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
-        <p class="text-sm text-neutral"><%= t("notifications.description") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("notifications.description") %></p>
       </header>
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <%= turbo_frame_tag "notifications_history", data: { turbo_action: "advance" } do %>
             <% personal_label = t("notifications.tabs.personal") %>
             <% announcements_label = t("notifications.tabs.announcements") %>
@@ -11129,17 +11127,17 @@ def configure_in_app_notifications
                 path: notifications_path(tab: "announcements"), is_active: -> { @tab == "announcements" }
               )
             ] %>
-            <%= with_tab(tabs:) do %>
+            <%= with_tab(tabs:, aria_label: t("notifications.title")) do %>
               <% if @tab == "personal" %>
                 <% if @deliveries.empty? %>
-                  <p class="text-sm text-neutral"><%= t("notifications.personal_empty") %></p>
+                  <p class="text-sm text-muted-foreground"><%= t("notifications.personal_empty") %></p>
                 <% else %>
-                  <ul class="list">
+                  <%= render(Shadcn::Item::Group.new(tag: :ul)) do %>
                     <% @deliveries.each do |delivery| %>
                       <%= render "notifications/notification", delivery:,
                         frame_prefix: "history_personal_notification", compact: false %>
                     <% end %>
-                  </ul>
+                  <% end %>
                   <%= pagination(@pagy, aria_label: t("notifications.personal_pagination")) %>
                 <% end %>
               <% else %>
@@ -11148,8 +11146,8 @@ def configure_in_app_notifications
               <% end %>
             <% end %>
           <% end %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
@@ -11194,45 +11192,44 @@ def configure_in_app_notifications
     <% content_for :page_actions_primary do %>
       <%= link_to t("notifications.admin.new"), new_admin_notification_path, class: action_button_classes(:primary) %>
     <% end %>
-    <section class="card card-border bg-base-100">
-      <div class="card-body p-3">
-        <div class="overflow-x-auto">
-          <table class="table table-sm table-pin-rows min-w-max">
-            <thead>
-              <tr>
-                <th><%= t("notifications.admin.message") %></th>
-                <th><%= t("notifications.admin.state") %></th>
-                <th><%= t("notifications.admin.audience") %></th>
-                <th><%= t("notifications.admin.published_at") %></th>
-                <th><%= t("notifications.admin.recipients_count") %></th>
-                <th><span class="sr-only"><%= t("common.actions") %></span></th>
-              </tr>
-            </thead>
-            <tbody>
-              <% @notifications.each do |notification| %>
-                <tr>
-                  <td class="max-w-md break-words">
-                    <%= truncate(notification.message_plain_text, length: 80) %>
-                  </td>
-                  <td><span class="badge"><%= t("notifications.admin.states.\#{notification.published? ? 'published' : notification.draft? ? 'draft' : 'scheduled'}") %></span></td>
-                  <td><%= t("notifications.audiences.\#{notification.audience}") %></td>
-                  <td><%= l(notification.published_at, format: :short) %></td>
-                  <td><%= notification.all_users? ? t("notifications.admin.all_users") : notification.notification_deliveries.size %></td>
-                  <td>
-                    <div class="flex flex-wrap justify-end gap-2">
-                      <%= link_to t("common.show"), admin_notification_path(notification), class: action_button_classes(:secondary) %>
-                      <%= link_to t("common.edit"), edit_admin_notification_path(notification), class: action_button_classes(:secondary) %>
-                      <%= button_to t("common.destroy"), admin_notification_path(notification), method: :delete,
-                        class: action_button_classes(:destructive), data: { turbo_confirm: t("notifications.admin.destroy_confirm") } %>
-                    </div>
-                  </td>
-                </tr>
+    <%= render(Shadcn::Card.new(tag: :section)) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
+        <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
+        <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+          <%= render(Shadcn::Table::Header.new) do %>
+            <%= render(Shadcn::Table::Row.new) do %>
+              <%= render(Shadcn::Table::Head.new(scope: :col)) { t("notifications.admin.message") } %>
+              <%= render(Shadcn::Table::Head.new(scope: :col)) { t("notifications.admin.state") } %>
+              <%= render(Shadcn::Table::Head.new(scope: :col)) { t("notifications.admin.audience") } %>
+              <%= render(Shadcn::Table::Head.new(scope: :col)) { t("notifications.admin.published_at") } %>
+              <%= render(Shadcn::Table::Head.new(scope: :col)) { t("notifications.admin.recipients_count") } %>
+              <%= render(Shadcn::Table::Head.new(scope: :col)) { tag.span(t("common.actions"), class: "sr-only") } %>
+            <% end %>
+          <% end %>
+          <%= render(Shadcn::Table::Body.new) do %>
+            <% @notifications.each do |notification| %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <%= render(Shadcn::Table::Cell.new(class: "max-w-md break-words")) { link_to truncate(notification.message_plain_text, length: 80), admin_notification_path(notification), class: "text-primary underline underline-offset-4" } %>
+                <%= render(Shadcn::Table::Cell.new) do %>
+                  <%= render(Shadcn::Badge.new(variant: notification.published? ? :default : notification.draft? ? :secondary : :outline)) { t("notifications.admin.states.\#{notification.published? ? 'published' : notification.draft? ? 'draft' : 'scheduled'}") } %>
+                <% end %>
+                <%= render(Shadcn::Table::Cell.new) { t("notifications.audiences.\#{notification.audience}") } %>
+                <%= render(Shadcn::Table::Cell.new) { l(notification.published_at, format: :short) } %>
+                <%= render(Shadcn::Table::Cell.new) { notification.all_users? ? t("notifications.admin.all_users") : notification.notification_deliveries.size } %>
+                <%= render(Shadcn::Table::Cell.new) do %>
+                  <div class="flex flex-wrap justify-end gap-2">
+                    <%= link_to t("common.show"), admin_notification_path(notification), class: action_button_classes(:secondary) %>
+                    <%= link_to t("common.edit"), edit_admin_notification_path(notification), class: action_button_classes(:secondary) %>
+                    <%= button_to t("common.destroy"), admin_notification_path(notification), method: :delete,
+                      class: action_button_classes(:destructive), data: { turbo_confirm: t("notifications.admin.destroy_confirm") } %>
+                  </div>
+                <% end %>
               <% end %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
+    <% end %>
     <%= pagination(@pagy, aria_label: t("notifications.admin.pagination")) %>
   ERB
 
@@ -11242,47 +11239,56 @@ def configure_in_app_notifications
     <%= form_with model: [:admin, notification], class: "space-y-6",
       data: { controller: "notification-recipients", notification_recipients_url_value: admin_notification_recipients_path,
         notification_recipients_selected_value: selected_users.to_json,
+        notification_recipients_item_class_value: Shadcn::Item.classes(extra: "items-center"),
+        notification_recipients_content_class_value: Shadcn::Item::Content.classes(extra: "min-w-0 break-words"),
+        notification_recipients_remove_button_class_value: Shadcn::Button.classes(variant: :outline, size: :sm),
         notification_recipients_remove_label_value: t("notifications.admin.remove_recipient") } do |form| %>
       <% if notification.errors.any? %>
-        <div class="alert alert-error alert-soft" role="alert"><%= notification.errors.full_messages.to_sentence %></div>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <%= render(Shadcn::Alert::Description.new) { notification.errors.full_messages.to_sentence } %>
+        <% end %>
       <% end %>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><%= form.label :message, t("notifications.admin.message") %></legend>
+      <div class="grid gap-2">
+        <%= form.label :message, t("notifications.admin.message"), class: Shadcn::Label.classes %>
         <%= form.rich_text_area :message %>
-        <p class="label"><%= t("notifications.admin.message_hint") %></p>
-      </fieldset>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend"><%= form.label :audience, t("notifications.admin.audience") %></legend>
-          <%= form.select :audience, Notification.audiences.keys.map { |value| [t("notifications.audiences.\#{value}"), value] }, {},
-            class: "select w-full", data: { notification_recipients_target: "audience",
-              action: "change->notification-recipients#toggle" } %>
-        </fieldset>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend"><%= form.label :published_at, t("notifications.admin.published_at") %></legend>
-          <%= form.datetime_local_field :published_at, required: true, class: "input w-full" %>
-        </fieldset>
+        <p class="text-sm text-muted-foreground"><%= t("notifications.admin.message_hint") %></p>
       </div>
-      <label class="label cursor-pointer justify-start gap-3">
-        <%= form.checkbox :draft, class: "checkbox" %>
-        <span><%= t("notifications.admin.draft") %></span>
-      </label>
-      <fieldset class="fieldset" data-notification-recipients-target="selector">
-        <legend class="fieldset-legend"><%= t("notifications.admin.recipients") %></legend>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-2">
+          <%= form.label :audience, t("notifications.admin.audience"), class: Shadcn::Label.classes %>
+          <%= render(Shadcn::NativeSelect.new(id: form.field_id(:audience), name: form.field_name(:audience), class: "w-full",
+            data: { notification_recipients_target: "audience", action: "change->notification-recipients#toggle" })) do %>
+            <% Notification.audiences.keys.each do |value| %>
+              <%= render(Shadcn::NativeSelect::Option.new(value: value, selected: notification.audience == value)) { t("notifications.audiences.\#{value}") } %>
+            <% end %>
+          <% end %>
+        </div>
+        <div class="grid gap-2">
+          <%= form.label :published_at, t("notifications.admin.published_at"), class: Shadcn::Label.classes %>
+          <%= form.datetime_local_field :published_at, required: true, class: Shadcn::Input.classes(extra: "w-full") %>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <%= form.hidden_field :draft, value: "0", id: nil %>
+        <%= render(Shadcn::Checkbox.new(id: form.field_id(:draft), name: form.field_name(:draft), value: "1", checked: notification.draft?)) %>
+        <%= form.label :draft, t("notifications.admin.draft"), class: Shadcn::Label.classes %>
+      </div>
+      <fieldset class="grid gap-3" data-notification-recipients-target="selector">
+        <legend class="text-sm font-medium"><%= t("notifications.admin.recipients") %></legend>
         <div class="flex items-center gap-2">
           <p class="text-sm font-medium"><%= t("notifications.admin.selected_recipients") %></p>
-          <span class="badge badge-sm" data-notification-recipients-target="count">0</span>
+          <%= render(Shadcn::Badge.new(variant: :outline, data: { notification_recipients_target: "count" })) { "0" } %>
         </div>
-        <p class="text-sm text-neutral" data-notification-recipients-target="empty"><%= t("notifications.admin.no_selected_recipients") %></p>
-        <ul class="list rounded-box border border-base-300" data-notification-recipients-target="hidden" hidden></ul>
-        <label class="text-sm font-medium" for="notification_recipient_search"><%= t("notifications.admin.add_recipients") %></label>
-        <input id="notification_recipient_search" type="search" class="input w-full" placeholder="<%= t('notifications.admin.recipient_search') %>"
+        <p class="text-sm text-muted-foreground" data-notification-recipients-target="empty"><%= t("notifications.admin.no_selected_recipients") %></p>
+        <%= render(Shadcn::Item::Group.new(tag: :ul, data: { notification_recipients_target: "hidden" }, hidden: true)) %>
+        <label class="<%= Shadcn::Label.classes %>" for="notification_recipient_search"><%= t("notifications.admin.add_recipients") %></label>
+        <input id="notification_recipient_search" type="search" class="<%= Shadcn::Input.classes(extra: "w-full") %>" placeholder="<%= t('notifications.admin.recipient_search') %>"
           data-notification-recipients-target="search" data-action="input->notification-recipients#search">
-        <p class="label"><%= t("notifications.admin.recipient_search_hint") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("notifications.admin.recipient_search_hint") %></p>
         <%= turbo_frame_tag "notification_recipient_results", data: { notification_recipients_target: "frame" } do %>
         <% end %>
       </fieldset>
-      <div class="card-actions flex-wrap justify-end">
+      <div class="flex flex-wrap justify-end gap-2">
         <%= link_to t("common.back"), admin_notifications_path, class: action_button_classes(:quiet) %>
         <%= form.submit class: action_button_classes(:primary) %>
       </div>
@@ -11291,51 +11297,57 @@ def configure_in_app_notifications
 
   create_file "app/views/admin/notifications/new.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("notifications.admin.new") %>
-    <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
+    <%= render(Shadcn::Card.new(tag: :section)) do %>
+      <%= render(Shadcn::Card::Content.new) { render "form", notification: @notification } %>
+    <% end %>
   ERB
 
   create_file "app/views/admin/notifications/edit.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("notifications.admin.edit") %>
-    <section class="card card-border bg-base-100"><div class="card-body p-3"><%= render "form", notification: @notification %></div></section>
+    <%= render(Shadcn::Card.new(tag: :section)) do %>
+      <%= render(Shadcn::Card::Content.new) { render "form", notification: @notification } %>
+    <% end %>
   ERB
 
   create_file "app/views/admin/notifications/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("notifications.admin.show") %>
-    <section class="card card-border bg-base-100">
-      <div class="card-body p-3">
+    <%= render(Shadcn::Card.new(tag: :section)) do %>
+      <%= render(Shadcn::Card::Content.new(class: "space-y-4")) do %>
         <div class="break-words"><%= @notification.message %></div>
         <dl class="grid gap-3 sm:grid-cols-2">
-          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.state") %></dt><dd><%= @notification.draft? ? t("notifications.admin.states.draft") : t("notifications.admin.states.published") %></dd></div>
-          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.audience") %></dt><dd><%= t("notifications.audiences.\#{@notification.audience}") %></dd></div>
-          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.published_at") %></dt><dd><%= l(@notification.published_at, format: :short) %></dd></div>
-          <div><dt class="text-sm text-neutral"><%= t("notifications.admin.recipients_count") %></dt><dd><%= @notification.all_users? ? t("notifications.admin.all_users") : @notification.notification_deliveries.count %></dd></div>
+          <div><dt class="text-sm text-muted-foreground"><%= t("notifications.admin.state") %></dt><dd><%= @notification.draft? ? t("notifications.admin.states.draft") : t("notifications.admin.states.published") %></dd></div>
+          <div><dt class="text-sm text-muted-foreground"><%= t("notifications.admin.audience") %></dt><dd><%= t("notifications.audiences.\#{@notification.audience}") %></dd></div>
+          <div><dt class="text-sm text-muted-foreground"><%= t("notifications.admin.published_at") %></dt><dd><%= l(@notification.published_at, format: :short) %></dd></div>
+          <div><dt class="text-sm text-muted-foreground"><%= t("notifications.admin.recipients_count") %></dt><dd><%= @notification.all_users? ? t("notifications.admin.all_users") : @notification.notification_deliveries.count %></dd></div>
         </dl>
-        <div class="card-actions flex-wrap justify-end">
+        <div class="flex flex-wrap justify-end gap-2">
           <%= link_to t("common.back"), admin_notifications_path, class: action_button_classes(:quiet) %>
           <%= link_to t("common.edit"), edit_admin_notification_path(@notification), class: action_button_classes(:secondary) %>
         </div>
-      </div>
-    </section>
+      <% end %>
+    <% end %>
   ERB
 
   create_file "app/views/admin/notification_recipients/index.html.erb", <<~ERB, force: true
     <%= turbo_frame_tag "notification_recipient_results" do %>
       <p class="text-sm font-medium"><%= t("notifications.admin.recipient_search_results") %></p>
       <% if @users.empty? %>
-        <p class="text-sm text-neutral"><%= t("notifications.admin.no_recipients") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("notifications.admin.no_recipients") %></p>
       <% else %>
-        <ul class="list rounded-box border border-base-300">
+        <%= render(Shadcn::Item::Group.new(tag: :ul)) do %>
           <% @users.each do |user| %>
             <% label = T.must(user.profile).display_name %>
-            <li class="list-row items-center">
-              <span class="list-col-grow"><%= label %></span>
-              <button type="button" class="btn btn-outline btn-sm"
-                data-user-id="<%= user.id %>" data-user-label="<%= label %>" data-action="notification-recipients#select">
-                <%= t("notifications.admin.add_recipient") %>
-              </button>
-            </li>
+            <%= render(Shadcn::Item.new(tag: :li, class: "items-center")) do %>
+              <%= render(Shadcn::Item::Content.new(class: "min-w-0 break-words")) { label } %>
+              <%= render(Shadcn::Item::Actions.new) do %>
+                <button type="button" class="<%= Shadcn::Button.classes(variant: :outline, size: :sm) %>"
+                  data-user-id="<%= user.id %>" data-user-label="<%= label %>" data-action="notification-recipients#select">
+                  <%= t("notifications.admin.add_recipient") %>
+                </button>
+              <% end %>
+            <% end %>
           <% end %>
-        </ul>
+        <% end %>
       <% end %>
     <% end %>
   ERB
@@ -11685,7 +11697,7 @@ def configure_in_app_notifications
         get notifications_url
         assert_response :success
         assert_select "turbo-frame#notifications_history" do
-          assert_select "a.tab-active", text: /\#{Regexp.escape(I18n.t('notifications.tabs.personal'))}/
+          assert_select 'a[data-slot="navigation-menu-link"][aria-current="page"]', text: /\#{Regexp.escape(I18n.t('notifications.tabs.personal'))}/
           assert_select "li", text: /\#{Regexp.escape(notifications(:published_selected).message_plain_text)}/, count: 1
           assert_select "li", text: /\#{Regexp.escape(notifications(:published_all).message_plain_text)}/, count: 0
         end
@@ -11693,7 +11705,7 @@ def configure_in_app_notifications
         get notifications_url(tab: "announcements")
         assert_response :success
         assert_select "turbo-frame#notifications_history" do
-          assert_select "a.tab-active", text: /\#{Regexp.escape(I18n.t('notifications.tabs.announcements'))}/
+          assert_select 'a[data-slot="navigation-menu-link"][aria-current="page"]', text: /\#{Regexp.escape(I18n.t('notifications.tabs.announcements'))}/
           assert_select "li", text: /\#{Regexp.escape(notifications(:published_all).message_plain_text)}/, count: 1
           assert_select "li", text: /\#{Regexp.escape(notifications(:future).message_plain_text)}/, count: 0
         end
@@ -11727,9 +11739,9 @@ def configure_in_app_notifications
           @user.update!(global_notifications_read_at: state.fetch(:announcements) ? 2.days.ago : Time.current)
           get notifications_url
           assert_response :success
-          assert_select "#history_personal_unread_status .status", count: (state.fetch(:personal) ? 1 : 0)
-          assert_select "#history_announcements_unread_status .status", count: (state.fetch(:announcements) ? 1 : 0)
-          assert_select "#notification_unread_status .status",
+          assert_select "#history_personal_unread_status [data-tab-unread-indicator]", count: (state.fetch(:personal) ? 1 : 0)
+          assert_select "#history_announcements_unread_status [data-tab-unread-indicator]", count: (state.fetch(:announcements) ? 1 : 0)
+          assert_select "#notification_unread_status [data-notification-unread-indicator]",
             count: (state.fetch(:personal) || state.fetch(:announcements) ? 1 : 0)
         end
       end
@@ -12002,7 +12014,7 @@ def configure_in_app_notifications
         assert_select "turbo-frame#notification_recipient_results" do
           assert_select "li", text: /Match Candidate/, count: 1
           assert_select "li", text: /ID:/, count: 0
-          assert_select "button.btn-outline[data-user-id=?]", candidate.id.to_s,
+          assert_select "button[data-user-id=?]", candidate.id.to_s,
             text: I18n.t("notifications.admin.add_recipient"), count: 1
           assert_select "button[data-user-id=?]", selected_user.id.to_s, count: 0
         end
@@ -12028,7 +12040,7 @@ def configure_in_app_notifications
         @user.update!(global_notifications_read_at: Time.current)
         visit account_path
         assert_no_match(%r{/notifications/popover}, resource_names.join("\n"))
-        assert_selector "#notifications_popover .skeleton", count: 3, visible: :all
+        assert_selector "#notifications_popover [data-slot='skeleton']", count: 3, visible: :all
 
         find('button[popovertarget="notifications-popover"]').click
         assert_selector "#notifications-popover:popover-open"
@@ -12037,7 +12049,7 @@ def configure_in_app_notifications
 
         within("#notifications-popover") { click_on I18n.t("notifications.open"), match: :first }
         assert_selector "#notifications-popover:popover-open"
-        assert_no_selector "#notification_unread_status .status"
+        assert_no_selector "#notification_unread_status [data-notification-unread-indicator]"
       end
 
       test "shows announcements without personal read controls and marks the displayed cutoff" do
@@ -12050,15 +12062,15 @@ def configure_in_app_notifications
         assert_text notifications(:published_all).message_plain_text
         within("#notifications-popover") do
           assert_no_button I18n.t("notifications.open")
-          assert_no_selector "#popover_announcements_unread_status .status"
+          assert_no_selector "#popover_announcements_unread_status [data-tab-unread-indicator]"
           assert_link I18n.t("notifications.more"), href: notifications_path(tab: "announcements")
         end
-        assert_no_selector "#notification_unread_status .status"
+        assert_no_selector "#notification_unread_status [data-notification-unread-indicator]"
 
         popover_requests = resource_names.count { |name| name.match?(%r{/notifications/popover}) }
         find('button[popovertarget="notifications-popover"]').click
         find('button[popovertarget="notifications-popover"]').click
-        assert_selector "#notifications-popover:popover-open a.tab-active",
+        assert_selector '#notifications-popover:popover-open a[data-slot="navigation-menu-link"][aria-current="page"]',
           text: /\#{Regexp.escape(I18n.t('notifications.tabs.personal'))}/
         assert_operator resource_names.count { |name| name.match?(%r{/notifications/popover}) }, :>, popover_requests
       end
@@ -12077,17 +12089,17 @@ def configure_in_app_notifications
         find('button[popovertarget="notifications-popover"]').click
         within("#notifications-popover") { click_link I18n.t("notifications.tabs.announcements") }
 
-        assert_selector "#popover_announcement_read_error.alert.alert-error.alert-soft",
+        assert_selector '#popover_announcement_read_error[data-slot="alert"]',
           text: I18n.t("notifications.announcement_read_failed")
         assert_equal original_cursor, @user.reload.global_notifications_read_at
-        assert_selector "#notification_unread_status .status"
-        assert_selector "#popover_announcements_unread_status .status"
+        assert_selector "#notification_unread_status [data-notification-unread-indicator]"
+        assert_selector "#popover_announcements_unread_status [data-tab-unread-indicator]"
 
         cdp.send_message("Network.setBlockedURLs", params: { urls: [] })
         within("#popover_announcement_read_error") { click_button I18n.t("notifications.retry") }
         assert_no_selector "#popover_announcement_read_error", visible: :visible
-        assert_no_selector "#notification_unread_status .status"
-        assert_no_selector "#popover_announcements_unread_status .status"
+        assert_no_selector "#notification_unread_status [data-notification-unread-indicator]"
+        assert_no_selector "#popover_announcements_unread_status [data-tab-unread-indicator]"
       ensure
         cdp&.send_message("Network.setBlockedURLs", params: { urls: [] })
         cdp&.detach
@@ -12135,7 +12147,7 @@ def configure_in_app_notifications
         assert_no_text I18n.t("notifications.admin.no_selected_recipients")
         assert_no_selector "turbo-frame#notification_recipient_results button[data-user-id='\#{@user.id}']"
         within('[data-notification-recipients-target="hidden"]') do
-          assert_selector "li.list-row", text: display_name
+          assert_selector 'li[data-slot="item"]', text: display_name
           click_button I18n.t("notifications.admin.remove_recipient")
         end
         assert_selector '[data-notification-recipients-target="count"]', text: "0"
@@ -12156,7 +12168,7 @@ def configure_in_app_notifications
         assert_selector '[data-notification-recipients-target="count"]', text: expected_recipient_ids.size.to_s
         expected_recipient_ids.each do |user_id|
           display_name = T.must(User.find(user_id).profile).display_name
-          assert_selector '[data-notification-recipients-target="hidden"] li.list-row', text: display_name
+          assert_selector '[data-notification-recipients-target="hidden"] li[data-slot="item"]', text: display_name
           assert_selector "input[name='notification[recipient_ids][]'][value='\#{user_id}']", visible: :all
         end
 
@@ -12199,8 +12211,6 @@ def configure_default_views
   avatar_enabled = true
   screen_name_enabled = true
   display_name_enabled = true
-  account_navigation_count = 3 + (profile_enabled ? 1 : 0) + (api_enabled ? 1 : 0) +
-    (web_push_enabled ? 1 : 0)
   account_page_description = if profile_enabled
     '<%= t("accounts.show.description_with_profile") %>'
   else
@@ -12213,167 +12223,135 @@ def configure_default_views
   end
   home_action = '<%= link_to t("home.start_devise"), new_user_registration_path, class: action_button_classes(:primary) %>'
   account_navigation_items = <<~ERB
-    <li>
-      <%= link_to application_routes.account_path, class: ("menu-active" if current_page?(application_routes.account_path)), aria: { current: ("page" if current_page?(application_routes.account_path)) } do %>
+    <%= navigation_item(path: application_routes.account_path, active: current_page?(application_routes.account_path), dropdown: local_assigns.fetch(:dropdown, false)) do %>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955a1.125 1.125 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
         </svg>
         <%= t("navigation.dashboard") %>
-      <% end %>
-    </li>
+    <% end %>
   ERB
   if profile_enabled
     account_navigation_items += <<~ERB
-      <li>
-        <%= link_to application_routes.profile_path, class: ("menu-active" if controller_path == "profiles"), aria: { current: ("page" if controller_path == "profiles") } do %>
+      <%= navigation_item(path: application_routes.profile_path, active: controller_path == "profiles", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
           <%= t("navigation.profile") %>
-        <% end %>
-      </li>
+      <% end %>
     ERB
   end
   account_settings_path = "application_routes.account_passkeys_path"
   account_navigation_items += <<~ERB
-    <li>
-      <% account_settings_active = controller_path.in?(["account/passkeys", "account/siwe_identities"]) || current_page?(application_routes.delete_account_path) %>
-      <%= link_to #{account_settings_path}, class: ("menu-active" if account_settings_active), aria: { current: ("page" if account_settings_active) } do %>
+    <% account_settings_active = controller_path.in?(["account/passkeys", "account/siwe_identities"]) || current_page?(application_routes.delete_account_path) %>
+    <%= navigation_item(path: #{account_settings_path}, active: account_settings_active, dropdown: local_assigns.fetch(:dropdown, false)) do %>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
         </svg>
         <%= t("navigation.account_settings") %>
-      <% end %>
-    </li>
+    <% end %>
   ERB
   if web_push_enabled
     account_navigation_items += <<~ERB
-      <li>
-        <%= link_to application_routes.web_push_settings_path, class: ("menu-active" if controller_path == "web_push_settings"), aria: { current: ("page" if controller_path == "web_push_settings") } do %>
+      <%= navigation_item(path: application_routes.web_push_settings_path, active: controller_path == "web_push_settings", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
           <%= t("navigation.web_push_settings") %>
-        <% end %>
-      </li>
+      <% end %>
     ERB
   end
   if api_enabled
     account_navigation_items += <<~ERB
-      <li>
-        <%= link_to application_routes.api_credentials_path, class: ("menu-active" if controller_path == "api_credentials"), aria: { current: ("page" if controller_path == "api_credentials") } do %>
+      <%= navigation_item(path: application_routes.api_credentials_path, active: controller_path == "api_credentials", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
           </svg>
           <%= t("navigation.api_credentials") %>
-        <% end %>
-      </li>
+      <% end %>
     ERB
   end
   account_navigation_items += <<~ERB
     <% if allowed_to?(:overview?, User) %>
-      <li>
-        <%= link_to application_routes.admin_root_path do %>
+      <%= navigation_item(path: application_routes.admin_root_path, active: false, dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" />
           </svg>
           <%= t("navigation.admin") %>
-        <% end %>
-      </li>
+      <% end %>
     <% end %>
   ERB
   admin_navigation_items = <<~ERB
-      <li>
-        <%= link_to application_routes.admin_root_path, class: ("menu-active" if controller_path == "admin/overview"), aria: { current: ("page" if controller_path == "admin/overview") } do %>
+      <%= navigation_item(path: application_routes.admin_root_path, active: controller_path == "admin/overview", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" />
           </svg>
           <%= application_translate("navigation.overview") %>
-        <% end %>
-      </li>
-      <li>
-        <%= link_to application_routes.admin_soft_maintenance_path, class: ("menu-active" if controller_path == "admin/soft_maintenance_settings"), aria: { current: ("page" if controller_path == "admin/soft_maintenance_settings") } do %>
+      <% end %>
+      <%= navigation_item(path: application_routes.admin_soft_maintenance_path, active: controller_path == "admin/soft_maintenance_settings", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
           </svg>
           <%= application_translate("navigation.soft_maintenance") %>
-        <% end %>
-      </li>
-      <li>
-        <%= link_to application_routes.admin_users_path, class: ("menu-active" if controller_path.in?(%w[admin/users admin/user_roles])), aria: { current: ("page" if controller_path.in?(%w[admin/users admin/user_roles])) } do %>
+      <% end %>
+      <%= navigation_item(path: application_routes.admin_users_path, active: controller_path.in?(%w[admin/users admin/user_roles]), dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m6-3c0 7.142-3.75 12-9 13.5C6.75 18.75 3 13.892 3 6.75c3.75 0 7.5-1.5 9-4.5 1.5 3 5.25 4.5 9 4.5Z" />
           </svg>
           <%= application_translate("navigation.users") %>
-        <% end %>
-      </li>
-      <li>
-        <%= link_to application_routes.admin_notifications_path, class: ("menu-active" if controller_path.start_with?("admin/notifications")), aria: { current: ("page" if controller_path.start_with?("admin/notifications")) } do %>
+      <% end %>
+      <%= navigation_item(path: application_routes.admin_notifications_path, active: controller_path.start_with?("admin/notifications"), dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
           <%= application_translate("navigation.admin_notifications") %>
-        <% end %>
-      </li>
-      <li>
-        <%= link_to application_routes.admin_pages_path, class: ("menu-active" if controller_path == "admin/pages"), aria: { current: ("page" if controller_path == "admin/pages") } do %>
+      <% end %>
+      <%= navigation_item(path: application_routes.admin_pages_path, active: controller_path == "admin/pages", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5A3.375 3.375 0 0 0 10.125 2.25H8.25m0 12.75h7.5m-7.5 3h4.5M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-8.25a10.5 10.5 0 0 0-9-10.125Z" />
           </svg>
           <%= application_translate("navigation.pages") %>
-        <% end %>
-      </li>
-      <li>
-        <%= link_to application_routes.admin_faqs_path, class: ("menu-active" if controller_path == "admin/faqs"), aria: { current: ("page" if controller_path == "admin/faqs") } do %>
+      <% end %>
+      <%= navigation_item(path: application_routes.admin_faqs_path, active: controller_path == "admin/faqs", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 9.75a3.375 3.375 0 1 1 5.775 2.387c-.938.938-1.9 1.424-1.9 2.613M12 18h.008v.008H12V18Zm9-6a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
           <%= application_translate("navigation.faqs") %>
-        <% end %>
-      </li>
-      <li>
-        <%= link_to application_routes.edit_admin_footer_setting_path, class: ("menu-active" if controller_path == "admin/footer_settings"), aria: { current: ("page" if controller_path == "admin/footer_settings") } do %>
+      <% end %>
+      <%= navigation_item(path: application_routes.edit_admin_footer_setting_path, active: controller_path == "admin/footer_settings", dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
           </svg>
           <%= application_translate("content_management.admin.footer_settings.title") %>
-        <% end %>
-      </li>
+      <% end %>
   ERB
   if job_operations_enabled
     admin_navigation_items += <<~ERB
-      <li>
-        <%= link_to application_routes.admin_jobs_path, class: ("menu-active" if controller_path.start_with?("mission_control/jobs/")), aria: { current: ("page" if controller_path.start_with?("mission_control/jobs/")) } do %>
+      <%= navigation_item(path: application_routes.admin_jobs_path, active: controller_path.start_with?("mission_control/jobs/"), dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 18h16.5M4.5 6.75h15a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-15a.75.75 0 0 1-.75-.75V7.5a.75.75 0 0 1 .75-.75Z" />
           </svg>
           <%= application_translate("navigation.job_operations") %>
-        <% end %>
-      </li>
+      <% end %>
     ERB
   end
   if maintenance_tasks_enabled
     admin_navigation_items += <<~ERB
-      <li>
-        <%= link_to application_routes.admin_maintenance_tasks_path, class: ("menu-active" if controller_path.start_with?("maintenance_tasks/")), aria: { current: ("page" if controller_path.start_with?("maintenance_tasks/")) } do %>
+      <%= navigation_item(path: application_routes.admin_maintenance_tasks_path, active: controller_path.start_with?("maintenance_tasks/"), dropdown: local_assigns.fetch(:dropdown, false)) do %>
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766m-3.704 3.796-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 2.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 2.437 1.745-2.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
           </svg>
           <%= application_translate("navigation.maintenance_tasks") %>
-        <% end %>
-      </li>
+      <% end %>
     ERB
   end
   admin_navigation_items += <<~ERB
-    <li>
-      <%= link_to application_routes.account_path do %>
+    <%= navigation_item(path: application_routes.account_path, active: false, dropdown: local_assigns.fetch(:dropdown, false)) do %>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955a1.125 1.125 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
         </svg>
         <%= application_translate("navigation.dashboard") %>
-      <% end %>
-    </li>
+    <% end %>
   ERB
   signed_in_condition = "user_signed_in?"
   admin_controller_conditions = ['controller_path.start_with?("admin/")', 'controller_path.start_with?("billing/admin/")']
@@ -12383,17 +12361,17 @@ def configure_default_views
   profile_owner = "current_user.profile"
   logout_path = "application_routes.destroy_user_session_path"
   guest_desktop_navigation = <<~ERB
-    <%= link_to t("billing.ui.plans"), Billing::Engine.routes.url_helpers.plans_path, class: "link" %>
-    <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: "btn btn-outline" %>
+    <%= link_to t("billing.ui.plans"), Billing::Engine.routes.url_helpers.plans_path, class: "text-primary underline underline-offset-4" %>
+    <%= link_to t("navigation.sign_in"), application_routes.new_user_session_path, class: action_button_classes(:quiet) %>
     <% unless soft_site_maintenance? %>
-      <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: "btn btn-primary btn-outline" %>
+      <%= link_to t("navigation.sign_up"), application_routes.new_user_registration_path, class: action_button_classes(:primary) %>
     <% end %>
   ERB
   guest_mobile_navigation = <<~ERB
-    <li><%= link_to Billing::Engine.routes.url_helpers.plans_path do %><%= billing_icon("squares-2x2") %><%= t("billing.ui.plans") %><% end %></li>
-    <li><%= link_to application_routes.new_user_session_path do %><%= billing_icon("user-circle") %><%= t("navigation.sign_in") %><% end %></li>
+    <%= navigation_item(path: Billing::Engine.routes.url_helpers.plans_path, active: false, dropdown: true) do %><%= billing_icon("squares-2x2") %><%= t("billing.ui.plans") %><% end %>
+    <%= navigation_item(path: application_routes.new_user_session_path, active: false, dropdown: true) do %><%= billing_icon("user-circle") %><%= t("navigation.sign_in") %><% end %>
     <% unless soft_site_maintenance? %>
-      <li><%= link_to application_routes.new_user_registration_path do %><%= billing_icon("user-circle") %><%= t("navigation.sign_up") %><% end %></li>
+      <%= navigation_item(path: application_routes.new_user_registration_path, active: false, dropdown: true) do %><%= billing_icon("user-circle") %><%= t("navigation.sign_up") %><% end %>
     <% end %>
   ERB
   profile_identity = if display_name_enabled || screen_name_enabled
@@ -12409,7 +12387,7 @@ def configure_default_views
     screen_name = if screen_name_enabled
       <<~ERB
         <% if #{profile_owner}.screen_name.present? %>
-          <span class="block text-neutral">@<%= #{profile_owner}.screen_name %></span>
+          <span class="block text-muted-foreground">@<%= #{profile_owner}.screen_name %></span>
         <% end %>
       ERB
     else
@@ -12421,10 +12399,8 @@ def configure_default_views
     ].compact.join(" || ")
     <<~ERB
       <% if #{condition} %>
-        <li>
-          <div class="menu-title">
-      #{display_name.lines.map { |line| "      #{line}" }.join}#{screen_name.lines.map { |line| "      #{line}" }.join}    </div>
-        </li>
+        <%= render(Shadcn::DropdownMenu::Label.new) do %>
+      #{display_name.lines.map { |line| "      #{line}" }.join}#{screen_name.lines.map { |line| "      #{line}" }.join}    <% end %>
       <% end %>
     ERB
   else
@@ -12432,29 +12408,24 @@ def configure_default_views
   end
   account_menu_trigger = if avatar_enabled
     <<~ERB
-      <summary class="btn btn-circle btn-ghost" aria-label="<%= t('navigation.open_account_menu') %>">
-        <div class="avatar">
-          <div class="w-10 rounded-full">
-            <%= profile_avatar(#{profile_owner}, size: 40, alt: "") %>
-          </div>
-        </div>
-      </summary>
+      <%= render(Shadcn::DropdownMenu::Trigger.new(variant: :ghost, size: :"icon-lg", class: "size-10 rounded-full p-0", aria: { label: t('navigation.open_account_menu') })) do %>
+        <%= render(Shadcn::Avatar.new(size: :lg)) { profile_avatar(#{profile_owner}, size: 40, alt: "") } %>
+      <% end %>
     ERB
   else
     <<~ERB
-      <summary class="btn btn-outline">
+      <%= render(Shadcn::DropdownMenu::Trigger.new(variant: :outline)) do %>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
         </svg>
         <span><%= t("common.menu") %></span>
-      </summary>
+      <% end %>
     ERB
   end
   layout_method = %(devise_controller? ? "authentication" : "application")
   wallet_script = ""
   pwa_head = if pwa_enabled
     <<~ERB
-      <meta name="theme-color" content="#3ea8ff">
       <%= tag.link rel: "manifest", href: application_routes.pwa_manifest_path(format: :json) %>
     ERB
   else
@@ -12524,6 +12495,54 @@ def configure_default_views
   RUBY
   create_file "app/controllers/accounts_controller.rb", accounts_controller, force: true
 
+  create_file "app/javascript/controllers/dialog_backdrop_controller.js", <<~'JAVASCRIPT', force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      close(event) {
+        if (event.target !== this.element) return
+
+        const bounds = this.element.getBoundingClientRect()
+        const outside = event.clientX < bounds.left || event.clientX > bounds.right ||
+          event.clientY < bounds.top || event.clientY > bounds.bottom
+        if (!outside) return
+
+        const root = this.element.closest('[data-controller~="shadcn--dialog"]')
+        this.application.getControllerForElementAndIdentifier(root, "shadcn--dialog")?.close()
+      }
+    }
+  JAVASCRIPT
+
+  create_file "app/javascript/controllers/active_navigation_controller.js", <<~'JAVASCRIPT', force: true
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      connect() {
+        this.observer = new ResizeObserver(() => this.revealCurrent())
+        this.observer.observe(this.element)
+        this.revealCurrent()
+        this.element.dataset.activeNavigationReady = "true"
+      }
+
+      disconnect() {
+        this.observer.disconnect()
+      }
+
+      revealCurrent() {
+        const scroller = this.element.matches('[data-with-menu-scroll]')
+          ? this.element
+          : this.element.querySelector('[data-slot="navigation-menu"]')
+        const active = scroller?.querySelector('[aria-current="page"]')
+        if (!active || scroller.scrollWidth <= scroller.clientWidth) return
+        const box = active.getBoundingClientRect()
+        const frame = scroller.getBoundingClientRect()
+        if (box.left < frame.left || box.right > frame.right) {
+          scroller.scrollLeft += box.left - frame.left - (frame.width - box.width) / 2
+        }
+      }
+    }
+  JAVASCRIPT
+
   create_file "app/helpers/application_helper.rb", <<~'RUBY', force: true
     module ApplicationHelper
       extend T::Sig
@@ -12537,15 +12556,15 @@ def configure_default_views
       module ApplicationRoutes
       end
 
-      ACTION_BUTTON_CLASSES = {
-        primary: "btn btn-primary",
-        secondary: "btn",
-        quiet: "btn btn-outline",
-        warning: "btn btn-outline btn-warning",
-        destructive: "btn btn-outline btn-error",
-        destructive_confirm: "btn btn-error"
+      ACTION_BUTTON_VARIANTS = {
+        primary: :default,
+        secondary: :secondary,
+        quiet: :outline,
+        warning: :outline,
+        destructive: :destructive,
+        destructive_confirm: :destructive
       }.freeze
-      private_constant :ACTION_BUTTON_CLASSES
+      private_constant :ACTION_BUTTON_VARIANTS
 
       Rails.application.routes.url_helpers.extend(ApplicationRoutes)
 
@@ -12580,25 +12599,33 @@ def configure_default_views
 
       sig { params(role: Symbol).returns(String) }
       def action_button_classes(role)
-        ACTION_BUTTON_CLASSES.fetch(role) do
+        variant = ACTION_BUTTON_VARIANTS.fetch(role) do
           Kernel.raise ArgumentError, "unsupported action button role: #{role.inspect}"
         end
+        Shadcn::Button.classes(variant:)
       end
 
       sig do
-        params(
-          active: T::Boolean,
-          disabled: T::Boolean,
-          square: T::Boolean
-        ).returns(String)
+        params(path: String, active: T::Boolean, dropdown: T::Boolean,
+          block: T.proc.returns(String)).returns(ActiveSupport::SafeBuffer)
       end
-      def pagination_item_classes(active: false, disabled: false, square: false)
-        class_names(
-          "btn join-item",
-          "btn-active": active,
-          "btn-disabled": disabled,
-          "btn-square": square
-        )
+      def navigation_item(path:, active:, dropdown: false, &block)
+        aria = active ? { current: "page" } : {}
+        if dropdown
+          indicator = if active
+            tag.svg(tag.path(d: "m4.5 12.75 6 6 9-13.5", stroke_linecap: "round", stroke_linejoin: "round"),
+              xmlns: "http://www.w3.org/2000/svg", class: "ml-auto size-4", fill: "none", viewBox: "0 0 24 24",
+              stroke_width: "1.5", stroke: "currentColor", aria: { hidden: true })
+          end
+          render(Shadcn::DropdownMenu::Item.new(tag: :a, href: path, aria:,
+            class: ("font-medium text-foreground" if active))) { safe_join([capture(&block), indicator].compact) }
+        else
+          render(Shadcn::NavigationMenu::Item.new) do
+            render(Shadcn::NavigationMenu::Link.new(href: path, aria:,
+              data: (active ? { active: "" } : {}), class: class_names("w-full", "font-medium text-foreground": active,
+                "text-muted-foreground": !active)), &block)
+          end
+        end
       end
 
       sig do
@@ -12612,10 +12639,11 @@ def configure_default_views
         Kernel.raise ArgumentError, "pagination aria label must not be empty" if aria_label.strip.empty?
 
         content = []
-        content << tag.span(summary, class: "text-sm text-base-content/70") if summary.present?
-        content << tag.div(capture(&block), class: "join")
-        inner = tag.div(safe_join(content), class: "flex w-max min-w-full items-center justify-end gap-3")
-        tag.nav(inner, class: "overflow-x-auto", aria: { label: aria_label })
+        content << tag.span(summary, class: "text-sm text-muted-foreground") if summary.present?
+        content << render(Shadcn::Pagination::Content.new) { capture(&block) }
+        render(Shadcn::Pagination.new("aria-label": aria_label, class: "overflow-x-auto")) do
+          tag.div(safe_join(content), class: "flex min-w-full items-center justify-end gap-3")
+        end
       end
 
       sig { params(pagy: Pagy::Offset, aria_label: String).returns(T.nilable(ActiveSupport::SafeBuffer)) }
@@ -12630,12 +12658,17 @@ def configure_default_views
         items.concat(series.map do |item|
           case item
           when Integer
-            link_to item.to_s, pagy.page_url(item), class: pagination_item_classes
+            render(Shadcn::Pagination::Item.new) do
+              render(Shadcn::Pagination::Link.new(href: pagy.page_url(item))) { item.to_s }
+            end
           when String
-            tag.span(item, class: pagination_item_classes(active: true), role: "link",
-              aria: { current: "page", disabled: true })
+            render(Shadcn::Pagination::Item.new) do
+              render(Shadcn::Pagination::Link.new(tag: :span, is_active: true)) { item }
+            end
           when :gap
-            tag.span("…", class: pagination_item_classes(disabled: true), role: "separator", aria: { disabled: true })
+            render(Shadcn::Pagination::Item.new) do
+              render(Shadcn::Pagination::Ellipsis.new)
+            end
           else
             Kernel.raise TypeError, "unsupported pagination item: #{item.inspect}"
           end
@@ -12664,12 +12697,11 @@ def configure_default_views
           aria: { hidden: true },
           data: { slot: "icon" }
         )
-        classes = pagination_item_classes(square: true)
         url = pagy.page_url(direction)
-        return link_to(icon, url, class: classes, aria: { label: label }) if url
-
-        tag.span(icon, class: pagination_item_classes(disabled: true, square: true), tabindex: "-1", role: "link",
-          aria: { label: label, disabled: true })
+        render(Shadcn::Pagination::Item.new) do
+          render(Shadcn::Pagination::Link.new(tag: (url ? :a : :span), href: url, size: :default,
+            aria: { label: label, disabled: (true unless url) })) { icon }
+        end
       end
 
       sig do
@@ -12692,20 +12724,25 @@ def configure_default_views
 
         title_id = "#{id}-title"
         description_id = "#{id}-description"
-        modal_content = [tag.h2(title, id: title_id, class: "text-lg font-bold leading-[1.5]")]
-        if description.present?
-          modal_content << tag.p(description, id: description_id, class: "mt-2 text-base-content/70")
-        end
-        modal_content << capture(&block)
-        modal_content << tag.div(actions, class: "modal-action") if actions.present?
-
-        box = tag.div(safe_join(modal_content), class: "modal-box")
-        backdrop = tag.form(method: "dialog", class: "modal-backdrop") do
-          tag.button(close_label, type: "submit")
-        end
         aria = { labelledby: title_id }
         aria[:describedby] = description_id if description.present?
-        tag.dialog(safe_join([box, backdrop]), id:, class: "modal", data: dialog_data, aria:)
+        data = dialog_data.merge(
+          controller: "dialog-backdrop",
+          action: [dialog_data[:action], "click->dialog-backdrop#close"].compact.join(" ")
+        )
+        dialog_content = render(Shadcn::Dialog::Content.new(id:, show_close_button: false, data:, aria:)) do
+          header = render(Shadcn::Dialog::Header.new) do
+            heading = [render(Shadcn::Dialog::Title.new(id: title_id)) { title }]
+            if description.present?
+              heading << render(Shadcn::Dialog::Description.new(id: description_id)) { description }
+            end
+            safe_join(heading)
+          end
+          close = render(Shadcn::Dialog::Close.new(class: action_button_classes(:quiet))) { close_label }
+          footer = render(Shadcn::Dialog::Footer.new) { safe_join([close, actions].compact) }
+          safe_join([header, capture(&block), footer])
+        end
+        render(Shadcn::Dialog.new) { dialog_content }
       end
 
       sig { params(card: T::Boolean).returns(T.nilable(ActiveSupport::SafeBuffer)) }
@@ -12727,23 +12764,21 @@ def configure_default_views
         actions = tag.div(safe_join(columns), class: "grid min-w-0 gap-4 sm:grid-cols-2", data: { page_actions: true })
         return actions unless card
 
-        tag.div(tag.div(actions, class: "card-body p-3"), class: "card card-border bg-base-100 mb-6",
-          data: { page_actions_container: "card" })
+        render(Shadcn::Card.new(class: "mb-6", data: { page_actions_container: "card" })) do
+          render(Shadcn::Card::Content.new) { actions }
+        end
       end
       private :page_actions
 
       sig do
         params(
           tabs: T::Array[Tab],
-          size: T.nilable(Symbol),
+          aria_label: String,
           block: T.proc.returns(String)
         ).returns(ActiveSupport::SafeBuffer)
       end
-      def with_tab(tabs:, size: nil, &block)
-        unless size.nil? || %i[xs sm md lg xl].include?(size)
-          Kernel.raise ArgumentError, "tab size must be a daisyUI tab size"
-        end
-
+      def with_tab(tabs:, aria_label:, &block)
+        Kernel.raise ArgumentError, "tab navigation aria label must not be empty" if aria_label.strip.empty?
         matches = tabs.each_with_index.filter_map do |tab, index|
           path = tab.path
           Kernel.raise ArgumentError, "tab path must not be empty" if path.empty?
@@ -12774,20 +12809,23 @@ def configure_default_views
             tab_content
           ])
         end
-        items = tabs.each_with_index.flat_map do |tab, index|
+        items = tabs.each_with_index.map do |tab, index|
           active = index == active_index
-          link = link_to tab.name, tab.path, role: "tab",
-            class: class_names("tab", "tab-active": active, "z-10": active),
-            aria: { selected: active, current: ("page" if active) }
-          next [link] unless active
-
-          [link, tag.div(tab_content, role: "tabpanel",
-            class: "tab-content sticky left-0 max-w-[100cqw] [contain:inline-size] bg-base-100 border-base-300 p-3")]
+          render(Shadcn::NavigationMenu::Item.new) do
+            render(Shadcn::NavigationMenu::Link.new(href: tab.path,
+              data: (active ? { active: "" } : {}), aria: { current: ("page" if active) },
+              class: (active ? "font-medium text-foreground" : "text-muted-foreground"))) { tab.name }
+          end
         end
 
-        tablist = tag.div(safe_join(items), role: "tablist",
-          class: class_names("tabs tabs-lift min-w-max", "tabs-#{size}" => size.present?))
-        tag.div(tablist, class: "isolate overflow-x-auto")
+        navigation_menu = render(Shadcn::NavigationMenu.new(tag: :div, class: "max-w-full overflow-x-auto justify-start")) do
+          render(Shadcn::NavigationMenu::List.new(class: "min-w-max justify-start")) { safe_join(items) }
+        end
+        navigation = tag.nav(navigation_menu, aria: { label: aria_label }, data: { controller: "active-navigation" })
+        panel = render(Shadcn::Card.new) do
+          render(Shadcn::Card::Content.new) { tab_content }
+        end
+        tag.div(safe_join([navigation, panel]), class: "space-y-3")
       end
     end
   RUBY
@@ -12799,14 +12837,14 @@ def configure_default_views
     class ApplicationHelperTest < ActionView::TestCase
       include ApplicationHelper
 
-      test "invalid fields preserve Join structure labels and escaped values" do
+      test "invalid fields preserve labels and escaped values" do
         value = '"><script>alert(1)</script>'
         profile = Profile.new(screen_name: value)
         profile.errors.add(:screen_name, :invalid)
         markup = fields_for(:profile, profile) do |form|
           safe_join([
             form.label(:screen_name),
-            tag.div(class: "join") { safe_join([form.text_field(:screen_name, class: "input join-item", aria: { describedby: "name-help" }), form.submit("Save", class: class_names(action_button_classes(:primary), "join-item"))]) },
+            tag.div(class: "flex") { safe_join([form.text_field(:screen_name, class: Shadcn::Input.classes, aria: { describedby: "name-help" }), form.submit("Save", class: action_button_classes(:primary))]) },
             form.select(:screen_name, [["Name", "name"]]),
             form.text_area(:screen_name),
             form.file_field(:screen_name),
@@ -12815,13 +12853,13 @@ def configure_default_views
         end
         fragment = Nokogiri::HTML.fragment(markup)
         assert_empty fragment.css(".field_with_errors, script")
-        input = fragment.at_css(".join > input[type='text']")
+        input = fragment.at_css(".flex > input[type='text']")
         assert input
         assert_equal value, input["value"]
         assert_equal "true", input["aria-invalid"]
         assert_equal "name-help", input["aria-describedby"]
         assert_equal input["id"], fragment.at_css("label")["for"]
-        assert_equal 1, fragment.css(".join > input[type='submit']").size
+        assert_equal 1, fragment.css(".flex > input[type='submit']").size
         %w[select textarea input[type='file']].each do |selector|
           assert_equal "true", fragment.at_css(selector)["aria-invalid"]
         end
@@ -12830,12 +12868,12 @@ def configure_default_views
 
       test "maps semantic action button roles without a fallback" do
         expected = {
-          primary: "btn btn-primary",
-          secondary: "btn",
-          quiet: "btn btn-outline",
-          warning: "btn btn-outline btn-warning",
-          destructive: "btn btn-outline btn-error",
-          destructive_confirm: "btn btn-error"
+          primary: Shadcn::Button.classes(variant: :default),
+          secondary: Shadcn::Button.classes(variant: :secondary),
+          quiet: Shadcn::Button.classes(variant: :outline),
+          warning: Shadcn::Button.classes(variant: :outline),
+          destructive: Shadcn::Button.classes(variant: :destructive),
+          destructive_confirm: Shadcn::Button.classes(variant: :destructive)
         }
 
         expected.each do |role, classes|
@@ -12844,48 +12882,45 @@ def configure_default_views
         assert_raises(ArgumentError) { action_button_classes(:unknown) }
       end
 
-      test "renders the shared pagination wrapper and item modifiers" do
+      test "renders the shared shadcn pagination wrapper" do
         html = with_pagination(aria_label: "Records pagination", summary: "2 / 8") do
           safe_join([
-            tag.a("2", href: "/records?page=2", class: pagination_item_classes(active: true)),
-            tag.span("3", class: pagination_item_classes(disabled: true, square: true))
+            render(Shadcn::Pagination::Item.new) do
+              render(Shadcn::Pagination::Link.new(href: "/records?page=2")) { "2" }
+            end,
+            render(Shadcn::Pagination::Item.new) do
+              render(Shadcn::Pagination::Link.new(tag: :span, is_active: true)) { "3" }
+            end
           ])
         end
         fragment = Nokogiri::HTML5.fragment(html)
-        nav = T.must(fragment.at_css('nav.overflow-x-auto[aria-label="Records pagination"]'))
+        nav = T.must(fragment.at_css('nav[data-slot="pagination"][aria-label="Records pagination"]'))
         inner = T.must(nav.element_children.first)
 
         assert_includes inner["class"].split, "flex"
-        assert_includes inner["class"].split, "w-max"
         assert_includes inner["class"].split, "min-w-full"
         assert_includes inner["class"].split, "justify-end"
-        assert_equal ["SPAN", "DIV"], inner.element_children.map(&:name).map(&:upcase)
+        assert_equal ["SPAN", "UL"], inner.element_children.map(&:name).map(&:upcase)
         assert_equal "2 / 8", inner.element_children.first.text
-        assert_equal "2", inner.at_css(".join > .btn-active").text
-        assert_includes inner.at_css(".join > .btn-disabled")["class"].split, "btn-square"
-        assert_equal 2, inner.css(".join > .join-item.btn").size
-        assert_equal "btn join-item btn-active",
-          inner.at_css(".join > .btn-active")["class"]
-        assert_equal "btn join-item btn-disabled btn-square",
-          inner.at_css(".join > .btn-disabled")["class"]
+        assert_equal "2", inner.at_css('li[data-slot="pagination-item"] > a[data-slot="pagination-link"]').text
+        assert_equal "3", inner.at_css('li[data-slot="pagination-item"] > span[aria-current="page"]').text
         assert_raises(ArgumentError) { with_pagination(aria_label: " ") { "items" } }
       end
 
-      test "renders accessible daisyUI pagination from the Pagy series" do
+      test "renders accessible shadcn pagination from the Pagy series" do
         pagy = pagination_pagy(count: 400, page: 8)
 
         html = pagination(pagy, aria_label: "Records pagination")
         fragment = Nokogiri::HTML5.fragment(T.must(html))
-        nav = T.must(fragment.at_css('nav.overflow-x-auto[aria-label="Records pagination"]'))
-        items = nav.css(".join > .join-item.btn")
+        nav = T.must(fragment.at_css('nav[data-slot="pagination"][aria-label="Records pagination"]'))
+        items = nav.css('ul[data-slot="pagination-content"] > li[data-slot="pagination-item"]')
 
         assert_equal 9, items.size
-        assert items.all? { |item| %w[btn join-item].all? { |name| item["class"].split.include?(name) } }
-        assert_equal %w[1 … 7 8 9 … 16], items.drop(1).take(7).map(&:text)
-        assert_equal "8", nav.at_css(".join-item.btn-active[aria-current=page]").text
-        assert_equal 2, nav.css('.join-item.btn-disabled[role="separator"]').size
-        assert_equal "/records?page=7", nav.at_css(%(.join > a[aria-label="#{I18n.t("common.previous")}"]))["href"]
-        assert_equal "/records?page=9", nav.at_css(%(.join > a[aria-label="#{I18n.t("common.next")}"]))["href"]
+        assert_equal ["1", "More pages", "7", "8", "9", "More pages", "16"], items.drop(1).take(7).map(&:text)
+        assert_equal "8", nav.at_css('[data-slot="pagination-link"][aria-current="page"]').text
+        assert_equal 2, nav.css('[data-slot="pagination-ellipsis"]').size
+        assert_equal "/records?page=7", nav.at_css(%(a[aria-label="#{I18n.t("common.previous")}"]))["href"]
+        assert_equal "/records?page=9", nav.at_css(%(a[aria-label="#{I18n.t("common.next")}"]))["href"]
         assert_equal 2, nav.css('svg.size-5[aria-hidden="true"][data-slot="icon"]').size
       end
 
@@ -12895,20 +12930,19 @@ def configure_default_views
         first_page = Nokogiri::HTML5.fragment(T.must(
           pagination(pagination_pagy(count: 50), aria_label: "Records pagination")
         ))
-        previous = T.must(first_page.at_css(%(.join > .btn-disabled[aria-label="#{I18n.t("common.previous")}"])))
-        assert_equal "link", previous["role"]
+        previous = T.must(first_page.at_css(%(span[data-slot="pagination-link"][aria-label="#{I18n.t("common.previous")}"])))
         assert_equal "true", previous["aria-disabled"]
         assert_nil previous["href"]
 
         last_page = Nokogiri::HTML5.fragment(T.must(
           pagination(pagination_pagy(count: 50, page: 2), aria_label: "Records pagination")
         ))
-        following = T.must(last_page.at_css(%(.join > .btn-disabled[aria-label="#{I18n.t("common.next")}"])))
+        following = T.must(last_page.at_css(%(span[data-slot="pagination-link"][aria-label="#{I18n.t("common.next")}"])))
         assert_equal "true", following["aria-disabled"]
         assert_nil following["href"]
       end
 
-      test "renders one accessible native dialog from captured body and actions" do
+      test "renders one accessible shadcn dialog from captured body and actions" do
         capture_count = 0
         actions = capture { tag.button("Apply", type: "button") }
         html = with_modal(
@@ -12923,28 +12957,31 @@ def configure_default_views
           tag.p("Body")
         end
         fragment = Nokogiri::HTML5.fragment(html)
-        dialog = T.must(fragment.at_css("dialog#example-modal.modal"))
+        root = T.must(fragment.at_css('[data-slot="dialog"][data-controller="shadcn--dialog"]'))
+        dialog = T.must(root.at_css('dialog#example-modal[data-slot="dialog-content"]'))
 
         assert_equal 1, capture_count
         assert_equal "example-modal-title", dialog["aria-labelledby"]
         assert_equal "example-modal-description", dialog["aria-describedby"]
         assert_equal "dialog", dialog["data-controller-target"]
-        assert_equal "close->controller#close", dialog["data-action"]
-        assert_equal "Example", dialog.at_css(".modal-box > h2#example-modal-title").text
-        assert_equal "Description", dialog.at_css(".modal-box > p#example-modal-description").text
-        assert_equal "Body", dialog.at_css(".modal-box > p:not([id])").text
-        assert_equal "Apply", dialog.at_css(".modal-action > button").text
-        assert_equal "dialog", dialog.at_css("form.modal-backdrop")["method"]
-        assert_equal "Close", dialog.at_css("form.modal-backdrop > button[type=submit]").text
+        assert_equal "close->controller#close click->dialog-backdrop#close", dialog["data-action"]
+        assert_equal "dialog-backdrop", dialog["data-controller"]
+        assert_equal "Example", dialog.at_css('[data-slot="dialog-title"]#example-modal-title').text
+        assert_equal "Description", dialog.at_css('[data-slot="dialog-description"]#example-modal-description').text
+        assert_equal "Body", dialog.at_css("p:not([id])").text
+        footer = T.must(dialog.at_css('[data-slot="dialog-footer"]'))
+        assert_equal ["Close", "Apply"], footer.css("button").map(&:text)
+        assert_equal "shadcn--dialog#close", footer.at_css('[data-slot="dialog-close"]')["data-action"]
+        assert_nil dialog.at_css("form[method=dialog]")
       end
 
       test "omits optional modal description and actions" do
         html = with_modal(id: "simple-modal", title: "Simple", close_label: "Close") { tag.p("Body") }
-        dialog = T.must(Nokogiri::HTML5.fragment(html).at_css("dialog#simple-modal"))
+        dialog = T.must(Nokogiri::HTML5.fragment(html).at_css('dialog#simple-modal[data-slot="dialog-content"]'))
 
         assert_nil dialog["aria-describedby"]
         assert_nil dialog.at_css("[id=simple-modal-description]")
-        assert_nil dialog.at_css(".modal-action")
+        assert_equal "Close", dialog.at_css('[data-slot="dialog-close"]').text
       end
 
       test "rejects invalid modal identifiers and empty labels" do
@@ -12954,19 +12991,19 @@ def configure_default_views
       end
 
       test "renders only the populated page action columns inside a card" do
-        content_for(:page_actions_primary) { tag.a("Create", href: "/new", class: "btn") }
+        content_for(:page_actions_primary) { tag.a("Create", href: "/new", class: Shadcn::Button.classes) }
 
         html = send(:page_actions, card: true)
         fragment = Nokogiri::HTML5.fragment(T.must(html))
-        card = T.must(fragment.at_css('[data-page-actions-container="card"].card.card-border.bg-base-100'))
-        card_body = T.must(card.at_css(".card-body"))
+        card = T.must(fragment.at_css('[data-page-actions-container="card"][data-slot="card"]'))
+        card_body = T.must(card.at_css('[data-slot="card-content"]'))
 
         assert card_body.element_children.first["data-page-actions"]
-        assert_includes card_body["class"].split, "p-3"
+        assert_includes card_body["class"].split, "px-(--card-spacing)"
         assert_nil card.at_css('[data-page-actions-column="secondary"]')
         primary = T.must(card.at_css('[data-page-actions-column="primary"]'))
         assert_includes primary["class"].split, "sm:col-start-2"
-        assert_equal "Create", primary.at_css("a.btn").text
+        assert_equal "Create", primary.at_css("a").text
       end
 
       test "orders appended secondary fragments before primary actions" do
@@ -12996,20 +13033,20 @@ def configure_default_views
         content_for(:page_actions_primary) { tag.a("Create", href: "/new") }
         capture_count = 0
 
-        html = with_tab(tabs: [ApplicationHelper::Tab.new(name: "Account", path: "/account")]) do
+        html = with_tab(tabs: [ApplicationHelper::Tab.new(name: "Account", path: "/account")], aria_label: "Account") do
           capture_count += 1
           tag.p("Tab content")
         end
         fragment = Nokogiri::HTML5.fragment(html)
-        tab_content = T.must(fragment.at_css("[role=tabpanel]"))
+        tab_content = T.must(fragment.at_css('[data-slot="card-content"]'))
         actions_container = T.must(tab_content.element_children.first)
 
         assert_equal 1, capture_count
         assert_equal "tab", actions_container["data-page-actions-container"]
         assert actions_container.at_css("[data-page-actions]")
-        assert_includes tab_content["class"].split, "p-3"
+        assert_includes tab_content["class"].split, "px-(--card-spacing)"
         assert_equal "Tab content", tab_content.element_children.find { |node| node.name == "p" }.text
-        assert_nil tab_content.at_css(".card.card-border")
+        assert_nil tab_content.at_css('[data-page-actions-container="card"]')
         assert content_for?(:page_actions_in_tab)
       end
 
@@ -13020,27 +13057,20 @@ def configure_default_views
         html = with_tab(tabs: [
           ApplicationHelper::Tab.new(name: "Account", path: "/account"),
           ApplicationHelper::Tab.new(name: "Wallets", path: "/account/siwe_identities")
-        ]) do
+        ], aria_label: "Account") do
           capture_count += 1
           tag.p("Tab content")
         end
         fragment = Nokogiri::HTML5.fragment(html)
 
         assert_equal 1, capture_count
-        assert_equal 1, fragment.css(".overflow-x-auto > .tabs.tabs-lift.min-w-max").size
-        assert_equal 1, fragment.css(".tabs.tabs-lift > .tab-content").size
-        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "sticky"
-        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "left-0"
-        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "max-w-[100cqw]"
-        assert_includes fragment.at_css("[role=tabpanel]")["class"].split, "[contain:inline-size]"
-        assert_equal "Tab content", fragment.at_css(".tab-active + .tab-content p").text
-        assert_equal "/account/siwe_identities", fragment.at_css(".tab-active")["href"]
-        assert_includes fragment.at_css(".tab-active")["class"].split, "z-10"
-        assert_includes fragment.at_css("[role='tablist']").parent["class"].split, "isolate"
-        refute_includes fragment.at_css(".tab:not(.tab-active)")["class"].split, "z-10"
-        assert_equal "true", fragment.at_css(".tab-active")["aria-selected"]
-        assert_equal "page", fragment.at_css(".tab-active")["aria-current"]
-        assert_equal ["false", "true"], fragment.css(".tab").pluck("aria-selected")
+        assert_equal 1, fragment.css('[data-slot="navigation-menu"] > [data-slot="navigation-menu-list"]').size
+        assert_equal 2, fragment.css('[data-slot="navigation-menu-item"] > a[data-slot="navigation-menu-link"]').size
+        assert_equal "Tab content", fragment.at_css('[data-slot="card-content"] p').text
+        active = T.must(fragment.at_css('a[data-slot="navigation-menu-link"][aria-current="page"]'))
+        assert_equal "/account/siwe_identities", active["href"]
+        assert active.key?("data-active")
+        assert_equal "/account", fragment.at_css('a[data-slot="navigation-menu-link"]:not([data-active])')["href"]
       end
 
       test "uses an explicit lambda instead of path matching" do
@@ -13048,45 +13078,47 @@ def configure_default_views
         html = with_tab(tabs: [
           ApplicationHelper::Tab.new(name: "Account", path: "/account", is_active: -> { false }),
           ApplicationHelper::Tab.new(name: "Dynamic", path: "/elsewhere", is_active: -> { true })
-        ]) { tag.p("Tab content") }
+        ], aria_label: "Account") { tag.p("Tab content") }
 
-        assert_equal "/elsewhere", Nokogiri::HTML5.fragment(html).at_css(".tab-active")["href"]
+        assert_equal "/elsewhere", Nokogiri::HTML5.fragment(html).at_css('a[data-slot="navigation-menu-link"][data-active]')["href"]
       end
 
       test "rejects no match and equally long active paths" do
         request.path = "/unmatched"
         assert_raises(ArgumentError) do
-          with_tab(tabs: [ApplicationHelper::Tab.new(name: "Account", path: "/account")]) { "content" }
+          with_tab(tabs: [ApplicationHelper::Tab.new(name: "Account", path: "/account")], aria_label: "Account") { "content" }
         end
 
         assert_raises(ArgumentError) do
           with_tab(tabs: [
             ApplicationHelper::Tab.new(name: "First", path: "/first", is_active: -> { true }),
             ApplicationHelper::Tab.new(name: "Other", path: "/other", is_active: -> { true })
-          ]) { "content" }
+          ], aria_label: "Account") { "content" }
         end
       end
 
       test "rejects empty paths and active predicates other than lambdas" do
         assert_raises(ArgumentError) do
-          with_tab(tabs: [ApplicationHelper::Tab.new(name: "Empty", path: "")]) { "content" }
+          with_tab(tabs: [ApplicationHelper::Tab.new(name: "Empty", path: "")], aria_label: "Account") { "content" }
         end
         assert_raises(ArgumentError) do
           with_tab(tabs: [
             ApplicationHelper::Tab.new(name: "Proc", path: "/proc", is_active: proc { true })
-          ]) { "content" }
+          ], aria_label: "Account") { "content" }
         end
       end
 
-      test "adds an optional daisyUI size modifier" do
-        request.path = "/compact"
-        tab = ApplicationHelper::Tab.new(name: "Compact", path: "/compact")
-        html = with_tab(tabs: [tab], size: :sm) { "content" }
+      test "uses link navigation without a client-side tab controller" do
+        request.path = "/account"
+        tab = ApplicationHelper::Tab.new(name: "Account", path: "/account")
+        html = with_tab(tabs: [tab], aria_label: "Account") { "content" }
+        fragment = Nokogiri::HTML5.fragment(html)
 
-        assert_includes Nokogiri::HTML5.fragment(html).at_css("[role=tablist]")["class"].split, "tabs-sm"
-        assert_raises(ArgumentError) do
-          with_tab(tabs: [tab], size: :compact) { "content" }
-        end
+        assert_equal "Account", fragment.at_css("nav")['aria-label']
+        assert_nil fragment.at_css('nav [data-slot="card-content"]')
+        assert_equal "page", fragment.at_css('a[data-slot="navigation-menu-link"]')["aria-current"]
+        assert_nil fragment.at_css('[data-controller="shadcn--tabs"]')
+        assert_equal "content", fragment.at_css('[data-slot="card-content"]').text
       end
 
       private
@@ -13105,7 +13137,7 @@ def configure_default_views
 
   create_file "app/views/layouts/application.html.erb", <<~ERB, force: true
     <!DOCTYPE html>
-    <html lang="<%= I18n.locale %>" data-theme="rapid-rails">
+    <html lang="<%= I18n.locale %>">
       <head>
         <title><%= document_title %></title>
         <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -13123,13 +13155,13 @@ def configure_default_views
         <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag "lexxy", "data-turbo-track": "reload" %>
-    #{wallet_script}    <%= content_for?(:javascript_importmap) ? yield(:javascript_importmap) : javascript_importmap_tags %>
+    #{wallet_script}    <%= javascript_importmap_tags %>
       </head>
-      <body class="min-h-screen bg-base-100 text-base-content antialiased" data-layout="application"#{body_data_attributes}>
+      <body class="min-h-screen bg-background text-foreground antialiased" data-layout="application"#{body_data_attributes}>
         <div class="flex min-h-screen flex-col">
           <%= render "shared/header" %>
-          <main class="flex-1 bg-base-200">
-            <%= render "shared/flash" %>
+          <main class="flex-1 bg-background">
+            <%= render "shared/flash" unless content_for?(:with_menu_navigation) %>
             <%= content_for?(:content) ? yield(:content) : yield %>
           </main>
           <%= render "shared/footer" %>
@@ -13140,19 +13172,15 @@ def configure_default_views
 
   create_file "app/views/layouts/authentication.html.erb", <<~ERB, force: true
     <% content_for :content do %>
-      <section class="hero mx-auto w-full max-w-md px-5 py-10 md:py-16" data-layout="authentication">
-        <div class="hero-content w-full max-w-none flex-col gap-4 p-0">
-          <div class="card card-border bg-base-100 w-full">
-            <div class="card-body p-6 sm:p-8">
-              <%= yield %>
-            </div>
-          </div>
+      <section class="mx-auto w-full max-w-md px-5 py-10 md:py-16" data-layout="authentication">
+        <div class="flex w-full flex-col gap-4">
+          <%= render(Shadcn::Card.new(class: "w-full")) do %>
+            <%= render(Shadcn::Card::Content.new) { yield } %>
+          <% end %>
           <% if content_for?(:authentication_switch) %>
-            <div class="card card-border bg-base-100 w-full">
-              <div class="card-body p-6 sm:p-8">
-                <%= yield :authentication_switch %>
-              </div>
-            </div>
+            <%= render(Shadcn::Card.new(class: "w-full")) do %>
+              <%= render(Shadcn::Card::Content.new) { yield :authentication_switch } %>
+            <% end %>
           <% end %>
         </div>
       </section>
@@ -13162,10 +13190,11 @@ def configure_default_views
 
   create_file "app/views/layouts/_with_menu.html.erb", <<~ERB, force: true
     <% content_for :content, flush: true do %>
-      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 min-[961px]:grid-cols-[220px_minmax(0,1fr)] min-[961px]:py-12" data-layout="with-menu">
+      <div class="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 desktop:grid-cols-[220px_minmax(0,1fr)] desktop:py-12" data-layout="with-menu">
         <aside class="min-w-0 h-fit"><%= yield :with_menu_navigation %></aside>
         <div class="min-w-0 [container-type:inline-size]">
           <% page_content = yield %>
+          <%= render "shared/flash", container_class: "w-full pb-6" %>
           <h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
           <%= page_actions(card: true) unless content_for?(:page_actions_in_tab) %>
           <%= page_content %>
@@ -13178,15 +13207,15 @@ def configure_default_views
   create_file "app/views/shared/_account_navigation.html.erb", account_navigation_items, force: true
   create_file "app/views/layouts/_account_shell.html.erb", <<~ERB, force: true
     <% content_for :with_menu_navigation, flush: true do %>
-      <nav class="w-full rounded-box bg-base-100" aria-label="<%= t('navigation.account_menu') %>">
-        <p class="px-4 pt-3 text-sm font-semibold text-neutral min-[961px]:hidden" data-with-menu-mobile-category><%= t("navigation.dashboard") %></p>
-        <div class="overflow-x-auto min-[961px]:overflow-visible" data-with-menu-scroll>
-          <ul class="menu menu-horizontal w-max min-w-full min-[961px]:menu-vertical min-[961px]:w-full" data-with-menu-items>
-            <li class="menu-title max-[961px]:hidden"><%= t("navigation.dashboard") %></li>
+      <%= render(Shadcn::NavigationMenu.new(class: "w-full max-w-none flex-col items-stretch rounded-md border border-border bg-card", aria: { label: t('navigation.account_menu') })) do %>
+        <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground desktop:hidden" data-with-menu-mobile-category><%= t("navigation.dashboard") %></p>
+        <div class="overflow-x-auto desktop:overflow-visible" data-controller="active-navigation" data-with-menu-scroll>
+          <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground max-desktop:hidden" data-with-menu-desktop-category><%= t("navigation.dashboard") %></p>
+          <%= render(Shadcn::NavigationMenu::List.new(class: "w-max min-w-full justify-start gap-1 p-2 desktop:w-full desktop:flex-col desktop:items-stretch", data: { with_menu_items: true })) do %>
             <%= render "shared/account_navigation" %>
-          </ul>
+          <% end %>
         </div>
-      </nav>
+      <% end %>
     <% end %>
     <%= render layout: "layouts/with_menu" do %>
       <%= yield %>
@@ -13205,13 +13234,11 @@ def configure_default_views
   ].compact.join(",\n          ")
   create_file "app/views/layouts/account_settings.html.erb", <<~ERB, force: true
       <% content_for :account_settings_content, flush: true do %>
-        <nav aria-label="<%= t('navigation.account_settings') %>">
-          <%= with_tab(tabs: [
+        <%= with_tab(tabs: [
           #{account_settings_tabs}
-          ]) do %>
-            <%= yield %>
-          <% end %>
-        </nav>
+          ], aria_label: t('navigation.account_settings')) do %>
+          <%= yield %>
+        <% end %>
       <% end %>
       <%= render layout: "layouts/account_shell" do %>
         <%= yield :account_settings_content %>
@@ -13221,15 +13248,15 @@ def configure_default_views
   create_file "app/views/shared/_admin_navigation.html.erb", admin_navigation_items, force: true
   create_file "app/views/layouts/admin.html.erb", <<~ERB, force: true
     <% content_for :with_menu_navigation, flush: true do %>
-      <nav class="w-full rounded-box bg-base-100" aria-label="<%= application_translate('navigation.admin_menu') %>">
-        <p class="px-4 pt-3 text-sm font-semibold text-neutral min-[961px]:hidden" data-with-menu-mobile-category><%= application_translate("navigation.admin") %></p>
-        <div class="overflow-x-auto min-[961px]:overflow-visible" data-with-menu-scroll>
-          <ul class="menu menu-horizontal w-max min-w-full min-[961px]:menu-vertical min-[961px]:w-full" data-with-menu-items>
-            <li class="menu-title max-[961px]:hidden"><%= application_translate("navigation.admin") %></li>
+      <%= render(Shadcn::NavigationMenu.new(class: "w-full max-w-none flex-col items-stretch rounded-md border border-border bg-card", aria: { label: application_translate('navigation.admin_menu') })) do %>
+        <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground desktop:hidden" data-with-menu-mobile-category><%= application_translate("navigation.admin") %></p>
+        <div class="overflow-x-auto desktop:overflow-visible" data-controller="active-navigation" data-with-menu-scroll>
+          <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground max-desktop:hidden" data-with-menu-desktop-category><%= application_translate("navigation.admin") %></p>
+          <%= render(Shadcn::NavigationMenu::List.new(class: "w-max min-w-full justify-start gap-1 p-2 desktop:w-full desktop:flex-col desktop:items-stretch", data: { with_menu_items: true })) do %>
             <%= render "shared/admin_navigation" %>
-          </ul>
+          <% end %>
         </div>
-      </nav>
+      <% end %>
     <% end %>
     <%= render layout: "layouts/with_menu" do %>
       <%= content_for?(:admin_content) ? yield(:admin_content) : yield %>
@@ -13237,24 +13264,22 @@ def configure_default_views
   ERB
 
   create_file "app/views/shared/_header.html.erb", <<~ERB, force: true
-    <header class="border-b border-base-300 bg-base-100">
-      <nav class="navbar mx-auto w-full max-w-6xl px-5" aria-label="<%= t('navigation.main') %>">
-        <div class="navbar-start">
-          <%= link_to application_identity.app_name, application_routes.root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
-        </div>
+    <header class="border-b border-border bg-background">
+      <nav class="mx-auto flex min-h-16 w-full max-w-6xl items-center justify-between gap-4 px-5" aria-label="<%= t('navigation.main') %>">
+        <%= link_to application_identity.app_name, application_routes.root_path, class: "inline-flex min-h-11 items-center text-lg font-bold text-primary" %>
         <% if #{signed_in_condition} %>
-          <div class="navbar-end gap-1">
-            <button type="button" class="btn btn-ghost btn-circle" popovertarget="notifications-popover"
+          <div class="flex items-center gap-1">
+            <button type="button" class="<%= Shadcn::Button.classes(variant: :ghost, size: :icon) %>" popovertarget="notifications-popover"
               style="anchor-name: --notifications-anchor" aria-label="<%= t('notifications.popover_label') %>">
-              <span class="indicator">
+              <span class="relative inline-flex">
                 <%= render "notifications/unread_status" %>
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
               </span>
             </button>
-            <div id="notifications-popover" popover class="dropdown dropdown-end z-20 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-box border border-base-300 bg-base-100 shadow"
-              style="position-anchor: --notifications-anchor" data-controller="notification-popover"
+            <div id="notifications-popover" popover class="z-20 w-[min(24rem,calc(100vw-2rem))] rounded-md border border-border bg-popover text-popover-foreground shadow-md"
+              style="position-anchor: --notifications-anchor; inset: auto; top: anchor(bottom); right: min(anchor(right), calc(100vw - min(24rem, 100vw - 2rem) - 1rem)); margin-top: 0.5rem" data-controller="notification-popover"
               data-notification-popover-url-value="<%= application_routes.popover_notifications_path %>"
               data-action="toggle->notification-popover#load">
               <%= turbo_frame_tag "notifications_popover", data: {
@@ -13262,49 +13287,47 @@ def configure_default_views
                 action: "turbo:fetch-request-error->notification-popover#error turbo:frame-missing->notification-popover#error"
               } do %>
                 <div class="space-y-3 p-3" aria-label="<%= t('notifications.loading') %>">
-                  <div class="skeleton h-4 w-4/5"></div>
-                  <div class="skeleton h-4 w-3/5"></div>
-                  <div class="skeleton h-4 w-2/3"></div>
+                  <%= render(Shadcn::Skeleton.new(class: "h-4 w-4/5")) %>
+                  <%= render(Shadcn::Skeleton.new(class: "h-4 w-3/5")) %>
+                  <%= render(Shadcn::Skeleton.new(class: "h-4 w-2/3")) %>
                 </div>
               <% end %>
               <template data-notification-popover-target="error">
                 <div class="p-3">
-                  <div class="alert" role="alert" data-notification-load-error><span><%= t("notifications.load_failed") %></span></div>
-                  <button type="button" class="btn mt-3 w-full" data-action="notification-popover#retry"><%= t("notifications.retry") %></button>
+                  <%= render(Shadcn::Alert.new(role: "alert", data: { notification_load_error: true })) { render(Shadcn::Alert::Description.new) { t("notifications.load_failed") } } %>
+                  <button type="button" class="<%= Shadcn::Button.classes(variant: :secondary, extra: "mt-3 w-full") %>" data-action="notification-popover#retry"><%= t("notifications.retry") %></button>
                 </div>
               </template>
             </div>
-            <details class="dropdown dropdown-end dropdown-hover">
-    #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}          <ul class="menu menu-sm dropdown-content z-10 mt-3 w-72 rounded-box bg-base-100 shadow">
-    #{profile_identity.lines.map { |line| "            #{line}" }.join}            <% if controller_path.start_with?("billing/merchant/") %>
-                <%= render "billing/shared/merchant_navigation" %>
-              <% elsif #{admin_controller_condition} %>
-                <li class="menu-title"><%= application_translate("navigation.admin") %></li>
-                <%= render "shared/admin_navigation" %>
-              <% else %>
-                <%= render "shared/account_navigation" %>
-              <% end %>
-              <li role="separator"></li>
-              <li>
-                <%= link_to #{logout_path}, data: { turbo_method: :delete } do %>
+            <%= render(Shadcn::DropdownMenu.new) do %>
+    #{account_menu_trigger.lines.map { |line| "          #{line}" }.join}      <%= render(Shadcn::DropdownMenu::Content.new(align: :end, class: "z-20 w-72")) do %>
+    #{profile_identity.lines.map { |line| "          #{line}" }.join}        <% if controller_path.start_with?("billing/merchant/") %>
+                  <%= render "billing/shared/merchant_navigation", dropdown: true %>
+                <% elsif #{admin_controller_condition} %>
+                  <%= render(Shadcn::DropdownMenu::Label.new) { application_translate("navigation.admin") } %>
+                  <%= render "shared/admin_navigation", dropdown: true %>
+                <% else %>
+                  <%= render "shared/account_navigation", dropdown: true %>
+                <% end %>
+                <%= render(Shadcn::DropdownMenu::Separator.new) %>
+                <%= render(Shadcn::DropdownMenu::Item.new(tag: :a, href: #{logout_path}, data: { turbo_method: :delete })) do %>
                   <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9m9.75 0-3-3m3 3-3 3" />
                   </svg>
                   <%= t("navigation.sign_out") %>
                 <% end %>
-              </li>
-              </ul>
-            </details>
+              <% end %>
+            <% end %>
           </div>
         <% else %>
-          <div class="navbar-end hidden items-center gap-1 min-[961px]:flex">
+          <div class="hidden items-center gap-3 desktop:flex">
     #{guest_desktop_navigation.lines.map { |line| "        #{line}" }.join}      </div>
-          <div class="navbar-end min-[961px]:hidden">
-            <details class="dropdown dropdown-end">
-              <summary class="btn btn-outline"><%= t("common.menu") %></summary>
-              <ul class="menu menu-sm dropdown-content z-10 mt-3 w-52 rounded-box bg-base-100 shadow">
-    #{guest_mobile_navigation.lines.map { |line| "            #{line}" }.join}          </ul>
-            </details>
+          <div class="desktop:hidden">
+            <%= render(Shadcn::DropdownMenu.new) do %>
+              <%= render(Shadcn::DropdownMenu::Trigger.new(variant: :outline)) { t("common.menu") } %>
+              <%= render(Shadcn::DropdownMenu::Content.new(align: :end, class: "z-20 w-64")) do %>
+    #{guest_mobile_navigation.lines.map { |line| "                #{line}" }.join}            <% end %>
+            <% end %>
           </div>
         <% end %>
       </nav>
@@ -13313,57 +13336,63 @@ def configure_default_views
 
   create_file "app/views/shared/_flash.html.erb", <<~ERB, force: true
     <% if flash[:credential_risk] %>
-      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
-        <div class="alert alert-warning alert-soft" role="alert">
-          <span>
-            <%= t("credential_risk.warning") %>
-            <%= link_to t("credential_risk.add_login_method"), application_routes.account_passkeys_path, class: "link whitespace-nowrap" %>
-          </span>
-        </div>
+      <div class="<%= local_assigns.fetch(:container_class, "mx-auto w-full max-w-[820px] px-5 pt-5") %>">
+        <%= render(Shadcn::Alert.new) do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+          <%= render(Shadcn::Alert::Title.new) { t("credential_risk.warning") } %>
+          <%= render(Shadcn::Alert::Description.new) do %>
+            <%= link_to t("credential_risk.add_login_method"), application_routes.account_passkeys_path, class: "underline whitespace-nowrap" %>
+          <% end %>
+        <% end %>
       </div>
     <% end %>
     <% if notice.present? %>
-      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
-        <div class="alert alert-success alert-soft" role="status"><span><%= notice %></span></div>
+      <div class="<%= local_assigns.fetch(:container_class, "mx-auto w-full max-w-[820px] px-5 pt-5") %>">
+        <%= render(Shadcn::Alert.new(role: "status")) do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+          <%= render(Shadcn::Alert::Description.new) { notice } %>
+        <% end %>
       </div>
     <% end %>
     <% if alert.present? %>
-      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
-        <div class="alert alert-error alert-soft" role="alert"><span><%= alert %></span></div>
+      <div class="<%= local_assigns.fetch(:container_class, "mx-auto w-full max-w-[820px] px-5 pt-5") %>">
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <%= render(Shadcn::Alert::Description.new) { alert } %>
+        <% end %>
       </div>
     <% end %>
   ERB
 
   create_file "app/views/shared/_footer.html.erb", <<~ERB, force: true
     <% external_links_configured = footer_setting.x_url.present? || footer_setting.github_url.present? %>
-    <div class="border-t border-base-300 bg-base-100">
-      <footer class="footer footer-vertical mx-auto w-full max-w-6xl px-5 py-8 text-sm sm:footer-horizontal">
-        <nav>
-          <h2 class="footer-title leading-[1.5]"><%= t("footer.about_section") %></h2>
-          <%= link_to t("footer.about", app_name: application_identity.app_name), application_routes.about_path, class: "link link-hover" %>
-          <%= link_to t("footer.company"), application_routes.corp_path, class: "link link-hover" %>
+    <div class="border-t border-border bg-card">
+      <footer class="mx-auto grid w-full max-w-6xl gap-8 px-5 py-8 text-sm sm:grid-cols-2 desktop:grid-cols-4" data-site-footer>
+        <nav class="flex flex-col items-start gap-2">
+          <h2 class="font-semibold leading-[1.5]"><%= t("footer.about_section") %></h2>
+          <%= link_to t("footer.about", app_name: application_identity.app_name), application_routes.about_path, class: "text-primary underline underline-offset-4" %>
+          <%= link_to t("footer.company"), application_routes.corp_path, class: "text-primary underline underline-offset-4" %>
         </nav>
-        <nav>
-          <h2 class="footer-title leading-[1.5]"><%= t("footer.guides_section") %></h2>
-          <%= link_to t("footer.manual"), application_routes.manual_path, class: "link link-hover" %>
-          <%= link_to t("footer.faq"), application_routes.faq_path, class: "link link-hover" %>
+        <nav class="flex flex-col items-start gap-2">
+          <h2 class="font-semibold leading-[1.5]"><%= t("footer.guides_section") %></h2>
+          <%= link_to t("footer.manual"), application_routes.manual_path, class: "text-primary underline underline-offset-4" %>
+          <%= link_to t("footer.faq"), application_routes.faq_path, class: "text-primary underline underline-offset-4" %>
         </nav>
         <% if external_links_configured %>
-          <nav>
-            <h2 class="footer-title leading-[1.5]"><%= t("footer.links_section") %></h2>
+          <nav class="flex flex-col items-start gap-2">
+            <h2 class="font-semibold leading-[1.5]"><%= t("footer.links_section") %></h2>
             <% if footer_setting.x_url.present? %>
-              <%= link_to "X(Twitter)", footer_setting.x_url, class: "link link-hover", target: "_blank", rel: "noopener noreferrer" %>
+              <%= link_to "X(Twitter)", footer_setting.x_url, class: "text-primary underline underline-offset-4", target: "_blank", rel: "noopener noreferrer" %>
             <% end %>
             <% if footer_setting.github_url.present? %>
-              <%= link_to "GitHub", footer_setting.github_url, class: "link link-hover", target: "_blank", rel: "noopener noreferrer" %>
+              <%= link_to "GitHub", footer_setting.github_url, class: "text-primary underline underline-offset-4", target: "_blank", rel: "noopener noreferrer" %>
             <% end %>
           </nav>
         <% end %>
-        <nav>
-          <h2 class="footer-title leading-[1.5]">Legal</h2>
-          <%= link_to t("footer.terms"), application_routes.terms_path, class: "link link-hover" %>
-          <%= link_to t("footer.privacy"), application_routes.privacy_path, class: "link link-hover" %>
-          <%= link_to t("footer.transaction_law"), application_routes.transaction_law_path, class: "link link-hover" %>
+        <nav class="flex flex-col items-start gap-2">
+          <h2 class="font-semibold leading-[1.5]">Legal</h2>
+          <%= link_to t("footer.terms"), application_routes.terms_path, class: "text-primary underline underline-offset-4" %>
+          <%= link_to t("footer.privacy"), application_routes.privacy_path, class: "text-primary underline underline-offset-4" %>
+          <%= link_to t("footer.transaction_law"), application_routes.transaction_law_path, class: "text-primary underline underline-offset-4" %>
         </nav>
       </footer>
     </div>
@@ -13371,12 +13400,12 @@ def configure_default_views
 
   create_file "app/views/home/index.html.erb", <<~ERB, force: true
     <div class="mx-auto w-full max-w-[820px] space-y-8 px-5 py-10 md:py-14">
-      <section class="hero rounded-box border border-base-300 bg-base-100">
-        <div class="hero-content w-full max-w-none flex-col items-start gap-6 p-6 sm:p-8 md:p-10">
-          <span class="badge badge-outline"><%= t("home.badge") %></span>
+      <section class="rounded-xl border border-border bg-card">
+        <div class="flex w-full flex-col items-start gap-6 p-6 sm:p-8 md:p-10">
+          <%= render(Shadcn::Badge.new(variant: :outline)) { t("home.badge") } %>
           <div>
-            <h1 class="text-[1.75rem] font-bold leading-[1.5] min-[961px]:text-[2.4rem]"><%= t("home.heading") %></h1>
-            <p class="mt-5 max-w-2xl text-neutral"><%= t("home.description") %></p>
+            <h1 class="text-balance text-[1.75rem] font-bold leading-[1.5] desktop:text-[2.4rem]"><%= t("home.heading.before") %><span class="whitespace-nowrap"><%= t("home.heading.emphasis") %></span><%= t("home.heading.after") %></h1>
+            <p class="mt-5 max-w-2xl text-muted-foreground"><%= t("home.description") %></p>
           </div>
           <div class="flex flex-col gap-3 sm:flex-row">
             #{home_action}
@@ -13390,15 +13419,15 @@ def configure_default_views
           <p class="text-sm font-semibold text-primary"><%= t("home.starter") %></p>
           <h2 id="features-title" class="mt-1 text-xl font-bold leading-[1.5]"><%= t("home.features_title") %></h2>
         </div>
-        <div class="grid gap-4 min-[961px]:grid-cols-3">
+        <div class="grid gap-4 desktop:grid-cols-3">
           <% [["01", t("home.features.rails.title"), t("home.features.rails.description")], ["02", t("home.features.ui.title"), t("home.features.ui.description")], ["03", t("home.features.production.title"), t("home.features.production.description")]].each do |number, title, description| %>
-            <article class="card card-border bg-base-100 transition-shadow hover:shadow-sm">
-              <div class="card-body gap-3 p-5">
+            <%= render(Shadcn::Card.new(class: "transition-shadow hover:shadow-sm")) do %>
+              <%= render(Shadcn::Card::Content.new(class: "flex flex-col gap-3")) do %>
                 <span class="text-xs font-bold text-primary"><%= number %></span>
-                <h3 class="card-title text-base leading-[1.5]"><%= title %></h3>
-                <p class="text-sm text-neutral"><%= description %></p>
-              </div>
-            </article>
+                <%= render(Shadcn::Card::Title.new(tag: :h3, class: "text-base leading-[1.5]")) { title } %>
+                <p class="text-sm text-muted-foreground"><%= description %></p>
+              <% end %>
+            <% end %>
           <% end %>
         </div>
       </section>
@@ -13409,18 +13438,18 @@ def configure_default_views
     <% content_for :page_title, t("accounts.show.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm text-neutral">#{account_page_description}</p>
+        <p class="text-sm text-muted-foreground">#{account_page_description}</p>
       </header>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
-          <h2 class="card-title text-base leading-[1.5]"><%= t("accounts.show.next_step") %></h2>
-          <p class="text-sm text-neutral">#{account_page_action}</p>
-          <div class="card-actions mt-2 flex-wrap justify-end">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new(class: "flex flex-col gap-3")) do %>
+          <%= render(Shadcn::Card::Title.new(tag: :h2, class: "text-base leading-[1.5]")) { t("accounts.show.next_step") } %>
+          <p class="text-sm text-muted-foreground">#{account_page_action}</p>
+          <div class="mt-2 flex flex-wrap justify-end gap-2">
             <%= link_to t("accounts.show.back_home"), root_path, class: action_button_classes(:quiet) %>
           </div>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
@@ -13437,7 +13466,7 @@ def configure_default_views
              data-siwe-sign-in-challenge-error-value="<%= t('siwe.errors.challenge') %>"
              data-siwe-sign-in-verification-error-value="<%= t('siwe.errors.verification') %>">
           <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="siwe-sign-in#authenticate"><%= t("accounts.delete.with_wallet") %></button>
-          <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-siwe-sign-in-target="error"></div>
+          <%= render(Shadcn::Alert.new(variant: :destructive, class: "mt-4 hidden", role: "alert", data: { siwe_sign_in_target: "error" })) %>
           <%= render "shared/siwe_provider_picker", modal_id: "siwe-delete-account-provider-picker" %>
         </div>
       <% end %>
@@ -13448,10 +13477,10 @@ def configure_default_views
   create_file "app/views/accounts/delete.html.erb", <<~ERB, force: true
     <% content_for :page_title, t("accounts.delete.title") %>
 
-    <section class="card card-border border-error bg-base-100">
-      <div class="card-body">
-        <p class="text-base-content/70"><%= t("accounts.delete.description") %></p>
-        <div class="card-actions flex-wrap justify-end">
+    <%= render(Shadcn::Card.new(class: "ring-destructive!")) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
+        <p class="text-muted-foreground"><%= t("accounts.delete.description") %></p>
+        <div class="flex flex-wrap justify-end gap-2">
           <%= link_to t("common.back"), account_path, class: action_button_classes(:quiet) %>
           <% if current_user.passkey_credentials.exists? %>
             <div data-controller="passkey"
@@ -13463,12 +13492,12 @@ def configure_default_views
                  data-passkey-unsupported-value="<%= t('passkeys.errors.unsupported') %>"
                  data-passkey-failed-value="<%= t('passkeys.errors.verification') %>">
               <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="passkey#authenticate"><%= t("accounts.delete.with_passkey") %></button>
-              <div class="alert alert-error alert-soft mt-4 hidden" role="alert" data-passkey-target="error"></div>
+              <%= render(Shadcn::Alert.new(variant: :destructive, class: "mt-4 hidden", role: "alert", data: { passkey_target: "error" })) %>
             </div>
           <% end %>
     #{account_delete_siwe.lines.map { |line| "      #{line}" }.join}    </div>
-      </div>
-    </section>
+      <% end %>
+    <% end %>
   ERB
 
   configure_devise_views
@@ -13504,19 +13533,19 @@ def configure_default_views
   end
   profile_trigger_assertion = if avatar_enabled
     <<~RUBY.lines.map { |line| "      #{line}" }.join
-      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-circle .avatar', count: 1 do
+      assert_select 'header [data-slot="dropdown-menu-trigger"] [data-slot="avatar"]', count: 1 do
         assert_select 'svg[width="40"][height="40"][aria-hidden="true"]', count: 1
       end
       assert_select 'header .avatar-placeholder', count: 0
     RUBY
   else
     <<~RUBY.lines.map { |line| "      #{line}" }.join
-      assert_select 'header details.dropdown.dropdown-end.dropdown-hover > summary.btn.btn-outline', text: I18n.t("common.menu"), count: 1 do
+      assert_select 'header [data-slot="dropdown-menu-trigger"]', text: I18n.t("common.menu"), count: 1 do
         assert_select 'svg[data-slot="icon"]', count: 1
       end
     RUBY
   end
-  profile_identity_selector = "header ul.menu.dropdown-content > li > .menu-title"
+  profile_identity_selector = 'header [data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-label"]'
   profile_identity_assertion = if display_name_enabled && screen_name_enabled
     <<~RUBY.lines.map { |line| "      #{line}" }.join
       assert_select '#{profile_identity_selector}', text: /Sample User.*@sample_user/m, count: 1 do
@@ -13554,14 +13583,14 @@ def configure_default_views
       form_assertions << <<~RUBY
         assert_select '[data-controller="image-crop"]', count: 1
         assert_select '[data-controller="image-crop"][data-image-crop-aspect-ratio-value="1"][data-image-crop-output-width-value="512"][data-image-crop-output-height-value="512"]', count: 1
-        assert_select 'form[action=?] fieldset.fieldset.min-w-0.grid-cols-1 input.file-input.min-w-0[name="profile[avatar_upload]"][accept="image/jpeg,image/png,image/webp"][data-image-crop-target="input"]', profile_path, count: 1
-        assert_select 'form[action=?] fieldset.fieldset p.label > span.min-w-0.whitespace-normal', profile_path, text: I18n.t("profiles.avatar_hint"), count: 1
-        assert_select 'form[action=?] .avatar svg[width="64"][height="64"]', profile_path, count: 1
+        assert_select 'form[action=?] input[type="file"][name="profile[avatar_upload]"][accept="image/jpeg,image/png,image/webp"][data-image-crop-target="input"]', profile_path, count: 1
+        assert_select 'form[action=?] p.text-muted-foreground', profile_path, text: I18n.t("profiles.avatar_hint"), count: 1
+        assert_select 'form[action=?] [data-image-crop-target="currentPreview"] svg[width="64"][height="64"]', profile_path, count: 1
         assert_select 'form[action=?] dialog', profile_path, count: 0
-        assert_select 'dialog#avatar-crop-modal.modal[aria-labelledby="avatar-crop-modal-title"][aria-describedby="avatar-crop-modal-description"]', count: 1 do
-          assert_select '.modal-box > h2#avatar-crop-modal-title', text: I18n.t("profiles.avatar_crop.title"), count: 1
-          assert_select '.modal-action button[data-action="image-crop#apply"]', text: I18n.t("profiles.avatar_crop.apply"), count: 1
-          assert_select 'form.modal-backdrop[method="dialog"]', count: 1
+        assert_select 'dialog#avatar-crop-modal[data-slot="dialog-content"][aria-labelledby="avatar-crop-modal-title"][aria-describedby="avatar-crop-modal-description"]', count: 1 do
+          assert_select '[data-slot="dialog-header"] [data-slot="dialog-title"]#avatar-crop-modal-title', text: I18n.t("profiles.avatar_crop.title"), count: 1
+          assert_select '[data-slot="dialog-footer"] button[data-action="image-crop#apply"]', text: I18n.t("profiles.avatar_crop.apply"), count: 1
+          assert_select 'button[data-slot="dialog-close"]', count: 1
         end
         assert_select 'form[action=?]', profile_avatar_path, count: 0
       RUBY
@@ -13584,9 +13613,9 @@ def configure_default_views
     <<~RUBY
       get profile_url
       assert_response :success
-      assert_select '[data-layout="with-menu"] .list > .list-row', count: 3
+      assert_select '[data-layout="with-menu"] [data-slot="item-group"] > li[data-slot="item"]', count: 3
       assert_select 'a[href=?]', edit_profile_path, text: I18n.t("profiles.edit"), count: 1
-      #{avatar_enabled ? "assert_select '.list .avatar svg[width=\"64\"][height=\"64\"]', count: 1\n      assert_select '.avatar-placeholder', count: 0" : ""}
+      #{avatar_enabled ? "assert_select '[data-slot=\"item-group\"] svg[width=\"64\"][height=\"64\"]', count: 1\n      assert_select '.avatar-placeholder', count: 0" : ""}
 
       get edit_profile_url
       assert_response :success
@@ -13603,28 +13632,28 @@ def configure_default_views
             assert_select 'form[action=?] [data-image-crop-target="currentPreview"] img[width="64"][height="64"]', profile_path, count: 1
             assert_select 'form[action=?][method="post"]', profile_avatar_path, count: 1 do
               assert_select 'input[name="_method"][value="delete"]', count: 1
-              assert_select 'button.btn.btn-outline.btn-error[data-turbo-confirm]', text: I18n.t("profiles.avatar_delete"), count: 1
+              assert_select 'button[data-turbo-confirm]', text: I18n.t("profiles.avatar_delete"), count: 1
             end
 
             original_blob = profile.avatar.blob
             patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.corrupt_png_upload } }
             assert_response :unprocessable_content
             error_text = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.undecodable")
-            assert_select '.alert.alert-error.alert-soft[role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
+            assert_select '[data-slot="alert"][role="alert"]', text: /\#{Regexp.escape(error_text)}/, count: 1
             assert_equal original_blob, profile.reload.avatar.blob
 
             patch profile_url, params: { profile: { avatar_upload: AvatarTestImage.upload(width: 96, height: 72) } }
             assert_response :unprocessable_content
             square_error = I18n.t("activerecord.errors.models.profile.attributes.avatar_upload.not_square")
-            assert_select '.alert.alert-error.alert-soft[role="alert"]', text: /\#{Regexp.escape(square_error)}/, count: 1
+            assert_select '[data-slot="alert"][role="alert"]', text: /\#{Regexp.escape(square_error)}/, count: 1
             assert_equal original_blob, profile.reload.avatar.blob
 
             delete profile_avatar_url
             assert_redirected_to profile_url
             assert_not profile.reload.avatar.attached?
             follow_redirect!
-            assert_select '.alert.alert-success.alert-soft', text: I18n.t("profiles.avatar.destroy.notice"), count: 1
-            assert_select '.list .avatar svg[width="64"][height="64"]', count: 1
+            assert_select '[data-slot="alert"]', text: I18n.t("profiles.avatar.destroy.notice"), count: 1
+            assert_select '[data-slot="item-group"] svg[width="64"][height="64"]', count: 1
           RUBY
         else
           ""
@@ -13777,11 +13806,11 @@ def configure_default_views
           assert_select '[data-controller="passkey"]', count: 1
           assert_select 'input[type="password"]', count: 0
           assert_select 'input[name*="login_id"]', count: 0
-          assert_select '[data-layout="authentication"] > .hero-content' do
-            assert_select '> .card.card-border.bg-base-100', count: 2
-            assert_select '> .card.card-border.bg-base-100:first-child [data-controller="passkey"]', count: 1
-            assert_select '> .card.card-border.bg-base-100:last-child p.text-sm.text-base-content\\/70', text: switch_prompt, count: 1
-            assert_select '> .card.card-border.bg-base-100:last-child a[href=?]', switch_path, text: switch_text, count: 1
+          assert_select '[data-layout="authentication"] > .flex' do
+            assert_select '> [data-slot="card"]', count: 2
+            assert_select '> [data-slot="card"]:first-child [data-controller="passkey"]', count: 1
+            assert_select '> [data-slot="card"]:last-child p.text-sm.text-muted-foreground', text: switch_prompt, count: 1
+            assert_select '> [data-slot="card"]:last-child a[href=?]', switch_path, text: switch_text, count: 1
           end
         end
       end
@@ -13805,21 +13834,21 @@ def configure_default_views
 
         get account_url
         assert_response :success
-        assert_select 'nav[aria-label=?] a.menu-active[href=?]', I18n.t("navigation.account_menu"), account_path, count: 1
+        assert_select 'nav[aria-label=?] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', I18n.t("navigation.account_menu"), account_path, count: 1
         assert_select 'a[href=?]', admin_root_path, text: I18n.t("navigation.admin"), count: 2
-    #{profile_trigger_assertion}#{profile_identity_assertion}        assert_select 'header ul.menu.dropdown-content > li[role="separator"]:empty', count: 1
-        assert_select 'header ul.menu.dropdown-content a[href=?][data-turbo-method="delete"]', destroy_user_session_path,
+    #{profile_trigger_assertion}#{profile_identity_assertion}        assert_select 'header [data-slot="dropdown-menu-separator"]', count: 1
+        assert_select 'header [data-slot="dropdown-menu-content"] a[href=?][data-turbo-method="delete"]', destroy_user_session_path,
           text: I18n.t("navigation.sign_out"), count: 1 do
           assert_select 'svg.size-5[aria-hidden="true"][data-slot="icon"]', count: 1
         end
 
         get account_passkeys_url
         assert_response :success
-        assert_select '.tab-active[href=?]', account_passkeys_path, count: 1
-        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"] a[href=?]',
+        assert_select 'nav[aria-label=?] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', I18n.t("navigation.account_settings"), account_passkeys_path, count: 1
+        assert_select '[data-slot="card-content"] > [data-page-actions-container="tab"] [data-page-actions-column="primary"] a[href=?]',
           new_account_passkey_path, count: 1
         assert_select '[data-page-actions-container="card"]', count: 0
-        assert_select 'ul.list > li.list-row', count: 1
+        assert_select 'ul[data-slot="item-group"] > li[data-slot="item"]', count: 1
         assert_select 'input[type="password"]', count: 0
 
         get delete_account_url
@@ -13850,7 +13879,6 @@ def configure_pwa
       display: "standalone",
       scope: "/",
       description: I18n.t("meta.description", locale: identity.default_locale, app_name: identity.app_name),
-      theme_color: "#3ea8ff",
       background_color: "#ffffff"
     ) %>
   ERB
@@ -14235,6 +14263,15 @@ def configure_web_push
   create_file "app/javascript/controllers/push_subscription_controller.js", <<~JAVASCRIPT, force: true
     import { Controller } from "@hotwired/stimulus"
 
+    const STATUS_TONES = {
+      off: "info",
+      on: "success",
+      success: "success",
+      denied: "warning",
+      unsupported: "warning",
+      error: "error"
+    }
+
     export default class extends Controller {
       static targets = ["toggle", "testButton", "status"]
       static values = {
@@ -14468,11 +14505,13 @@ def configure_web_push
           this.testButtonTarget.disabled = !subscribed
         }
         if (this.hasStatusTarget) {
-          this.statusTarget.classList.remove("hidden", "alert-info", "alert-success", "alert-warning", "alert-error")
-          const alertClass = state === "success" || state === "on" ? "alert-success" :
-            state === "denied" || state === "unsupported" ? "alert-warning" :
-              state === "error" ? "alert-error" : "alert-info"
-          this.statusTarget.classList.add(alertClass)
+          const tone = STATUS_TONES[state]
+          if (!tone) throw new Error(`Unknown Web Push state: ${state}`)
+          this.statusTarget.dataset.tone = tone
+          this.statusTarget.className = tone === "error" || tone === "warning"
+            ? this.statusTarget.dataset.destructiveClasses
+            : this.statusTarget.dataset.defaultClasses
+          this.statusTarget.setAttribute("role", tone === "error" || tone === "warning" ? "alert" : "status")
           this.statusTarget.textContent = message
         }
       }
@@ -14488,32 +14527,34 @@ def configure_web_push
     <% content_for :page_title, t("web_push.page.title") %>
     <div class="space-y-6">
       <header>
-        <p class="text-sm text-neutral"><%= t("web_push.page.description") %></p>
+        <p class="text-sm text-muted-foreground"><%= t("web_push.page.description") %></p>
       </header>
 
-      <section class="card card-border bg-base-100">
-        <div class="card-body p-3">
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 class="card-title text-base leading-[1.5]">
+              <h2 class="text-base font-semibold leading-[1.5]">
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
                 <%= t("web_push.page.card_title") %>
               </h2>
-              <p class="mt-2 text-sm text-neutral"><%= t("web_push.page.card_description") %></p>
+              <p class="mt-2 text-sm text-muted-foreground"><%= t("web_push.page.card_description") %></p>
             </div>
             <label class="flex cursor-pointer items-center gap-3">
               <span class="text-sm font-semibold"><%= t("web_push.page.receive") %></span>
-              <input type="checkbox" class="toggle" data-push-subscription-target="toggle" data-action="change->push-subscription#toggle" aria-label="<%= t("web_push.page.toggle_label") %>">
+              <%= render(Shadcn::Switch.new(data: { push_subscription_target: "toggle", action: "change->push-subscription#toggle" }, aria: { label: t("web_push.page.toggle_label") })) %>
             </label>
           </div>
-          <div class="card-actions flex-wrap justify-end">
+          <div class="flex flex-wrap justify-end">
             <button type="button" class="<%= action_button_classes(:secondary) %>" data-push-subscription-target="testButton" data-action="click->push-subscription#sendTest" disabled><%= t("web_push.page.send_test") %></button>
           </div>
-          <div class="alert alert-info alert-soft hidden" role="status" aria-live="polite" data-push-subscription-target="status"></div>
-        </div>
-      </section>
+          <%= render(Shadcn::Alert.new(class: "hidden", role: "status", aria: { live: "polite" },
+            data: { push_subscription_target: "status", default_classes: Shadcn::Alert.classes,
+              destructive_classes: Shadcn::Alert.classes(variant: :destructive) })) %>
+        <% end %>
+      <% end %>
     </div>
   ERB
 
@@ -14767,7 +14808,7 @@ def configure_web_push
         page_title = I18n.t("web_push.page.title")
         assert_select "h1", text: page_title, count: 1
         assert_select "title", text: "\#{page_title} | \#{Rails.configuration.x.application_identity.app_name}", count: 1
-        assert_select 'nav[aria-label=?] a.menu-active[aria-current="page"][href=?]', I18n.t("navigation.account_menu"), web_push_settings_path, count: 1
+        assert_select 'nav[aria-label=?] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', I18n.t("navigation.account_menu"), web_push_settings_path, count: 1
         assert_select '[data-push-subscription-target="toggle"]', count: 1
         assert_select '[data-push-subscription-target="testButton"]', count: 1
       end
@@ -14907,6 +14948,17 @@ def install_job_operations
     MissionControl::Jobs.http_basic_auth_enabled = false
   RUBY
 
+  append_to_file "config/importmap.rb", <<~RUBY
+    pin "mission_control/jobs/form_controller", to: "mission_control/jobs/controllers/form_controller.js"
+    pin "helpers", to: "mission_control/jobs/helpers/index.js"
+    pin "helpers/debounce_helpers", to: "mission_control/jobs/helpers/debounce_helpers.js"
+  RUBY
+  append_to_file "app/javascript/application.js", <<~JAVASCRIPT
+
+    import JobFormController from "mission_control/jobs/form_controller"
+    application.register("form", JobFormController)
+  JAVASCRIPT
+
   create_file "app/policies/job_operation_policy.rb", <<~RUBY, force: true
     class JobOperationPolicy < ApplicationPolicy
       T::Sig::WithoutRuntime.sig { returns(T::Boolean) }
@@ -14936,12 +14988,13 @@ def install_job_operations
       module JobOperationsHelper
         extend T::Sig
 
-        JOB_STATUS_CLASSES = {
-          "failed" => "badge-error",
-          "blocked" => "badge-warning",
-          "finished" => "badge-success",
-          "scheduled" => "badge-info",
-          "in_progress" => "badge-info"
+        JOB_STATUS_VARIANTS = {
+          "pending" => :outline,
+          "failed" => :destructive,
+          "blocked" => :secondary,
+          "finished" => :default,
+          "scheduled" => :outline,
+          "in_progress" => :secondary
         }.freeze
 
         JOB_STATUS_KEYS = {
@@ -14996,9 +15049,11 @@ def install_job_operations
           translate(key, **options)
         end
 
-        sig { params(status: T.any(String, Symbol)).returns(String) }
-        def job_operation_status_class(status)
-          JOB_STATUS_CLASSES.fetch(status.to_s, "badge-neutral")
+        sig { params(status: T.any(String, Symbol)).returns(ActiveSupport::SafeBuffer) }
+        def job_operation_status_badge(status)
+          render(Shadcn::Badge.new(variant: JOB_STATUS_VARIANTS.fetch(status.to_s))) do
+            job_operation_status_label(status)
+          end
         end
 
         sig { params(status: T.any(String, Symbol)).returns(String) }
@@ -15059,9 +15114,6 @@ def install_job_operations
 
   create_file "app/views/layouts/mission_control/jobs/application.html.erb", <<~'ERB', force: true
     <%= with_host_application_locale do %>
-      <% content_for :javascript_importmap do %>
-        <%= javascript_importmap_tags "application", importmap: MissionControl::Jobs.importmap %>
-      <% end %>
       <% content_for :admin_content, flush: true do %>
         <%= render layout: "layouts/mission_control/jobs/navigation" do %>
           <div class="min-w-0 space-y-6" data-mission-control-jobs-root>
@@ -15080,28 +15132,30 @@ def install_job_operations
       <% content_for :page_actions_secondary do %>
         <section class="flex flex-wrap items-center justify-end gap-3" aria-label="<%= t('job_operations.aria.application_selection') %>">
           <% if @application.servers.many? %>
-            <div role="tablist" class="tabs tabs-lift" aria-label="<%= t('job_operations.aria.servers') %>">
-              <% @application.servers.each do |server| %>
-                <%= link_to server.name, application_queues_path(@application, server_id: server),
-                  role: "tab", class: class_names("tab", "tab-active": selected_server?(server)),
-                  aria: { current: ("page" if selected_server?(server)) } %>
+            <%= render(Shadcn::NavigationMenu.new(aria: { label: t("job_operations.aria.servers") })) do %>
+              <%= render(Shadcn::NavigationMenu::List.new) do %>
+                <% @application.servers.each do |server| %>
+                  <%= render(Shadcn::NavigationMenu::Item.new) do %>
+                    <%= render(Shadcn::NavigationMenu::Link.new(href: application_queues_path(@application, server_id: server),
+                      aria: { current: ("page" if selected_server?(server)) },
+                      data: (selected_server?(server) ? { active: "" } : {}))) { server.name } %>
+                  <% end %>
+                <% end %>
               <% end %>
-            </div>
+            <% end %>
           <% end %>
 
           <% if selectable_applications.any? %>
-            <div class="dropdown dropdown-end">
-              <button type="button" tabindex="0" class="btn">
-                <%= MissionControl::Jobs::Current.application.name %>
-              </button>
-              <ul tabindex="0" class="dropdown-content menu z-10 mt-2 w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow">
+            <%= render(Shadcn::DropdownMenu.new) do %>
+              <%= render(Shadcn::DropdownMenu::Trigger.new(variant: :outline)) { MissionControl::Jobs::Current.application.name } %>
+              <%= render(Shadcn::DropdownMenu::Content.new(align: :end, class: "z-20 w-52")) do %>
                 <% selectable_applications.each do |application| %>
-                  <li><%= link_to application.name, application_queues_path(application, server_id: nil) %></li>
+                  <%= render(Shadcn::DropdownMenu::Item.new(tag: :a, href: application_queues_path(application, server_id: nil))) { application.name } %>
                 <% end %>
-              </ul>
-            </div>
+              <% end %>
+            <% end %>
           <% else %>
-            <span class="badge badge-outline"><%= MissionControl::Jobs::Current.application.name %></span>
+            <%= render(Shadcn::Badge.new(variant: :outline)) { MissionControl::Jobs::Current.application.name } %>
           <% end %>
         </section>
       <% end %>
@@ -15110,9 +15164,9 @@ def install_job_operations
 
   create_file "app/views/layouts/mission_control/jobs/_flash.html.erb", <<~'ERB', force: true
     <% flash.each do |name, message| %>
-      <div class="alert alert-soft <%= name.to_sym == :notice ? "alert-success" : "alert-error" %>" role="alert">
-        <span><%= message %></span>
-      </div>
+      <%= render(Shadcn::Alert.new(variant: (name.to_sym == :notice ? :default : :destructive), role: "alert")) do %>
+        <%= render(Shadcn::Alert::Description.new) { message } %>
+      <% end %>
     <% end %>
   ERB
 
@@ -15120,24 +15174,26 @@ def install_job_operations
     <% tabs = navigation_sections.map do |key, (_label, url)|
          ApplicationHelper::Tab.new(name: job_operation_navigation_label(key), path: url, is_active: -> { key == current_section })
        end %>
-    <nav aria-label="<%= t('job_operations.aria.sections') %>">
-      <%= with_tab(tabs:) do %>
-        <%= yield %>
-      <% end %>
-    </nav>
+    <%= with_tab(tabs:, aria_label: t('job_operations.aria.sections')) do %>
+      <%= yield %>
+    <% end %>
   ERB
 
   create_file "app/views/mission_control/jobs/shared/_pagination_toolbar.html.erb", <<~'ERB', force: true
     <%= with_pagination(aria_label:, summary: "#{page.index} / #{page.pages_count || "..."}") do %>
-      <% if page.first? %>
-        <span class="<%= pagination_item_classes(disabled: true) %>" role="link" aria-disabled="true"><%= t("job_operations.actions.previous_page") %></span>
-      <% else %>
-        <%= link_to t("job_operations.actions.previous_page"), url_for(page: page.previous_index, **filter_param), class: pagination_item_classes %>
+      <%= render(Shadcn::Pagination::Item.new) do %>
+        <% if page.first? %>
+          <%= render(Shadcn::Pagination::Link.new(tag: :span, size: :default, aria: { disabled: true })) { t("job_operations.actions.previous_page") } %>
+        <% else %>
+          <%= render(Shadcn::Pagination::Link.new(size: :default, href: url_for(page: page.previous_index, **filter_param))) { t("job_operations.actions.previous_page") } %>
+        <% end %>
       <% end %>
-      <% if page.last? %>
-        <span class="<%= pagination_item_classes(disabled: true) %>" role="link" aria-disabled="true"><%= t("job_operations.actions.next_page") %></span>
-      <% else %>
-        <%= link_to t("job_operations.actions.next_page"), url_for(page: page.next_index, **filter_param), class: pagination_item_classes %>
+      <%= render(Shadcn::Pagination::Item.new) do %>
+        <% if page.last? %>
+          <%= render(Shadcn::Pagination::Link.new(tag: :span, size: :default, aria: { disabled: true })) { t("job_operations.actions.next_page") } %>
+        <% else %>
+          <%= render(Shadcn::Pagination::Link.new(size: :default, href: url_for(page: page.next_index, **filter_param))) { t("job_operations.actions.next_page") } %>
+        <% end %>
       <% end %>
     <% end %>
   ERB
@@ -15147,24 +15203,32 @@ def install_job_operations
     <% content_for :page_title, t("job_operations.titles.queues") %>
 
     <% if @queues.empty? %>
-      <div class="alert" role="status"><span><%= t("job_operations.empty.queues") %></span></div>
+      <%= render(Shadcn::Alert.new(role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) { t("job_operations.empty.queues") } %>
+      <% end %>
     <% else %>
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
-          <div class="overflow-x-auto">
-            <table class="table min-w-max">
-              <thead><tr><th><%= t("job_operations.fields.queue") %></th><th><%= t("job_operations.fields.pending_jobs") %></th><th><span class="sr-only"><%= t("job_operations.fields.actions") %></span></th></tr></thead>
-              <tbody>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
+          <%= render(Shadcn::Table.new(class: "min-w-96")) do %>
+            <%= render(Shadcn::Table::Header.new) do %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.queue") } %>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.pending_jobs") } %>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { tag.span(t("job_operations.fields.actions"), class: "sr-only") } %>
+              <% end %>
+            <% end %>
+            <%= render(Shadcn::Table::Body.new) do %>
                 <% @queues.each do |queue| %>
-                  <tr>
-                    <td>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
                       <div class="flex flex-wrap items-center gap-2">
-                        <%= link_to queue.name, application_queue_path(@application, queue), class: "link link-hover font-semibold" %>
-                        <% if queue.paused? %><span class="badge badge-warning"><%= t("job_operations.statuses.paused") %></span><% end %>
+                        <%= link_to queue.name, application_queue_path(@application, queue), class: "underline font-semibold" %>
+                        <% if queue.paused? %><%= render(Shadcn::Badge.new(variant: :secondary)) { t("job_operations.statuses.paused") } %><% end %>
                       </div>
-                    </td>
-                    <td><%= queue.size %></td>
-                    <td>
+                    <% end %>
+                    <%= render(Shadcn::Table::Cell.new) { queue.size } %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
                       <% if queue_pausing_supported? %>
                         <div class="flex flex-wrap justify-end gap-2">
                           <% if queue.active? %>
@@ -15174,14 +15238,13 @@ def install_job_operations
                           <% end %>
                         </div>
                       <% end %>
-                    </td>
-                  </tr>
+                    <% end %>
+                  <% end %>
                 <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
     <% end %>
   ERB
 
@@ -15191,8 +15254,8 @@ def install_job_operations
 
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <% if @queue.paused? %><span class="badge badge-warning"><%= t("job_operations.statuses.paused") %></span><% end %>
-        <p class="text-sm text-base-content/70"><%= t("job_operations.counts.pending_jobs", count: @queue.size) %></p>
+        <% if @queue.paused? %><%= render(Shadcn::Badge.new(variant: :secondary)) { t("job_operations.statuses.paused") } %><% end %>
+        <p class="text-sm text-muted-foreground"><%= t("job_operations.counts.pending_jobs", count: @queue.size) %></p>
       </div>
       <div class="flex flex-wrap justify-end gap-2">
         <% if queue_pausing_supported? %>
@@ -15206,28 +15269,33 @@ def install_job_operations
     </header>
 
     <% if @jobs_page.empty? %>
-      <div class="alert" role="status"><span><%= t("job_operations.empty.queue") %></span></div>
+      <%= render(Shadcn::Alert.new(role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) { t("job_operations.empty.queue") } %>
+      <% end %>
     <% else %>
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
-          <div class="overflow-x-auto">
-            <table class="table min-w-max">
-              <thead><tr><th><%= t("job_operations.fields.job") %></th><th><%= t("job_operations.fields.arguments") %></th></tr></thead>
-              <tbody>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+            <%= render(Shadcn::Table::Header.new) do %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.job") } %>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.arguments") } %>
+              <% end %>
+            <% end %>
+            <%= render(Shadcn::Table::Body.new) do %>
                 <% @jobs_page.records.each do |job| %>
-                  <tr>
-                    <td>
-                      <%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "link link-hover font-semibold" %>
-                      <div class="text-sm text-base-content/70"><%= job_operation_event_time(:enqueued, job.enqueued_at.to_datetime) %></div>
-                    </td>
-                    <td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td>
-                  </tr>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
+                      <%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "underline font-semibold" %>
+                      <div class="text-sm text-muted-foreground"><%= job_operation_event_time(:enqueued, job.enqueued_at.to_datetime) %></div>
+                    <% end %>
+                    <%= render(Shadcn::Table::Cell.new(class: "font-mono text-sm")) { job_arguments(job) if job.serialized_arguments.present? } %>
+                  <% end %>
                 <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
       <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: {}, aria_label: t("job_operations.aria.queue_jobs_pagination") %>
     <% end %>
   ERB
@@ -15237,47 +15305,47 @@ def install_job_operations
     <% navigation(title: jobs_title, section: "#{jobs_status}_jobs".to_sym) %>
     <% content_for :page_title, jobs_title %>
 
-    <span class="badge <%= job_operation_status_class(jobs_status) %>"><%= job_operation_status_label(jobs_status) %></span>
+    <%= job_operation_status_badge(jobs_status) %>
 
     <% unless @jobs_page.empty? && !active_filters? %>
-      <section class="card card-border bg-base-100" aria-label="<%= t('job_operations.aria.filters') %>">
-        <div class="card-body">
+      <%= render(Shadcn::Card.new(tag: :section, aria: { label: t('job_operations.aria.filters') })) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
           <%= form_for :filter, url: application_jobs_path(MissionControl::Jobs::Current.application, jobs_status), method: :get,
             html: { class: "grid gap-4 md:grid-cols-2" },
             data: { controller: "form", action: "input->form#debouncedSubmit" } do |form| %>
-            <fieldset class="fieldset">
-              <%= form.label :job_class_name, t("job_operations.filters.job_class_name"), class: "fieldset-legend" %>
-              <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: "input w-full", list: "job-classes", placeholder: t("job_operations.filters.job_class_placeholder"), autocomplete: "off" %>
-            </fieldset>
-            <fieldset class="fieldset">
-              <%= form.label :queue_name, t("job_operations.filters.queue_name"), class: "fieldset-legend" %>
-              <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: "input w-full", list: "queue-names", placeholder: t("job_operations.filters.queue_placeholder"), autocomplete: "off" %>
-            </fieldset>
+            <div class="grid gap-2">
+              <%= form.label :job_class_name, t("job_operations.filters.job_class_name"), class: Shadcn::Label.classes %>
+              <%= form.text_field :job_class_name, value: @job_filters[:job_class_name], class: Shadcn::Input.classes(extra: "w-full"), list: "job-classes", placeholder: t("job_operations.filters.job_class_placeholder"), autocomplete: "off" %>
+            </div>
+            <div class="grid gap-2">
+              <%= form.label :queue_name, t("job_operations.filters.queue_name"), class: Shadcn::Label.classes %>
+              <%= form.text_field :queue_name, value: @job_filters[:queue_name], class: Shadcn::Input.classes(extra: "w-full"), list: "queue-names", placeholder: t("job_operations.filters.queue_placeholder"), autocomplete: "off" %>
+            </div>
             <% if jobs_status == "finished" %>
-              <fieldset class="fieldset">
-                <%= form.label :finished_at_start, t("job_operations.filters.finished_at_start"), class: "fieldset-legend" %>
-                <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: "input w-full" %>
-              </fieldset>
-              <fieldset class="fieldset">
-                <%= form.label :finished_at_end, t("job_operations.filters.finished_at_end"), class: "fieldset-legend" %>
-                <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: "input w-full" %>
-              </fieldset>
+              <div class="grid gap-2">
+                <%= form.label :finished_at_start, t("job_operations.filters.finished_at_start"), class: Shadcn::Label.classes %>
+                <%= form.datetime_field :finished_at_start, value: @job_filters[:finished_at]&.begin, class: Shadcn::Input.classes(extra: "w-full") %>
+              </div>
+              <div class="grid gap-2">
+                <%= form.label :finished_at_end, t("job_operations.filters.finished_at_end"), class: Shadcn::Label.classes %>
+                <%= form.datetime_field :finished_at_end, value: @job_filters[:finished_at]&.end, class: Shadcn::Input.classes(extra: "w-full") %>
+              </div>
             <% end %>
             <%= hidden_field_tag :server_id, MissionControl::Jobs::Current.server.id %>
             <datalist id="job-classes"><% @job_class_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
             <datalist id="queue-names"><% @queue_names.each do |name| %><option value="<%= name %>"></option><% end %></datalist>
-            <div class="card-actions flex-wrap justify-end md:col-span-2">
+            <div class="flex flex-wrap justify-end gap-2 md:col-span-2">
               <%= link_to t("job_operations.actions.clear_filters"), application_jobs_path(MissionControl::Jobs::Current.application, jobs_status, job_class_name: nil, queue_name: nil, finished_at: nil..nil), class: action_button_classes(:secondary) %>
             </div>
           <% end %>
-        </div>
-      </section>
+        <% end %>
+      <% end %>
     <% end %>
 
     <% if jobs_status.failed? && !@jobs_page.empty? %>
       <% content_for :page_actions_primary do %>
         <div class="flex flex-wrap items-center justify-end gap-3">
-          <% if active_filters? %><span class="text-sm text-base-content/70"><%= t("job_operations.counts.jobs_found", count: @jobs_count) %></span><% end %>
+          <% if active_filters? %><span class="text-sm text-muted-foreground"><%= t("job_operations.counts.jobs_found", count: @jobs_count) %></span><% end %>
           <%= button_to t(active_filters? ? "job_operations.actions.retry_selection" : "job_operations.actions.retry_all"), application_bulk_retries_path(@application, **jobs_filter_param), method: :post,
             disabled: @jobs_count == 0, class: action_button_classes(:warning) %>
           <%= button_to t(active_filters? ? "job_operations.actions.discard_selection" : "job_operations.actions.discard_all"), application_bulk_discards_path(@application, **jobs_filter_param), method: :post,
@@ -15288,50 +15356,86 @@ def install_job_operations
     <% end %>
 
     <% if @jobs_page.empty? %>
-      <div class="alert" role="status">
-        <span><%= active_filters? ? t("job_operations.empty.filtered_jobs", status: jobs_title) : t("job_operations.empty.status_jobs", status: jobs_title, emoji: blank_status_emoji(jobs_status)) %></span>
-      </div>
+      <%= render(Shadcn::Alert.new(role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) do %>
+          <%= active_filters? ? t("job_operations.empty.filtered_jobs", status: jobs_title) : t("job_operations.empty.status_jobs", status: jobs_title, emoji: blank_status_emoji(jobs_status)) %>
+        <% end %>
+      <% end %>
     <% else %>
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
-          <div class="overflow-x-auto">
-            <table class="table min-w-max">
-              <thead><tr><th><%= t("job_operations.fields.job") %></th><% job_operation_attribute_keys(jobs_status).each do |attribute| %><th><% if attribute == :actions %><span class="sr-only"><%= t("job_operations.fields.actions") %></span><% else %><%= t("job_operations.fields.#{attribute}") %><% end %></th><% end %></tr></thead>
-              <tbody>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+            <%= render(Shadcn::Table::Header.new) do %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.job") } %>
+                <% job_operation_attribute_keys(jobs_status).each do |attribute| %>
+                  <%= render(Shadcn::Table::Head.new(scope: :col)) do %>
+                    <% if attribute == :actions %>
+                      <span class="sr-only"><%= t("job_operations.fields.actions") %></span>
+                    <% else %>
+                      <%= t("job_operations.fields.#{attribute}") %>
+                    <% end %>
+                  <% end %>
+                <% end %>
+              <% end %>
+            <% end %>
+            <%= render(Shadcn::Table::Body.new) do %>
                 <% @jobs_page.records.each do |job| %>
-                  <tr>
-                    <td>
-                      <%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover font-semibold" %>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
+                      <%= link_to job_title(job), application_job_path(@application, job.job_id), class: "underline font-semibold" %>
                       <% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %>
-                      <div class="text-sm text-base-content/70"><%= job_operation_event_time(:enqueued, job.enqueued_at.to_datetime) %></div>
-                    </td>
+                      <div class="text-sm text-muted-foreground"><%= job_operation_event_time(:enqueued, job.enqueued_at.to_datetime) %></div>
+                    <% end %>
                     <% case jobs_status.to_s %>
                     <% when "failed" %>
-                      <td><%= link_to failed_job_error(job), application_job_path(@application, job.job_id, anchor: "error"), class: "link link-hover" %><div class="text-sm text-base-content/70"><%= job_operation_event_time(:failed, job.failed_at) %></div></td>
-                      <td><div class="flex flex-wrap justify-end gap-2"><%= button_to t("job_operations.actions.retry"), application_job_retry_path(@application, job.job_id, params: jobs_filter_param), class: action_button_classes(:warning) %><%= button_to t("job_operations.actions.discard"), application_job_discard_path(@application, job.job_id, params: jobs_filter_param), class: action_button_classes(:destructive), form: { data: { turbo_confirm: t("job_operations.confirmations.discard_job") } } %></div></td>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <%= link_to failed_job_error(job), application_job_path(@application, job.job_id, anchor: "error"), class: "underline" %>
+                        <div class="text-sm text-muted-foreground"><%= job_operation_event_time(:failed, job.failed_at) %></div>
+                      <% end %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <div class="flex flex-wrap justify-end gap-2">
+                          <%= button_to t("job_operations.actions.retry"), application_job_retry_path(@application, job.job_id, params: jobs_filter_param), class: action_button_classes(:warning) %>
+                          <%= button_to t("job_operations.actions.discard"), application_job_discard_path(@application, job.job_id, params: jobs_filter_param), class: action_button_classes(:destructive), form: { data: { turbo_confirm: t("job_operations.confirmations.discard_job") } } %>
+                        </div>
+                      <% end %>
                     <% when "blocked" %>
-                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                      <td><div class="font-mono text-sm"><%= job.blocked_by %></div><div class="text-sm text-base-content/70"><%= job_operation_event_time(:expires, job.blocked_until) if job.blocked_until %></div></td>
-                      <td><div class="flex flex-wrap justify-end gap-2"><%= button_to t("job_operations.actions.run_now"), application_job_dispatch_path(@application, job.job_id), class: action_button_classes(:warning) %></div></td>
+                      <%= render(Shadcn::Table::Cell.new) { link_to job.queue_name, application_queue_path(@application, job.queue), class: "underline" } %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <div class="font-mono text-sm"><%= job.blocked_by %></div>
+                        <div class="text-sm text-muted-foreground"><%= job_operation_event_time(:expires, job.blocked_until) if job.blocked_until %></div>
+                      <% end %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <div class="flex flex-wrap justify-end gap-2"><%= button_to t("job_operations.actions.run_now"), application_job_dispatch_path(@application, job.job_id), class: action_button_classes(:warning) %></div>
+                      <% end %>
                     <% when "scheduled" %>
-                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                      <td><%= job_operation_relative_time(job.scheduled_at) %> <% if job_delayed?(job) %><span class="badge badge-error"><%= t("job_operations.statuses.delayed") %></span><% end %></td>
-                      <td><div class="flex flex-wrap justify-end gap-2"><%= button_to t("job_operations.actions.run_now"), application_job_dispatch_path(@application, job.job_id), class: action_button_classes(:warning) %><%= button_to t("job_operations.actions.discard"), application_job_discard_path(@application, job.job_id), class: action_button_classes(:destructive), form: { data: { turbo_confirm: t("job_operations.confirmations.discard_job") } } %></div></td>
+                      <%= render(Shadcn::Table::Cell.new) { link_to job.queue_name, application_queue_path(@application, job.queue), class: "underline" } %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <%= job_operation_relative_time(job.scheduled_at) %>
+                        <% if job_delayed?(job) %><%= render(Shadcn::Badge.new(variant: :destructive)) { t("job_operations.statuses.delayed") } %><% end %>
+                      <% end %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <div class="flex flex-wrap justify-end gap-2">
+                          <%= button_to t("job_operations.actions.run_now"), application_job_dispatch_path(@application, job.job_id), class: action_button_classes(:warning) %>
+                          <%= button_to t("job_operations.actions.discard"), application_job_discard_path(@application, job.job_id), class: action_button_classes(:destructive), form: { data: { turbo_confirm: t("job_operations.confirmations.discard_job") } } %>
+                        </div>
+                      <% end %>
                     <% when "in_progress" %>
-                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                      <td><% if job.worker_id %><%= link_to t("job_operations.labels.worker", id: job.worker_id), application_worker_path(@application, job.worker_id), class: "link link-hover" %><% else %>—<% end %></td>
-                      <td class="text-base-content/70"><%= job.started_at ? job_operation_relative_time(job.started_at) : t("job_operations.statuses.finished_parenthetical") %></td>
+                      <%= render(Shadcn::Table::Cell.new) { link_to job.queue_name, application_queue_path(@application, job.queue), class: "underline" } %>
+                      <%= render(Shadcn::Table::Cell.new) do %>
+                        <% if job.worker_id %><%= link_to t("job_operations.labels.worker", id: job.worker_id), application_worker_path(@application, job.worker_id), class: "underline" %><% else %>—<% end %>
+                      <% end %>
+                      <%= render(Shadcn::Table::Cell.new(class: "text-muted-foreground")) { job.started_at ? job_operation_relative_time(job.started_at) : t("job_operations.statuses.finished_parenthetical") } %>
                     <% when "finished" %>
-                      <td><%= link_to job.queue_name, application_queue_path(@application, job.queue), class: "link link-hover" %></td>
-                      <td class="text-base-content/70"><%= job_operation_event_time(:finished, job.finished_at) %></td>
+                      <%= render(Shadcn::Table::Cell.new) { link_to job.queue_name, application_queue_path(@application, job.queue), class: "underline" } %>
+                      <%= render(Shadcn::Table::Cell.new(class: "text-muted-foreground")) { job_operation_event_time(:finished, job.finished_at) } %>
                     <% end %>
-                  </tr>
+                  <% end %>
                 <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
       <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param, aria_label: t("job_operations.aria.status_jobs_pagination", status: jobs_title) %>
     <% end %>
   ERB
@@ -15341,7 +15445,7 @@ def install_job_operations
     <% content_for :page_title, job_title(@job) %>
 
     <header class="flex flex-wrap items-start justify-between gap-4">
-      <span class="badge <%= job_operation_status_class(@job.status) %>"><%= job_operation_status_label(@job.status) %></span>
+      <%= job_operation_status_badge(@job.status) %>
       <div class="flex flex-wrap justify-end gap-2">
         <% if @job.failed? %>
           <%= button_to t("job_operations.actions.retry"), application_job_retry_path(@application, @job.job_id, params: jobs_filter_param), class: action_button_classes(:warning) %>
@@ -15355,47 +15459,71 @@ def install_job_operations
       </div>
     </header>
 
-    <section class="card card-border bg-base-100" aria-labelledby="job-information">
-      <div class="card-body p-0">
-        <div class="overflow-x-auto">
-          <h2 id="job-information" class="sr-only leading-[1.5]"><%= t("job_operations.aria.job_information") %></h2>
-          <table class="table min-w-max">
-            <tbody>
-              <tr><th><%= t("job_operations.fields.arguments") %></th><td class="font-mono text-sm"><%= job_arguments(@job) %></td></tr>
-              <tr><th><%= t("job_operations.fields.job_id") %></th><td class="break-all font-mono text-sm"><%= @job.job_id %></td></tr>
-              <tr><th><%= t("job_operations.fields.queue") %></th><td><%= link_to @job.queue_name, application_queue_path(@application, @job.queue), class: "badge badge-outline link link-hover" %></td></tr>
-              <tr><th><%= t("job_operations.fields.enqueued") %></th><td><%= job_operation_event_time(:enqueued, @job.enqueued_at.to_datetime) %></td></tr>
-              <% if @job.scheduled? %><tr><th><%= t("job_operations.fields.scheduled") %></th><td><%= job_operation_relative_time(@job.scheduled_at) %> <% if job_delayed?(@job) %><span class="badge badge-error"><%= t("job_operations.statuses.delayed") %></span><% end %></td></tr><% end %>
-              <% if @job.failed? %><tr><th><%= t("job_operations.fields.failed") %></th><td><%= job_operation_event_time(:failed, @job.failed_at) %></td></tr><% end %>
-              <% if @job.finished_at.present? %><tr><th><%= t("job_operations.fields.finished") %></th><td><%= job_operation_event_time(:finished, @job.finished_at) %></td></tr><tr><th><%= t("job_operations.fields.duration") %></th><td><%= t("job_operations.time.duration_seconds", value: @job.duration.round(3)) %></td></tr><% end %>
-              <% if @job.worker_id.present? %><tr><th><%= t("job_operations.fields.processed_by") %></th><td><%= link_to t("job_operations.labels.worker", id: @job.worker_id), application_worker_path(@application, @job.worker_id), class: "link link-hover" %></td></tr><% end %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    <% information_rows = [
+      [t("job_operations.fields.arguments"), job_arguments(@job), "font-mono text-sm"],
+      [t("job_operations.fields.job_id"), @job.job_id, "break-all font-mono text-sm"],
+      [t("job_operations.fields.queue"), link_to(@job.queue_name, application_queue_path(@application, @job.queue), class: "underline"), nil],
+      [t("job_operations.fields.enqueued"), job_operation_event_time(:enqueued, @job.enqueued_at.to_datetime), nil]
+    ] %>
+    <% if @job.scheduled? %>
+      <% scheduled = [job_operation_relative_time(@job.scheduled_at)] %>
+      <% scheduled << render(Shadcn::Badge.new(variant: :destructive)) { t("job_operations.statuses.delayed") } if job_delayed?(@job) %>
+      <% information_rows << [t("job_operations.fields.scheduled"), safe_join(scheduled, " "), nil] %>
+    <% end %>
+    <% information_rows << [t("job_operations.fields.failed"), job_operation_event_time(:failed, @job.failed_at), nil] if @job.failed? %>
+    <% if @job.finished_at.present? %>
+      <% information_rows << [t("job_operations.fields.finished"), job_operation_event_time(:finished, @job.finished_at), nil] %>
+      <% information_rows << [t("job_operations.fields.duration"), t("job_operations.time.duration_seconds", value: @job.duration.round(3)), nil] %>
+    <% end %>
+    <% if @job.worker_id.present? %>
+      <% information_rows << [t("job_operations.fields.processed_by"), link_to(t("job_operations.labels.worker", id: @job.worker_id), application_worker_path(@application, @job.worker_id), class: "underline"), nil] %>
+    <% end %>
+    <%= render(Shadcn::Card.new(tag: :section, aria: { labelledby: "job-information" })) do %>
+      <h2 id="job-information" class="sr-only"><%= t("job_operations.aria.job_information") %></h2>
+      <%= render(Shadcn::Card::Content.new(class: "p-0!")) do %>
+        <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+          <%= render(Shadcn::Table::Body.new) do %>
+            <% information_rows.each do |label, value, value_class| %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <%= render(Shadcn::Table::Head.new(scope: :row)) { label } %>
+                <%= render(Shadcn::Table::Cell.new(class: value_class)) { value } %>
+              <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
+    <% end %>
 
     <% if @job.failed? %>
       <section id="error" class="space-y-4" aria-labelledby="error-title">
         <h2 id="error-title" class="text-xl font-bold leading-[1.5]"><%= t("job_operations.titles.error_information") %></h2>
-        <div class="alert alert-error alert-soft alert-vertical" role="alert">
-          <div class="font-semibold"><%= @job.last_execution_error.error_class %></div>
-          <p><%= @job.last_execution_error.try(:message) || @job.last_execution_error.inspect %></p>
-        </div>
-        <% if @server.backtrace_cleaner %>
-          <div role="tablist" class="tabs tabs-box justify-end" aria-label="<%= t('job_operations.aria.backtrace_detail') %>">
-            <%= link_to t("job_operations.actions.clean_backtrace"), application_job_path(@application, @job.job_id, clean_backtrace: true), role: "tab", class: class_names("tab", "tab-active": clean_backtrace?) %>
-            <%= link_to t("job_operations.actions.full_backtrace"), application_job_path(@application, @job.job_id, clean_backtrace: false), role: "tab", class: class_names("tab", "tab-active": !clean_backtrace?) %>
-          </div>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <%= render(Shadcn::Alert::Title.new) { @job.last_execution_error.error_class } %>
+          <%= render(Shadcn::Alert::Description.new) { @job.last_execution_error.try(:message) || @job.last_execution_error.inspect } %>
         <% end %>
-        <div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= failed_job_backtrace(@job, @server) %></code></pre></div>
+        <% if @server.backtrace_cleaner %>
+          <%= render(Shadcn::NavigationMenu.new(aria: { label: t("job_operations.aria.backtrace_detail") })) do %>
+            <%= render(Shadcn::NavigationMenu::List.new) do %>
+              <% [[true, "job_operations.actions.clean_backtrace"], [false, "job_operations.actions.full_backtrace"]].each do |clean, label| %>
+                <%= render(Shadcn::NavigationMenu::Item.new) do %>
+                  <%= render(Shadcn::NavigationMenu::Link.new(href: application_job_path(@application, @job.job_id, clean_backtrace: clean),
+                    aria: { current: ("page" if clean_backtrace? == clean) },
+                    data: (clean_backtrace? == clean ? { active: "" } : {}))) { t(label) } %>
+                <% end %>
+              <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
+        <pre class="overflow-x-auto rounded-md bg-muted p-4 text-sm"><code><%= failed_job_backtrace(@job, @server) %></code></pre>
       </section>
     <% end %>
 
-    <details class="collapse collapse-arrow card card-border bg-base-100">
-      <summary class="collapse-title text-lg font-semibold"><%= t("job_operations.titles.raw_data") %></summary>
-      <div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@job.raw_data.without("backtrace")) %></code></pre></div></div>
-    </details>
+    <%= render(Shadcn::Collapsible.new(class: Shadcn::Card.classes)) do %>
+      <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4 text-lg font-semibold")) { t("job_operations.titles.raw_data") } %>
+      <%= render(Shadcn::Collapsible::Content.new(class: "px-6 pb-6")) do %>
+        <pre class="overflow-x-auto rounded-md bg-muted p-4 text-sm"><code><%= JSON.pretty_generate(@job.raw_data.without("backtrace")) %></code></pre>
+      <% end %>
+    <% end %>
   ERB
 
   create_file "app/views/mission_control/jobs/recurring_tasks/index.html.erb", <<~'ERB', force: true
@@ -15403,29 +15531,47 @@ def install_job_operations
     <% content_for :page_title, t("job_operations.titles.recurring_tasks") %>
 
     <% if @recurring_tasks.empty? %>
-      <div class="alert" role="status"><span><%= t("job_operations.empty.recurring_tasks") %></span></div>
+      <%= render(Shadcn::Alert.new(role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) { t("job_operations.empty.recurring_tasks") } %>
+      <% end %>
     <% else %>
-      <section class="card card-border bg-base-100">
-        <div class="card-body">
-          <div class="overflow-x-auto">
-            <table class="table min-w-max">
-              <thead><tr><th><%= t("job_operations.fields.task") %></th><th><%= t("job_operations.fields.job") %></th><th><%= t("job_operations.fields.schedule") %></th><th><%= t("job_operations.fields.last_enqueued") %></th><th><%= t("job_operations.fields.next") %></th><th><span class="sr-only"><%= t("job_operations.fields.actions") %></span></th></tr></thead>
-              <tbody>
-                <% @recurring_tasks.each do |task| %>
-                  <tr>
-                    <td><%= link_to task.id, application_recurring_task_path(@application, task.id), class: "link link-hover font-semibold" %></td>
-                    <td><% if task.job_class_name.present? %><%= task.job_class_name %><% if task.arguments.present? %><div class="font-mono text-sm"><%= task.arguments.join(",") %></div><% end %><% elsif task.command.present? %><div class="font-mono text-sm"><%= task.command %></div><% end %></td>
-                    <td><%= task.schedule %></td>
-                    <td class="text-base-content/70"><%= task.last_enqueued_at ? job_operation_relative_time(task.last_enqueued_at) : t("job_operations.time.never") %></td>
-                    <td class="text-base-content/70"><%= job_operation_relative_time(task.next_time) %></td>
-                    <td><div class="flex flex-wrap justify-end gap-2"><% if task.runnable? %><%= button_to t("job_operations.actions.run_now"), application_recurring_task_path(@application, task.id), class: action_button_classes(:warning), method: :put %><% end %></div></td>
-                  </tr>
+      <%= render(Shadcn::Card.new(tag: :section)) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+            <%= render(Shadcn::Table::Header.new) do %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <% %w[task job schedule last_enqueued next].each do |field| %>
+                  <%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.#{field}") } %>
                 <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+                <%= render(Shadcn::Table::Head.new(scope: :col)) { tag.span(t("job_operations.fields.actions"), class: "sr-only") } %>
+              <% end %>
+            <% end %>
+            <%= render(Shadcn::Table::Body.new) do %>
+                <% @recurring_tasks.each do |task| %>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Cell.new) { link_to task.id, application_recurring_task_path(@application, task.id), class: "underline font-semibold" } %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
+                      <% if task.job_class_name.present? %>
+                        <%= task.job_class_name %>
+                        <% if task.arguments.present? %><div class="font-mono text-sm"><%= task.arguments.join(",") %></div><% end %>
+                      <% elsif task.command.present? %>
+                        <div class="font-mono text-sm"><%= task.command %></div>
+                      <% end %>
+                    <% end %>
+                    <%= render(Shadcn::Table::Cell.new) { task.schedule } %>
+                    <%= render(Shadcn::Table::Cell.new(class: "text-muted-foreground")) { task.last_enqueued_at ? job_operation_relative_time(task.last_enqueued_at) : t("job_operations.time.never") } %>
+                    <%= render(Shadcn::Table::Cell.new(class: "text-muted-foreground")) { job_operation_relative_time(task.next_time) } %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <% if task.runnable? %><%= button_to t("job_operations.actions.run_now"), application_recurring_task_path(@application, task.id), class: action_button_classes(:warning), method: :put %><% end %>
+                      </div>
+                    <% end %>
+                  <% end %>
+                <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
     <% end %>
   ERB
 
@@ -15437,22 +15583,61 @@ def install_job_operations
       <% if @recurring_task.runnable? %><%= button_to t("job_operations.actions.run_now"), application_recurring_task_path(@application, @recurring_task.id), class: action_button_classes(:warning), method: :put %><% end %>
     </div>
 
-    <section class="card card-border bg-base-100">
-      <div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><tbody>
-        <% if @recurring_task.job_class_name.present? %><tr><th><%= t("job_operations.fields.job_class") %></th><td><%= @recurring_task.job_class_name %></td></tr><tr><th><%= t("job_operations.fields.arguments") %></th><td class="font-mono text-sm"><%= @recurring_task.arguments.join(",") %></td></tr><% elsif @recurring_task.command.present? %><tr><th><%= t("job_operations.fields.command") %></th><td class="font-mono text-sm"><%= @recurring_task.command %></td></tr><% end %>
-        <tr><th><%= t("job_operations.fields.schedule") %></th><td><%= @recurring_task.schedule %></td></tr>
-        <% if @recurring_task.queue_name.present? %><tr><th><%= t("job_operations.fields.queue") %></th><td><%= @recurring_task.queue_name %></td></tr><% end %>
-        <% if @recurring_task.priority.present? %><tr><th><%= t("job_operations.fields.priority") %></th><td><%= @recurring_task.priority %></td></tr><% end %>
-      </tbody></table></div></div>
-    </section>
+    <% task_rows = [] %>
+    <% if @recurring_task.job_class_name.present? %>
+      <% task_rows << [t("job_operations.fields.job_class"), @recurring_task.job_class_name, nil] %>
+      <% task_rows << [t("job_operations.fields.arguments"), @recurring_task.arguments.join(","), "font-mono text-sm"] %>
+    <% elsif @recurring_task.command.present? %>
+      <% task_rows << [t("job_operations.fields.command"), @recurring_task.command, "font-mono text-sm"] %>
+    <% end %>
+    <% task_rows << [t("job_operations.fields.schedule"), @recurring_task.schedule, nil] %>
+    <% task_rows << [t("job_operations.fields.queue"), @recurring_task.queue_name, nil] if @recurring_task.queue_name.present? %>
+    <% task_rows << [t("job_operations.fields.priority"), @recurring_task.priority, nil] if @recurring_task.priority.present? %>
+    <%= render(Shadcn::Card.new(tag: :section)) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
+        <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+          <%= render(Shadcn::Table::Body.new) do %>
+            <% task_rows.each do |label, value, value_class| %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <%= render(Shadcn::Table::Head.new(scope: :row)) { label } %>
+                <%= render(Shadcn::Table::Cell.new(class: value_class)) { value } %>
+              <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
+    <% end %>
 
     <% if @jobs_page.empty? %>
-      <div class="alert" role="status"><span><%= t("job_operations.empty.recurring_task_jobs") %></span></div>
+      <%= render(Shadcn::Alert.new(role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) { t("job_operations.empty.recurring_task_jobs") } %>
+      <% end %>
     <% else %>
-      <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]"><%= t("job_operations.counts.jobs", count: @recurring_task.jobs.count) %></h2>
-        <div class="card card-border bg-base-100"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th><%= t("job_operations.fields.job") %></th><th><%= t("job_operations.fields.arguments") %></th><th><%= t("job_operations.fields.status") %></th></tr></thead><tbody>
-          <% @jobs_page.records.each do |job| %><tr><td><%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "link link-hover font-semibold" %><div class="text-sm text-base-content/70"><%= job_operation_event_time(:enqueued, job.enqueued_at.to_datetime) %></div></td><td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td><td><span class="badge <%= job_operation_status_class(job.status) %>"><%= job_operation_status_label(job.status) %></span></td></tr><% end %>
-        </tbody></table></div></div></div>
+      <section class="space-y-4">
+        <h2 class="text-xl font-bold leading-[1.5]"><%= t("job_operations.counts.jobs", count: @recurring_task.jobs.count) %></h2>
+        <%= render(Shadcn::Card.new) do %>
+          <%= render(Shadcn::Card::Content.new) do %>
+            <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+              <%= render(Shadcn::Table::Header.new) do %>
+                <%= render(Shadcn::Table::Row.new) do %>
+                  <% %w[job arguments status].each do |field| %><%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.#{field}") } %><% end %>
+                <% end %>
+              <% end %>
+              <%= render(Shadcn::Table::Body.new) do %>
+                <% @jobs_page.records.each do |job| %>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Cell.new) do %>
+                      <%= link_to job_title(job), application_job_path(@application, job.job_id, filter: { queue_name: job.queue }), class: "underline font-semibold" %>
+                      <div class="text-sm text-muted-foreground"><%= job_operation_event_time(:enqueued, job.enqueued_at.to_datetime) %></div>
+                    <% end %>
+                    <%= render(Shadcn::Table::Cell.new(class: "font-mono text-sm")) { job_arguments(job) if job.serialized_arguments.present? } %>
+                    <%= render(Shadcn::Table::Cell.new) { job_operation_status_badge(job.status) } %>
+                  <% end %>
+                <% end %>
+              <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
         <%= render "mission_control/jobs/shared/pagination_toolbar", page: @jobs_page, filter_param: jobs_filter_param, aria_label: t("job_operations.aria.recurring_task_jobs_pagination") %>
       </section>
     <% end %>
@@ -15463,11 +15648,39 @@ def install_job_operations
     <% content_for :page_title, t("job_operations.titles.workers") %>
 
     <% if @workers_page.empty? %>
-      <div class="alert" role="status"><span><%= t("job_operations.empty.workers") %></span></div>
+      <%= render(Shadcn::Alert.new(role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) { t("job_operations.empty.workers") } %>
+      <% end %>
     <% else %>
-      <div class="card card-border bg-base-100"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th><%= t("job_operations.fields.worker") %></th><th><%= t("job_operations.fields.hostname") %></th><th><%= t("job_operations.fields.jobs") %></th><th><%= t("job_operations.fields.last_heartbeat") %></th></tr></thead><tbody>
-        <% @workers_page.records.each do |worker| %><tr><td><%= link_to t("job_operations.labels.worker", id: worker.id), application_worker_path(@application, worker.id), class: "link link-hover font-semibold" %><br><%= worker.name %></td><td><%= worker.hostname %></td><td><% worker.jobs.each do |job| %><div><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover" %><% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %></div><% end %></td><td class="text-base-content/70"><%= job_operation_event_time(:last_heartbeat, worker.last_heartbeat_at) %></td></tr><% end %>
-      </tbody></table></div></div></div>
+      <%= render(Shadcn::Card.new) do %>
+        <%= render(Shadcn::Card::Content.new) do %>
+          <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+            <%= render(Shadcn::Table::Header.new) do %>
+              <%= render(Shadcn::Table::Row.new) do %>
+                <% %w[worker hostname jobs last_heartbeat].each do |field| %><%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.#{field}") } %><% end %>
+              <% end %>
+            <% end %>
+            <%= render(Shadcn::Table::Body.new) do %>
+              <% @workers_page.records.each do |worker| %>
+                <%= render(Shadcn::Table::Row.new) do %>
+                  <%= render(Shadcn::Table::Cell.new) do %>
+                    <%= link_to t("job_operations.labels.worker", id: worker.id), application_worker_path(@application, worker.id), class: "underline font-semibold" %><br><%= worker.name %>
+                  <% end %>
+                  <%= render(Shadcn::Table::Cell.new) { worker.hostname } %>
+                  <%= render(Shadcn::Table::Cell.new) do %>
+                    <% worker.jobs.each do |job| %>
+                      <div><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "underline" %>
+                        <% if job.serialized_arguments.present? %><div class="font-mono text-sm"><%= job_arguments(job) %></div><% end %>
+                      </div>
+                    <% end %>
+                  <% end %>
+                  <%= render(Shadcn::Table::Cell.new(class: "text-muted-foreground")) { job_operation_event_time(:last_heartbeat, worker.last_heartbeat_at) } %>
+                <% end %>
+              <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
       <%= render "mission_control/jobs/shared/pagination_toolbar", page: @workers_page, filter_param: {}, aria_label: t("job_operations.aria.workers_pagination") %>
     <% end %>
   ERB
@@ -15476,19 +15689,51 @@ def install_job_operations
     <% navigation(title: t("job_operations.titles.worker", id: @worker.id), section: :workers) %>
     <% content_for :page_title, t("job_operations.titles.worker", id: @worker.id) %>
 
-    <p class="text-base-content/70"><%= @worker.name %> · <%= @worker.hostname %></p>
+    <p class="text-muted-foreground"><%= @worker.name %> · <%= @worker.hostname %></p>
 
-    <details class="collapse collapse-arrow card card-border bg-base-100" open><summary class="collapse-title text-lg font-semibold"><%= t("job_operations.titles.configuration") %></summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.configuration) %></code></pre></div></div></details>
-
-    <% if @worker.jobs.empty? %>
-      <div class="alert" role="status"><span><%= t("job_operations.empty.worker_idle") %></span></div>
-    <% else %>
-      <section class="space-y-4"><h2 class="text-xl font-bold leading-[1.5]"><%= t("job_operations.counts.running_jobs", count: @worker.jobs.size) %></h2><div class="card card-border bg-base-100"><div class="card-body"><div class="overflow-x-auto"><table class="table min-w-max"><thead><tr><th><%= t("job_operations.fields.job") %></th><th><%= t("job_operations.fields.arguments") %></th><th><%= t("job_operations.fields.status") %></th></tr></thead><tbody>
-        <% @worker.jobs.each do |job| %><tr><td><%= link_to job_title(job), application_job_path(@application, job.job_id), class: "link link-hover font-semibold" %></td><td class="font-mono text-sm"><%= job_arguments(job) if job.serialized_arguments.present? %></td><td><span class="badge <%= job_operation_status_class(job.status) %>"><%= job_operation_status_label(job.status) %></span></td></tr><% end %>
-      </tbody></table></div></div></div></section>
+    <%= render(Shadcn::Collapsible.new(class: Shadcn::Card.classes, open: true)) do %>
+      <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4 text-lg font-semibold")) { t("job_operations.titles.configuration") } %>
+      <%= render(Shadcn::Collapsible::Content.new(class: "px-6 pb-6")) do %>
+        <pre class="overflow-x-auto rounded-md bg-muted p-4 text-sm"><code><%= JSON.pretty_generate(@worker.configuration) %></code></pre>
+      <% end %>
     <% end %>
 
-    <details class="collapse collapse-arrow card card-border bg-base-100"><summary class="collapse-title text-lg font-semibold"><%= t("job_operations.titles.raw_data") %></summary><div class="collapse-content"><div class="mockup-code overflow-x-auto"><pre data-prefix=""><code><%= JSON.pretty_generate(@worker.raw_data) %></code></pre></div></div></details>
+    <% if @worker.jobs.empty? %>
+      <%= render(Shadcn::Alert.new(role: "status")) do %>
+        <%= render(Shadcn::Alert::Description.new) { t("job_operations.empty.worker_idle") } %>
+      <% end %>
+    <% else %>
+      <section class="space-y-4">
+        <h2 class="text-xl font-bold leading-[1.5]"><%= t("job_operations.counts.running_jobs", count: @worker.jobs.size) %></h2>
+        <%= render(Shadcn::Card.new) do %>
+          <%= render(Shadcn::Card::Content.new) do %>
+            <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
+              <%= render(Shadcn::Table::Header.new) do %>
+                <%= render(Shadcn::Table::Row.new) do %>
+                  <% %w[job arguments status].each do |field| %><%= render(Shadcn::Table::Head.new(scope: :col)) { t("job_operations.fields.#{field}") } %><% end %>
+                <% end %>
+              <% end %>
+              <%= render(Shadcn::Table::Body.new) do %>
+                <% @worker.jobs.each do |job| %>
+                  <%= render(Shadcn::Table::Row.new) do %>
+                    <%= render(Shadcn::Table::Cell.new) { link_to job_title(job), application_job_path(@application, job.job_id), class: "underline font-semibold" } %>
+                    <%= render(Shadcn::Table::Cell.new(class: "font-mono text-sm")) { job_arguments(job) if job.serialized_arguments.present? } %>
+                    <%= render(Shadcn::Table::Cell.new) { job_operation_status_badge(job.status) } %>
+                  <% end %>
+                <% end %>
+              <% end %>
+            <% end %>
+          <% end %>
+        <% end %>
+      </section>
+    <% end %>
+
+    <%= render(Shadcn::Collapsible.new(class: Shadcn::Card.classes)) do %>
+      <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4 text-lg font-semibold")) { t("job_operations.titles.raw_data") } %>
+      <%= render(Shadcn::Collapsible::Content.new(class: "px-6 pb-6")) do %>
+        <pre class="overflow-x-auto rounded-md bg-muted p-4 text-sm"><code><%= JSON.pretty_generate(@worker.raw_data) %></code></pre>
+      <% end %>
+    <% end %>
   ERB
 
   create_locale_pair(
@@ -15498,13 +15743,13 @@ def install_job_operations
       "job_operations" => {
         "sections" => {
           "queues" => "キュー",
-          "failed_jobs" => "失敗したジョブ（%{count}）",
-          "in_progress_jobs" => "実行中のジョブ（%{count}）",
-          "blocked_jobs" => "ブロック中のジョブ（%{count}）",
-          "scheduled_jobs" => "実行待ちのジョブ（%{count}）",
-          "finished_jobs" => "完了したジョブ（%{count}）",
+          "failed_jobs" => "失敗（%{count}）",
+          "in_progress_jobs" => "実行中（%{count}）",
+          "blocked_jobs" => "ブロック（%{count}）",
+          "scheduled_jobs" => "待機（%{count}）",
+          "finished_jobs" => "完了（%{count}）",
           "workers" => "ワーカー",
-          "recurring_tasks" => "定期タスク"
+          "recurring_tasks" => "定期"
         },
         "titles" => {
           "queues" => "キュー",
@@ -15802,7 +16047,7 @@ def install_job_operations
 
     queue、状態別job、worker、定期task、失敗内容、retry/discard状況を確認できます。失敗jobのretryは同じjobを再度queueへ戻し、discardはjobをqueue databaseから削除します。Mission Control Jobsは運用task自体を定義・開始するMaintenance Tasksとは独立しており、Maintenance Tasksは`/admin/maintenance_tasks`で管理します。
 
-    host application側のdaisyUI View overrideは見出し、tab、table、状態、日時、操作、確認文、ARIA labelをja/enに対応させ、生成時に選んだ既定localeで表示します。Mission Control Jobsがrequest内で使用する英語専用I18n設定は専用layoutの描画中だけhostのI18n設定へ切り替えるため、header、footer、HTML metadataは既定localeを維持します。engine controllerが生成する操作後通知と例外messageは英語のままです。routeと操作契約はMission Control Jobs 1.1.0の公式実装を維持し、Bulma stylesheetと専用CSSは読み込みません。
+    host application側のshadcn_view_components View overrideは見出し、navigation、table、状態、日時、操作、確認文、ARIA labelをja/enに対応させ、生成時に選んだ既定localeで表示します。Mission Control Jobsがrequest内で使用する英語専用I18n設定は専用layoutの描画中だけhostのI18n設定へ切り替えるため、header、footer、HTML metadataは既定localeを維持します。engine controllerが生成する操作後通知と例外messageは英語のままです。routeと操作契約はMission Control Jobs 1.1.0の公式実装を維持し、Bulma stylesheetと専用CSSは読み込みません。
 
     ## 完了jobのcleanup
 
@@ -15930,27 +16175,23 @@ def install_job_operations
         assert_select "html[lang=?]", locale.to_s, count: 1
         assert_select 'meta[property="og:locale"][content=?]', locale == :ja ? "ja_JP" : "en_US", count: 1
         assert_select 'header nav[aria-label=?]', host_translate("navigation.main"), count: 1
-        assert_select "footer .footer-title", text: host_translate("footer.about_section"), count: 1
+        assert_select "footer[data-site-footer] nav > h2", text: host_translate("footer.about_section"), count: 1
         assert_select '[data-layout="with-menu"] > div > h1', text: queues_title, count: 1
-        assert_select '[data-layout="with-menu"] > div > nav[aria-label=?] > .overflow-x-auto > [role="tablist"].tabs.tabs-lift.min-w-max', sections_label, count: 1
-        assert_select '[role="tablist"].tabs-xs, [role="tablist"].tabs-sm', count: 0
-        assert_select '[data-layout="with-menu"] > div > nav[aria-label=?] [role="tablist"] > .tab-content[role="tabpanel"]', sections_label, count: 1
-        assert_select '[data-layout="with-menu"] > div > nav[aria-label=?] [role="tablist"] > .tab-active + .tab-content.sticky.bg-base-100.border-base-300.p-3', sections_label, count: 1 do |panels|
-          assert_includes panels.first["class"].split, "[contain:inline-size]"
-        end
-        assert_select '.tab-content[role="tabpanel"] > [data-mission-control-jobs-root]', count: 1
+        assert_select '[data-layout="with-menu"] nav[aria-label=?] [data-slot="navigation-menu-list"] > [data-slot="navigation-menu-item"]', sections_label, count: 8
+        assert_select '[data-layout="with-menu"] nav[aria-label=?] a[data-slot="navigation-menu-link"][aria-current="page"][data-active]', sections_label, count: 1
+        assert_select '[data-layout="with-menu"] [data-slot="card"] > [data-slot="card-content"] > [data-mission-control-jobs-root]', count: 1
         assert_select '[data-mission-control-jobs-root] nav[aria-label=?]', sections_label, count: 0
         app_name = Rails.configuration.x.application_identity.app_name
         assert_select "title", text: "\#{queues_title} | \#{app_name}", count: 1
         assert_select 'meta[property="og:title"][content=?]', "\#{queues_title} | \#{app_name}", count: 1
-        assert_select 'a[role="tab"].tab.tab-active.z-10', minimum: 1
+        assert_select 'a[data-slot="navigation-menu-link"][aria-current="page"][data-active]', minimum: 1
         assert_select 'section[aria-label=?]', host_translate("job_operations.aria.application_selection"), count: 0
-        assert_select '[data-mission-control-jobs-root] > .card.card-border.bg-base-100 > .card-body > .overflow-x-auto > table.table.min-w-max', minimum: 1
-        assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
+        assert_select '[data-mission-control-jobs-root] > [data-slot="card"] > [data-slot="card-content"] [data-slot="table"]', minimum: 1
+        assert_select '[data-mission-control-jobs-root] button.h-7, [data-mission-control-jobs-root] button.h-6', count: 0
         assert_not_includes response.body, "bulma.min.css"
         assert_not_includes response.body, "is-boxed"
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', host_translate("navigation.admin_menu"), count: 1
-        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_jobs_path,
+        assert_select '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', Rails.application.routes.url_helpers.admin_jobs_path,
           text: host_translate("navigation.job_operations"), count: 1
       end
 
@@ -15987,7 +16228,7 @@ def install_job_operations
         get MissionControl::Jobs::Engine.routes.url_helpers.application_job_path(
           **route_options, id: active_job.job_id
         )
-        assert_active_job_section(/^\#{Regexp.escape(host_translate("job_operations.titles.status_jobs.failed"))}/)
+        assert_active_job_section host_translate("job_operations.sections.failed_jobs", count: 1)
 
         worker = SolidQueue::Process.create!(
           kind: "Worker", last_heartbeat_at: Time.current, pid: Process.pid,
@@ -16019,25 +16260,25 @@ def install_job_operations
           server_id: server.to_param
         )
         assert_response :success
-        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="secondary"]', count: 0
-        assert_select '.tab-content > [data-page-actions-container="tab"] [data-page-actions-column="primary"]', count: 1 do
-          assert_select "form button.btn.btn-outline.btn-warning", text: host_translate("job_operations.actions.retry_all"), count: 1
-          assert_select "form button.btn.btn-outline.btn-error", text: host_translate("job_operations.actions.discard_all"), count: 1
+        assert_select '[data-slot="card-content"] > [data-page-actions-container="tab"] [data-page-actions-column="secondary"]', count: 0
+        assert_select '[data-slot="card-content"] > [data-page-actions-container="tab"] [data-page-actions-column="primary"]', count: 1 do
+          assert_select "form button", text: host_translate("job_operations.actions.retry_all"), count: 1
+          assert_select "form button", text: host_translate("job_operations.actions.discard_all"), count: 1
         end
         filters_label = host_translate("job_operations.aria.filters")
-        assert_select '.tab-content > [data-mission-control-jobs-root] > section.card.card-border.bg-base-100[aria-label=?] > .card-body > form.grid', filters_label, count: 1
-        assert_select '[aria-label=?] .card-actions.flex-wrap.justify-end a.btn', filters_label, text: host_translate("job_operations.actions.clear_filters"), count: 1
-        assert_select '[data-mission-control-jobs-root] > .card.card-border.bg-base-100 > .card-body > .overflow-x-auto > table.table.min-w-max', count: 1
-        assert_select '[data-mission-control-jobs-root] table .flex.flex-wrap.justify-end.gap-2', count: 1 do
-          assert_select 'form button.btn.btn-outline.btn-warning', text: host_translate("job_operations.actions.retry"), count: 1
-          assert_select 'form button.btn.btn-outline.btn-error', text: host_translate("job_operations.actions.discard"), count: 1
+        assert_select '[data-mission-control-jobs-root] > section[data-slot="card"][aria-label=?] > [data-slot="card-content"] > form.grid', filters_label, count: 1
+        assert_select '[aria-label=?] .flex.flex-wrap.justify-end a', filters_label, text: host_translate("job_operations.actions.clear_filters"), count: 1
+        assert_select '[data-mission-control-jobs-root] > [data-slot="card"] > [data-slot="card-content"] [data-slot="table"]', count: 1
+        assert_select '[data-mission-control-jobs-root] [data-slot="table"] .flex.flex-wrap.justify-end.gap-2', count: 1 do
+          assert_select 'form button', text: host_translate("job_operations.actions.retry"), count: 1
+          assert_select 'form button', text: host_translate("job_operations.actions.discard"), count: 1
         end
         failed_title = host_translate("job_operations.titles.status_jobs.failed")
         pagination_label = host_translate("job_operations.aria.status_jobs_pagination", status: failed_title)
-        assert_select 'nav[aria-label=?].overflow-x-auto > .flex.min-w-full.justify-end > .join', pagination_label, count: 1 do
-          assert_select '.join-item.btn', count: 2
+        assert_select '[data-slot="pagination"][aria-label=?] > .flex.min-w-full > [data-slot="pagination-content"]', pagination_label, count: 1 do
+          assert_select '[data-slot="pagination-item"]', count: 2
         end
-        assert_select '[data-mission-control-jobs-root] .btn-sm, [data-mission-control-jobs-root] .btn-xs', count: 0
+        assert_select '[data-mission-control-jobs-root] button.h-7, [data-mission-control-jobs-root] button.h-6', count: 0
         assert_select '[data-page-actions-container="card"]', count: 0
 
         post retry_path
@@ -16050,8 +16291,8 @@ def install_job_operations
       private
         def assert_active_job_section(label)
           assert_response :success
-          assert_select 'a[role="tab"].tab-active[aria-current="page"]', text: label, count: 1
-          assert_select '[role="tablist"] > .tab-content[role="tabpanel"]', count: 1
+          assert_select '[data-layout="with-menu"] nav[aria-label=?] a[data-slot="navigation-menu-link"][data-active][aria-current="page"]', host_translate('job_operations.aria.sections'), text: label, count: 1
+          assert_select '[data-slot="card"] > [data-slot="card-content"] > [data-mission-control-jobs-root]', count: 1
         end
 
         def host_translate(key, **options)
@@ -16207,22 +16448,22 @@ def install_maintenance_tasks
       module MaintenanceTasksHelper
         extend T::Sig
 
-        STATUS_CLASSES = {
-          "new" => { badge: "badge-neutral", progress: "progress-neutral" },
-          "enqueued" => { badge: "badge-info", progress: "progress-info" },
-          "running" => { badge: "badge-info", progress: "progress-info" },
-          "interrupted" => { badge: "badge-info", progress: "progress-info" },
-          "pausing" => { badge: "badge-warning", progress: "progress-warning" },
-          "paused" => { badge: "badge-warning", progress: "progress-warning" },
-          "succeeded" => { badge: "badge-success", progress: "progress-success" },
-          "cancelling" => { badge: "badge-neutral", progress: "progress-neutral" },
-          "cancelled" => { badge: "badge-neutral", progress: "progress-neutral" },
-          "errored" => { badge: "badge-error", progress: "progress-error" }
+        STATUS_BADGE_VARIANTS = {
+          "new" => :outline,
+          "enqueued" => :secondary,
+          "running" => :secondary,
+          "interrupted" => :secondary,
+          "pausing" => :secondary,
+          "paused" => :secondary,
+          "succeeded" => :default,
+          "cancelling" => :outline,
+          "cancelled" => :outline,
+          "errored" => :destructive
         }.freeze
 
         sig { params(status: String).returns(ActiveSupport::SafeBuffer) }
         def status_tag(status)
-          tag.span(status.capitalize, class: ["badge", STATUS_CLASSES.fetch(status).fetch(:badge)])
+          render(Shadcn::Badge.new(variant: STATUS_BADGE_VARIANTS.fetch(status))) { t("maintenance_tasks_ui.status.\#{status}") }
         end
 
         sig { params(run: MaintenanceTasks::Run).returns(T.nilable(ActiveSupport::SafeBuffer)) }
@@ -16230,10 +16471,20 @@ def install_maintenance_tasks
           return unless run.started?
 
           progress = MaintenanceTasks::Progress.new(run)
-          attributes = { max: progress.max, class: ["progress", STATUS_CLASSES.fetch(run.status).fetch(:progress)] }
-          attributes[:value] = progress.value unless progress.value.nil?
+          percent = if progress.value && progress.max.positive?
+            100.0 * progress.value / progress.max
+          end
+          count = run.tick_count.to_i
+          total = run.tick_total.to_i
+          progress_text = if total <= 0
+            t("maintenance_tasks_ui.progress.count", count:)
+          elsif count > total
+            t("maintenance_tasks_ui.progress.over_total", count:, total:)
+          else
+            t("maintenance_tasks_ui.progress.with_total", count:, total:, percent: (100.0 * count / total).round)
+          end
           tag.div(class: "space-y-2") do
-            tag.progress(**attributes) + tag.p(tag.i(progress.text), class: "text-sm text-neutral")
+            render(Shadcn::Progress.new(value: percent)) + tag.p(tag.i(progress_text), class: "text-sm text-muted-foreground")
           end
         end
 
@@ -16245,23 +16496,32 @@ def install_maintenance_tasks
         end
         def parameter_field(form_builder, parameter_name)
           inclusion_values = resolve_inclusion_value(form_builder.object, parameter_name)
-          return form_builder.select(parameter_name, inclusion_values, { prompt: "Select a value" }, class: "select w-full") if inclusion_values
+          if inclusion_values
+            return render(Shadcn::NativeSelect.new(id: form_builder.field_id(parameter_name), name: form_builder.field_name(parameter_name), class: "w-full")) do
+              safe_join([
+                tag.option(t("maintenance_tasks_ui.select_value"), value: ""),
+                options_for_select(inclusion_values, form_builder.object.public_send(parameter_name))
+              ])
+            end
+          end
 
           case form_builder.object.class.attribute_types[parameter_name]
           when ActiveModel::Type::Integer
-            form_builder.number_field(parameter_name, class: "input w-full")
+            form_builder.number_field(parameter_name, class: Shadcn::Input.classes(extra: "w-full"))
           when ActiveModel::Type::Decimal, ActiveModel::Type::Float
-            form_builder.number_field(parameter_name, step: "any", class: "input w-full")
+            form_builder.number_field(parameter_name, step: "any", class: Shadcn::Input.classes(extra: "w-full"))
           when ActiveModel::Type::DateTime
-            form_builder.datetime_field(parameter_name, class: "input w-full sm:w-fit") + datetime_field_help_text
+            form_builder.datetime_field(parameter_name, class: Shadcn::Input.classes(extra: "w-full sm:w-fit")) + datetime_field_help_text
           when ActiveModel::Type::Date
-            form_builder.date_field(parameter_name, class: "input w-full sm:w-fit")
+            form_builder.date_field(parameter_name, class: Shadcn::Input.classes(extra: "w-full sm:w-fit"))
           when ActiveModel::Type::Time
-            form_builder.time_field(parameter_name, class: "input w-full sm:w-fit")
+            form_builder.time_field(parameter_name, class: Shadcn::Input.classes(extra: "w-full sm:w-fit"))
           when ActiveModel::Type::Boolean
-            form_builder.check_box(parameter_name, class: "checkbox")
+            form_builder.hidden_field(parameter_name, value: "0", id: nil) +
+              render(Shadcn::Checkbox.new(id: form_builder.field_id(parameter_name), name: form_builder.field_name(parameter_name),
+                value: "1", checked: form_builder.object.public_send(parameter_name)))
           else
-            form_builder.text_area(parameter_name, class: "textarea w-full")
+            form_builder.text_area(parameter_name, class: Shadcn::Textarea.classes(extra: "w-full"))
           end
         end
 
@@ -16272,7 +16532,7 @@ def install_maintenance_tasks
           else
             Time.now.zone
           end
-          tag.p("Timezone: \#{zone}.", class: "label")
+          tag.p(t("maintenance_tasks_ui.timezone", zone: zone), class: "text-sm text-muted-foreground")
         end
 
         sig do
@@ -16281,7 +16541,7 @@ def install_maintenance_tasks
         end
         def time_ago(datetime)
           time_tag(datetime, title: datetime.utc, class: "cursor-help") do
-            time_ago_in_words(datetime) + " ago"
+            t("maintenance_tasks_ui.time_ago", distance: time_ago_in_words(datetime))
           end
         end
       end
@@ -16293,14 +16553,16 @@ def install_maintenance_tasks
 
     <%= tag.div(data: { refresh: (defined?(@refresh) && @refresh) || "" }, class: "space-y-8") do %>
       <% if @available_tasks.empty? %>
-        <section class="card card-border bg-base-100">
-          <div class="card-body">
-            <h2 class="card-title leading-[1.5]">The MaintenanceTasks gem has been successfully installed!</h2>
-            <p>Any new Tasks will show up here. To start writing your first Task, run <code>bin/rails generate maintenance_tasks:task my_task</code>.</p>
-          </div>
-        </section>
+        <%= render(Shadcn::Card.new(tag: :section)) do %>
+          <%= render(Shadcn::Card::Header.new) do %>
+            <%= render(Shadcn::Card::Title.new(tag: :h2)) { t("maintenance_tasks_ui.installed") } %>
+          <% end %>
+          <%= render(Shadcn::Card::Content.new) do %>
+            <p><%= t("maintenance_tasks_ui.installed_help") %> <code>bin/rails generate maintenance_tasks:task my_task</code></p>
+          <% end %>
+        <% end %>
       <% else %>
-        <% [["Active Tasks", @available_tasks[:active]], ["New Tasks", @available_tasks[:new]], ["Completed Tasks", @available_tasks[:completed]]].each do |heading, tasks| %>
+        <% [[t("maintenance_tasks_ui.active_tasks"), @available_tasks[:active]], [t("maintenance_tasks_ui.new_tasks"), @available_tasks[:new]], [t("maintenance_tasks_ui.completed_tasks"), @available_tasks[:completed]]].each do |heading, tasks| %>
           <% if tasks.present? %>
             <section class="space-y-4" aria-labelledby="<%= heading.parameterize %>">
               <h2 id="<%= heading.parameterize %>" class="text-xl font-bold leading-[1.5]"><%= heading %></h2>
@@ -16315,26 +16577,25 @@ def install_maintenance_tasks
   ERB
 
   create_file "app/views/maintenance_tasks/tasks/_task.html.erb", <<~ERB, force: true
-    <article class="card card-border min-w-0 bg-base-100">
-      <div class="card-body min-w-0">
+    <%= render(Shadcn::Card.new(tag: :article, class: "min-w-0")) do %>
+      <%= render(Shadcn::Card::Content.new(class: "min-w-0")) do %>
         <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <h3 class="card-title min-w-0 text-base leading-[1.5]">
-            <%= link_to task, admin_maintenance_tasks.task_path(task), class: "link link-hover min-w-0 break-all" %>
+          <h3 class="min-w-0 text-base font-semibold leading-[1.5]">
+            <%= link_to task, admin_maintenance_tasks.task_path(task), class: "underline min-w-0 break-all" %>
           </h3>
           <%= status_tag(task.status) %>
         </div>
 
         <% if (run = task.related_run) %>
           <% if task.stale? %>
-            <div class="alert alert-warning alert-soft text-sm" role="status">
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-              </svg>
-              <span>This task last ran <%= MaintenanceTasks.task_staleness_threshold.inspect %> ago. Consider removing it as it may be stale.</span>
-            </div>
+            <%= render(Shadcn::Alert.new(role: "status")) do %>
+              <%= render(Shadcn::Alert::Description.new) do %>
+                <%= t("maintenance_tasks_ui.stale_task", threshold: MaintenanceTasks.task_staleness_threshold.inspect) %>
+              <% end %>
+            <% end %>
           <% end %>
 
-          <time class="text-sm font-semibold" datetime="<%= run.created_at.iso8601 %>" title="<%= run.created_at.utc %>"><%= run.created_at.to_fs(:long) %></time>
+          <time class="text-sm font-semibold" datetime="<%= run.created_at.iso8601 %>"><%= l(run.created_at, format: :long) %></time>
           <%= progress run %>
           <div class="text-sm"><%= render "maintenance_tasks/runs/info/\#{run.status}", run: run %></div>
           <div class="text-sm" id="custom-content"><%= render "maintenance_tasks/runs/info/custom", run: run %></div>
@@ -16342,21 +16603,21 @@ def install_maintenance_tasks
           <%= render "maintenance_tasks/runs/arguments", arguments: run.masked_arguments %>
           <%= render "maintenance_tasks/runs/metadata", metadata: run.metadata %>
         <% end %>
-      </div>
-    </article>
+      <% end %>
+    <% end %>
   ERB
 
   create_file "app/views/maintenance_tasks/tasks/show.html.erb", <<~ERB, force: true
     <% content_for :page_title, @task %>
 
-    <section class="card card-border bg-base-100">
-      <div class="card-body">
+    <%= render(Shadcn::Card.new(tag: :section)) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
         <%= form_with url: admin_maintenance_tasks.task_runs_path(@task), method: :post, class: "space-y-6" do |form| %>
           <% if @task.csv_task? %>
-            <fieldset class="fieldset">
-              <%= form.label :csv_file, class: "fieldset-legend" %>
-              <%= form.file_field :csv_file, accept: "text/csv", class: "file-input w-full" %>
-            </fieldset>
+            <div class="grid gap-2">
+              <%= form.label :csv_file, class: Shadcn::Label.classes %>
+              <%= form.file_field :csv_file, accept: "text/csv", class: Shadcn::Input.classes(extra: "w-full") %>
+            </div>
           <% end %>
 
           <% parameter_names = @task.parameter_names %>
@@ -16364,56 +16625,58 @@ def install_maintenance_tasks
             <div class="grid gap-5 md:grid-cols-2">
               <%= fields_for :task, @task.new do |ff| %>
                 <% parameter_names.each do |parameter_name| %>
-                  <fieldset class="fieldset min-w-0">
-                    <%= ff.label parameter_name, class: "fieldset-legend" do %>
-                      <span class="font-mono"><%= parameter_name %></span>
+                  <div class="grid min-w-0 gap-2">
+                    <%= ff.label parameter_name, class: Shadcn::Label.classes do %>
+                      <%= ff.object.class.human_attribute_name(parameter_name) %>
                       <% if attribute_required?(ff.object, parameter_name) %>
-                        <span class="text-error" aria-hidden="true">*</span><span class="sr-only"> required</span>
+                        <span class="text-destructive" aria-hidden="true">*</span><span class="sr-only"><%= t("maintenance_tasks_ui.required") %></span>
                       <% end %>
                     <% end %>
                     <%= parameter_field(ff, parameter_name) %>
-                  </fieldset>
+                  </div>
                 <% end %>
               <% end %>
             </div>
           <% end %>
 
           <%= render "maintenance_tasks/tasks/custom", form: form %>
-          <div class="card-actions flex-wrap justify-end">
-            <%= form.submit "Run", class: action_button_classes(:primary), disabled: @task.deleted? %>
+          <div class="flex flex-wrap justify-end gap-2">
+            <%= form.submit t("maintenance_tasks_ui.run"), class: action_button_classes(:primary), disabled: @task.deleted? %>
           </div>
         <% end %>
-      </div>
-    </section>
+      <% end %>
+    <% end %>
 
     <% if (code = @task.code) %>
-      <details class="collapse collapse-arrow card card-border bg-base-100">
-        <summary class="collapse-title text-lg font-semibold">Source code</summary>
-        <div class="collapse-content">
-          <div class="mockup-code overflow-x-auto">
+      <%= render(Shadcn::Collapsible.new(class: Shadcn::Card.classes)) do %>
+        <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4 text-lg font-semibold")) { t("maintenance_tasks_ui.source_code") } %>
+        <%= render(Shadcn::Collapsible::Content.new(class: "px-6 pb-6")) do %>
+          <div class="overflow-x-auto rounded-md bg-muted p-4 font-mono text-sm">
             <% code.lines(chomp: true).each.with_index(1) do |line, line_number| %>
-              <pre data-prefix="<%= line_number %>"><code><%= highlight_code(line) %></code></pre>
+              <pre data-line-number="<%= line_number %>"><code><%= highlight_code(line) %></code></pre>
             <% end %>
           </div>
-        </div>
-      </details>
+        <% end %>
+      <% end %>
     <% end %>
 
     <%= tag.div(data: { refresh: @task.refresh? || "" }, class: "space-y-8") do %>
       <% if @task.active_runs.any? %>
         <section class="space-y-4">
-          <h2 class="text-xl font-bold leading-[1.5]">Active Runs</h2>
+          <h2 class="text-xl font-bold leading-[1.5]"><%= t("maintenance_tasks_ui.active_runs") %></h2>
           <%= render partial: "maintenance_tasks/runs/run", collection: @task.active_runs %>
         </section>
       <% end %>
 
       <% if @task.runs_page.records.present? %>
         <section class="space-y-4">
-          <h2 class="text-xl font-bold leading-[1.5]">Previous Runs</h2>
+          <h2 class="text-xl font-bold leading-[1.5]"><%= t("maintenance_tasks_ui.previous_runs") %></h2>
           <%= render partial: "maintenance_tasks/runs/run", collection: @task.runs_page.records %>
           <% unless @task.runs_page.last? %>
-            <%= with_pagination(aria_label: "Previous runs pagination") do %>
-              <%= link_to "Next page", admin_maintenance_tasks.task_path(@task, cursor: @task.runs_page.next_cursor), class: pagination_item_classes %>
+            <%= with_pagination(aria_label: t("maintenance_tasks_ui.previous_runs_pagination")) do %>
+              <%= render(Shadcn::Pagination::Item.new) do %>
+                <%= render(Shadcn::Pagination::Link.new(size: :default, href: admin_maintenance_tasks.task_path(@task, cursor: @task.runs_page.next_cursor))) { t("common.next") } %>
+              <% end %>
             <% end %>
           <% end %>
         </section>
@@ -16422,18 +16685,18 @@ def install_maintenance_tasks
   ERB
 
   create_file "app/views/maintenance_tasks/runs/_run.html.erb", <<~ERB, force: true
-    <details class="collapse collapse-arrow card card-border bg-base-100" open id="run_<%= run.id %>">
-      <summary class="collapse-title pr-12">
+    <%= render(Shadcn::Collapsible.new(class: Shadcn::Card.classes, open: true, id: "run_\#{run.id}")) do %>
+      <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4")) do %>
         <span class="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <span class="flex min-w-0 flex-wrap items-center gap-3">
-            <time class="font-semibold" datetime="<%= run.created_at.iso8601 %>" title="<%= run.created_at.utc %>"><%= run.created_at.to_fs(:long) %></time>
+            <time class="font-semibold" datetime="<%= run.created_at.iso8601 %>"><%= l(run.created_at, format: :long) %></time>
             <%= status_tag run.status %>
           </span>
-          <a href="#run_<%= run.id %>" class="link link-hover" title="Run ID">#<%= run.id %></a>
+          <a href="#run_<%= run.id %>" class="underline" title="Run ID">#<%= run.id %></a>
         </span>
-      </summary>
+      <% end %>
 
-      <div class="collapse-content space-y-5">
+      <%= render(Shadcn::Collapsible::Content.new(class: "space-y-5 px-6 pb-6")) do %>
         <%= progress run %>
         <div class="text-sm"><%= render "maintenance_tasks/runs/info/\#{run.status}", run: run %></div>
         <div class="text-sm" id="custom-content"><%= render "maintenance_tasks/runs/info/custom", run: run %></div>
@@ -16441,31 +16704,31 @@ def install_maintenance_tasks
         <%= render "maintenance_tasks/runs/arguments", arguments: run.masked_arguments %>
         <%= render "maintenance_tasks/runs/metadata", metadata: run.metadata %>
 
-        <div class="card-actions flex-wrap justify-end">
+        <div class="flex flex-wrap justify-end gap-2">
           <% if run.paused? %>
-            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
+            <%= button_to t("maintenance_tasks_ui.resume"), admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
+            <%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
           <% elsif run.errored? %>
-            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
+            <%= button_to t("maintenance_tasks_ui.resume"), admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
           <% elsif run.cancelling? %>
-            <% if run.stuck? %><%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
+            <% if run.stuck? %><%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
           <% elsif run.pausing? %>
-            <%= button_to "Pausing", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: true %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
-            <% if run.stuck? %><%= button_to "Force pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
+            <%= button_to t("maintenance_tasks_ui.pausing"), admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: true %>
+            <%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
+            <% if run.stuck? %><%= button_to t("maintenance_tasks_ui.force_pause"), admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
           <% elsif run.active? %>
-            <%= button_to "Pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: @task.deleted? %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
+            <%= button_to t("maintenance_tasks_ui.pause"), admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: @task.deleted? %>
+            <%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
           <% end %>
         </div>
-      </div>
-    </details>
+      <% end %>
+    <% end %>
   ERB
 
   create_file "app/views/maintenance_tasks/runs/_arguments.html.erb", <<~ERB, force: true
     <% if arguments.present? %>
       <section class="space-y-3">
-        <h3 class="text-sm font-semibold leading-[1.5]">Arguments:</h3>
+        <h3 class="text-sm font-semibold leading-[1.5]"><%= t("maintenance_tasks_ui.arguments") %></h3>
         <%= render "maintenance_tasks/runs/serializable", serializable: arguments %>
       </section>
     <% end %>
@@ -16474,7 +16737,7 @@ def install_maintenance_tasks
   create_file "app/views/maintenance_tasks/runs/_metadata.html.erb", <<~ERB, force: true
     <% if metadata.present? %>
       <section class="space-y-3">
-        <h3 class="text-sm font-semibold leading-[1.5]">Metadata:</h3>
+        <h3 class="text-sm font-semibold leading-[1.5]"><%= t("maintenance_tasks_ui.metadata") %></h3>
         <%= render "maintenance_tasks/runs/serializable", serializable: metadata %>
       </section>
     <% end %>
@@ -16482,7 +16745,7 @@ def install_maintenance_tasks
 
   create_file "app/views/maintenance_tasks/runs/_csv.html.erb", <<~ERB, force: true
     <% if run.csv_file.present? %>
-      <%= link_to "Download CSV", csv_file_download_path(run), class: "link link-hover" %>
+      <%= link_to t("maintenance_tasks_ui.download_csv"), csv_file_download_path(run), class: "underline" %>
     <% end %>
   ERB
 
@@ -16492,7 +16755,7 @@ def install_maintenance_tasks
       <% when Hash %>
         <dl class="grid gap-3 md:grid-cols-2">
           <% serializable.transform_values(&:to_s).each do |key, value| %>
-            <div class="rounded-box bg-base-200 p-4">
+            <div class="rounded-md bg-muted p-4">
               <dt class="mb-2 break-all font-mono text-sm font-semibold"><%= key %></dt>
               <dd class="min-w-0">
                 <% unless value.empty? %>
@@ -16503,21 +16766,47 @@ def install_maintenance_tasks
           <% end %>
         </dl>
       <% else %>
-        <code class="block break-all rounded-box bg-base-200 p-4 text-sm"><%= serializable.inspect %></code>
+        <code class="block break-all rounded-md bg-muted p-4 text-sm"><%= serializable.inspect %></code>
       <% end %>
     <% end %>
   ERB
 
   create_file "app/views/maintenance_tasks/runs/info/_errored.html.erb", <<~ERB, force: true
     <div class="space-y-4">
-      <p>Ran for <%= time_running_in_words run %> until an error happened <%= time_ago run.ended_at %>.</p>
-      <div class="alert alert-error alert-soft alert-vertical" role="alert">
-        <div class="font-semibold"><%= run.error_class %></div>
-        <p><%= run.error_message %></p>
-        <% if run.backtrace.present? %><pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words text-sm"><code><%= format_backtrace(run.backtrace) %></code></pre><% end %>
-      </div>
+      <p><%= t("maintenance_tasks_ui.errored_summary", duration: time_running_in_words(run), ago: time_ago(run.ended_at)) %></p>
+      <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+        <%= render(Shadcn::Alert::Title.new) { run.error_class } %>
+        <%= render(Shadcn::Alert::Description.new) do %>
+          <p><%= run.error_message %></p>
+          <% if run.backtrace.present? %><pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words text-sm"><code><%= format_backtrace(run.backtrace) %></code></pre><% end %>
+        <% end %>
+      <% end %>
     </div>
   ERB
+
+  %w[enqueued interrupted pausing cancelling].each do |status|
+    create_file "app/views/maintenance_tasks/runs/info/_#{status}.html.erb",
+      %(<p><%= t("maintenance_tasks_ui.info.#{status}") %></p>\n), force: true
+  end
+
+  create_file "app/views/maintenance_tasks/runs/info/_running.html.erb", <<~ERB, force: true
+    <% if (time_to_completion = run.time_to_completion) %>
+      <p><%= t("maintenance_tasks_ui.info.running", duration: time_running_in_words(run), remaining: distance_of_time_in_words(time_to_completion)) %></p>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/info/_paused.html.erb", <<~ERB, force: true
+    <% if (time_to_completion = run.time_to_completion) %>
+      <p><%= t("maintenance_tasks_ui.info.paused_remaining", duration: time_running_in_words(run), remaining: distance_of_time_in_words(time_to_completion)) %></p>
+    <% else %>
+      <p><%= t("maintenance_tasks_ui.info.paused_count", duration: time_running_in_words(run), count: run.tick_count) %></p>
+    <% end %>
+  ERB
+
+  %w[cancelled succeeded].each do |status|
+    create_file "app/views/maintenance_tasks/runs/info/_#{status}.html.erb",
+      %(<p><%= t("maintenance_tasks_ui.info.#{status}", duration: time_running_in_words(run), ago: time_ago(run.ended_at)) %></p>\n), force: true
+  end
 
   create_file "app/javascript/controllers/maintenance_tasks_refresh_controller.js", <<~JAVASCRIPT, force: true
     import { Controller } from "@hotwired/stimulus"
@@ -16570,11 +16859,45 @@ def install_maintenance_tasks
     "maintenance_tasks",
     ja: {
       "navigation" => { "maintenance_tasks" => "運用タスク" },
-      "maintenance_tasks" => { "title" => "運用タスク" }
+      "maintenance_tasks" => { "title" => "運用タスク" },
+      "activemodel" => { "attributes" => { "maintenance/safe_test_task" => {
+        "note" => "メモ", "quantity" => "件数", "ratio" => "比率", "amount" => "金額", "scheduled_at" => "予定日時",
+        "due_on" => "期限日", "starts_at" => "開始時刻", "mode" => "モード", "notify" => "通知する"
+      } } },
+      "maintenance_tasks_ui" => {
+        "status" => { "new" => "未実行", "enqueued" => "待機中", "running" => "実行中", "interrupted" => "再開待ち", "pausing" => "一時停止中", "paused" => "一時停止", "succeeded" => "完了", "cancelling" => "中止中", "cancelled" => "中止", "errored" => "失敗" },
+        "select_value" => "選択してください", "timezone" => "タイムゾーン: %{zone}", "time_ago" => "%{distance}前",
+        "installed" => "運用タスクの導入が完了しました", "installed_help" => "新しいタスクはここに表示されます。最初のタスクを作成するには次のコマンドを実行してください。",
+        "active_tasks" => "実行中のタスク", "new_tasks" => "未実行のタスク", "completed_tasks" => "完了したタスク",
+        "stale_task" => "このタスクは%{threshold}以上実行されていません。不要であれば削除を検討してください。",
+        "required" => "必須", "run" => "実行", "source_code" => "ソースコード", "active_runs" => "実行中", "previous_runs" => "実行履歴", "previous_runs_pagination" => "実行履歴のページ切り替え",
+        "resume" => "再開", "cancel" => "中止", "pausing" => "一時停止中", "force_pause" => "強制的に一時停止", "pause" => "一時停止",
+        "arguments" => "引数", "metadata" => "メタデータ", "download_csv" => "CSVをダウンロード",
+        "errored_summary" => "%{duration}実行した後、%{ago}にエラーが発生しました。",
+        "progress" => { "count" => "%{count}件処理済みです。", "over_total" => "%{count}件処理済みです（予定%{total}件）。", "with_total" => "%{count}/%{total}件処理済み（%{percent}%）。" },
+        "info" => { "enqueued" => "実行待ちです。", "interrupted" => "中断しました。まもなく再開します。", "pausing" => "一時停止しています。", "cancelling" => "中止しています。", "running" => "%{duration}実行中です。残り約%{remaining}です。", "paused_remaining" => "%{duration}実行して一時停止しました。残り約%{remaining}です。", "paused_count" => "%{duration}実行して一時停止しました。%{count}件処理済みです。", "cancelled" => "%{duration}実行し、%{ago}に中止しました。", "succeeded" => "%{duration}実行し、%{ago}に完了しました。" }
+      }
     },
     en: {
       "navigation" => { "maintenance_tasks" => "Maintenance tasks" },
-      "maintenance_tasks" => { "title" => "Maintenance tasks" }
+      "maintenance_tasks" => { "title" => "Maintenance tasks" },
+      "activemodel" => { "attributes" => { "maintenance/safe_test_task" => {
+        "note" => "Note", "quantity" => "Quantity", "ratio" => "Ratio", "amount" => "Amount", "scheduled_at" => "Scheduled at",
+        "due_on" => "Due on", "starts_at" => "Starts at", "mode" => "Mode", "notify" => "Notify"
+      } } },
+      "maintenance_tasks_ui" => {
+        "status" => { "new" => "New", "enqueued" => "Enqueued", "running" => "Running", "interrupted" => "Interrupted", "pausing" => "Pausing", "paused" => "Paused", "succeeded" => "Succeeded", "cancelling" => "Cancelling", "cancelled" => "Cancelled", "errored" => "Errored" },
+        "select_value" => "Select a value", "timezone" => "Timezone: %{zone}", "time_ago" => "%{distance} ago",
+        "installed" => "Maintenance Tasks is installed", "installed_help" => "New tasks will appear here. To create your first task, run:",
+        "active_tasks" => "Active tasks", "new_tasks" => "New tasks", "completed_tasks" => "Completed tasks",
+        "stale_task" => "This task has not run for %{threshold}. Consider removing it if it is no longer needed.",
+        "required" => "required", "run" => "Run", "source_code" => "Source code", "active_runs" => "Active runs", "previous_runs" => "Previous runs", "previous_runs_pagination" => "Previous runs pagination",
+        "resume" => "Resume", "cancel" => "Cancel", "pausing" => "Pausing", "force_pause" => "Force pause", "pause" => "Pause",
+        "arguments" => "Arguments", "metadata" => "Metadata", "download_csv" => "Download CSV",
+        "errored_summary" => "Ran for %{duration} until an error happened %{ago}.",
+        "progress" => { "count" => "Processed %{count} items.", "over_total" => "Processed %{count} items (expected %{total}).", "with_total" => "Processed %{count} of %{total} items (%{percent}%)." },
+        "info" => { "enqueued" => "Waiting to start.", "interrupted" => "Interrupted momentarily; resuming shortly.", "pausing" => "Pausing…", "cancelling" => "Cancelling…", "running" => "Running for %{duration}. About %{remaining} remaining.", "paused_remaining" => "Ran for %{duration} until paused. About %{remaining} remaining.", "paused_count" => "Ran for %{duration} until paused. Processed %{count} items.", "cancelled" => "Ran for %{duration}, cancelled %{ago}.", "succeeded" => "Ran for %{duration}, finished %{ago}." }
+      }
     }
   )
 
@@ -16717,43 +17040,46 @@ def install_maintenance_tasks
         app_name = Rails.configuration.x.application_identity.app_name
         assert_select '[data-layout="with-menu"] > div > h1', text: page_title, count: 1
         assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
-        assert_select '[data-layout="with-menu"] .tab-content', count: 0
-        assert_select ".card.card-border", minimum: 1
-        assert_select ".badge.badge-neutral", text: "New", count: 3
+        assert_select '[data-layout="with-menu"] [data-slot="tabs-content"]', count: 0
+        assert_select '[data-slot="card"]', minimum: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.new"), count: 3
         assert_select "a", text: "Maintenance::CountdownTask", count: 1
         assert_select 'link[href*="bulma"]', count: 0
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
         assert_select '[data-layout="with-menu"] a[href=?]', Rails.application.routes.url_helpers.admin_users_path,
           text: I18n.t("navigation.users"), minimum: 1
-        assert_select '[data-layout="with-menu"] a.menu-active[href=?]', Rails.application.routes.url_helpers.admin_maintenance_tasks_path,
+        assert_select '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"][href=?]', Rails.application.routes.url_helpers.admin_maintenance_tasks_path,
           text: I18n.t("navigation.maintenance_tasks"), count: 1
 
         get TASK_PATH
         assert_response :success
         assert_select "[data-maintenance-tasks-root]", count: 1
-        assert_select "fieldset.fieldset", count: 9
-        assert_select "textarea.textarea[name=?]", "task[note]", count: 1
-        assert_select "input.input[type=number][name=?]", "task[quantity]", count: 1
-        assert_select "input.input[type=number][step=any][name=?]", "task[ratio]", count: 1
-        assert_select "input.input[type=number][step=any][name=?]", "task[amount]", count: 1
-        assert_select "input.input[type=datetime-local][name=?]", "task[scheduled_at]", count: 1
-        assert_select "input.input[type=date][name=?]", "task[due_on]", count: 1
-        assert_select "input.input[type=time][name=?]", "task[starts_at]", count: 1
-        assert_select "select.select[name=?]", "task[mode]", count: 1
-        assert_select "input.checkbox[name=?]", "task[notify]", count: 1
-        assert_select "input.btn.btn-primary[type=submit]", value: "Run", count: 1
+        assert_select 'form[action=?] .grid.min-w-0.gap-2', MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 9
+        assert_select "textarea[name=?]", "task[note]", count: 1
+        assert_select 'label[for="task_note"]', count: 1 do |labels|
+          assert_includes T.must(labels.first).text, I18n.t("activemodel.attributes.maintenance/safe_test_task.note")
+        end
+        assert_select "input[type=number][name=?]", "task[quantity]", count: 1
+        assert_select "input[type=number][step=any][name=?]", "task[ratio]", count: 1
+        assert_select "input[type=number][step=any][name=?]", "task[amount]", count: 1
+        assert_select "input[type=datetime-local][name=?]", "task[scheduled_at]", count: 1
+        assert_select "input[type=date][name=?]", "task[due_on]", count: 1
+        assert_select "input[type=time][name=?]", "task[starts_at]", count: 1
+        assert_select 'select[data-slot="native-select"][name=?]', "task[mode]", count: 1
+        assert_select 'input[data-slot="checkbox"][name=?]', "task[notify]", count: 1
+        assert_select "input[type=submit]", value: I18n.t("maintenance_tasks_ui.run"), count: 1
         assert_select "form[action=?]", MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 1
-        assert_select "details.collapse.collapse-arrow", minimum: 1
-        assert_select ".mockup-code", count: 1
+        assert_select 'details[data-slot="collapsible"]', minimum: 1
+        assert_select '[data-slot="collapsible-content"] > .overflow-x-auto', count: 1
         source_lines = T.must(MaintenanceTasks::TaskDataShow.prepare(TASK_NAME).code).lines(chomp: true)
-        assert_select ".mockup-code > pre", count: source_lines.length do |code_lines|
-          assert_equal((1..source_lines.length).map(&:to_s), code_lines.pluck("data-prefix"))
+        assert_select '[data-slot="collapsible-content"] > .overflow-x-auto > pre', count: source_lines.length do |code_lines|
+          assert_equal((1..source_lines.length).map(&:to_s), code_lines.pluck("data-line-number"))
           code_lines.each { |line| assert_select line, "code", count: 1 }
         end
 
         get CSV_TASK_PATH
         assert_response :success
-        assert_select "input.file-input[type=file][name=csv_file]", count: 1
+        assert_select "input[type=file][name=csv_file]", count: 1
       end
 
       test "preserves pause, resume, and cancel operations" do
@@ -16777,7 +17103,7 @@ def install_maintenance_tasks
         assert_equal "cancelled", cancellable_run.reload.status
       end
 
-      test "renders daisyUI run controls, progress, and errors" do
+      test "renders shadcn run controls, progress, and errors" do
         sign_in_as(@admin)
         now = Time.current
         MaintenanceTasks::Run.create!(
@@ -16810,15 +17136,16 @@ def install_maintenance_tasks
         get TASK_PATH
 
         assert_response :success
-        assert_select ".badge.badge-warning", text: "Paused", count: 1
-        assert_select "progress.progress-warning", count: 1
-        assert_select ".card-actions.flex-wrap.justify-end", minimum: 3
-        assert_select "form[action$='/resume'] .btn", text: "Resume", count: 2
-        assert_select "form[action$='/pause'] .btn.btn-outline.btn-warning", text: "Pause", count: 1
-        assert_select "form[action$='/cancel'] .btn.btn-outline.btn-error", text: "Cancel", count: 2
-        assert_select ".btn-sm, .btn-xs", count: 0
-        assert_select ".badge.badge-error", text: "Errored", count: 1
-        assert_select ".alert.alert-error.alert-soft", text: /Something went wrong/, count: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.paused"), count: 1
+        assert_select '[data-slot="progress"] + p', text: I18n.t("maintenance_tasks_ui.progress.with_total", count: 2, total: 10, percent: 20), count: 1
+        assert_select '[data-slot="progress"][role="progressbar"][aria-valuenow="20.0"]', count: 1
+        assert_select '[data-slot="progress"][role="progressbar"][aria-valuenow="10.0"]', count: 1
+        assert_select '[data-slot="collapsible-content"] .flex.flex-wrap.justify-end.gap-2', minimum: 3
+        assert_select "form[action$='/resume'] button", text: I18n.t("maintenance_tasks_ui.resume"), count: 2
+        assert_select "form[action$='/pause'] button", text: I18n.t("maintenance_tasks_ui.pause"), count: 1
+        assert_select "form[action$='/cancel'] button", text: I18n.t("maintenance_tasks_ui.cancel"), count: 2
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.errored"), count: 1
+        assert_select '[data-slot="alert"][role="alert"]', text: /Something went wrong/, count: 1
       end
 
       test "renders cursor pagination with the shared button contract" do
@@ -16837,8 +17164,8 @@ def install_maintenance_tasks
         get TASK_PATH
 
         assert_response :success
-        assert_select 'nav[aria-label="Previous runs pagination"].overflow-x-auto > .flex.min-w-full.justify-end > .join', count: 1 do
-          assert_select "a.join-item.btn", text: "Next page", count: 1
+        assert_select '[data-slot="pagination"][aria-label=?] > .flex.min-w-full > [data-slot="pagination-content"]', I18n.t("maintenance_tasks_ui.previous_runs_pagination"), count: 1 do
+          assert_select 'a[data-slot="pagination-link"]', text: I18n.t("common.next"), count: 1
         end
       end
 
@@ -16864,8 +17191,8 @@ def install_maintenance_tasks
 
         get TASK_PATH
         assert_response :success
-        assert_select ".badge.badge-success", text: "Succeeded", count: 1
-        assert_select "progress.progress-success", count: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.succeeded"), count: 1
+        assert_select '[data-slot="progress"][role="progressbar"]', count: 1
       end
     end
   RUBY
@@ -16903,6 +17230,7 @@ def configure_common_files
         screen_size: [1400, 900],
         options: {
           headless: true,
+          locale: I18n.default_locale.to_s == "ja" ? "ja-JP" : "en-US",
           playwright_cli_executable_path: Rails.root.join("node_modules/.bin/playwright").to_s
         }
 
@@ -16949,6 +17277,8 @@ def configure_evidence_capture
         "desktop" => { "width" => 1400, "height" => 900 },
         "mobile" => { "width" => 390, "height" => 844 }
       }.freeze
+      SELECTED_VIEWPORT = ENV.fetch("EVIDENCE_VIEWPORT")
+      VIEWPORTS.fetch(SELECTED_VIEWPORT)
       PRIVATE_KEY = "1".rjust(64, "0")
       REGULAR_PRIVATE_KEY = "2".rjust(64, "0")
       UNLINKED_PRIVATE_KEY = "3".rjust(64, "0")
@@ -16976,7 +17306,7 @@ def configure_evidence_capture
             "scenario_set" => SCENARIO_SET,
             "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
             "locale" => LOCALE,
-            "viewports" => VIEWPORTS,
+            "viewports" => VIEWPORTS.slice(SELECTED_VIEWPORT),
             "captures" => @captures
           ) + "\n"
         )
@@ -16984,7 +17314,7 @@ def configure_evidence_capture
 
       private
         def capture_common_scenarios
-          VIEWPORTS.each do |viewport_name, viewport|
+          VIEWPORTS.slice(SELECTED_VIEWPORT).each do |viewport_name, viewport|
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
             prepare_guest_data
             verify_footer_geometry if viewport_name == "desktop"
@@ -17007,7 +17337,7 @@ def configure_evidence_capture
           @user ||= create_evidence_user("evidence-primary")
           T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
 
-          VIEWPORTS.each do |viewport_name, viewport|
+          VIEWPORTS.slice(SELECTED_VIEWPORT).each do |viewport_name, viewport|
             Capybara.reset_sessions!
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
             @user.siwe_identities.delete_all
@@ -17078,7 +17408,7 @@ def configure_evidence_capture
               viewport_name
             )
             assert_account_settings_tabs_geometry
-            assert_selector ".badge", text: translate("siwe.identities.current"), count: 1
+            assert_selector '[data-slot="badge"]', text: translate("siwe.identities.current"), count: 1
             assert_no_link translate("siwe.identities.delete"), href: account_siwe_identity_path(main_identity)
             assert_link translate("siwe.identities.delete"), href: account_siwe_identity_path(regular_identity)
 
@@ -17106,7 +17436,7 @@ def configure_evidence_capture
             click_button translate("common.update")
             assert_current_path account_siwe_identities_path
             assert_selector "h1", text: translate("siwe.identities.title")
-            assert_selector ".alert.alert-success.alert-soft", text: translate("siwe.identities.updated"), count: 1
+            assert_selector '[data-slot="alert"][role="status"]', text: translate("siwe.identities.updated"), count: 1
             capture_current_page("siwe-identity-renamed", translate("siwe.identities.updated"), viewport_name)
             assert_account_settings_tabs_geometry
             capture_page(
@@ -17124,14 +17454,14 @@ def configure_evidence_capture
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
                 const navigation = document.querySelector('nav[aria-label="アカウント設定"]')
-                const scroller = navigation.querySelector(':scope > .overflow-x-auto')
-                const tablist = scroller.querySelector(':scope > [role="tablist"]')
-                const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
-                const activeTab = tablist.querySelector(':scope > .tab-active')
-                const panel = activeTab.nextElementSibling
+                const scroller = navigation.querySelector('[data-slot="navigation-menu"].overflow-x-auto')
+                const list = scroller.querySelector('[data-slot="navigation-menu-list"]')
+                const links = Array.from(list.querySelectorAll('a[data-slot="navigation-menu-link"]'))
+                const active = links.find((link) => link.getAttribute("aria-current") === "page")
+                const panel = navigation.parentElement.querySelector(':scope > [data-slot="card"]')
                 const navigationRect = navigation.getBoundingClientRect()
                 const panelRect = panel.getBoundingClientRect()
-                const activeTabRect = activeTab.getBoundingClientRect()
+                const activeRect = active.getBoundingClientRect()
                 return {
                   documentWidth: document.documentElement.scrollWidth,
                   viewportWidth: window.innerWidth,
@@ -17139,25 +17469,13 @@ def configure_evidence_capture
                   navigationRight: navigationRect.right,
                   panelLeft: panelRect.left,
                   panelRight: panelRect.right,
-                  activeTabBottom: activeTabRect.bottom,
+                  navigationBottom: navigationRect.bottom,
                   panelTop: panelRect.top,
-                  activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
-                  panelBorderTopWidth: parseFloat(getComputedStyle(panel).borderTopWidth),
-                  panelMarginTop: parseFloat(getComputedStyle(panel).marginTop),
-                  activeTabCoversSharedEdge: document.elementFromPoint(
-                    activeTabRect.left + activeTabRect.width / 2,
-                    panelRect.top + 0.5
-                  ) === activeTab,
-                  activeTabOwnsPanel: activeTab.nextElementSibling === panel,
-                  panelInsideTablist: panel.parentElement === tablist,
-                  panelIsTabContent: panel.classList.contains('tab-content'),
-                  panelIsSticky: panel.classList.contains('sticky'),
-                  panelContain: getComputedStyle(panel).contain,
-                  panelCount: tablist.querySelectorAll(':scope > .tab-content').length,
-                  tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
+                  activeVisible: activeRect.left >= navigationRect.left && activeRect.right <= navigationRect.right,
+                  panelContentCount: panel.querySelectorAll(':scope > [data-slot="card-content"]').length,
+                  rowCount: new Set(links.map((link) => Math.round(link.getBoundingClientRect().top))).size,
                   scrollerScrollWidth: scroller.scrollWidth,
-                  scrollerClientWidth: scroller.clientWidth,
-                  nestedBaseBorderCount: panel.querySelectorAll('.card-border.border-base-300').length
+                  scrollerClientWidth: scroller.clientWidth
                 }
               }
             JAVASCRIPT
@@ -17165,20 +17483,11 @@ def configure_evidence_capture
           assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth")
           assert_in_delta geometry.fetch("navigationLeft"), geometry.fetch("panelLeft"), 1
           assert_operator geometry.fetch("panelRight"), :<=, geometry.fetch("navigationRight") + 1
-          assert_in_delta geometry.fetch("activeTabBottom"), geometry.fetch("panelTop"), 1.5
-          assert_in_delta 0, geometry.fetch("activeTabBorderBottomWidth"), 0.1
-          assert_in_delta 1, geometry.fetch("panelBorderTopWidth"), 0.1
-          assert_in_delta(-1, geometry.fetch("panelMarginTop"), 0.1)
-          assert geometry.fetch("activeTabCoversSharedEdge")
-          assert geometry.fetch("activeTabOwnsPanel")
-          assert geometry.fetch("panelInsideTablist")
-          assert geometry.fetch("panelIsTabContent")
-          assert geometry.fetch("panelIsSticky")
-          assert_equal "inline-size", geometry.fetch("panelContain")
-          assert_equal 1, geometry.fetch("panelCount")
-          assert_equal 1, geometry.fetch("tabRowCount")
+          assert_operator geometry.fetch("panelTop"), :>, geometry.fetch("navigationBottom")
+          assert geometry.fetch("activeVisible")
+          assert_equal 1, geometry.fetch("panelContentCount")
+          assert_equal 1, geometry.fetch("rowCount")
           assert_operator geometry.fetch("scrollerScrollWidth"), :>=, geometry.fetch("scrollerClientWidth")
-          assert_equal 0, geometry.fetch("nestedBaseBorderCount")
         end
 
         def authenticate_with_siwe(key, viewport)
@@ -17214,7 +17523,7 @@ def configure_evidence_capture
           install_unlinked_siwe_provider(key.address.to_s, signature, challenge)
 
           click_button translate("authentication.sign_in_with_wallet")
-          assert_selector ".alert-error", text: translate("siwe.errors.wallet_not_registered")
+          assert_selector '[data-slot="alert"][role="alert"]', text: translate("siwe.errors.wallet_not_registered")
           assert_link translate("authentication.create_account"), href: new_user_registration_path, count: 1
           assert_current_path new_user_session_path
           geometry = page.evaluate_script(<<~JAVASCRIPT)
@@ -17282,7 +17591,7 @@ def configure_evidence_capture
         end
 
         def capture_avatar_scenarios
-          VIEWPORTS.each do |viewport_name, viewport|
+          VIEWPORTS.slice(SELECTED_VIEWPORT).each do |viewport_name, viewport|
             Capybara.reset_sessions!
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
             prepare_guest_data
@@ -17296,7 +17605,7 @@ def configure_evidence_capture
               "avatar-home",
               "アバター（ホーム）",
               root_path,
-              translate("home.heading"),
+              home_heading_text,
               viewport_name,
               [40]
             )
@@ -17313,6 +17622,10 @@ def configure_evidence_capture
 
         def translate(key, **options)
           I18n.t(key, **options)
+        end
+
+        def home_heading_text
+          %w[before emphasis after].map { |part| translate("home.heading.#{part}") }.join
         end
 
         def host_translate(key, **options)
@@ -17370,7 +17683,7 @@ def configure_evidence_capture
         end
 
         def capture_guest_pages(viewport)
-          capture_page("home-guest", "ホーム（未ログイン）", root_path, translate("home.heading"), viewport)
+          capture_page("home-guest", "ホーム（未ログイン）", root_path, home_heading_text, viewport)
           capture_page("about", "アプリについて", about_path, Page::TITLES.fetch("about"), viewport)
           assert_selector ".lexxy-content", text: "管理画面から更新したAction Text本文"
           capture_page("corp", "運営者情報", corp_path, Page::TITLES.fetch("corp"), viewport)
@@ -17386,7 +17699,7 @@ def configure_evidence_capture
           viewport_size = VIEWPORTS.fetch(viewport)
           page.current_window.resize_to(viewport_size.fetch("width"), viewport_size.fetch("height"))
           visit root_path
-          find("header details.dropdown > summary", visible: :visible).click
+          find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
           capture_current_page("navigation-guest-open", "モバイルメニュー（未ログイン）", viewport)
         end
 
@@ -17465,7 +17778,7 @@ def configure_evidence_capture
         end
 
         def capture_authenticated_pages(viewport)
-          capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, translate("home.heading"), viewport)
+          capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, home_heading_text, viewport)
           capture_notification_scenarios(viewport)
           capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
@@ -17487,7 +17800,7 @@ def configure_evidence_capture
             visit api_credentials_path
             assert_equal 200, page.status_code
             assert_selector "h1", text: translate("api_credentials.title")
-            assert_selector ".alert.alert-info.alert-soft", text: translate("api_credentials.empty"), count: 1
+            assert_selector '[data-slot="empty"]', text: translate("api_credentials.empty"), count: 1
             capture_current_page("api-credentials-empty", "APIキー一覧（空）", viewport)
             capture_page("api-credential-new", "APIキー作成", new_api_credential_path, translate("api_credentials.new"), viewport)
             fill_in ApiCredential.human_attribute_name(:name), with: "Evidence CLI"
@@ -17495,7 +17808,7 @@ def configure_evidence_capture
               find('input[type="submit"]').click
             end
             assert_text translate("api_credentials.secret_once")
-            assert_selector ".alert.alert-warning.alert-soft", count: 1
+            assert_selector '[data-slot="alert"]', text: translate("api_credentials.secret_once"), count: 1
             capture_current_page("api-credential-secret", "APIキー詳細（初回secret）", viewport)
             credential = @user.api_credentials.find_by!(name: "Evidence CLI")
             capture_page("api-credential-show", "APIキー詳細", api_credential_path(credential), "Evidence CLI", viewport)
@@ -17505,24 +17818,30 @@ def configure_evidence_capture
           if JOB_OPERATIONS
             queues_title = translate("job_operations.titles.queues")
             failed_title = translate("job_operations.titles.status_jobs.failed")
+            failed_tab = translate("job_operations.sections.failed_jobs", count: 1)
             visit host_routes.admin_jobs_path
             assert_equal 200, page.status_code
             assert_selector "[data-mission-control-jobs-root]", count: 1
             assert_admin_navigation_active(host_translate("navigation.job_operations"))
+            assert_selector 'nav[data-active-navigation-ready="true"]', count: 1
             assert_job_operations_tabs_single_row if viewport == "desktop"
             capture_current_page("admin-job-operations", queues_title, viewport)
             if viewport == "mobile"
-              find("header details.dropdown > summary", visible: :visible).click
+              find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
+              assert_selector 'header [data-slot="dropdown-menu-content"]:popover-open'
               capture_current_page(
                 "admin-job-operations-navigation-open",
                 "#{queues_title}のモバイルメニュー",
                 viewport
               )
-              find("header details.dropdown > summary", visible: :visible).click
+              assert_selector 'header [data-slot="dropdown-menu-content"]:popover-open'
+              find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
             end
-            find('[role="tab"]', text: /^#{Regexp.escape(failed_title)}/).click
+            find(%Q{nav[aria-label="#{translate("job_operations.aria.sections")}"] a[data-slot="navigation-menu-link"]},
+              text: failed_tab).click
             assert_selector '[data-layout="with-menu"] > div > h1', text: failed_title, count: 1
-            assert_selector ".tab-active", text: /^#{Regexp.escape(failed_title)}/, count: 1
+            assert_selector 'a[data-slot="navigation-menu-link"][aria-current="page"]',
+              text: failed_tab, count: 1
             assert_job_operations_tabs_single_row if viewport == "desktop"
             capture_current_page("admin-job-operations-failed", failed_title, viewport)
           end
@@ -17534,13 +17853,13 @@ def configure_evidence_capture
             capture_current_page("admin-maintenance-tasks", "運用タスク", viewport)
             click_link "Maintenance::SafeTestTask"
             assert_selector "textarea[name='task[note]']", count: 1
-            assert_selector "input.checkbox[name='task[notify]']", count: 1
-            find("details.collapse", text: "Source code").find("summary").click
-            assert_selector "details.collapse[open] .mockup-code", count: 1
-            code_lines = all(".mockup-code > pre")
+            assert_selector "input[data-slot='checkbox'][name='task[notify]']", count: 1
+            find('details[data-slot="collapsible"]', text: translate("maintenance_tasks_ui.source_code")).find('summary[data-slot="collapsible-trigger"]').click
+            assert_selector 'details[data-slot="collapsible"][open] [data-slot="collapsible-content"] .font-mono', count: 1
+            code_lines = all('details[data-slot="collapsible"][open] [data-slot="collapsible-content"] pre[data-line-number]')
             assert_operator code_lines.length, :>, 1
-            assert_equal((1..code_lines.length).map(&:to_s), code_lines.pluck("data-prefix"))
-            assert_selector ".mockup-code > pre > code", count: code_lines.length
+            assert_equal((1..code_lines.length).map(&:to_s), code_lines.pluck("data-line-number"))
+            assert_selector 'details[data-slot="collapsible"][open] pre[data-line-number] > code', count: code_lines.length
             capture_current_page("admin-maintenance-task-details", "運用タスク詳細", viewport)
             task_path = page.current_path
             paused_run = MaintenanceTasks::Run.create!(
@@ -17560,10 +17879,10 @@ def configure_evidence_capture
               tick_total: 10
             )
             visit task_path
-            assert_selector ".badge.badge-warning", text: "Paused", count: 1
-            assert_button "Pause"
-            assert_button "Resume"
-            assert_button "Cancel"
+            assert_selector '[data-slot="badge"]', text: translate("maintenance_tasks_ui.status.paused"), count: 1
+            assert_button translate("maintenance_tasks_ui.pause")
+            assert_button translate("maintenance_tasks_ui.resume")
+            assert_button translate("maintenance_tasks_ui.cancel")
             capture_current_page("admin-maintenance-task-paused", "運用タスク一時停止中", viewport)
             paused_run.destroy!
             running_run.destroy!
@@ -17578,21 +17897,21 @@ def configure_evidence_capture
               backtrace: ["app/tasks/maintenance/safe_test_task.rb:10"]
             )
             visit task_path
-            assert_selector ".badge.badge-error", text: "Errored", count: 1
-            assert_selector ".alert.alert-error.alert-soft", text: "Evidence task failure", count: 1
+            assert_selector '[data-slot="badge"]', text: translate("maintenance_tasks_ui.status.errored"), count: 1
+            assert_selector '[data-slot="alert"]', text: "Evidence task failure", count: 1
             capture_current_page("admin-maintenance-task-errored", "運用タスクエラー", viewport)
             errored_run.destroy!
             visit task_path
-            click_button "Run"
-            assert_text "Enqueued"
+            click_button translate("maintenance_tasks_ui.run")
+            assert_text translate("maintenance_tasks_ui.status.enqueued")
             perform_enqueued_jobs
             visit page.current_path
-            assert_text "Succeeded"
-            assert_selector ".badge.badge-success", text: "Succeeded", count: 1
+            assert_text translate("maintenance_tasks_ui.status.succeeded")
+            assert_selector '[data-slot="badge"]', text: translate("maintenance_tasks_ui.status.succeeded"), count: 1
             capture_current_page("admin-maintenance-task-completed", "運用タスク完了", viewport)
             if viewport == "mobile"
               visit admin_maintenance_tasks_path
-              find("header details.dropdown > summary", visible: :visible).click
+          find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
               capture_current_page(
                 "admin-maintenance-tasks-navigation-open",
                 "運用タスクのモバイルメニュー",
@@ -17636,7 +17955,7 @@ def configure_evidence_capture
           assert_admin_navigation_active(translate("content_management.admin.footer_settings.title"))
 
           visit root_path
-          find("header details.dropdown > summary", visible: :visible).click
+          find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
           assert_account_menu_visual_state
           capture_current_page("navigation-authenticated-open", "アカウントメニュー（ログイン済み）", viewport)
 
@@ -17654,7 +17973,7 @@ def configure_evidence_capture
             translate("admin.users.show_title", name: managed_profile.display_name),
             viewport
           )
-          assert_selector '.avatar svg[width="64"][height="64"]', count: 1
+          assert_selector '[data-slot="avatar"] svg[width="64"][height="64"]', count: 1
           assert_button translate("admin.users.grant")
           capture_page(
             "admin-user-edit",
@@ -17699,13 +18018,13 @@ def configure_evidence_capture
           )
           assert_admin_navigation_active(translate("navigation.soft_maintenance"))
           assert_selector 'a[target="_blank"][rel="noopener"]', text: translate("soft_maintenance.admin.preview")
-          assert_selector 'input.toggle[name="soft_maintenance_setting[site_enabled]"]', count: 1
-          assert_selector 'input.toggle[name="soft_maintenance_setting[api_enabled]"]', count: 1 if API
+          assert_selector 'input[data-slot="switch"][name="soft_maintenance_setting[site_enabled]"]', count: 1
+          assert_selector 'input[data-slot="switch"][name="soft_maintenance_setting[api_enabled]"]', count: 1 if API
 
-          find('input.toggle[name="soft_maintenance_setting[site_enabled]"]').check
+          find('input[data-slot="switch"][name="soft_maintenance_setting[site_enabled]"]').check
           click_button translate("common.save")
           assert_selector "dialog#soft-maintenance-confirmation[open]"
-          assert_selector ".alert.alert-warning.alert-soft", text: translate("soft_maintenance.admin.confirm_warning")
+          assert_selector 'dialog#soft-maintenance-confirmation[open] [data-slot="alert"]', text: translate("soft_maintenance.admin.confirm_warning")
           capture_current_page("admin-soft-maintenance-confirmation", "ソフトメンテナンス開始確認", viewport)
 
           capture_page(
@@ -17741,21 +18060,21 @@ def configure_evidence_capture
             popover.removeAttribute("data-action")
             popover.showPopover()
           JAVASCRIPT
-          assert_selector "#notifications-popover:popover-open #notifications_popover .skeleton", count: 3
+          assert_selector "#notifications-popover:popover-open #notifications_popover [data-slot='skeleton']", count: 3
           capture_current_page("notifications-popover-skeleton", "通知popover（読込中）", viewport)
 
           visit root_path
           find('button[popovertarget="notifications-popover"]').click
           assert_selector "#notifications-popover:popover-open"
           assert_text "Evidence notification 1"
-          assert_selector "#notification_unread_status .status", count: 1
-          assert_selector "#popover_personal_unread_status .status", count: 1
-          assert_selector "#popover_announcements_unread_status .status", count: 1
+          assert_selector "#notification_unread_status [data-notification-unread-indicator]", count: 1
+          assert_selector "#popover_personal_unread_status [data-tab-unread-indicator]", count: 1
+          assert_selector "#popover_announcements_unread_status [data-tab-unread-indicator]", count: 1
           capture_current_page("notifications-popover-unread", "通知popover（未読）", viewport)
 
           within("#notifications-popover") { click_link translate("notifications.tabs.announcements") }
           assert_text "Evidence announcement 1"
-          assert_no_selector "#popover_announcements_unread_status .status"
+          assert_no_selector "#popover_announcements_unread_status [data-tab-unread-indicator]"
           within("#notifications-popover") { assert_no_button translate("notifications.open") }
           capture_current_page("notifications-popover-announcements", "通知popover（お知らせ）", viewport)
 
@@ -17784,7 +18103,7 @@ def configure_evidence_capture
           assert_text "Evidence notification 1"
           within("#notifications-popover") { click_button translate("notifications.open_all") }
           assert_selector "#notifications-popover:popover-open"
-          assert_no_selector "#notification_unread_status .status"
+          assert_no_selector "#notification_unread_status [data-notification-unread-indicator]"
           capture_current_page("notifications-popover-opened", "通知popover（全件既読後）", viewport)
 
           capture_page(
@@ -17811,7 +18130,7 @@ def configure_evidence_capture
           recipient = T.must(@user)
           display_name = T.must(recipient.profile).display_name
           assert_selector '[data-notification-recipients-target="count"]', text: "1"
-          assert_selector '[data-notification-recipients-target="hidden"] li.list-row', text: display_name
+          assert_selector '[data-notification-recipients-target="hidden"] li[data-slot="item"]', text: display_name
           assert_selector "input[name='notification[recipient_ids][]'][value='#{recipient.id}']", visible: :all
           assert_admin_navigation_active(translate("navigation.admin_notifications"))
           capture_current_page("admin-notification-edit", "通知編集", viewport)
@@ -17828,7 +18147,7 @@ def configure_evidence_capture
             click_button translate("notifications.admin.add_recipient")
           end
           assert_selector '[data-notification-recipients-target="count"]', text: "1"
-          assert_selector '[data-notification-recipients-target="hidden"] li.list-row', text: display_name
+          assert_selector '[data-notification-recipients-target="hidden"] li[data-slot="item"]', text: display_name
           assert_no_selector "turbo-frame#notification_recipient_results button[data-user-id='#{@regular_user.id}']"
           capture_current_page("admin-notification-recipients", "通知の個別受信者選択", viewport)
         end
@@ -17839,12 +18158,12 @@ def configure_evidence_capture
             visit root_path
             if width == 320
               assert_standard_button_size_modifiers
-              assert_standard_card_border_colors
+              assert_standard_card_ring_colors
             end
             find('button[popovertarget="notifications-popover"]').click
             assert_selector "#notifications-popover:popover-open"
             assert_text "Evidence notification 1"
-            assert_default_outline_button_colors("#notifications-popover .btn.btn-outline")
+            assert_default_outline_button_colors('#notifications-popover a[data-turbo-frame="_top"]')
             assert_notification_tab_geometry("#notifications-popover", width)
 
             within("#notifications-popover") { click_link translate("notifications.tabs.announcements") }
@@ -17872,8 +18191,8 @@ def configure_evidence_capture
                 const button = document.querySelector(#{selector.to_json})
                 const borderProbe = document.createElement("div")
                 const textProbe = document.createElement("div")
-                borderProbe.style.border = "1px solid var(--color-base-300)"
-                textProbe.style.color = "var(--color-base-content)"
+                borderProbe.style.border = "1px solid var(--border)"
+                textProbe.style.color = "var(--foreground)"
                 document.body.append(borderProbe, textProbe)
                 const colors = {
                   border: getComputedStyle(button).borderTopColor,
@@ -17896,9 +18215,9 @@ def configure_evidence_capture
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
                 const classNames = {
-                  default: "btn",
-                  small: "btn btn-sm",
-                  extraSmall: "btn btn-xs"
+                  default: #{Shadcn::Button.classes.to_json},
+                  small: #{Shadcn::Button.classes(size: :sm).to_json},
+                  extraSmall: #{Shadcn::Button.classes(size: :xs).to_json}
                 }
                 const buttons = Object.fromEntries(
                   Object.entries(classNames).map(([name, className]) => {
@@ -17912,7 +18231,7 @@ def configure_evidence_capture
                 const sizes = Object.fromEntries(
                   Object.entries(buttons).map(([name, button]) => [
                     name,
-                    parseFloat(getComputedStyle(button).fontSize)
+                    button.getBoundingClientRect().height
                   ])
                 )
                 Object.values(buttons).forEach((button) => button.remove())
@@ -17924,76 +18243,64 @@ def configure_evidence_capture
           assert_operator sizes.fetch("small"), :>, sizes.fetch("extraSmall")
         end
 
-        def assert_standard_card_border_colors
+        def assert_standard_card_ring_colors
           styles = page.driver.with_playwright_page do |playwright_page|
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
                 const normal = document.createElement("div")
                 const error = document.createElement("div")
-                const baseProbe = document.createElement("div")
                 const errorProbe = document.createElement("div")
-                normal.className = "card card-border bg-base-100"
-                error.className = "card card-border border-error bg-base-100"
-                baseProbe.style.borderColor = "var(--color-base-300)"
-                errorProbe.style.borderColor = "var(--color-error)"
-                document.body.append(normal, error, baseProbe, errorProbe)
+                normal.className = #{Shadcn::Card.classes.to_json}
+                error.className = #{Shadcn::Card.classes(extra: "ring-destructive!").to_json}
+                errorProbe.style.color = "var(--destructive)"
+                document.body.append(normal, error, errorProbe)
                 const normalStyle = getComputedStyle(normal)
                 const errorStyle = getComputedStyle(error)
                 const styles = {
-                  normalColor: normalStyle.borderTopColor,
-                  expectedNormalColor: getComputedStyle(baseProbe).borderTopColor,
-                  errorColor: errorStyle.borderTopColor,
-                  expectedErrorColor: getComputedStyle(errorProbe).borderTopColor,
-                  normalStyle: normalStyle.borderTopStyle,
-                  errorStyle: errorStyle.borderTopStyle,
-                  normalWidth: parseFloat(normalStyle.borderTopWidth),
-                  errorWidth: parseFloat(errorStyle.borderTopWidth)
+                  normalShadow: normalStyle.boxShadow,
+                  errorShadow: errorStyle.boxShadow,
+                  expectedErrorColor: getComputedStyle(errorProbe).color
                 }
                 normal.remove()
                 error.remove()
-                baseProbe.remove()
                 errorProbe.remove()
                 return styles
               }
             JAVASCRIPT
           end
-          assert_equal styles.fetch("expectedNormalColor"), styles.fetch("normalColor")
-          assert_equal styles.fetch("expectedErrorColor"), styles.fetch("errorColor")
-          assert_equal "solid", styles.fetch("normalStyle")
-          assert_equal "solid", styles.fetch("errorStyle")
-          assert_operator styles.fetch("normalWidth"), :>, 0
-          assert_equal styles.fetch("normalWidth"), styles.fetch("errorWidth")
+          assert_includes styles.fetch("normalShadow"), "0px 0px 0px 1px"
+          assert_includes styles.fetch("errorShadow"),
+            "#{styles.fetch('expectedErrorColor')} 0px 0px 0px 1px"
+          refute_equal styles.fetch("normalShadow"), styles.fetch("errorShadow")
         end
 
         def assert_notification_tab_geometry(surface_selector, width)
           geometry = page.driver.with_playwright_page do |playwright_page|
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
-                const surface = document.querySelector(#{surface_selector.to_json}).getBoundingClientRect()
-                const tablist = document.querySelector(#{(surface_selector + " [role='tablist']").to_json})
-                const tabs = Array.from(tablist.querySelectorAll(":scope > [role='tab']"))
-                  .map((tab) => tab.getBoundingClientRect())
-                const activeElement = tablist.querySelector(":scope > .tab-active")
-                const activeTab = activeElement.getBoundingClientRect()
-                const tabpanelElement = tablist.querySelector(":scope > [role='tabpanel']")
-                const tabpanel = tabpanelElement.getBoundingClientRect()
-                const zIndex = (element) => {
-                  const value = Number.parseInt(getComputedStyle(element).zIndex, 10)
-                  return Number.isNaN(value) ? 0 : value
-                }
+                const root = document.querySelector(#{surface_selector.to_json})
+                const surface = root.getBoundingClientRect()
+                const navigation = root.querySelector('nav [data-slot="navigation-menu"]')
+                const links = Array.from(navigation.querySelectorAll('a[data-slot="navigation-menu-link"]'))
+                const active = links.find((link) => link.getAttribute("aria-current") === "page")
+                const panel = navigation.closest("nav").parentElement.querySelector(':scope > [data-slot="card"]')
+                const panelRect = panel.getBoundingClientRect()
+                const navigationRect = navigation.getBoundingClientRect()
+                const activeRect = active.getBoundingClientRect()
                 return {
                   documentWidth: document.documentElement.scrollWidth,
                   viewportWidth: window.innerWidth,
                   surfaceLeft: surface.left,
                   surfaceRight: surface.right,
-                  tabTopDelta: Math.max(...tabs.map((tab) => tab.top)) - Math.min(...tabs.map((tab) => tab.top)),
-                  tabConnectionDelta: Math.abs(activeTab.bottom - tabpanel.top),
-                  activeTabCoversSharedEdge: document.elementFromPoint(
-                    activeTab.left + activeTab.width / 2,
-                    tabpanel.top + 0.5
-                  ) === activeElement,
-                  activeZIndex: zIndex(activeElement),
-                  tabpanelZIndex: zIndex(tabpanelElement)
+                  rowCount: new Set(links.map((link) => Math.round(link.getBoundingClientRect().top))).size,
+                  panelTop: panelRect.top,
+                  navigationBottom: navigationRect.bottom,
+                  panelLeft: panelRect.left,
+                  panelRight: panelRect.right,
+                  navigationLeft: navigationRect.left,
+                  navigationRight: navigationRect.right,
+                  activeVisible: activeRect.left >= navigationRect.left && activeRect.right <= navigationRect.right,
+                  panelContentCount: panel.querySelectorAll(':scope > [data-slot="card-content"]').length
                 }
               }
             JAVASCRIPT
@@ -18002,26 +18309,25 @@ def configure_evidence_capture
             "Notification surface overflow at #{width}px: #{surface_selector}"
           assert_operator geometry.fetch("surfaceLeft"), :>=, 0
           assert_operator geometry.fetch("surfaceRight"), :<=, geometry.fetch("viewportWidth")
-          assert_operator geometry.fetch("tabTopDelta"), :<=, 1,
-            "Notification tabs wrapped at #{width}px"
-          assert_operator geometry.fetch("tabConnectionDelta"), :<=, 2,
+          assert_equal 1, geometry.fetch("rowCount"), "Notification tabs wrapped at #{width}px"
+          assert_operator geometry.fetch("panelTop"), :>, geometry.fetch("navigationBottom"),
             "Active notification tab is detached from its panel at #{width}px"
-          assert geometry.fetch("activeTabCoversSharedEdge"),
-            "Active notification tab does not cover the shared edge at #{width}px: #{surface_selector}"
-          assert_operator geometry.fetch("activeZIndex"), :>, geometry.fetch("tabpanelZIndex"),
-            "Active notification tab does not cover the shared border at #{width}px: #{surface_selector}"
+          assert_in_delta geometry.fetch("navigationLeft"), geometry.fetch("panelLeft"), 1
+          assert_operator geometry.fetch("panelRight"), :<=, geometry.fetch("navigationRight") + 1
+          assert geometry.fetch("activeVisible"), "Active notification tab is outside the viewport at #{width}px"
+          assert_equal 1, geometry.fetch("panelContentCount")
         end
 
         def assert_account_menu_visual_state
-          identity_selector = "header ul.menu.dropdown-content > li > .menu-title"
-          separator_selector = 'header ul.menu.dropdown-content > li[role="separator"]:empty'
+          identity_selector = 'header [data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-label"]'
+          separator_selector = 'header [data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-separator"]'
           assert_selector identity_selector, text: /Evidence User.*@evidence_user/m, count: 1
           assert_no_selector "#{identity_selector} a, #{identity_selector} button"
           assert_selector separator_selector, count: 1
           assert_selector %(header a[href="#{host_routes.admin_root_path}"]),
             text: translate("navigation.admin"), count: 1
           assert_selector %(
-            header ul.menu.dropdown-content
+            header [data-slot="dropdown-menu-content"]
             a[href="#{host_routes.destroy_user_session_path}"]
             svg.size-5[aria-hidden="true"][data-slot="icon"]
           ).squish, count: 1
@@ -18069,7 +18375,7 @@ def configure_evidence_capture
           assert_in_delta 1, separator.fetch("height"), 0.1
           assert_in_delta separator.fetch("marginTop"), separator.fetch("marginBottom"), 0.1
           assert_operator separator.fetch("width"), :>, 0
-          assert_operator separator.fetch("width"), :<, separator.fetch("menuWidth")
+          assert_operator separator.fetch("width"), :<=, separator.fetch("menuWidth") + 2
         end
 
         def capture_passkey_pages(viewport)
@@ -18096,7 +18402,7 @@ def configure_evidence_capture
           fill_in translate("passkeys.name"), with: "Backup Security Key"
           click_button translate("common.update")
           assert_current_path account_passkeys_path
-          assert_selector ".alert.alert-success.alert-soft", text: translate("passkeys.updated"), count: 1
+          assert_selector '[data-slot="alert"][role="status"]', text: translate("passkeys.updated"), count: 1
           capture_current_page("passkey-renamed", "Passkey一覧（名称変更後）", viewport)
           capture_page("passkey-delete-reauth", "Passkey解除（再認証）", account_passkey_path(second), translate("passkeys.delete_title"), viewport)
           assert_selector '[data-passkey-destruction-action-value="delete_passkey"]', count: 1
@@ -18112,9 +18418,9 @@ def configure_evidence_capture
           configure_webauthn_for_current_page
           click_button translate("authentication.sign_up_with_passkey")
           assert_current_path root_path
-          assert_selector ".alert-warning.alert-soft", text: translate("credential_risk.warning")
+          assert_selector '[data-slot="alert"]', text: translate("credential_risk.warning")
           assert_link translate("credential_risk.add_login_method"), href: account_passkeys_path
-          assert_no_selector ".alert-warning.alert-soft .btn"
+          assert_no_selector '[data-slot="alert"] a[data-slot="button"]'
           capture_current_page("passkey-registration-risk-warning", "Passkey登録後の紛失リスク警告", viewport)
         end
 
@@ -18171,7 +18477,7 @@ def configure_evidence_capture
           assert_current_path root_path
 
           visit root_path
-          find("header details.dropdown > summary", visible: :visible).click if viewport == "mobile"
+          find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click if viewport == "mobile"
           assert_no_selector %(header a[href="#{host_routes.admin_root_path}"]), visible: :all
           assert_no_selector %(header a[href="#{host_routes.admin_users_path}"]), visible: :all
           assert_no_selector %(header a[href="#{host_routes.admin_jobs_path}"]), visible: :all if JOB_OPERATIONS
@@ -18266,15 +18572,15 @@ def configure_evidence_capture
           perform_enqueued_jobs(only: ActiveStorage::TransformJob)
           stored = Vips::Image.new_from_buffer(T.must(@user.profile).reload.avatar.blob.download, "")
           assert_equal [512, 512], [stored.width, stored.height]
-          capture_avatar_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport, [40])
+          capture_avatar_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, home_heading_text, viewport, [40])
           capture_avatar_page("profile-uploaded-avatar", "プロフィール（画像アバター）", host_routes.profile_path, translate("profiles.title"), viewport, [40, 64])
           capture_avatar_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport, [40, 64])
 
           accept_confirm { click_button translate("profiles.avatar_delete") }
           assert_current_path host_routes.profile_path
-          assert_selector ".alert.alert-success.alert-soft", text: translate("profiles.avatar.destroy.notice")
+          assert_selector '[data-slot="alert"][role="status"]', text: translate("profiles.avatar.destroy.notice")
           capture_current_page("profile-avatar-deleted", "プロフィール（画像削除後）", viewport)
-          capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, translate("home.heading"), viewport)
+          capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, home_heading_text, viewport)
         ensure
           source&.close!
         end
@@ -18283,11 +18589,10 @@ def configure_evidence_capture
           geometry = page.driver.with_playwright_page do |playwright_page|
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
-                const dialog = document.querySelector("dialog#avatar-crop-modal")
-                const box = dialog.querySelector(".modal-box")
-                const cropper = dialog.querySelector('[data-image-crop-target="cropper"]')
-                const selection = dialog.querySelector("cropper-selection")
-                const boxRect = box.getBoundingClientRect()
+                  const dialog = document.querySelector("dialog#avatar-crop-modal")
+                  const cropper = dialog.querySelector('[data-image-crop-target="cropper"]')
+                  const selection = dialog.querySelector("cropper-selection")
+                  const boxRect = dialog.getBoundingClientRect()
                 const cropperRect = cropper.getBoundingClientRect()
                 return {
                   dialogOpen: dialog.open,
@@ -18376,26 +18681,26 @@ def configure_evidence_capture
           toggle = find('[data-push-subscription-target="toggle"]:not([disabled])')
           assert_not toggle.checked?
           toggle.click
-          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
+          assert_selector '[data-push-subscription-target="status"][data-tone="success"]',
             text: translate("web_push.client.enabled")
           assert_selector '[data-push-subscription-target="testButton"]:not([disabled])', text: translate("web_push.page.send_test")
           capture_current_page("web-push-enabled", "Web Push（購読済み・テスト通知可能）", viewport)
 
           find('[data-push-subscription-target="testButton"]').click
-          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
+          assert_selector '[data-push-subscription-target="status"][data-tone="success"]',
             text: translate("web_push.client.test_sent")
 
           set_evidence_web_push_mode("rotated")
           visit web_push_settings_path
           reconnect_web_push_controller
           install_evidence_csrf_token
-          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
+          assert_selector '[data-push-subscription-target="status"][data-tone="success"]',
             text: translate("web_push.client.reconciled")
           assert_equal({ "subscribeCount" => 1, "unsubscribeCount" => 1, "subscribed" => true,
                          "permissionRequests" => 0 }, evidence_web_push_stats)
 
           find('[data-push-subscription-target="toggle"]:not([disabled])').click
-          assert_selector '[data-push-subscription-target="status"].alert-info.alert-soft',
+          assert_selector '[data-push-subscription-target="status"][data-tone="info"]',
             text: translate("web_push.client.disabled")
           assert_equal false, evidence_web_push_stats.fetch("subscribed")
 
@@ -18404,21 +18709,21 @@ def configure_evidence_capture
           reconnect_web_push_controller
           install_evidence_csrf_token
           find('[data-push-subscription-target="toggle"]:not([disabled])').click
-          assert_selector '[data-push-subscription-target="status"].alert-success.alert-soft',
+          assert_selector '[data-push-subscription-target="status"][data-tone="success"]',
             text: translate("web_push.client.enabled")
           assert_equal 1, evidence_web_push_stats.fetch("permissionRequests")
 
           set_evidence_web_push_mode("denied")
           visit web_push_settings_path
           reconnect_web_push_controller
-          assert_selector '[data-push-subscription-target="status"].alert-warning.alert-soft',
+          assert_selector '[data-push-subscription-target="status"][data-tone="warning"]',
             text: translate("web_push.client.blocked")
           assert find('[data-push-subscription-target="toggle"]').disabled?
 
           set_evidence_web_push_mode("unsupported")
           visit web_push_settings_path
           reconnect_web_push_controller
-          assert_selector '[data-push-subscription-target="status"].alert-warning.alert-soft',
+          assert_selector '[data-push-subscription-target="status"][data-tone="warning"]',
             text: translate("web_push.client.unsupported")
           assert find('[data-push-subscription-target="toggle"]').disabled?
         ensure
@@ -18556,10 +18861,10 @@ def configure_evidence_capture
 
         def assert_admin_navigation_active(label)
           assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"])
-          assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] :is([data-with-menu-mobile-category], li.menu-title)), text: host_translate("navigation.admin"), count: 1
+          assert_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] :is([data-with-menu-mobile-category], [data-with-menu-desktop-category])), text: host_translate("navigation.admin"), count: 1
           assert_no_selector %([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.account_menu")}"])
-          assert_selector '[data-layout="with-menu"] a.menu-active[aria-current="page"]', text: label, count: 1
-          assert_selector 'header li.menu-title', text: host_translate("navigation.admin"), count: 1, visible: :all
+          assert_selector '[data-layout="with-menu"] a[data-slot="navigation-menu-link"][aria-current="page"]', text: label, count: 1
+          assert_selector 'header [data-slot="dropdown-menu-label"]', text: host_translate("navigation.admin"), count: 1, visible: :all
           assert_selector %(a[href="#{account_path}"]),
             text: translate("navigation.dashboard"), count: 2, visible: :all
           admin_links = all(%([data-layout="with-menu"] nav[aria-label="#{host_translate("navigation.admin_menu")}"] a), visible: :all)
@@ -18569,10 +18874,10 @@ def configure_evidence_capture
         def assert_account_navigation_scope
           assert_selector %([data-layout="with-menu"] nav[aria-label="#{translate("navigation.account_menu")}"])
           assert_no_selector %([data-layout="with-menu"] nav[aria-label="#{translate("navigation.admin_menu")}"])
-          assert_no_selector 'header li.menu-title', text: translate("navigation.admin"), visible: :all
+          assert_no_selector 'header [data-slot="dropdown-menu-label"]', text: translate("navigation.admin"), visible: :all
           assert_selector %(a[href="#{admin_root_path}"]),
             text: translate("navigation.admin"), count: 2, visible: :all
-          assert_no_selector %(header a[href="\#{admin_users_path}"]), visible: :all
+          assert_no_selector %(header a[href="#{admin_users_path}"]), visible: :all
         end
 
         def assert_admin_overview_geometry(viewport)
@@ -18580,7 +18885,7 @@ def configure_evidence_capture
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
                 const grid = document.querySelector("[data-admin-overview-stats]")
-                const cards = Array.from(grid.querySelectorAll(":scope > .card.card-border.bg-base-100"))
+                const cards = Array.from(grid.querySelectorAll(':scope > [data-slot="card"]'))
                 return {
                   documentWidth: document.documentElement.scrollWidth,
                   viewportWidth: window.innerWidth,
@@ -18601,7 +18906,7 @@ def configure_evidence_capture
           visit faq_path
           assert_equal 200, page.status_code
           assert_selector "h1", text: translate("content_management.faqs.title")
-          find("details.collapse > summary", text: @evidence_faq.question).click
+          find('details[data-slot="accordion-item"] > summary', text: @evidence_faq.question).click
           assert_selector "details[open] .lexxy-content", text: "アカウントを作成し"
           assert_no_text "公開前の質問"
           capture_current_page("faq", "よくある質問", viewport)
@@ -18609,19 +18914,19 @@ def configure_evidence_capture
 
         def verify_footer_geometry
           {
-            320 => "row",
-            640 => "column",
-            960 => "column",
-            961 => "column"
-          }.each do |width, expected_flow|
+            320 => 1,
+            640 => 2,
+            960 => 2,
+            961 => 4
+          }.each do |width, expected_columns|
             page.current_window.resize_to(width, 900)
             visit root_path
             geometry = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
-                  const footer = document.querySelector("footer.footer")
+                  const footer = document.querySelector("footer[data-site-footer]")
                   return {
-                    flow: getComputedStyle(footer).gridAutoFlow,
+                    columns: getComputedStyle(footer).gridTemplateColumns.split(" ").length,
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth
                   }
@@ -18629,7 +18934,7 @@ def configure_evidence_capture
               JAVASCRIPT
             end
 
-            assert_equal expected_flow, geometry.fetch("flow"), "footer layout at #{width}px"
+            assert_equal expected_columns, geometry.fetch("columns"), "footer layout at #{width}px"
             assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
               "horizontal overflow at #{width}px"
           end
@@ -18650,12 +18955,12 @@ def configure_evidence_capture
                     const sidebarElement = layout.querySelector(':scope > aside')
                     const sidebar = sidebarElement.getBoundingClientRect()
                     const content = layout.querySelector(':scope > div').getBoundingClientRect()
-                    const surfaceBody = layout.querySelector(':scope > div .card.card-border.bg-base-100 > .card-body')
+                    const surfaceBody = layout.querySelector(':scope > div [data-slot="card"] > [data-slot="card-content"]')
                     const surfaceStyle = getComputedStyle(surfaceBody)
                     const mobileCategory = sidebarElement.querySelector('[data-with-menu-mobile-category]')
                     const scroll = sidebarElement.querySelector('[data-with-menu-scroll]')
                     const menu = sidebarElement.querySelector('[data-with-menu-items]')
-                    const desktopTitle = menu.querySelector(':scope > .menu-title')
+                    const desktopTitle = sidebarElement.querySelector('[data-with-menu-desktop-category]')
                     const mobileCategoryLeftBeforeScroll = mobileCategory.getBoundingClientRect().left
                     scroll.scrollLeft = scroll.scrollWidth
                     return {
@@ -18688,8 +18993,8 @@ def configure_evidence_capture
 
               assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
                 "#{area} with-menu layout horizontal overflow at #{width}px"
-              assert_equal [12, 12, 12, 12], geometry.fetch("surfacePadding"),
-                "#{area} standard surface should use p-3 at #{width}px"
+              assert_equal [0, 16, 0, 16], geometry.fetch("surfacePadding"),
+                "#{area} standard surface should use the default Card::Content spacing at #{width}px"
               if width < 961
                 assert_equal "row", geometry.fetch("menuDirection"),
                   "#{area} with-menu should use a horizontal menu at #{width}px"
@@ -18738,7 +19043,7 @@ def configure_evidence_capture
                   () => {
                     const heading = document.querySelector('[data-layout="with-menu"] > div > h1')
                     const card = document.querySelector('[data-page-actions-container="card"]')
-                    const cardBodyStyle = getComputedStyle(card.querySelector(':scope > .card-body'))
+                    const cardBodyStyle = getComputedStyle(card.querySelector(':scope > [data-slot="card-content"]'))
                     const grid = card.querySelector('[data-page-actions]')
                     const primary = grid.querySelector('[data-page-actions-column="primary"]')
                     return {
@@ -18768,8 +19073,8 @@ def configure_evidence_capture
                 "no-tab page actions should immediately follow the heading at #{width}px"
               assert_equal 0, no_tab.fetch("secondaryCount")
               assert_equal 0, no_tab.fetch("tabContainerCount")
-              assert_equal [12, 12, 12, 12], no_tab.fetch("padding"),
-                "no-tab page actions should use p-3 at #{width}px"
+              assert_equal [0, 16, 0, 16], no_tab.fetch("padding"),
+                "no-tab page actions should use the default Card::Content spacing at #{width}px"
               if width < 640
                 assert_equal 1, no_tab.fetch("columnCount")
                 assert_in_delta no_tab.fetch("gridWidth"), no_tab.fetch("primaryWidth"), 1
@@ -18783,7 +19088,7 @@ def configure_evidence_capture
             tabbed = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
-                  const panel = document.querySelector('[role="tabpanel"].tab-content')
+                  const panel = document.querySelector('[data-page-actions-container="tab"]').parentElement
                   const panelStyle = getComputedStyle(panel)
                   const container = panel.querySelector(':scope > [data-page-actions-container="tab"]')
                   const grid = container.querySelector('[data-page-actions]')
@@ -18791,7 +19096,7 @@ def configure_evidence_capture
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
                     containerIsFirst: panel.firstElementChild === container,
-                    cardCount: container.querySelectorAll('.card.card-border.bg-base-100').length,
+                    cardCount: container.querySelectorAll('[data-slot="card"]').length,
                     primaryCount: grid.querySelectorAll('[data-page-actions-column="primary"]').length,
                     secondaryCount: grid.querySelectorAll('[data-page-actions-column="secondary"]').length,
                     padding: [
@@ -18811,8 +19116,8 @@ def configure_evidence_capture
             assert_equal 0, tabbed.fetch("cardCount")
             assert_equal 1, tabbed.fetch("primaryCount")
             assert_equal 0, tabbed.fetch("secondaryCount")
-            assert_equal [12, 12, 12, 12], tabbed.fetch("padding"),
-              "tab content should use p-3 at #{width}px"
+            assert_equal [0, 16, 0, 16], tabbed.fetch("padding"),
+              "tab content should use the default Card::Content spacing at #{width}px"
           end
         ensure
           desktop = VIEWPORTS.fetch("desktop")
@@ -18829,19 +19134,22 @@ def configure_evidence_capture
                 () => {
                   const nav = document.querySelector('nav[aria-label="#{translate("admin.users.pagination")}"]')
                   const toolbar = nav.querySelector(':scope > .flex')
-                  const join = toolbar.querySelector(':scope > .join')
-                  const items = Array.from(join.querySelectorAll(':scope > .join-item.btn'))
-                  const active = join.querySelector(':scope > .btn-active[aria-current="page"]')
+                  const join = toolbar.querySelector(':scope > [data-slot="pagination-content"]')
+                  const items = Array.from(join.querySelectorAll(':scope > [data-slot="pagination-item"]'))
+                  const active = join.querySelector('[data-slot="pagination-link"][aria-current="page"]')
                   nav.scrollLeft = nav.scrollWidth
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
                     directItemCount: items.length,
                     childCount: join.children.length,
-                    rowCount: new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size,
+                    rowCount: new Set(items.map((item) => {
+                  const rect = item.getBoundingClientRect()
+                  return Math.round(rect.top + rect.height / 2)
+                })).size,
                     fontSizes: [...new Set(items.map((item) => getComputedStyle(item).fontSize))],
                     activeText: active.textContent.trim(),
-                    iconCount: join.querySelectorAll(':scope > .btn-square svg[aria-hidden="true"]').length,
+                    iconCount: join.querySelectorAll(':scope > [data-slot="pagination-item"] svg[aria-hidden="true"]').length,
                     navOverflowX: getComputedStyle(nav).overflowX,
                     navScrollWidth: nav.scrollWidth,
                     navClientWidth: nav.clientWidth,
@@ -18880,48 +19188,35 @@ def configure_evidence_capture
             geometry = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
-                  const layout = document.querySelector('[data-layout="with-menu"]')
-                  const heading = layout.querySelector(':scope > div > h1')
-                  const subnavigation = layout.querySelector(':scope > div > nav[aria-label="#{translate("job_operations.aria.sections")}"]')
-                  const scroller = subnavigation.querySelector(':scope > .overflow-x-auto')
-                  const tablist = scroller.querySelector(':scope > [role="tablist"]')
-                  const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
-                  const activeTab = tablist.querySelector(':scope > .tab-active')
-                  const tabContent = activeTab.nextElementSibling
-                  const activeTabRect = activeTab.getBoundingClientRect()
-                  const tabContentRect = tabContent.getBoundingClientRect()
-                  const root = document.querySelector("[data-mission-control-jobs-root]")
-                  const tableScroller = root.querySelector(".card.card-border.bg-base-100 > .card-body > .overflow-x-auto")
+                  const heading = document.querySelector('[data-layout="with-menu"] > div > h1')
+                  const navigation = document.querySelector('nav[aria-label="#{translate("job_operations.aria.sections")}"]')
+                  const scroller = navigation.querySelector('[data-slot="navigation-menu"].overflow-x-auto')
+                  const links = Array.from(scroller.querySelectorAll('a[data-slot="navigation-menu-link"]'))
+                  const active = links.find((link) => link.getAttribute("aria-current") === "page")
+                  const panel = navigation.parentElement.querySelector(':scope > [data-slot="card"]')
+                  const root = panel.querySelector("[data-mission-control-jobs-root]")
+                  const tableScroller = root.querySelector('[data-slot="table-container"]')
+                  const navigationRect = navigation.getBoundingClientRect()
+                  const panelRect = panel.getBoundingClientRect()
+                  const activeRect = active.getBoundingClientRect()
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
                     rootWidth: root.getBoundingClientRect().width,
                     rootScrollWidth: root.scrollWidth,
                     rootClientWidth: root.clientWidth,
-                    rootTop: root.getBoundingClientRect().top,
                     headingBottom: heading.getBoundingClientRect().bottom,
-                    subnavigationTop: subnavigation.getBoundingClientRect().top,
-                    activeTabBottom: activeTabRect.bottom,
-                    activeTabWidth: activeTabRect.width,
-                    activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
-                    tabContentTop: tabContentRect.top,
-                    tabContentBottom: tabContentRect.bottom,
-                    tabContentWidth: tabContentRect.width,
-                    tabContentBorderTopWidth: parseFloat(getComputedStyle(tabContent).borderTopWidth),
-                    tabContentMarginTop: parseFloat(getComputedStyle(tabContent).marginTop),
-                    activeTabCoversSharedEdge: document.elementFromPoint(
-                      activeTabRect.left + activeTabRect.width / 2,
-                      tabContentRect.top + 0.5
-                    ) === activeTab,
-                    rootBottom: root.getBoundingClientRect().bottom,
-                    activeTabOwnsTabContent: activeTab.nextElementSibling === tabContent,
-                    tabContentInsideTablist: tabContent.parentElement === tablist,
-                    rootInsideTabContent: root.parentElement === tabContent,
-                    tabContentIsSticky: tabContent.classList.contains("sticky"),
-                    tabContentContain: getComputedStyle(tabContent).contain,
-                    tabContentCount: tablist.querySelectorAll(':scope > .tab-content').length,
-                    tablistHasSmallModifier: tablist.classList.contains("tabs-xs") || tablist.classList.contains("tabs-sm"),
-                    tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
+                    navigationTop: navigationRect.top,
+                    navigationBottom: navigationRect.bottom,
+                    navigationLeft: navigationRect.left,
+                    navigationRight: navigationRect.right,
+                    panelTop: panelRect.top,
+                    panelLeft: panelRect.left,
+                    panelRight: panelRect.right,
+                    panelContainsRoot: panel.contains(root),
+                    panelContentCount: panel.querySelectorAll(':scope > [data-slot="card-content"]').length,
+                    activeVisible: activeRect.left >= navigationRect.left && activeRect.right <= navigationRect.right,
+                    rowCount: new Set(links.map((link) => Math.round(link.getBoundingClientRect().top))).size,
                     scrollerScrollWidth: scroller.scrollWidth,
                     scrollerClientWidth: scroller.clientWidth,
                     tableScrollerScrollWidth: tableScroller.scrollWidth,
@@ -18933,100 +19228,55 @@ def configure_evidence_capture
 
             assert_operator geometry.fetch("documentWidth"), :<=, geometry.fetch("viewportWidth"),
               "Mission Control Jobs page overflow at #{width}px"
-            assert_operator geometry.fetch("rootWidth"), :>, 0,
-              "Mission Control Jobs content should be visible at #{width}px"
+            assert_operator geometry.fetch("rootWidth"), :>, 0
             assert_operator geometry.fetch("rootScrollWidth"), :>=, geometry.fetch("rootClientWidth")
-            assert_operator geometry.fetch("subnavigationTop"), :>=, geometry.fetch("headingBottom"),
-              "Mission Control Jobs heading should precede subnavigation at #{width}px"
-            assert_in_delta geometry.fetch("activeTabBottom"), geometry.fetch("tabContentTop"), 1.5,
-              "Mission Control Jobs active tab should connect to tab content at #{width}px"
-            assert_in_delta 0, geometry.fetch("activeTabBorderBottomWidth"), 0.1,
-              "Mission Control Jobs active tab should leave its bottom border open at #{width}px"
-            assert_in_delta 1, geometry.fetch("tabContentBorderTopWidth"), 0.1,
-              "Mission Control Jobs tab content should own the shared border at #{width}px"
-            assert_in_delta(-1, geometry.fetch("tabContentMarginTop"), 0.1,
-              "Mission Control Jobs tab content should collapse the shared border at #{width}px")
-            assert geometry.fetch("activeTabCoversSharedEdge"),
-              "Mission Control Jobs active tab should cover the shared border at #{width}px"
-            assert geometry.fetch("activeTabOwnsTabContent"),
-              "Mission Control Jobs active tab should immediately precede its content at #{width}px"
-            assert geometry.fetch("tabContentInsideTablist"),
-              "Mission Control Jobs tab content should be inside the tablist at #{width}px"
-            assert geometry.fetch("rootInsideTabContent"),
-              "Mission Control Jobs root should be wrapped by tab content at #{width}px"
-            assert geometry.fetch("tabContentIsSticky"),
-              "Mission Control Jobs tab content should be sticky at #{width}px"
-            assert_equal "inline-size", geometry.fetch("tabContentContain"),
-              "Mission Control Jobs tab content should use inline-size containment at #{width}px"
-            assert_equal 1, geometry.fetch("tabContentCount"),
-              "Mission Control Jobs should render only the active tab content at #{width}px"
-            refute geometry.fetch("tablistHasSmallModifier"),
-              "Mission Control Jobs tabs should use the default size at #{width}px"
-            assert_equal 1, geometry.fetch("tabRowCount"),
-              "Mission Control Jobs tabs should stay on one row at #{width}px"
-            assert_operator geometry.fetch("rootTop"), :>=, geometry.fetch("tabContentTop"),
-              "Mission Control Jobs subnavigation should precede content at #{width}px"
-            assert_operator geometry.fetch("tabContentBottom"), :>=, geometry.fetch("rootBottom"),
-              "Mission Control Jobs tab content should contain its body at #{width}px"
-            assert_operator geometry.fetch("activeTabWidth"), :<, geometry.fetch("tabContentWidth"),
-              "Mission Control Jobs active tab should not stretch across the content at #{width}px"
-            assert_operator geometry.fetch("scrollerScrollWidth"), :>=, geometry.fetch("scrollerClientWidth"),
-              "Mission Control Jobs scroll container should contain its tabs at #{width}px"
+            assert_operator geometry.fetch("navigationTop"), :>=, geometry.fetch("headingBottom")
+            assert_operator geometry.fetch("panelTop"), :>, geometry.fetch("navigationBottom")
+            assert_in_delta geometry.fetch("navigationLeft"), geometry.fetch("panelLeft"), 1
+            assert_operator geometry.fetch("panelRight"), :<=, geometry.fetch("navigationRight") + 1
+            assert geometry.fetch("panelContainsRoot")
+            assert_equal 1, geometry.fetch("panelContentCount")
+            assert geometry.fetch("activeVisible"), "Mission Control Jobs active navigation is hidden at #{width}px"
+            assert_equal 1, geometry.fetch("rowCount"), "Mission Control Jobs navigation wrapped at #{width}px"
+            assert_operator geometry.fetch("scrollerScrollWidth"), :>=, geometry.fetch("scrollerClientWidth")
             if width <= 390
-              assert_operator geometry.fetch("scrollerScrollWidth"), :>, geometry.fetch("scrollerClientWidth"),
-                "Mission Control Jobs tabs should scroll horizontally at #{width}px"
-              assert_operator geometry.fetch("tableScrollerScrollWidth"), :>, geometry.fetch("tableScrollerClientWidth"),
-                "Mission Control Jobs table should scroll horizontally at #{width}px"
+              assert_operator geometry.fetch("scrollerScrollWidth"), :>, geometry.fetch("scrollerClientWidth")
+              assert_operator geometry.fetch("tableScrollerScrollWidth"), :>, geometry.fetch("tableScrollerClientWidth")
             end
 
             failed_title = translate("job_operations.titles.status_jobs.failed")
-            find('[role="tab"]', text: /^#{Regexp.escape(failed_title)}/).click
+            failed_tab = translate("job_operations.sections.failed_jobs", count: 1)
+            find(%Q{nav[aria-label="#{translate("job_operations.aria.sections")}"] a[data-slot="navigation-menu-link"]},
+              text: failed_tab).click
             assert_selector '[data-layout="with-menu"] > div > h1', text: failed_title, count: 1
             failed_geometry = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
                 () => {
-                  const activeTab = document.querySelector('[role="tab"].tab-active')
-                  const tabContent = activeTab.nextElementSibling
-                  const activeTabRect = activeTab.getBoundingClientRect()
-                  const tabContentRect = tabContent.getBoundingClientRect()
-                  const tablist = activeTab.parentElement
-                  const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
-                  const root = tabContent.querySelector("[data-mission-control-jobs-root]")
-                  const actionsContainer = tabContent.querySelector(':scope > [data-page-actions-container="tab"]')
+                  const navigation = document.querySelector('nav[aria-label="#{translate("job_operations.aria.sections")}"]')
+                  const links = Array.from(navigation.querySelectorAll('a[data-slot="navigation-menu-link"]'))
+                  const active = links.find((link) => link.getAttribute("aria-current") === "page")
+                  const panel = navigation.parentElement.querySelector(':scope > [data-slot="card"]')
+                  const content = panel.querySelector(':scope > [data-slot="card-content"]')
+                  const root = content.querySelector("[data-mission-control-jobs-root]")
+                  const actionsContainer = content.querySelector(':scope > [data-page-actions-container="tab"]')
                   const actions = actionsContainer.querySelector('[data-page-actions]')
-                  const primary = actions.querySelector('[data-page-actions-column="primary"]')
-                  const actionButtons = Array.from(actions.querySelectorAll(".btn"))
+                  const actionButtons = Array.from(actions.querySelectorAll("button"))
                   const filter = root.querySelector(':scope > section[aria-label="#{translate("job_operations.aria.filters")}"]')
-                  const tableCard = root.querySelector(':scope > .card.card-border.bg-base-100:has(table)')
-                  const tableScroller = root.querySelector(".card.card-border.bg-base-100 > .card-body > .overflow-x-auto")
+                  const tableCard = root.querySelector(':scope > [data-slot="card"]:has(table)')
+                  const tableScroller = tableCard.querySelector('[data-slot="table-container"]')
                   return {
-                    activeTabBottom: activeTabRect.bottom,
-                    activeTabBorderBottomWidth: parseFloat(getComputedStyle(activeTab).borderBottomWidth),
-                    tabContentTop: tabContentRect.top,
-                    tabContentBottom: tabContentRect.bottom,
-                    tabContentBorderTopWidth: parseFloat(getComputedStyle(tabContent).borderTopWidth),
-                    tabContentMarginTop: parseFloat(getComputedStyle(tabContent).marginTop),
-                    activeTabCoversSharedEdge: document.elementFromPoint(
-                      activeTabRect.left + activeTabRect.width / 2,
-                      tabContentRect.top + 0.5
-                    ) === activeTab,
-                    rootBottom: root.getBoundingClientRect().bottom,
-                    tabContentRadius: parseFloat(getComputedStyle(tabContent).borderStartStartRadius),
-                    activeTabOwnsTabContent: tabContent.classList.contains("tab-content"),
-                    tabContentIsSticky: tabContent.classList.contains("sticky"),
-                    tabContentContain: getComputedStyle(tabContent).contain,
-                    tabRowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
-                    actionContainerIsFirst: tabContent.firstElementChild === actionsContainer,
+                    documentWidth: document.documentElement.scrollWidth,
+                    viewportWidth: window.innerWidth,
+                    rowCount: new Set(links.map((link) => Math.round(link.getBoundingClientRect().top))).size,
+                    activeInsideNavigation: navigation.contains(active),
+                    panelContainsRoot: panel.contains(root),
+                    actionContainerIsFirst: content.firstElementChild === actionsContainer,
                     actionColumnCount: getComputedStyle(actions).gridTemplateColumns.split(" ").length,
                     secondaryCount: actions.querySelectorAll('[data-page-actions-column="secondary"]').length,
-                    actionButtonsUseDefaultSize: actionButtons.every((button) =>
-                      !button.classList.contains("btn-sm") && !button.classList.contains("btn-xs")
-                    ),
-                    actionButtonFontSizes: [...new Set(actionButtons.map((button) => getComputedStyle(button).fontSize))],
+                    actionButtonHeights: [...new Set(actionButtons.map((button) => button.getBoundingClientRect().height))],
                     filterInsideContent: filter.parentElement === root,
-                    filterUsesCardShell: ["card", "card-border", "bg-base-100"].every((className) =>
-                      filter.classList.contains(className)
-                    ) && filter.firstElementChild.classList.contains("card-body"),
+                    filterUsesCardShell: filter.dataset.slot === "card" &&
+                      filter.firstElementChild.dataset.slot === "card-content",
                     filterTop: filter.getBoundingClientRect().top,
                     tableCardTop: tableCard.getBoundingClientRect().top,
                     tableScrollerScrollWidth: tableScroller.scrollWidth,
@@ -19035,50 +19285,21 @@ def configure_evidence_capture
                 }
               JAVASCRIPT
             end
-            assert_in_delta failed_geometry.fetch("activeTabBottom"), failed_geometry.fetch("tabContentTop"), 1.5,
-              "Mission Control Jobs middle tab should connect to tab content at #{width}px"
-            assert_in_delta 0, failed_geometry.fetch("activeTabBorderBottomWidth"), 0.1,
-              "Mission Control Jobs middle tab should leave its bottom border open at #{width}px"
-            assert_in_delta 1, failed_geometry.fetch("tabContentBorderTopWidth"), 0.1,
-              "Mission Control Jobs middle tab content should own the shared border at #{width}px"
-            assert_in_delta(-1, failed_geometry.fetch("tabContentMarginTop"), 0.1,
-              "Mission Control Jobs middle tab content should collapse the shared border at #{width}px")
-            assert failed_geometry.fetch("activeTabCoversSharedEdge"),
-              "Mission Control Jobs middle active tab should cover the shared border at #{width}px"
-            assert failed_geometry.fetch("activeTabOwnsTabContent"),
-              "Mission Control Jobs middle tab should immediately precede its content at #{width}px"
-            assert failed_geometry.fetch("tabContentIsSticky"),
-              "Mission Control Jobs middle tab content should be sticky at #{width}px"
-            assert_equal "inline-size", failed_geometry.fetch("tabContentContain"),
-              "Mission Control Jobs middle tab content should use inline-size containment at #{width}px"
-            assert_equal 1, failed_geometry.fetch("tabRowCount"),
-              "Mission Control Jobs middle tabs should stay on one row at #{width}px"
-            assert_operator failed_geometry.fetch("tabContentRadius"), :>, 0,
-              "Mission Control Jobs middle tab content should keep its leading corner at #{width}px"
-            assert_operator failed_geometry.fetch("tabContentBottom"), :>=, failed_geometry.fetch("rootBottom"),
-              "Mission Control Jobs middle tab content should contain its body at #{width}px"
-            assert failed_geometry.fetch("actionContainerIsFirst"),
-              "Mission Control Jobs page actions should lead the tab content at #{width}px"
-            assert failed_geometry.fetch("actionButtonsUseDefaultSize"),
-              "Mission Control Jobs page action buttons should use the standard default size at #{width}px"
-            assert_equal 1, failed_geometry.fetch("actionButtonFontSizes").length,
-              "Mission Control Jobs page action buttons should use one standard default size at #{width}px"
-            assert_equal 0, failed_geometry.fetch("secondaryCount"),
-              "Mission Control Jobs complex filters should stay out of secondary page actions at #{width}px"
-            assert failed_geometry.fetch("filterInsideContent"),
-              "Mission Control Jobs complex filters should be in the content area at #{width}px"
-            assert failed_geometry.fetch("filterUsesCardShell"),
-              "Mission Control Jobs complex filters should use the shared card shell at #{width}px"
-            assert_operator failed_geometry.fetch("tableCardTop"), :>, failed_geometry.fetch("filterTop"),
-              "Mission Control Jobs results should follow complex filters at #{width}px"
+            assert_operator failed_geometry.fetch("documentWidth"), :<=, failed_geometry.fetch("viewportWidth")
+            assert_equal 1, failed_geometry.fetch("rowCount")
+            assert failed_geometry.fetch("activeInsideNavigation")
+            assert failed_geometry.fetch("panelContainsRoot")
+            assert failed_geometry.fetch("actionContainerIsFirst")
+            assert_equal 1, failed_geometry.fetch("actionButtonHeights").length
+            assert_equal 0, failed_geometry.fetch("secondaryCount")
+            assert failed_geometry.fetch("filterInsideContent")
+            assert failed_geometry.fetch("filterUsesCardShell")
+            assert_operator failed_geometry.fetch("tableCardTop"), :>, failed_geometry.fetch("filterTop")
             if width < 640
-              assert_equal 1, failed_geometry.fetch("actionColumnCount"),
-                "Mission Control Jobs page actions should use one column at #{width}px"
-              assert_operator failed_geometry.fetch("tableScrollerScrollWidth"), :>, failed_geometry.fetch("tableScrollerClientWidth"),
-                "Mission Control Jobs failed table should scroll horizontally at #{width}px"
+              assert_equal 1, failed_geometry.fetch("actionColumnCount")
+              assert_operator failed_geometry.fetch("tableScrollerScrollWidth"), :>, failed_geometry.fetch("tableScrollerClientWidth")
             else
-              assert_equal 2, failed_geometry.fetch("actionColumnCount"),
-                "Mission Control Jobs page actions should keep the shared desktop grid at #{width}px"
+              assert_equal 2, failed_geometry.fetch("actionColumnCount")
             end
           end
         ensure
@@ -19090,21 +19311,28 @@ def configure_evidence_capture
           geometry = page.driver.with_playwright_page do |playwright_page|
             playwright_page.evaluate(<<~JAVASCRIPT)
               () => {
-                const tablist = document.querySelector('[aria-label="#{translate("job_operations.aria.sections")}"] > .overflow-x-auto > [role="tablist"]')
-                const tabs = Array.from(tablist.querySelectorAll(':scope > .tab'))
-                const activeTab = tablist.querySelector(':scope > .tab-active')
-                const tabContent = activeTab.nextElementSibling
+                const navigation = document.querySelector('nav[aria-label="#{translate("job_operations.aria.sections")}"]')
+                const links = Array.from(navigation.querySelectorAll('a[data-slot="navigation-menu-link"]'))
+                const active = links.find((link) => link.getAttribute("aria-current") === "page")
+                const panel = navigation.parentElement.querySelector(':scope > [data-slot="card"]')
                 return {
-                  rowCount: new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size,
-                  activeTabBottom: activeTab.getBoundingClientRect().bottom,
-                  tabContentTop: tabContent.getBoundingClientRect().top
+                  rowCount: new Set(links.map((link) => Math.round(link.getBoundingClientRect().top))).size,
+                  activeInsideNavigation: navigation.contains(active),
+                  allLinksVisible: links.every((link) => {
+                    const bounds = link.getBoundingClientRect()
+                    const frame = navigation.getBoundingClientRect()
+                    return bounds.left >= frame.left - 1 && bounds.right <= frame.right + 1
+                  }),
+                  panelTop: panel.getBoundingClientRect().top,
+                  navigationBottom: navigation.getBoundingClientRect().bottom
                 }
               }
             JAVASCRIPT
           end
-          assert_equal 1, geometry.fetch("rowCount"), "Mission Control Jobs desktop tabs must stay on one row"
-          assert_in_delta geometry.fetch("activeTabBottom"), geometry.fetch("tabContentTop"), 1.5,
-            "Mission Control Jobs desktop active tab must connect to tab content"
+          assert_equal 1, geometry.fetch("rowCount"), "Mission Control Jobs desktop navigation must stay on one row"
+          assert geometry.fetch("activeInsideNavigation")
+          assert geometry.fetch("allLinksVisible"), "Mission Control Jobs desktop navigation must show every section"
+          assert_operator geometry.fetch("panelTop"), :>, geometry.fetch("navigationBottom")
         end
 
         def verify_maintenance_tasks_geometry
@@ -19121,8 +19349,8 @@ def configure_evidence_capture
                   const shell = document.querySelector('[data-layout="with-menu"]')
                   const sidebar = shell.querySelector(":scope > aside").getBoundingClientRect()
                   const content = shell.querySelector(":scope > div").getBoundingClientRect()
-                  const activeIcon = shell.querySelector('a.menu-active svg').getBoundingClientRect()
-                  const footer = document.querySelector("footer.footer")
+                  const activeIcon = shell.querySelector('a[data-slot="navigation-menu-link"][aria-current="page"] svg').getBoundingClientRect()
+                  const footer = document.querySelector("footer[data-site-footer]")
                   return {
                     documentWidth: document.documentElement.scrollWidth,
                     viewportWidth: window.innerWidth,
@@ -19134,7 +19362,7 @@ def configure_evidence_capture
                     contentLeft: content.left,
                     activeIconWidth: activeIcon.width,
                     activeIconHeight: activeIcon.height,
-                    footerFlow: getComputedStyle(footer).gridAutoFlow
+                    footerColumns: getComputedStyle(footer).gridTemplateColumns.split(" ").length
                   }
                 }
               JAVASCRIPT
@@ -19147,8 +19375,8 @@ def configure_evidence_capture
               "Maintenance Tasks navigation icon width at #{width}px"
             assert_in_delta 20, geometry.fetch("activeIconHeight"), 0.5,
               "Maintenance Tasks navigation icon height at #{width}px"
-            expected_footer_flow = width < 640 ? "row" : "column"
-            assert_equal expected_footer_flow, geometry.fetch("footerFlow"),
+            expected_footer_columns = width < 640 ? 1 : (width < 961 ? 2 : 4)
+            assert_equal expected_footer_columns, geometry.fetch("footerColumns"),
               "Maintenance Tasks footer layout at #{width}px"
             if width < 961
               assert_operator geometry.fetch("contentTop"), :>=, geometry.fetch("sidebarBottom"),
@@ -19175,7 +19403,7 @@ def configure_evidence_capture
           T.must(singleton_class).define_method(:urlsafe_base64, T.must(original_method))
         end
 
-        def assert_joined_input_actions(identifier, viewport)
+        def assert_form_action_geometry(identifier, viewport)
           return unless %w[passkey-edit siwe-identity-edit api-credential-new api-credential-edit
             billing-members billing-payouts billing-admin-merchant-fee billing-payments billing-refunds
             billing-merchant-new billing-merchant-edit billing-settings billing-chain-settings billing-sales
@@ -19187,36 +19415,60 @@ def configure_evidence_capture
             groups = page.evaluate_script(<<~JAVASCRIPT)
               (() => [...document.querySelectorAll('form')].flatMap(form => {
                 const field = [...form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]), select, textarea')]
-                  .filter(input => input.checkVisibility() && !input.readOnly).at(-1);
-                const button = form.querySelector('.btn[type="submit"]');
-                if (!field || !button || !field.matches('.input, .select, .file-input')) return [];
-                const group = field.parentElement;
-                if (!group.classList.contains('join') || button.parentElement !== group) return [{ joined: false, fieldName: field.name }];
-                const input = field.getBoundingClientRect();
-                const action = button.getBoundingClientRect();
-                const style = getComputedStyle(field);
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-                const minimumWidth = field.matches('select') ? Math.max(...[...field.options].map(option => context.measureText(option.text).width)) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2 : 64;
-                return [{ joined: true, fieldName: field.name, top: input.top, buttonTop: action.top, height: input.height, buttonHeight: action.height,
-                  gap: action.left - input.right, left: input.left, right: action.right, inputWidth: input.width,
-                  minimumWidth, labelCount: field.labels.length,
-                  buttonLabelMatches: !button.hasAttribute('aria-label') || button.getAttribute('aria-label').includes(button.value || button.textContent.trim()),
-                  overflow: document.documentElement.scrollWidth > innerWidth }];
+                  .filter(input => input.checkVisibility() && !input.readOnly).at(-1)
+                const button = form.querySelector('input[type="submit"], button[type="submit"]')
+                if (!field || !button || !button.checkVisibility()) return []
+                const input = field.getBoundingClientRect()
+                const action = button.getBoundingClientRect()
+                const style = getComputedStyle(field)
+                const canvas = document.createElement('canvas')
+                const context = canvas.getContext('2d')
+                context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+                const minimumWidth = field.matches('select') ?
+                  Math.max(...[...field.options].map(option => context.measureText(option.text).width)) +
+                    parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2 :
+                  field.matches('input[type="checkbox"], input[type="radio"]') ? 16 : 64
+                const inputGroup = field.closest('[data-slot="input-group"]')
+                const joined = inputGroup?.contains(button) || false
+                const inputGroupBox = joined ? inputGroup.getBoundingClientRect() : null
+                return [{ fieldName: field.name, inputTop: input.top, inputBottom: input.bottom,
+                  inputLeft: input.left, inputRight: input.right, inputWidth: input.width,
+                  buttonTop: action.top, buttonBottom: action.bottom, buttonLeft: action.left,
+                  buttonRight: action.right, buttonHeight: action.height,
+                  joined, groupTop: inputGroupBox?.top, groupBottom: inputGroupBox?.bottom,
+                  groupRight: inputGroupBox?.right, buttonSize: button.dataset.size, minimumWidth,
+                  labelCount: field.labels.length,
+                  buttonLabel: button.value || button.textContent.trim(),
+                  buttonAriaLabel: button.getAttribute('aria-label') || '',
+                  overflow: document.documentElement.scrollWidth > innerWidth }]
               }))()
             JAVASCRIPT
-            assert_not_empty groups, "#{identifier} must join the input and submit button"
+            assert_not_empty groups, "#{identifier} must show a labeled field and submit action"
             groups.each do |group|
-              assert group.fetch("joined"), "#{identifier}: #{group.fetch('fieldName')} and its submit button must share a Join"
-              assert_in_delta group.fetch("top"), group.fetch("buttonTop"), 1, "#{identifier} at #{width}px"
-              assert_in_delta group.fetch("height"), group.fetch("buttonHeight"), 1
-              assert_in_delta 0, group.fetch("gap"), 1
               assert_operator group.fetch("inputWidth"), :>=, group.fetch("minimumWidth"), "#{identifier} input at #{width}px"
-              assert_operator group.fetch("left"), :>=, 0
-              assert_operator group.fetch("right"), :<=, width
               assert_operator group.fetch("labelCount"), :>=, 1
-              assert group.fetch("buttonLabelMatches"), "#{identifier} accessible name must include the visible button label"
+              assert_predicate group.fetch("buttonLabel"), :present?
+              if (aria_label = group.fetch("buttonAriaLabel")).present?
+                assert_includes aria_label, group.fetch("buttonLabel")
+              end
+              assert_operator group.fetch("inputLeft"), :>=, 0
+              assert_operator group.fetch("buttonLeft"), :>=, 0
+              assert_operator group.fetch("inputRight"), :<=, width
+              assert_operator group.fetch("buttonRight"), :<=, width
+              assert_operator group.fetch("buttonTop"), :>=, group.fetch("inputTop") - 1
+              if group.fetch("joined")
+                assert_equal "xs", group.fetch("buttonSize")
+                assert_operator group.fetch("buttonTop") - group.fetch("groupTop"), :>=, 2
+                assert_operator group.fetch("groupBottom") - group.fetch("buttonBottom"), :>=, 2
+                assert_operator group.fetch("groupRight") - group.fetch("buttonRight"), :>=, 2
+                assert_in_delta 0, group.fetch("buttonLeft") - group.fetch("inputRight"), 1
+              else
+                overlap_width = [group.fetch("inputRight"), group.fetch("buttonRight")].min -
+                  [group.fetch("inputLeft"), group.fetch("buttonLeft")].max
+                overlap_height = [group.fetch("inputBottom"), group.fetch("buttonBottom")].min -
+                  [group.fetch("inputTop"), group.fetch("buttonTop")].max
+                assert(overlap_width <= 0 || overlap_height <= 0, "#{identifier} input and action overlap at #{width}px")
+              end
               assert_not group.fetch("overflow"), "#{identifier} at #{width}px"
             end
           end
@@ -19225,7 +19477,7 @@ def configure_evidence_capture
         end
 
         def capture_current_page(identifier, title, viewport)
-          assert_joined_input_actions(identifier, viewport)
+          assert_form_action_geometry(identifier, viewport)
           if identifier.start_with?("billing-")
             assert_billing_geometry(viewport)
           end
@@ -19250,7 +19502,10 @@ def configure_evidence_capture
               }
             JAVASCRIPT
             playwright_page.evaluate("() => document.fonts.ready")
-            playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")
+            overlay_open = playwright_page.evaluate(<<~JAVASCRIPT)
+              () => Boolean(document.querySelector('dialog[open], [data-slot="dropdown-menu-content"]:popover-open, #notifications-popover:popover-open'))
+            JAVASCRIPT
+            playwright_page.screenshot(path: path.to_s, fullPage: !overlay_open, animations: "disabled")
           end
           @captures << { "id" => identifier, "title" => title, "viewport" => viewport, "path" => filename }
         end
@@ -19334,7 +19589,9 @@ def configure_evidence_capture
     # frozen_string_literal: true
 
     require "fileutils"
+    require "json"
     require "rbconfig"
+    require "tmpdir"
 
     namespace :evidence do
       desc "CapybaraとPlaywrightでUIエビデンスを撮影する"
@@ -19364,14 +19621,32 @@ def configure_evidence_capture
         end
 
         begin
-          raise "test databaseの再構築に失敗しました" unless rebuild_test_database.call
+          captures = []
+          viewports = {}
+          metadata = nil
+          %w[desktop mobile].each do |viewport|
+            raise "test databaseの再構築に失敗しました" unless rebuild_test_database.call
 
-          system(
-            { "RAILS_ENV" => "test", "EVIDENCE_OUTPUT_DIR" => output_directory.to_s }.merge(web_push_environment),
-            RbConfig.ruby,
-            "-Itest",
-            Rails.root.join("test/support/evidence_capture.rb").to_s
-          ) || raise("UIエビデンスの撮影に失敗しました")
+            Dir.mktmpdir("evidence-#{viewport}-") do |directory|
+              system(
+                { "RAILS_ENV" => "test", "EVIDENCE_OUTPUT_DIR" => directory, "EVIDENCE_VIEWPORT" => viewport }.merge(web_push_environment),
+                RbConfig.ruby,
+                "-Itest",
+                Rails.root.join("test/support/evidence_capture.rb").to_s
+              ) || raise("#{viewport}のUIエビデンス撮影に失敗しました")
+
+              result = JSON.parse(File.read(File.join(directory, "captures.json")))
+              metadata ||= result.slice("scenario_set", "additional_login_methods", "locale")
+              raise "viewport間の撮影条件が一致しません" unless metadata == result.slice("scenario_set", "additional_login_methods", "locale")
+
+              viewports.merge!(result.fetch("viewports"))
+              result.fetch("captures").each do |capture|
+                FileUtils.cp(File.join(directory, capture.fetch("path")), output_directory.join(capture.fetch("path")))
+                captures << capture
+              end
+            end
+          end
+          File.write(output_directory.join("captures.json"), JSON.pretty_generate(metadata.merge("viewports" => viewports, "captures" => captures)) + "\n")
         rescue StandardError => error
           capture_error = error
         ensure
@@ -19679,6 +19954,48 @@ def configure_sorbet_shims
     ""
   end
 
+  create_file "sorbet/rbi/shims/shadcn_view_components.rbi", <<~'RBI', force: true
+    # typed: true
+
+    # shadcn_view_components 0.2.2 declares rest keyword arguments as a Hash in its
+    # Sorbet signatures. Sorbet then type-checks each keyword value as the Hash.
+    # These signatures preserve the gem's public keyword API for the generated app.
+    class Shadcn::BaseComponent
+      sig { params(args: T.untyped).void }
+      def initialize(**args); end
+
+      class << self
+        sig { params(extra: T.nilable(String), options: T.untyped).returns(String) }
+        def classes(extra: nil, **options); end
+      end
+    end
+
+    class Shadcn::Pagination::Link
+      sig { params(is_active: T.untyped, size: T.untyped, args: T.untyped).void }
+      def initialize(is_active: nil, size: :icon, **args); end
+    end
+
+    class Shadcn::NativeSelect
+      sig { params(size: T.untyped, args: T.untyped).void }
+      def initialize(size: :default, **args); end
+    end
+
+    class Shadcn::Dialog::Content
+      sig { params(show_close_button: T::Boolean, args: T.untyped).void }
+      def initialize(show_close_button: true, **args); end
+    end
+
+    class Shadcn::Card
+      sig { params(size: T.any(Symbol, String), args: T.untyped).void }
+      def initialize(size: :default, **args); end
+    end
+
+    class Shadcn::DropdownMenu::Item
+      sig { params(variant: T.nilable(T.any(Symbol, String)), args: T.untyped).void }
+      def initialize(variant: nil, **args); end
+    end
+  RBI
+
   create_file "sorbet/rbi/shims/framework_bindings.rbi", <<~RBI, force: true
     # typed: true
 
@@ -19689,10 +20006,6 @@ def configure_sorbet_shims
 
     class ActiveRecord::Base
       extend Devise::Models
-    end
-
-    class ActiveSupport::TestCase
-      include ActiveRecord::TestFixtures
     end
 
     class ActionDispatch::SystemTestCase
@@ -24562,7 +24875,7 @@ after_bundle do
   install_action_text
   install_active_storage_db
   configure_lexxy
-  install_daisyui
+  install_shadcn_view_components
   configure_generator_templates
   configure_rubocop
   configure_common_files

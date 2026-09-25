@@ -1,7 +1,7 @@
 # full / ja エビデンス
 
-- Source fingerprint: `30acd1e84e35244090d50c2167d6d5495bd317170080d72cd1e50c21a4085cfb`
-- Base commit: `facb7c387be1be5afd4654f11813671fc8caf328`
+- Source fingerprint: `92f13ba4331d392127279bb06aba7e24bac3cf23219c9e1b1b5638092ea34480`
+- Base commit: `664ba4e6b3932012c59d9d99ae3e5867e975fc74`
 - Locale: `ja`
 - Additional login methods: `siwe`
 - 更新: `rake evidence:update`
@@ -654,36 +654,6 @@
 |---|---|
 |![一般Userのナビゲーション (desktop)](navigation-regular-user--desktop.png)|![一般Userのナビゲーション (mobile)](navigation-regular-user--mobile.png)|
 
-## モバイルメニュー（未ログイン）
-
-### Mobile
-
-![モバイルメニュー（未ログイン） (mobile)](navigation-guest-open--mobile.png)
-
-## キューのモバイルメニュー
-
-### Mobile
-
-![キューのモバイルメニュー (mobile)](admin-job-operations-navigation-open--mobile.png)
-
-## 運用タスクのモバイルメニュー
-
-### Mobile
-
-![運用タスクのモバイルメニュー (mobile)](admin-maintenance-tasks-navigation-open--mobile.png)
-
-## 販売者画面のモバイルメニュー
-
-### Mobile
-
-![販売者画面のモバイルメニュー (mobile)](billing-merchant-navigation-open--mobile.png)
-
-## 決済画面のモバイルメニュー
-
-### Mobile
-
-![決済画面のモバイルメニュー (mobile)](billing-navigation-open--mobile.png)
-
 ## Ethereumでログイン
 
 |Desktop|Mobile|
@@ -745,3 +715,33 @@
 |Desktop|Mobile|
 |---|---|
 |![アバター（プロフィール） (desktop)](avatar-profile--desktop.png)|![アバター（プロフィール） (mobile)](avatar-profile--mobile.png)|
+
+## モバイルメニュー（未ログイン）
+
+### Mobile
+
+![モバイルメニュー（未ログイン） (mobile)](navigation-guest-open--mobile.png)
+
+## キューのモバイルメニュー
+
+### Mobile
+
+![キューのモバイルメニュー (mobile)](admin-job-operations-navigation-open--mobile.png)
+
+## 運用タスクのモバイルメニュー
+
+### Mobile
+
+![運用タスクのモバイルメニュー (mobile)](admin-maintenance-tasks-navigation-open--mobile.png)
+
+## 販売者画面のモバイルメニュー
+
+### Mobile
+
+![販売者画面のモバイルメニュー (mobile)](billing-merchant-navigation-open--mobile.png)
+
+## 決済画面のモバイルメニュー
+
+### Mobile
+
+![決済画面のモバイルメニュー (mobile)](billing-navigation-open--mobile.png)

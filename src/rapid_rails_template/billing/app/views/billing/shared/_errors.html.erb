@@ -1,3 +1,7 @@
 <% if errors.any? %>
-  <div class="alert alert-error alert-soft" role="alert"><ul><% errors.each do |message| %><li><%= message %></li><% end %></ul></div>
+  <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+    <%= render(Shadcn::Alert::Description.new) do %>
+      <ul class="list-disc pl-5"><% errors.each do |message| %><li><%= message %></li><% end %></ul>
+    <% end %>
+  <% end %>
 <% end %>

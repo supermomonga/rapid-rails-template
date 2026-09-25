@@ -52,7 +52,7 @@ module RapidRailsTemplate
     private
 
     def build_gems
-      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism gum]
+      result = %w[pagy active_link_to action_policy sentry-ruby sentry-rails lexxy active_storage_db rails-i18n shadcn_view_components capybara capybara-playwright-driver factory_bot factory_bot_rails annotaterb sorbet sorbet-runtime tapioca ruby-lsp ruby-lsp-rails rubocop-rails rubocop-thread_safety momocop prism gum]
       result.concat(%w[devise devise-i18n webauthn browser haikunator boring_avatars])
       result << "siwe-rb" if configuration["additional_login_methods"].include?("siwe")
       result << "thruster"
@@ -67,7 +67,7 @@ module RapidRailsTemplate
     end
 
     def build_steps
-      result = %w[prepare_billing_engine declare_gems install_action_text install_active_storage_db configure_lexxy install_daisyui configure_generator_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
+      result = %w[prepare_billing_engine declare_gems install_action_text install_active_storage_db configure_lexxy install_shadcn_view_components configure_generator_templates configure_rubocop configure_test_stack configure_evidence_capture install_annotaterb configure_application_gems configure_application_identity configure_image_delivery]
       result << "install_devise"
       result << "install_siwe" if configuration["additional_login_methods"].include?("siwe")
       result << "configure_roles"
@@ -118,6 +118,7 @@ module RapidRailsTemplate
         sorbet/config
         sorbet/tapioca/config.yml
         sorbet/tapioca/require.rb
+        sorbet/rbi/shims/shadcn_view_components.rbi
         sorbet/rbi/shims/framework_bindings.rbi
         sorbet/rbi/shims/bundler_connection_pool.rbi
         sorbet/rbi/**/*

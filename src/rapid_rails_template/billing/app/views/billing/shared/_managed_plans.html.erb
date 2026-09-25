@@ -1,15 +1,31 @@
 <% if @plans.empty? %><%= render "billing/shared/empty", icon: "squares-2x2", title: t("billing.ui.no_plans"), description: t("billing.ui.empty_plans_help") %><% end %>
 <div class="grid gap-4">
   <% @plans.each do |plan| %>
-    <section class="card card-border bg-base-100"><div class="card-body">
-      <div class="flex flex-wrap items-start justify-between gap-3"><h2 class="card-title break-words"><%= plan.name %></h2><span class="badge whitespace-nowrap"><%= t(plan.accepting_subscriptions ? "billing.ui.accepting" : "billing.ui.closed") %></span></div>
-      <p class="text-lg font-semibold tabular-nums"><%= t("billing.ui.price_period", amount: billing_amount(plan.amount_units), days: plan.period_days) %></p>
-      <p class="text-base-content/70"><%= t("billing.ui.accepted_chains") %></p>
-      <div class="flex flex-wrap gap-2"><% plan.chain_ids.each do |id| %><span class="badge whitespace-nowrap"><%= Billing::Chains.fetch(id).name %></span><% end %></div>
-      <% unavailable = plan.chain_ids.reject { |id| plan.available_on?(id) } %>
-      <% if plan.accepting_subscriptions && unavailable.any? %><p class="text-sm"><%= t("billing.ui.unavailable_chains", chains: unavailable.map { |id| Billing::Chains.fetch(id).name }.join(" / ")) %></p><% end %>
-      <div class="card-actions justify-end"><%= link_to billing_label("public_page", "arrow-top-right-on-square"), plan_path(plan), class: action_button_classes(:secondary) %><%= link_to t("billing.ui.edit"), edit_merchant_plan_path(plan), class: action_button_classes(:secondary) if merchant_editable? %></div>
-    </div></section>
+    <%= render(Shadcn::Card.new) do %>
+      <%= render(Shadcn::Card::Header.new) do %>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <%= render(Shadcn::Card::Title.new(tag: :h2, class: "break-words")) { plan.name } %>
+          <%= render(Shadcn::Badge.new(variant: plan.accepting_subscriptions ? :default : :secondary, class: "whitespace-nowrap")) { t(plan.accepting_subscriptions ? "billing.ui.accepting" : "billing.ui.closed") } %>
+        </div>
+      <% end %>
+      <%= render(Shadcn::Card::Content.new(class: "space-y-3")) do %>
+        <p class="text-lg font-semibold tabular-nums"><%= t("billing.ui.price_period", amount: billing_amount(plan.amount_units), days: plan.period_days) %></p>
+        <p class="text-muted-foreground"><%= t("billing.ui.accepted_chains") %></p>
+        <div class="flex flex-wrap gap-2"><% plan.chain_ids.each do |id| %><%= render(Shadcn::Badge.new(variant: :outline, class: "whitespace-nowrap")) { Billing::Chains.fetch(id).name } %><% end %></div>
+        <% unavailable = plan.chain_ids.reject { |id| plan.available_on?(id) } %>
+        <% if plan.accepting_subscriptions && unavailable.any? %>
+          <%= render(Shadcn::Alert.new(role: "status")) do %>
+            <%= billing_icon("exclamation-triangle") %>
+            <%= render(Shadcn::Alert::Title.new) { t("billing.ui.unavailable_chains_title") } %>
+            <%= render(Shadcn::Alert::Description.new) { t("billing.ui.unavailable_chains", chains: unavailable.map { |id| Billing::Chains.fetch(id).name }.join(" / ")) } %>
+          <% end %>
+        <% end %>
+      <% end %>
+      <%= render(Shadcn::Card::Footer.new(class: "flex-wrap justify-end gap-2")) do %>
+        <%= link_to billing_label("public_page", "arrow-top-right-on-square"), plan_path(plan), class: action_button_classes(:secondary) %>
+        <%= link_to t("billing.ui.edit"), edit_merchant_plan_path(plan), class: action_button_classes(:secondary) if merchant_editable? %>
+      <% end %>
+    <% end %>
   <% end %>
 </div>
 <%= render "billing/shared/pagination" %>

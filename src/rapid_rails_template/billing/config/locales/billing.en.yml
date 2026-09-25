@@ -10,6 +10,9 @@ en:
     setup_submitted: Collection account creation submitted. Checkout will become available
       after finalization.
     recheck_requested: Transaction reconciliation requested.
+    transaction_errors:
+      verification: The transaction needs verification.
+      receipt_verification: The transaction receipt needs verification.
     errors:
       active_contracts: Leave every merchant and wait for purchase contracts, paid
         access and pending operations to end before deleting your account.
@@ -222,6 +225,7 @@ en:
       confirm_cancellation: Confirm cancellation
       unavailable_chains: 'Currently unavailable chains: %{chains}. Check payout addresses
         and operator configuration.'
+      unavailable_chains_title: Some chains are unavailable
       no_merchants_help: Registered sellers and their plans will appear here.
       no_public_plans_help: There are no public plans yet.
       operator_allocation: Operator allocation
@@ -245,6 +249,7 @@ en:
       screen_name: Registered username (without @)
       invitation_help: Invite an existing user. Membership starts when they accept.
         Invitations expire after seven days.
+      received_invitation_help: Review your invitations and choose which merchant to join. Invitations expire after seven days.
       no_invitations: No invitations.
       accept_invitation: Accept
       reject_invitation: Decline
@@ -265,7 +270,7 @@ en:
       switch_merchant: Switch merchant
       select_merchant: Select merchant
       selected_merchant: Selected
-      open_merchant_history: Open history
+      open_merchant_history: View closed merchants
       no_active_merchants: No open merchants
       no_active_merchants_help: Create a merchant or review your invitations.
       closed_merchants: Closed merchant history
@@ -364,6 +369,7 @@ en:
       reverted: Reverted
       review: Needs review
     checkout:
+      error_title: Payment cannot continue
       connecting: Connecting to your wallet.
       review: Review the saved terms before signing.
       signing: Sign the spend permission in your wallet.

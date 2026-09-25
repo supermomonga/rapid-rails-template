@@ -8,6 +8,9 @@ ja:
     cancel_requested: 解約を受け付けました。支払済み期間は引き続き利用できます。送信済みの決済は確定まで確認します。
     setup_submitted: 集金口座の作成を送信しました。確定後に受付できるようになります。
     recheck_requested: 取引の再照合を受け付けました。
+    transaction_errors:
+      verification: 取引の検証結果を確認する必要があります。
+      receipt_verification: 取引の受領内容を確認する必要があります。
     errors:
       active_contracts: すべての販売者から脱退し、購入契約・利用期間・未完了処理が終了してから削除してください。
       unavailable: 現在このチェーンでの契約を受け付けできません。
@@ -182,6 +185,7 @@ ja:
       keep_subscription: 契約に戻る
       confirm_cancellation: 更新停止と解約を確定
       unavailable_chains: 現在受付できないチェーン：%{chains}。送金先や運営側の設定を確認してください。
+      unavailable_chains_title: 一部のチェーンでは受付できません
       no_merchants_help: 販売者が登録すると、公開プロフィールと販売プランをここから探せます。
       no_public_plans_help: 公開中の販売プランはまだありません。
       operator_allocation: 運営者への配分
@@ -200,6 +204,7 @@ ja:
       invite_member: メンバーを招待
       screen_name: 登録済みのユーザー名（@なし）
       invitation_help: 登録済みのユーザーを招待し、本人が承諾すると所属します。招待の有効期限は7日間です。
+      received_invitation_help: 届いた招待を確認し、参加する販売者を選べます。招待の有効期限は7日間です。
       no_invitations: 招待はありません。
       accept_invitation: 承諾する
       reject_invitation: 拒否する
@@ -219,7 +224,7 @@ ja:
       switch_merchant: 販売者を切り替え
       select_merchant: 販売者を選択
       selected_merchant: 選択中
-      open_merchant_history: 履歴を開く
+      open_merchant_history: 閉鎖済み販売者を見る
       no_active_merchants: 営業中の販売者がありません
       no_active_merchants_help: 販売者を作成するか、届いた招待を確認してください。
       closed_merchants: 閉鎖済み販売者の履歴
@@ -314,6 +319,7 @@ ja:
       reverted: 実行失敗
       review: 要確認
     checkout:
+      error_title: お支払いを続けられません
       connecting: ウォレットに接続しています。
       review: 保存した契約条件を確認して署名してください。
       signing: ウォレットで引き落とし許可に署名してください。

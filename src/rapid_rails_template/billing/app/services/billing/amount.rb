@@ -15,6 +15,10 @@ module Billing
       "#{whole}.#{fraction.to_s.rjust(decimals, '0')}"
     end
 
+    def self.display(units, decimals: 6)
+      format(units, decimals: decimals).sub(/\.?0+\z/, '')
+    end
+
     def self.split(units, basis_points)
       raise ArgumentError, "invalid fee" unless (0..10_000).cover?(basis_points)
 

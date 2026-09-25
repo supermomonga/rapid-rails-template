@@ -1,3 +1,9 @@
 <% state = billing_subscription_state(subscription) %>
-<% classes = { "pending" => "badge badge-soft badge-info", "active" => "badge badge-soft badge-success", "grace" => "badge badge-soft badge-warning", "cancelling" => "badge badge-soft badge-warning", "ended" => "badge" } %>
-<span class="<%= classes.fetch(state) %> whitespace-nowrap" data-billing-state><%= t("billing.states.#{state}") %></span>
+<% variants = {
+  "pending" => :secondary,
+  "active" => :default,
+  "grace" => :outline,
+  "cancelling" => :outline,
+  "ended" => :secondary
+} %>
+<%= render(Shadcn::Badge.new(variant: variants.fetch(state), data: { billing_state: true })) { t("billing.states.#{state}") } %>

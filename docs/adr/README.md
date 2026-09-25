@@ -13,3 +13,5 @@
 * [13. Spend Permissions決済をアプリ内Engineと常設Solid Queueで構成する](0013-spend-permissions決済をアプリ内engineと常設solid-queueで構成する.md)
 * [14. 販売者の運用画面を購入者のマイページから分離する](0014-販売者の運用画面を購入者のマイページから分離する.md)
 * [15. 販売者を複数ユーザーの所属で管理し運営者決済を共通化する](0015-販売者を複数ユーザーの所属で管理し運営者決済を共通化する.md)
+* [16. 生成アプリのUIをshadcn_view_componentsへ移行する](0016-生成アプリのuiをshadcn-view-componentsへ移行する.md)
+* [17. 生成アプリのUIにshadcnの既定テーマとvariantを使用する](0017-生成アプリのuiにshadcnの既定テーマとvariantを使用する.md)

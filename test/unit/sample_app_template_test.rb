@@ -46,20 +46,17 @@ class SampleAppTemplateTest < Minitest::Test
     assert_includes @source, "@article.profile = T.must(account_user.profile)"
     assert_includes @source, "pagy(:offset, visible_articles, limit: 25)"
     assert_includes @source, 'pagination(@pagy, aria_label: "Article pagination")'
-    assert_includes @source, 'table table-sm table-pin-rows min-w-[780px]'
-    assert_includes @source, 'td class="min-w-64"'
+    assert_includes @source, 'Shadcn::Table.new(class: "min-w-[780px]")'
+    assert_includes @source, 'Shadcn::Table::Cell.new(class: "min-w-64")'
   end
 
-  def test_uses_standard_daisyui_and_tailwind_classes
-    removed_classes = %w[btn card input].map { |component| [component, "rapid"].join("-") }
-    removed_classes.concat((1..3).map { |level| ["shadow", "elevation", level].join("-") })
-
-    removed_classes.each do |css_class|
-      refute_includes @source, css_class
-    end
-
-    assert_equal 2, @source.scan('class="card card-border bg-base-100"').size
-    refute_includes @source, 'card card-border border-base-300 bg-base-100 shadow-none'
+  def test_sample_views_use_shadcn_components_and_shared_action_roles
+    assert_equal 2, @source.scan('Shadcn::Card.new').size
+    assert_includes @source, 'Shadcn::Table.new'
+    assert_includes @source, 'Shadcn::Badge.new'
+    assert_includes @source, 'action_button_classes(:primary)'
+    assert_includes @source, 'action_button_classes(:destructive)'
+    refute_match(/class="(?:btn|card|badge|list)(?:\s|-)/, @source)
   end
 
   def test_seeds_non_admin_sample_users_and_leaves_initial_admin_assignment_for_the_next_signup

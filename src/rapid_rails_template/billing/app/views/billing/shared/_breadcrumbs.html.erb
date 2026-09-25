@@ -1,3 +1,7 @@
-<nav class="breadcrumbs text-sm mb-4" aria-label="<%= t('billing.ui.breadcrumbs') %>">
-  <ul><li><%= link_to billing_label(label, icon), path, class: "link" %></li><li><span aria-current="page"><%= current %></span></li></ul>
-</nav>
+<%= render(Shadcn::Breadcrumb.new(class: "mb-4", aria: { label: t("billing.ui.breadcrumbs") })) do %>
+  <%= render(Shadcn::Breadcrumb::List.new) do %>
+    <%= render(Shadcn::Breadcrumb::Item.new) { render(Shadcn::Breadcrumb::Link.new(href: path)) { billing_label(label, icon) } } %>
+    <%= render(Shadcn::Breadcrumb::Separator.new) %>
+    <%= render(Shadcn::Breadcrumb::Item.new) { render(Shadcn::Breadcrumb::Page.new) { current } } %>
+  <% end %>
+<% end %>

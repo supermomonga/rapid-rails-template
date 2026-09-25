@@ -63,12 +63,12 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
     post '/merchant/billing/billing-test/plans', params: { plan: { name: 'Too short', price_usdc: '10', period_days: 1, chain_ids: ['', '8453'], accepting_subscriptions: '1' } }
     assert_response :unprocessable_content
     assert_select "input[name='plan[name]'][value='Too short']"
-    assert_select '.alert-error'
+    assert_select '[data-slot="alert"][role="alert"]'
     sign_in @admin
     patch '/admin/billing/settings', params: { setting: { fee_percent: '1.00', grace_hours: 1000 } }
     assert_response :unprocessable_content
     assert_select "input[name='setting[grace_hours]'][value='1000']"
-    assert_select '.alert-error'
+    assert_select '[data-slot="alert"][role="alert"]'
     patch '/admin/billing/settings', params: { setting: { fee_percent: 'invalid', grace_hours: 48, merchant_plan_creation_enabled: '0' } }
     assert_response :unprocessable_content
     assert_select "input[name='setting[fee_percent]'][value='invalid']"
@@ -216,11 +216,11 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
     get '/account/billing/subscriptions'
     assert_select "[data-with-menu-items] a[href='/merchant/billing']", count: 1
     assert_select "[data-with-menu-items] a[href='/merchant/billing/sales']", count: 0
-    assert_select "[role='tabpanel']", count: 1
+    assert_select "nav[data-slot='navigation-menu'][aria-label='#{I18n.t('navigation.account_menu')}'] [data-slot='navigation-menu-link'][aria-current='page']", count: 1
     sign_in @seller
     get '/merchant/billing/billing-test/sales'
-    assert_select "nav[aria-label='#{I18n.t('billing.ui.merchant_menu')}']"
-    assert_select "[data-with-menu-items] a[href='/merchant/billing/billing-test/sales'][aria-current='page']"
+    assert_select "nav[data-slot='navigation-menu'][aria-label='#{I18n.t('billing.ui.merchant_menu')}']"
+    assert_select "[data-with-menu-items] a[data-slot='navigation-menu-link'][data-active][href='/merchant/billing/billing-test/sales'][aria-current='page']"
     assert_select "[data-with-menu-items] a[href='/account/billing/subscriptions']", count: 0
     assert_select '[data-with-menu-items] > li > a' do |links|
       links.each { |link| assert link.at_css("svg[aria-hidden='true']"), link.text }
@@ -235,9 +235,9 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
                                   fee_basis_points: 100, operator_address: "0x#{'11' * 20}", merchant_address: "0x#{'66' * 20}")
     sign_in @seller
     get '/merchant/billing/billing-test'
-    assert_select '.stat-value', text: /10\s+USDC/
-    assert_select '.stat-value', text: /9\.9\s+USDC/
-    assert_select '.stat-value', text: /0\.1\s+USDC/
+    assert_select '[data-billing-summary-amount="gross_sales"]', text: /10\s+USDC/
+    assert_select '[data-billing-summary-amount="merchant_received"]', text: /9\.9\s+USDC/
+    assert_select '[data-billing-summary-amount="operator_fee"]', text: /0\.1\s+USDC/
     get '/merchant/billing/billing-test/payments?chain_id=137'
     assert_select '[data-billing-empty]'
     get '/merchant/billing/billing-test/refund_records'
@@ -265,12 +265,12 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
     assert_select "input[name='refund_record[amount_usdc]'][value='1.2345678']"
     assert_select "textarea[name='refund_record[reason]']", text: 'Keep this reason'
     assert_select "option[value='137'][selected]"
-    assert_select '.alert-error'
+    assert_select '[data-slot="alert"][role="alert"]'
     assert_equal 0, charge.refund_records.count
     post '/merchant/billing/billing-test/payout_addresses', params: { payout_address: { chain_id: 8453, address: 'bad-address' } }
     assert_response :unprocessable_content
     assert_select "input#payout_8453[value='bad-address']"
-    assert_select "[role='tab'][aria-selected='true']", text: /#{Regexp.escape(I18n.t('billing.ui.payouts'))}/
+    assert_select '[data-slot="navigation-menu-link"][aria-current="page"]', text: /#{Regexp.escape(I18n.t('billing.ui.payouts'))}/
   end
 
   test 'cancellation confirmation is read only and ended subscriptions use a separate tab' do
@@ -278,13 +278,13 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
     get "/account/billing/subscriptions/#{@subscription.id}/cancellation"
     assert_response :success
     assert_nil @subscription.reload.cancel_requested_at
-    assert_select "input.btn-error[type='submit']"
+    assert_select "input[type='submit'][class*='bg-destructive/10'][class*='text-destructive']"
     @subscription.update!(status: 'ended', ended_at: Time.current)
     get '/account/billing/subscriptions'
     assert_select '[data-billing-subscription]', count: 0
     get '/account/billing/subscriptions?scope=ended'
     assert_select '[data-billing-subscription]', count: 1
-    assert_select "[role='tab'][aria-selected='true']", text: I18n.t('billing.ui.ended_contracts')
+    assert_select '[data-slot="navigation-menu-link"][aria-current="page"]', text: I18n.t('billing.ui.ended_contracts')
   end
 
   test 'app administrator needs membership and viewer cannot write or record refunds' do
@@ -322,9 +322,9 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
   test 'merchant switcher separates current identity from available destinations' do
     sign_in @seller
     get '/merchant/billing/billing-test'
-    assert_select 'aside > section[data-billing-merchant-selector]' do
+    assert_select 'aside > [data-billing-merchant-selector][data-slot="card"]' do
       assert_select '[data-billing-current-merchant]', text: 'Merchant'
-      assert_select '[popovertarget]', count: 0
+      assert_select '[data-slot="dropdown-menu-trigger"]', count: 0
     end
     assert_select 'nav [data-billing-merchant-selector]', count: 0
 
@@ -348,7 +348,7 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
     sign_in @buyer
     get '/merchant/billing'
     assert_select '[data-billing-current-merchant]', count: 0
-    assert_select '[popovertarget=billing-merchant-choices]', text: /#{Regexp.escape(I18n.t('billing.ui.open_merchant_history'))}/
+    assert_select '[data-slot="dropdown-menu-trigger"]', text: /#{Regexp.escape(I18n.t('billing.ui.open_merchant_history'))}/
     assert_select '#billing-merchant-choices button[value=past-team]', count: 1
     sign_in @admin
     get '/merchant/billing'

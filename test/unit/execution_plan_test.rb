@@ -58,11 +58,12 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.steps, "configure_lexxy"
     assert_operator plan.steps.index("install_action_text"), :<, plan.steps.index("install_active_storage_db")
     assert_operator plan.steps.index("install_active_storage_db"), :<, plan.steps.index("configure_lexxy")
-    assert_includes plan.steps, "install_daisyui"
+    assert_includes plan.gems, "shadcn_view_components"
+    assert_includes plan.steps, "install_shadcn_view_components"
     assert_operator plan.steps.index("install_action_text"), :<, plan.steps.index("configure_lexxy")
-    assert_operator plan.steps.index("configure_lexxy"), :<, plan.steps.index("install_daisyui")
+    assert_operator plan.steps.index("configure_lexxy"), :<, plan.steps.index("install_shadcn_view_components")
     assert_includes plan.steps, "configure_generator_templates"
-    assert_operator plan.steps.index("install_daisyui"), :<, plan.steps.index("configure_generator_templates")
+    assert_operator plan.steps.index("install_shadcn_view_components"), :<, plan.steps.index("configure_generator_templates")
     assert_operator plan.steps.index("configure_generator_templates"), :<, plan.steps.index("configure_default_views")
     assert_includes plan.steps, "configure_api"
     assert_includes plan.steps, "configure_profile"
@@ -123,6 +124,7 @@ class ExecutionPlanTest < Minitest::Test
     assert_includes plan.artifacts, "sorbet/tapioca/config.yml"
     assert_includes plan.artifacts, "sorbet/tapioca/require.rb"
     assert_includes plan.artifacts, "sorbet/rbi/shims/framework_bindings.rbi"
+    assert_includes plan.artifacts, "sorbet/rbi/shims/shadcn_view_components.rbi"
     assert_includes plan.artifacts, "sorbet/rbi/**/*"
     assert_includes plan.artifacts, "test/sorbet_test.rb"
     assert_includes plan.artifacts, "db/seeds.rb"

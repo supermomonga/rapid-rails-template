@@ -3,6 +3,9 @@ number: 6
 title: 生成アプリの基盤技術と対応バージョンを固定する
 status: accepted
 date: 2026-09-02
+links:
+- target: 16
+  kind: amendedby
 ---
 
 # 生成アプリの基盤技術と対応バージョンを固定する

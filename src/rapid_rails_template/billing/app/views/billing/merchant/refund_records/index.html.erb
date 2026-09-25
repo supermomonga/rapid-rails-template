@@ -1,10 +1,21 @@
 <% content_for :page_title, t("billing.ui.sales") %>
 <% content_for :page_actions_secondary do %><%= render "billing/shared/filters" %><% end %>
-<%= with_tab tabs: billing_tabs(:merchant_sales) do %>
+<%= with_tab tabs: billing_tabs(:merchant_sales), aria_label: t("billing.ui.sales") do %>
   <p class="mb-4"><%= t("billing.ui.refund_help") %></p>
   <% if @refunds.empty? %><%= render "billing/shared/empty", icon: "arrow-uturn-left", title: t("billing.ui.no_refunds"), description: t("billing.ui.refund_record_help") %><% end %>
-  <ul class="list"><% @refunds.each do |refund| %><li class="list-row">
-    <%= billing_icon("arrow-uturn-left") %><div class="list-col-grow min-w-0 space-y-2"><%= link_to refund.charge.subscription.plan_name, merchant_sale_path(refund.charge.subscription, tab: "payments"), class: "link font-semibold" %><p class="tabular-nums font-semibold"><%= billing_amount(refund.amount_units) %> USDC</p><p><%= l(refund.created_at, format: :long) %></p><p class="break-words whitespace-pre-wrap"><%= refund.reason %></p><%= link_to t("billing.ui.refund_transaction", chain: Billing::Chains.fetch(refund.chain_id).name), refund.explorer_url, class: "link", target: "_blank", rel: "noopener noreferrer" %></div>
-  </li><% end %></ul>
+  <%= render(Shadcn::Item::Group.new(tag: :ul)) do %>
+    <% @refunds.each do |refund| %>
+      <%= render(Shadcn::Item.new(tag: :li, variant: :outline)) do %>
+        <%= render(Shadcn::Item::Media.new) { billing_icon("arrow-uturn-left") } %>
+        <%= render(Shadcn::Item::Content.new(class: "min-w-0")) do %>
+          <%= render(Shadcn::Item::Title.new) { link_to refund.charge.subscription.plan_name, merchant_sale_path(refund.charge.subscription, tab: "payments"), class: "text-primary underline underline-offset-4" } %>
+          <p class="tabular-nums font-semibold" data-billing-amount><%= billing_amount(refund.amount_units) %> USDC</p>
+          <p><%= l(refund.created_at, format: :long) %></p>
+          <p class="break-words whitespace-pre-wrap"><%= refund.reason %></p>
+          <%= link_to t("billing.ui.refund_transaction", chain: Billing::Chains.fetch(refund.chain_id).name), refund.explorer_url, class: "text-primary underline underline-offset-4", target: "_blank", rel: "noopener noreferrer" %>
+        <% end %>
+      <% end %>
+    <% end %>
+  <% end %>
   <%= render "billing/shared/pagination" %>
 <% end %>

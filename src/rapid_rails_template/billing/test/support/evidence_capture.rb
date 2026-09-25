@@ -64,7 +64,7 @@ class EvidenceCapture
     fill_in translate('billing.ui.reason'), with: '送金済みの返金を記録します。'
     fill_in translate('billing.ui.transaction_hash'), with: 'invalid'
     click_button translate('billing.ui.record_refund')
-    assert_selector '.alert-error'
+    assert_selector '[data-slot="alert"][role="alert"]'
     assert_field translate('billing.ui.transaction_hash'), with: 'invalid'
     capture_current_page('billing-refund-invalid', '手動返金の入力エラーと値の保持', viewport)
     capture_merchant_membership_scenarios(merchant, routes, viewport)
@@ -99,8 +99,8 @@ class EvidenceCapture
     authenticate
     if viewport == 'mobile'
       visit routes.account_subscriptions_path
-      assert_selector '[data-with-menu-items] a.menu-active', text: translate('billing.ui.subscriptions')
-      find('header details.dropdown > summary', visible: :visible).click
+      assert_selector '[data-with-menu-items] a[data-slot="navigation-menu-link"][aria-current="page"]', text: translate('billing.ui.subscriptions')
+      find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
       capture_current_page('billing-navigation-open', '決済画面のモバイルメニュー', viewport)
     end
   end
@@ -164,11 +164,15 @@ class EvidenceCapture
           }),
           menuIcons: [...document.querySelectorAll('[data-with-menu-items] > li > a')].every(link => !!link.querySelector('svg[aria-hidden="true"]')),
           linksUnderlined: [...document.querySelectorAll('.link [data-billing-label-text]')].every(label => getComputedStyle(label).textDecorationLine.includes('underline')),
-          tabs: [...document.querySelectorAll('[role="tablist"]')].map(list => {
-            const tabs = [...list.querySelectorAll(':scope > [role="tab"]')].map(tab => tab.getBoundingClientRect());
-            const active = list.querySelector(':scope > [aria-selected="true"]');
-            const box = active.getBoundingClientRect(), panel = active.nextElementSibling.getBoundingClientRect();
-            return { rowDelta: Math.max(...tabs.map(tab => tab.top)) - Math.min(...tabs.map(tab => tab.top)), connection: Math.abs(box.bottom - panel.top), activeZ: Number(getComputedStyle(active).zIndex) || 0, panelZ: Number(getComputedStyle(active.nextElementSibling).zIndex) || 0, visible: box.left >= 0 && box.right <= innerWidth };
+          tabs: [...document.querySelectorAll('nav[aria-label] > [data-slot="navigation-menu"]')].map(menu => {
+            const links = [...menu.querySelectorAll('[data-slot="navigation-menu-link"]')].map(link => link.getBoundingClientRect());
+            const active = menu.querySelector('[data-slot="navigation-menu-link"][aria-current="page"]');
+            const box = active.getBoundingClientRect(), scroller = menu.getBoundingClientRect();
+            const panel = menu.parentElement.nextElementSibling.getBoundingClientRect();
+            return { rowDelta: Math.max(...links.map(link => link.top)) - Math.min(...links.map(link => link.top)),
+              visible: box.left >= scroller.left && box.right <= scroller.right,
+              panelWithinViewport: panel.left >= 0 && panel.right <= innerWidth,
+              panelBelowNavigation: panel.top >= scroller.bottom };
           })
         };
       })()
@@ -181,28 +185,33 @@ class EvidenceCapture
     assert geometry.fetch('linksUnderlined'), 'icon labels in text links must remain underlined without hover'
     geometry.fetch('tabs').each do |tab|
       assert_operator tab.fetch('rowDelta'), :<=, 1
-      assert_operator tab.fetch('connection'), :<=, 2
-      assert_operator tab.fetch('activeZ'), :>, tab.fetch('panelZ')
-      assert tab.fetch('visible'), 'active billing tab must remain visible'
+      assert tab.fetch('visible'), 'active billing navigation link must remain visible'
+      assert tab.fetch('panelWithinViewport'), 'billing panel must fit inside the viewport'
+      assert tab.fetch('panelBelowNavigation'), 'billing panel must follow navigation'
     end
-    unless page.has_css?('header details[open]', wait: 0)
-      covers_edges = page.evaluate_script(<<~JAVASCRIPT)
+    header_menu_open = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('header [data-slot="dropdown-menu-content"]')].some(menu => menu.checkVisibility())
+    JAVASCRIPT
+    unless header_menu_open
+      links_unobstructed = page.evaluate_script(<<~JAVASCRIPT)
         (() => {
           const position = { left: scrollX, top: scrollY };
-          const covered = [...document.querySelectorAll('[role="tablist"] > [aria-selected="true"]')].every(active => {
+          const activeLinks = [...document.querySelectorAll('nav[aria-label] [data-slot="navigation-menu-link"][aria-current="page"]')]
+            .filter(active => active.getClientRects().length > 0);
+          const unobstructed = activeLinks.every(active => {
             active.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
-            const box = active.getBoundingClientRect(), panel = active.nextElementSibling.getBoundingClientRect();
-            const topmost = document.elementFromPoint((box.left + box.right) / 2, panel.top + 0.5);
+            const box = active.getBoundingClientRect();
+            const topmost = document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2);
             return active.contains(topmost);
           });
           window.scrollTo({ ...position, behavior: 'instant' });
-          return covered;
+          return unobstructed;
         })()
       JAVASCRIPT
-      assert covers_edges, 'active tab must cover the shared panel border'
+      assert links_unobstructed, 'active billing navigation link must be unobstructed'
     else
       menu_on_top = page.evaluate_script(<<~JAVASCRIPT)
-        [...document.querySelectorAll('header details[open] .dropdown-content a')].every(link => {
+        [...document.querySelectorAll('header [data-slot="dropdown-menu-content"] a')].filter(link => link.checkVisibility()).every(link => {
           const box = link.getBoundingClientRect();
           return [0.1, 0.5, 0.9].every(x => [0.2, 0.5, 0.8].every(y =>
             link.contains(document.elementFromPoint(box.left + box.width * x, box.top + box.height * y))));
@@ -214,7 +223,7 @@ class EvidenceCapture
 
   def verify_billing_navigation(routes, viewport, merchant)
     visit routes.merchant_sales_path(merchant_id: merchant.public_id)
-    assert_selector '[data-with-menu-items] a[aria-current="page"]', text: translate('billing.ui.sales')
+    assert_selector '[data-with-menu-items] a[data-slot="navigation-menu-link"][data-active][aria-current="page"]', text: translate('billing.ui.sales')
     if viewport == 'desktop'
       [320, 390, 640, 960, 961].each do |width|
         page.current_window.resize_to(width, 900)
@@ -231,7 +240,7 @@ class EvidenceCapture
       end
       page.current_window.resize_to(VIEWPORTS.fetch(viewport).fetch('width'), VIEWPORTS.fetch(viewport).fetch('height'))
     else
-      find('header details.dropdown > summary', visible: :visible).click
+      find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
       assert_selector 'header a', text: translate('billing.ui.back_account')
       capture_current_page('billing-merchant-navigation-open', '販売者画面のモバイルメニュー', viewport)
     end
@@ -254,10 +263,10 @@ class EvidenceCapture
           (() => {
             const popup = document.querySelector('#billing-merchant-choices');
             const rect = popup.getBoundingClientRect();
-            const trigger = document.querySelector('[popovertarget="billing-merchant-choices"]');
+            const trigger = document.querySelector('[data-billing-merchant-selector] [data-slot="dropdown-menu-trigger"]');
             const action = trigger.parentElement.getBoundingClientRect();
             const button = trigger.getBoundingClientRect();
-            const items = [...popup.querySelectorAll('li > *')];
+            const items = [...popup.querySelectorAll('[role="menuitem"], [aria-current="true"]')];
             return { left: rect.left, right: rect.right, width: document.documentElement.scrollWidth,
               buttonWidthDifference: Math.abs(action.width - button.width),
               overflow: popup.scrollWidth > popup.clientWidth,
@@ -279,7 +288,7 @@ class EvidenceCapture
     end
     page.send_keys(:escape)
     assert_no_selector '#billing-merchant-choices:popover-open'
-    page.driver.with_playwright_page { |browser_page| browser_page.locator('[popovertarget="billing-merchant-choices"]').press('Enter') }
+    page.driver.with_playwright_page { |browser_page| browser_page.locator('[data-billing-merchant-selector] [data-slot="dropdown-menu-trigger"]').press('Enter') }
     assert_selector '#billing-merchant-choices:popover-open'
     page.driver.with_playwright_page { |browser_page| browser_page.locator("#billing-merchant-choices button[value='#{destination.public_id}']").press('Enter') }
     assert_current_path routes.merchant_dashboard_path(merchant_id: destination.public_id)

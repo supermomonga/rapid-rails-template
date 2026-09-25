@@ -12,7 +12,7 @@ unless generated_article_controller.include?("@pagy, @articles = pagy(:offset, A
 end
 generated_article_index = File.read("app/views/articles/index.html.erb")
 unless generated_article_index.include?('<%= pagination(@pagy, aria_label: "Articles pagination") %>')
-  raise "Article scaffold indexにdaisyUI paginationが生成されていません"
+  raise "Article scaffold indexにshadcn paginationが生成されていません"
 end
 
 article_migrations = Dir.glob("db/migrate/*_create_articles.rb")
@@ -195,44 +195,37 @@ create_file "app/views/articles/index.html.erb", <<~'ERB', force: true
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       <% if user_signed_in? %>
-        <%= link_to "New article", new_article_path, class: "btn btn-primary" %>
+        <%= link_to "New article", new_article_path, class: action_button_classes(:primary) %>
       <% end %>
     </header>
 
-    <section class="card card-border bg-base-100">
-      <div class="card-body">
-        <div class="overflow-x-auto">
-          <table class="table table-sm table-pin-rows min-w-[780px]">
-            <thead>
-              <tr>
-                <th scope="col">Title</th>
-                <th scope="col">Author</th>
-                <th scope="col">Body</th>
-                <th scope="col">Status</th>
-                <th scope="col"><span class="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody id="articles">
-              <% @articles.each do |article| %>
-                <tr id="<%= dom_id article %>">
-                  <td class="whitespace-nowrap"><%= article.title %></td>
-                  <td class="whitespace-nowrap"><%= article.profile.display_name %></td>
-                  <td class="min-w-64"><%= truncate(article.body, length: 120) %></td>
-                  <td class="whitespace-nowrap">
-                    <span class="badge <%= "badge-outline" if article.draft? %>">
-                      <%= article.draft? ? "Draft" : "Published" %>
-                    </span>
-                  </td>
-                  <td class="whitespace-nowrap text-right">
-                    <%= link_to "Show this article", article, class: "btn" %>
-                  </td>
-                </tr>
+    <%= render(Shadcn::Card.new) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
+        <%= render(Shadcn::Table.new(class: "min-w-[780px]")) do %>
+          <%= render(Shadcn::Table::Header.new) do %>
+            <%= render(Shadcn::Table::Row.new) do %>
+              <% %w[Title Author Body Status].each do |heading| %>
+                <%= render(Shadcn::Table::Head.new(scope: "col")) { heading } %>
               <% end %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+              <%= render(Shadcn::Table::Head.new(scope: "col")) { tag.span("Actions", class: "sr-only") } %>
+            <% end %>
+          <% end %>
+          <%= render(Shadcn::Table::Body.new(id: "articles")) do %>
+              <% @articles.each do |article| %>
+                <%= render(Shadcn::Table::Row.new(id: dom_id(article))) do %>
+                  <%= render(Shadcn::Table::Cell.new(class: "whitespace-nowrap")) { article.title } %>
+                  <%= render(Shadcn::Table::Cell.new(class: "whitespace-nowrap")) { article.profile.display_name } %>
+                  <%= render(Shadcn::Table::Cell.new(class: "min-w-64")) { truncate(article.body, length: 120) } %>
+                  <%= render(Shadcn::Table::Cell.new(class: "whitespace-nowrap")) do %>
+                    <%= render(Shadcn::Badge.new(variant: article.draft? ? :outline : :secondary)) { article.draft? ? "Draft" : "Published" } %>
+                  <% end %>
+                  <%= render(Shadcn::Table::Cell.new(class: "whitespace-nowrap text-right")) { link_to "Show this article", article, class: action_button_classes(:secondary) } %>
+                <% end %>
+              <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
+    <% end %>
 
     <%= pagination(@pagy, aria_label: "Article pagination") %>
   </div>
@@ -240,28 +233,12 @@ ERB
 
 create_file "app/views/articles/_article.html.erb", <<~'ERB', force: true
   <div id="<%= dom_id article %>">
-    <ul class="list">
-      <li class="list-row">
-        <span class="text-sm text-neutral">Author</span>
-        <strong class="list-col-grow min-w-0"><%= article.profile.display_name %></strong>
-      </li>
-      <li class="list-row">
-        <span class="text-sm text-neutral">Title</span>
-        <strong class="list-col-grow min-w-0"><%= article.title %></strong>
-      </li>
-      <li class="list-row">
-        <span class="text-sm text-neutral">Body</span>
-        <p class="list-col-grow min-w-0 whitespace-pre-wrap"><%= article.body %></p>
-      </li>
-      <li class="list-row">
-        <span class="text-sm text-neutral">Status</span>
-        <div class="list-col-grow min-w-0">
-          <span class="badge <%= "badge-outline" if article.draft? %>">
-            <%= article.draft? ? "Draft" : "Published" %>
-          </span>
-        </div>
-      </li>
-    </ul>
+    <dl class="divide-y divide-border">
+      <div class="grid gap-1 py-3 sm:grid-cols-[12rem_minmax(0,1fr)]"><dt class="text-sm text-muted-foreground">Author</dt><dd class="min-w-0 font-semibold"><%= article.profile.display_name %></dd></div>
+      <div class="grid gap-1 py-3 sm:grid-cols-[12rem_minmax(0,1fr)]"><dt class="text-sm text-muted-foreground">Title</dt><dd class="min-w-0 font-semibold"><%= article.title %></dd></div>
+      <div class="grid gap-1 py-3 sm:grid-cols-[12rem_minmax(0,1fr)]"><dt class="text-sm text-muted-foreground">Body</dt><dd class="min-w-0 whitespace-pre-wrap"><%= article.body %></dd></div>
+      <div class="grid gap-1 py-3 sm:grid-cols-[12rem_minmax(0,1fr)]"><dt class="text-sm text-muted-foreground">Status</dt><dd class="min-w-0"><%= render(Shadcn::Badge.new(variant: article.draft? ? :outline : :secondary)) { article.draft? ? "Draft" : "Published" } %></dd></div>
+    </dl>
   </div>
 ERB
 
@@ -271,18 +248,18 @@ create_file "app/views/articles/show.html.erb", <<~'ERB', force: true
   <div class="mx-auto w-full max-w-[820px] space-y-6 px-5 py-10 md:py-14">
     <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
 
-    <section class="card card-border bg-base-100">
-      <div class="card-body">
+    <%= render(Shadcn::Card.new) do %>
+      <%= render(Shadcn::Card::Content.new(class: "space-y-4")) do %>
         <%= render @article %>
-        <div class="card-actions justify-end">
+        <div class="flex flex-wrap justify-end gap-2">
+          <%= link_to "Back to articles", articles_path, class: action_button_classes(:quiet) %>
           <% if allowed_to?(:update?, @article) %>
-            <%= link_to "Edit this article", edit_article_path(@article), class: "btn" %>
-            <%= button_to "Destroy this article", @article, method: :delete, class: "btn btn-outline btn-error" %>
+            <%= link_to "Edit this article", edit_article_path(@article), class: action_button_classes(:secondary) %>
+            <%= button_to "Destroy this article", @article, method: :delete, class: action_button_classes(:destructive) %>
           <% end %>
-          <%= link_to "Back to articles", articles_path, class: "btn" %>
         </div>
-      </div>
-    </section>
+      <% end %>
+    <% end %>
   </div>
 ERB
 
@@ -394,7 +371,7 @@ create_file "test/controllers/articles_controller_test.rb", <<~'RUBY', force: tr
       get article_url(@draft)
 
       assert_response :success
-      assert_select ".badge", text: "Draft", count: 1
+      assert_select '[data-slot="badge"]', text: "Draft", count: 1
     end
 
     test "requires authentication for write actions" do
@@ -473,12 +450,12 @@ create_file "test/controllers/articles_controller_test.rb", <<~'RUBY', force: tr
 
       assert_response :success
       assert_select "tbody#articles tr", count: 25
-      assert_select 'nav[aria-label="Article pagination"] .join', count: 1
-      assert_select '.join > .join-item.btn', count: 4
-      assert_select '.join > .btn-active[aria-current="page"]', text: "1", count: 1
-      assert_select '.join > .btn-disabled[aria-label=?][aria-disabled="true"]', I18n.t("common.previous"), count: 1
-      assert_select '.join > a[href=?]', articles_path(page: 2), text: "2", count: 1
-      assert_select '.join > a[href=?][aria-label=?]', articles_path(page: 2), I18n.t("common.next"), count: 1
+      assert_select 'nav[aria-label="Article pagination"][data-slot="pagination"] [data-slot="pagination-content"]', count: 1
+      assert_select '[data-slot="pagination-content"] > [data-slot="pagination-item"]', count: 4
+      assert_select '[data-slot="pagination-link"][aria-current="page"]', text: "1", count: 1
+      assert_select '[data-slot="pagination-link"][aria-label=?][aria-disabled="true"]', I18n.t("common.previous"), count: 1
+      assert_select '[data-slot="pagination-link"][href=?]', articles_path(page: 2), text: "2", count: 1
+      assert_select '[data-slot="pagination-link"][href=?][aria-label=?]', articles_path(page: 2), I18n.t("common.next"), count: 1
     end
   end
 RUBY

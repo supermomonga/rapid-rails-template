@@ -14,8 +14,16 @@ module Billing
       tag.span(safe_join([billing_icon(icon), tag.span(t("billing.ui.#{key}"), class: 'in-[.link]:underline', data: { billing_label_text: true })]), class: 'inline-flex items-center gap-2')
     end
 
-    def billing_menu_item(key, path, icon, active:)
-      tag.li(link_to(billing_label(key, icon), path, class: ('menu-active' if active), aria: { current: ('page' if active) }))
+    def billing_menu_item(key, path, icon, active:, dropdown: false)
+      if dropdown
+        render(Shadcn::DropdownMenu::Item.new(tag: :a, href: path,
+          class: ('bg-accent text-accent-foreground' if active), aria: { current: ('page' if active) })) { billing_label(key, icon) }
+      else
+        render(Shadcn::NavigationMenu::Item.new) do
+          render(Shadcn::NavigationMenu::Link.new(href: path, class: 'desktop:w-full',
+            data: (active ? { active: '' } : {}), aria: { current: ('page' if active) })) { billing_label(key, icon) }
+        end
+      end
     end
 
     def billing_amount(units)

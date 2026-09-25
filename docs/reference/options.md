@@ -118,9 +118,9 @@ RailsアプリIDは有限選択の設定値とは分離して扱います。キ�
 - 表示条件: 常に表示する
 - 影響する処理: PWA manifest、service worker、関連routeの有効化と無効時のstub取扱い
 
-Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`use`時はRails標準の`Rails::PwaController`へmanifestとService Workerのrouteを接続し、Application Identityの表示用アプリ名と既定locale、標準icon、theme色、`standalone`表示を持つmanifestを決定的に生成します。application layoutへmanifest linkとtheme-colorを追加し、bodyへ接続したStimulus controllerが`/service-worker`をscope `/`で登録します。Service WorkerはWeb PushのJSON payloadを表示し、notification click時は同一originの既存windowを対象pathへ遷移させてfocusします。
+Rails 8.1にはPWA専用の`--skip-pwa`がなく、PWA用stubが標準生成されます。`use`時はRails標準の`Rails::PwaController`へmanifestとService Workerのrouteを接続し、Application Identityの表示用アプリ名と既定locale、標準icon、`standalone`表示を持つmanifestを決定的に生成します。独自のtheme色は指定しません。application layoutへmanifest linkを追加し、bodyへ接続したStimulus controllerが`/service-worker`をscope `/`で登録します。Service WorkerはWeb PushのJSON payloadを表示し、notification click時は同一originの既存windowを対象pathへ遷移させてfocusします。
 
-`skip`時もRails標準stubは残しますが、route、manifest link、theme-color、Service Worker登録controllerは有効化しません。存在しないgenerator optionや曖昧な文字列編集では処理しません。
+`skip`時もRails標準stubは残しますが、route、manifest link、Service Worker登録controllerは有効化しません。存在しないgenerator optionや曖昧な文字列編集では処理しません。
 
 ## `web_push`
 
@@ -157,7 +157,7 @@ Web Pushは購読1件につき1件のActive Jobを作成し、全構成で常設
 
 Mission Control Jobsは常設のSolid Queueのqueue、job、worker、定期task、失敗とretry状況を監視・操作します。この管理画面の有無は、Queueや決済処理の有無に影響しません。
 
-`enable`ではMission Control Jobs 1.1.0を`/admin/jobs`だけへmountし、公式`base_controller_class` extension pointから既存の`Admin::BaseController`、管理者role、Action Policyへ接続します。Mission Control標準のHTTP Basic認証は無効化し、追加のusername/passwordは要求しません。host側のdaisyUI View overrideは見出し、tab、table、状態、日時、操作、確認文、ARIA labelをja/enで生成し、既定localeに従って表示します。engineがrequest内で使用する英語専用I18n設定は専用layoutの描画中だけhostのI18n設定へ切り替え、header、footer、HTML metadataへ波及させません。engine controllerが生成する操作後通知と例外message、route、操作契約は変更しません。Bulma stylesheetとBulma classは生成しません。
+`enable`ではMission Control Jobs 1.1.0を`/admin/jobs`だけへmountし、公式`base_controller_class` extension pointから既存の`Admin::BaseController`、管理者role、Action Policyへ接続します。Mission Control標準のHTTP Basic認証は無効化し、追加のusername/passwordは要求しません。host側の`shadcn_view_components` View overrideは見出し、tab、table、状態、日時、操作、確認文、ARIA labelをja/enで生成し、既定localeに従って表示します。engineがrequest内で使用する英語専用I18n設定は専用layoutの描画中だけhostのI18n設定へ切り替え、header、footer、HTML metadataへ波及させません。engine controllerが生成する操作後通知と例外message、route、操作契約は変更しません。Bulma stylesheetとBulma classは生成しません。
 
 Solid Queue 1.6.0の公式install generatorは`config/recurring.yml`へ、完了ジョブを毎時12分に`SolidQueue::Job.clear_finished_in_batches`で整理するtaskを生成します。完了ジョブの保持期間は公式既定の1日です。失敗ジョブは`finished_at`を持つcleanup対象ではなく、管理者がretryまたはdiscardするまで保持されます。このcleanupはqueue database全体の運用要件なので、`job_operations=disable`でもSolid Queue標準生成物から削除しません。
 
@@ -171,7 +171,7 @@ Solid Queue 1.6.0の公式install generatorは`config/recurring.yml`へ、完了
 
 Maintenance Tasksは常設のSolid Queueで実行します。管理者向け運用タスクの有無は、Queueや決済処理の有無に影響しません。
 
-`enable`では`maintenance_tasks` 2.17.0の公式install generatorを実行し、Gem標準のRun modelとmigrationでstatus、cursor、error、job ID、arguments、metadataを管理します。engineは`/admin/maintenance_tasks`だけへmountし、既存のadmin認証、Action Policy、admin layoutを再利用します。管理画面はBulmaを読み込まず、host側のdaisyUI View overrideを使用します。生成直後から動作を確認できるよう、10から1までを順番にapplication logへ記録する`Maintenance::CountdownTask`も生成します。
+`enable`では`maintenance_tasks` 2.17.0の公式install generatorを実行し、Gem標準のRun modelとmigrationでstatus、cursor、error、job ID、arguments、metadataを管理します。engineは`/admin/maintenance_tasks`だけへmountし、既存のadmin認証、Action Policy、admin layoutを再利用します。管理画面はBulmaを読み込まず、host側の`shadcn_view_components` View overrideを使用します。生成直後から動作を確認できるよう、10から1までを順番にapplication logへ記録する`Maintenance::CountdownTask`も生成します。
 
 ## `additional_login_methods`
 
@@ -200,7 +200,7 @@ Profileは質問・CLI引数を持たず、全構成でUserとの1対1 associati
 
 `screen_name`はHaikunatorで小文字の英単語と数字をアンダースコアで連結した値をUser作成時に自動生成し、必須かつ一意にします。入力できる文字も小文字の英数字とアンダースコアだけに制限します。`display_name`は自動生成した`screen_name`をCamelCaseへ変換した値を初期値とし、必須かつ一意な公開表示名として扱います。databaseには両columnの`NOT NULL`制約とunique indexを作成し、modelでもpresenceとuniquenessを検証します。
 
-全構成で`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、汎用`image_crop` Stimulus controller、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantとRapid Rails themeのbase-100、primary、base-200、secondary、base-300に対応するpalette（`#ffffff`、`#3ea8ff`、`#f1f5f9`、`#0f83fd`、`#d6e3ed`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
+全構成で`boring_avatars ~> 0.1.0`、Cropper.js 2.1.1、汎用`image_crop` Stimulus controller、Profileの`has_one_attached :avatar`を追加し、Action Textとともに常設済みのActive Storageを利用します。Cropper.jsとtransitive dependencyはImportmapの公式`pin` commandで`vendor/javascript`へ保存し、実行時CDNは使用しません。画像未設定時はUser IDの文字列表現をseedとして、`beam` variantと中立色のpalette（`#ffffff`、`#f5f5f5`、`#e5e5e5`、`#737373`、`#262626`）からBoring Avatar SVGを生成します。seed専用columnは追加しません。設定済み画像はプロフィール編集画面の独立した確認付き操作で削除でき、削除後はBoring Avatarへ戻ります。
 
 添付avatarは40×40の`header_avatar`と64×64の`profile_avatar`というnamed variantだけを使用し、いずれも中央基準の正方形cropとします。両variantは`preprocessed: true`でattachment commit後にActive Storage標準の`TransformJob`へenqueueし、profile更新response内では画像変換を待ちません。常設のSolid Queue workerが処理します。表示寸法とvariant名の対応は共通helperの定数を正本とし、未知の寸法や画像処理失敗を元画像表示で隠しません。HTMLにも幅と高さを出力します。
 
@@ -319,7 +319,7 @@ Cloudflare APIからpermission group IDを解決して対象bucketだけのallow
 - `pwa=skip + web_push=use`の明示矛盾を変更開始前に拒否すること。
 - `--active-job`を不明なoptionとして拒否し、EngineとSolid Queueを全構成へ生成すること。
 - Maintenance Tasksとジョブ運用画面は独立して質問し、いずれも`enable`を既定値とすること。
-- ジョブ運用画面を使わない場合、Mission Control JobsのGem、initializer、controller、helper、policy、route、daisyUI View override、navigation、locale、文書を生成しないこと。
+- ジョブ運用画面を使わない場合、Mission Control JobsのGem、initializer、controller、helper、policy、route、`shadcn_view_components` View override、navigation、locale、文書を生成しないこと。
 - PWA使用時だけmanifest route、Service Worker route、manifest link、登録controllerを有効化すること。
 - Web Pushの購読再割当て、VAPID検証、所有者再確認、失効削除、一時障害retry、恒久障害failureを外部Push serviceへ接続せず検証すること。
 - Passkey-only構成とPasskey＋SIWE構成で購読APIと共通設定UIをDevise認証・CSRF保護し、ブラウザAPIを決定的にstubして購読、鍵変更、解除、拒否、非対応、テスト通知を検証すること。

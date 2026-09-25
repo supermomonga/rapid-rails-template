@@ -1,12 +1,18 @@
 <% if @plans.empty? %><%= render "billing/shared/empty", icon: "squares-2x2", title: t("billing.ui.no_plans"), description: t("billing.ui.no_public_plans_help") %><% end %>
 <div class="grid gap-4 sm:grid-cols-2">
-  <% @plans.each do |plan| %><article class="card card-border bg-base-100 min-w-0"><div class="card-body">
-    <h2 class="card-title break-words"><%= plan.name %></h2>
-    <p class="text-base-content/70"><%= plan.merchant_account.display_name %></p>
-    <p class="text-xl font-semibold tabular-nums"><%= t("billing.ui.price_period", amount: billing_amount(plan.amount_units), days: plan.period_days) %></p>
-    <div class="flex flex-wrap gap-2"><% plan.chain_ids.each do |id| %><span class="badge whitespace-nowrap"><%= Billing::Chains.fetch(id).name %></span><% end %></div>
-    <% unless plan.chain_ids.any? { |id| plan.available_on?(id) } %><p class="text-sm"><%= t("billing.ui.unavailable") %></p><% end %>
-    <div class="card-actions justify-end"><%= link_to t("billing.ui.details"), plan_path(plan), class: action_button_classes(:secondary) %></div>
-  </div></article><% end %>
+  <% @plans.each do |plan| %>
+    <%= render(Shadcn::Card.new(class: "min-w-0")) do %>
+      <%= render(Shadcn::Card::Header.new) do %>
+        <%= render(Shadcn::Card::Title.new(tag: :h2, class: "break-words")) { plan.name } %>
+        <%= render(Shadcn::Card::Description.new) { plan.merchant_account.display_name } %>
+      <% end %>
+      <%= render(Shadcn::Card::Content.new(class: "space-y-3")) do %>
+        <p class="text-xl font-semibold tabular-nums"><%= t("billing.ui.price_period", amount: billing_amount(plan.amount_units), days: plan.period_days) %></p>
+        <div class="flex flex-wrap gap-2"><% plan.chain_ids.each do |id| %><%= render(Shadcn::Badge.new(variant: :outline, class: "whitespace-nowrap")) { Billing::Chains.fetch(id).name } %><% end %></div>
+        <% unless plan.chain_ids.any? { |id| plan.available_on?(id) } %><p class="text-sm"><%= t("billing.ui.unavailable") %></p><% end %>
+      <% end %>
+      <%= render(Shadcn::Card::Footer.new(class: "justify-end")) { link_to t("billing.ui.details"), plan_path(plan), class: action_button_classes(:secondary) } %>
+    <% end %>
+  <% end %>
 </div>
 <%= render "billing/shared/pagination" %>

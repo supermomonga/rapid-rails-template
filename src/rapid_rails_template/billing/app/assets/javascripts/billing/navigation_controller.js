@@ -12,10 +12,9 @@ export default class extends Controller {
   }
 
   revealCurrent() {
-    this.element.querySelectorAll('[role="tablist"]').forEach(list => {
-      const active = list.querySelector(':scope > [aria-selected="true"]')
+    this.element.querySelectorAll('[data-slot="navigation-menu"]').forEach(scroller => {
+      const active = scroller.querySelector('[data-slot="navigation-menu-link"][aria-current="page"]')
       if (!active) return
-      const scroller = list.parentElement
       const box = active.getBoundingClientRect()
       const frame = scroller.getBoundingClientRect()
       if (box.left < frame.left || box.right > frame.right) {

@@ -119,7 +119,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes helper, "predicate.call"
     assert_includes helper, "tab_content = capture(&block)"
     assert_includes helper, 'Shadcn::NavigationMenu::Link.new(href: tab.path'
-    assert_includes helper, 'Shadcn::NavigationMenu::List.new(class: "min-w-max")'
+    assert_includes helper, 'Shadcn::NavigationMenu::List.new(class: "min-w-max justify-start")'
     assert_includes helper, 'Shadcn::Card::Content.new'
     assert_includes @source, '<div class="min-w-0 [container-type:inline-size]">'
     assert_includes helper, 'tag.div(safe_join([navigation, panel]), class: "space-y-3")'
@@ -483,7 +483,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_faqs, "class: action_button_classes(:primary)"
     assert_includes admin_faqs, "class: action_button_classes(:secondary)"
     assert_includes admin_faqs, "class: action_button_classes(:destructive)"
-    assert_includes footer_setting, 'Shadcn::InputGroup::Addon.new(align: "inline-end")'
+    assert_includes footer_setting, '<div class="flex flex-wrap justify-end gap-2"><%= form.submit t("common.update"), class: action_button_classes(:primary) %></div>'
+    refute_includes footer_setting, 'Shadcn::InputGroup::Addon.new(align: "inline-end")'
     assert_includes api_index, "class: action_button_classes(:primary)"
     assert_includes api_index, "class: action_button_classes(:secondary)"
     assert_includes notifications, "class: action_button_classes(:primary)"
@@ -733,7 +734,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes navigation, '<%= yield %>'
     refute_includes navigation, "tab-content"
     assert_includes generated_file_source("app/helpers/application_helper.rb"), "min-w-max"
-    assert_includes generated_file_source("app/helpers/application_helper.rb"), 'Shadcn::NavigationMenu::List.new(class: "min-w-max")'
+    assert_includes generated_file_source("app/helpers/application_helper.rb"), 'Shadcn::NavigationMenu::List.new(class: "min-w-max justify-start")'
     refute_includes navigation, "max-w-[100cqw]"
     refute_includes navigation, "grid-cols-[repeat(8,max-content)]"
     refute_includes navigation, "grid-rows-[auto_auto]"
@@ -826,8 +827,11 @@ class RailsTemplateContractTest < Minitest::Test
     %w[is-boxed is-active navbar-item navbar-menu message-body is-hoverable is-fullwidth].each do |bulma_class|
       refute_includes [layout, navigation, application_selection, jobs_index, job_show, queues_index, pagination].join, bulma_class
     end
-    assert_includes layout, "MissionControl::Jobs.importmap"
-    assert_includes application_layout, "content_for?(:javascript_importmap)"
+    refute_includes layout, "MissionControl::Jobs.importmap"
+    assert_includes application_layout, "javascript_importmap_tags"
+    assert_includes job_operations, 'pin "mission_control/jobs/form_controller", to: "mission_control/jobs/controllers/form_controller.js"'
+    assert_includes job_operations, 'application.register("form", JobFormController)'
+    refute_includes initializer, "MissionControl::Jobs.importmap.pin"
     assert_includes controller_test, "routes every engine action through the authorized base controller"
     assert_includes controller_test, "controller._process_action_callbacks.map(&:filter)"
     assert_includes controller_test, "keeps the matching section active on queue, job, and worker details"
@@ -911,7 +915,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes task_show, 'Shadcn::Label.classes'
     assert_includes task_show, 'Shadcn::Input.classes(extra: "w-full")'
     assert_includes task_show, '<div class="flex flex-wrap justify-end gap-2">'
-    assert_includes task_show, 'form.submit "Run", class: action_button_classes(:primary)'
+    assert_includes task_show, 'form.submit t("maintenance_tasks_ui.run"), class: action_button_classes(:primary)'
     assert_includes task_show, 'Shadcn::Collapsible.new(class: Shadcn::Card.classes)'
     assert_includes task_show, 'rounded-md bg-muted p-4'
     assert_includes task_show, "code.lines(chomp: true).each.with_index(1)"
@@ -919,7 +923,7 @@ class RailsTemplateContractTest < Minitest::Test
     refute_includes task_show, '<pre data-prefix=""><code><%= highlight_code(code) %></code></pre>'
     assert_includes controller_test, 'assert_select \'[data-slot="collapsible-content"] > .overflow-x-auto > pre\', count: source_lines.length'
     assert_includes controller_test, 'code_lines.pluck("data-line-number")'
-    assert_includes task_show, '<%= with_pagination(aria_label: "Previous runs pagination") do %>'
+    assert_includes task_show, '<%= with_pagination(aria_label: t("maintenance_tasks_ui.previous_runs_pagination")) do %>'
     assert_includes task_show, 'Shadcn::Pagination::Link.new(size: :default, href:'
     refute_includes task_show, 'class="join justify-end"'
     refute_includes task_show, 'class: "btn join-item"'
@@ -954,7 +958,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes refresh, "this.abortController?.abort()"
     assert_includes maintenance, 'create_file "docs/maintenance_tasks.md"'
     assert_includes controller_test, "assert_enqueued_with(job: MaintenanceTasks::TaskJob)"
-    assert_includes controller_test, 'assert_select \'[data-slot="badge"]\', text: "New", count: 3'
+    assert_includes controller_test, 'assert_select \'[data-slot="badge"]\', text: I18n.t("maintenance_tasks_ui.status.new"), count: 3'
     assert_includes controller_test, 'assert_select "a", text: "Maintenance::CountdownTask", count: 1'
     assert_includes controller_test, 'assert_equal "succeeded", run.reload.status'
     assert_includes controller_test, 'assert_equal "pausing", pausing_run.reload.status'
@@ -1294,7 +1298,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes view, "Shadcn::Table.new(class: \"min-w-max\")"
     assert_includes view, "Shadcn::Table::Header.new"
     assert_includes view, "Shadcn::Table::Body.new"
-    assert_includes view, "Shadcn::Avatar.new(class: \"size-10\")"
+    assert_includes view, "Shadcn::Avatar.new(size: :lg)"
     assert_includes view, "Shadcn::Badge.new(variant: :outline)"
     assert_includes view, "text-primary underline underline-offset-4"
     assert_includes view, 'admin_user_path(user)'
@@ -1583,7 +1587,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes avatar_helper, "profile.user_id.to_s"
     assert_includes avatar_helper, "variant: :beam"
     assert_includes avatar_helper, "AVATAR_VARIANTS = { 40 => :header_avatar, 64 => :profile_avatar }.freeze"
-    assert_includes avatar_helper, "image_tag profile.avatar.variant(variant)"
+    assert_includes avatar_helper, "Shadcn::Avatar::Image.new(src: url_for(profile.avatar.variant(variant))"
     assert_includes avatar_helper, "width: size, height: size"
     assert_includes profile_configuration, "attachment.variant :header_avatar, resize_to_fill: [40, 40], preprocessed: true"
     assert_includes profile_configuration, "attachment.variant :profile_avatar, resize_to_fill: [64, 64], preprocessed: true"
@@ -1935,8 +1939,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes admin_faq_form, "Shadcn::Checkbox.new"
     assert_includes admin_faq_form, 'form.hidden_field :published, value: "0"'
     assert_includes admin_faq_index, "Shadcn::Table.new"
-    assert_includes admin_faq_index, "Shadcn::Badge.new(variant: :outline)"
-    assert_includes footer_settings_edit, "Shadcn::InputGroup.new"
+    assert_includes admin_faq_index, "Shadcn::Badge.new(variant: faq.published? ? :default : :secondary)"
+    assert_includes footer_settings_edit, "Shadcn::Input.classes"
+    refute_includes footer_settings_edit, "Shadcn::InputGroup.new"
     assert_includes footer_settings_edit, "Shadcn::Alert.new(variant: :destructive"
     assert_class_tokens footer, "grid", "sm:grid-cols-2", "desktop:grid-cols-4"
     assert_equal 4, class_attributes(footer).count { |classes| classes.include?("font-semibold") }
@@ -2268,7 +2273,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'VIEWPORTS = {'
     assert_includes evidence, '"desktop" => { "width" => 1400, "height" => 900 }'
     assert_includes evidence, '"mobile" => { "width" => 390, "height" => 844 }'
-    assert_includes evidence, 'playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")'
+    assert_includes evidence, 'playwright_page.screenshot(path: path.to_s, fullPage: !overlay_open, animations: "disabled")'
     assert_includes evidence, 'browser_post_json('
     assert_includes evidence, '"/users/sign_in/siwe/challenge"'
     assert_includes evidence, "credentials: 'same-origin'"
@@ -2304,9 +2309,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"admin-maintenance-task-paused"'
     assert_includes evidence, '"admin-maintenance-task-errored"'
     assert_includes evidence, %q{assert_selector '[data-slot="alert"]', text: "Evidence task failure", count: 1}
-    assert_includes evidence, 'assert_button "Pause"'
-    assert_includes evidence, 'assert_button "Resume"'
-    assert_includes evidence, 'assert_button "Cancel"'
+    assert_includes evidence, 'assert_button translate("maintenance_tasks_ui.pause")'
+    assert_includes evidence, 'assert_button translate("maintenance_tasks_ui.resume")'
+    assert_includes evidence, 'assert_button translate("maintenance_tasks_ui.cancel")'
     assert_includes evidence, '"admin-notifications"'
     assert_includes evidence, '"admin-notification-show"'
     assert_includes evidence, '"admin-notification-edit"'
@@ -2339,7 +2344,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, '"web-push-enabled"'
     assert_includes evidence, 'set_evidence_web_push_mode("granted")'
     assert_includes evidence,
-      %q{assert_selector '[data-slot="alert"]', text: translate("api_credentials.empty"), count: 1}
+      %q{assert_selector '[data-slot="empty"]', text: translate("api_credentials.empty"), count: 1}
     assert_includes evidence,
       %q{assert_selector '[data-slot="alert"][role="status"]', text: translate("passkeys.updated"), count: 1}
     assert_includes evidence,
@@ -2444,7 +2449,8 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, 'viewport_size = VIEWPORTS.fetch(viewport)'
     assert_includes evidence, "def verify_job_operations_geometry"
     assert_includes evidence, 'failed_title = translate("job_operations.titles.status_jobs.failed")'
-    assert_includes evidence, 'text: /^#{Regexp.escape(failed_title)}/'
+    assert_includes evidence, 'failed_tab = translate("job_operations.sections.failed_jobs", count: 1)'
+    assert_includes evidence, 'text: failed_tab'
     assert_includes evidence, 'geometry.fetch("panelContentCount")'
     assert_includes evidence, 'failed_geometry.fetch("panelContainsRoot")'
     assert_includes evidence, "REGULAR_PRIVATE_KEY"
@@ -2454,7 +2460,7 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes evidence, "def verify_maintenance_tasks_geometry"
     assert_includes evidence, "[320, 390, 640, 960, 961].each"
     assert_includes evidence, 'visit host_routes.admin_maintenance_tasks_path'
-    assert_includes evidence, %q{find('details[data-slot="collapsible"]', text: "Source code").find('summary[data-slot="collapsible-trigger"]').click}
+    assert_includes evidence, %q{find('details[data-slot="collapsible"]', text: translate("maintenance_tasks_ui.source_code")).find('summary[data-slot="collapsible-trigger"]').click}
     assert_includes evidence, %q{code_lines = all('details[data-slot="collapsible"][open] [data-slot="collapsible-content"] pre[data-line-number]')}
     assert_includes evidence, 'code_lines.pluck("data-line-number")'
     assert_includes evidence, 'meta[name="csp-nonce"]'
@@ -2464,7 +2470,7 @@ class RailsTemplateContractTest < Minitest::Test
 
   def test_default_views_follow_the_design_background_breakpoint_and_component_sizing_contracts
     assert_includes @source, 'body class="min-h-screen bg-background text-foreground antialiased"'
-    assert_includes @source, 'main class="flex-1 bg-muted"'
+    assert_includes @source, 'main class="flex-1 bg-background"'
     assert_includes @source, 'desktop:grid-cols-[220px_minmax(0,1fr)]'
     assert_match(/class="[^"]*\bhidden\b[^"]*\bdesktop:flex\b/, @source)
     assert_includes @source, 'desktop:hidden'
@@ -2504,9 +2510,9 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes header, "Shadcn::DropdownMenu::Separator.new"
     assert_includes header, "Shadcn::DropdownMenu::Item.new(tag: :a, href:"
     assert_includes header, 'Shadcn::Button.classes(variant: :ghost, size: :icon)'
-    assert_includes @source, 'Shadcn::DropdownMenu::Trigger.new(variant: :ghost, size: :icon'
+    assert_includes @source, 'Shadcn::DropdownMenu::Trigger.new(variant: :ghost, size: :"icon-lg"'
     assert_includes header, 'Shadcn::DropdownMenu::Trigger.new(variant: :outline)'
-    assert_includes @source, 'Shadcn::Avatar.new(class: "size-10")'
+    assert_includes @source, 'Shadcn::Avatar.new(size: :lg)'
     refute_includes header, "details.dropdown"
     assert_class_tokens footer, "mx-auto", "w-full", "max-w-6xl", "px-5"
     assert_class_tokens footer, "grid", "sm:grid-cols-2", "desktop:grid-cols-4"
@@ -2644,6 +2650,17 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes registration, 'data-controller="passkey"'
   end
 
+  def test_flash_aligns_with_the_with_menu_content_column
+    application_layout = generated_file_source("app/views/layouts/application.html.erb")
+    with_menu_layout = generated_file_source("app/views/layouts/_with_menu.html.erb")
+    flash = generated_file_source("app/views/shared/_flash.html.erb")
+
+    assert_includes application_layout, 'render "shared/flash" unless content_for?(:with_menu_navigation)'
+    assert_includes with_menu_layout, 'render "shared/flash", container_class: "w-full pb-6"'
+    assert_includes flash, 'local_assigns.fetch(:container_class, "mx-auto w-full max-w-[820px] px-5 pt-5")'
+    assert_includes flash, 'Shadcn::Alert.new(variant: :destructive, role: "alert")'
+  end
+
   def test_devise_guest_navigation_uses_real_line_breaks
     guest_navigation = source_between(
       "  guest_desktop_navigation = <<~ERB",
@@ -2766,7 +2783,12 @@ class RailsTemplateContractTest < Minitest::Test
     assert_includes account_delete, 'Shadcn::Card.new(class: "ring-destructive!")'
     assert_includes account_delete, 'Shadcn::Card::Content.new'
     assert_includes job_show, 'Shadcn::Card::Content.new(class: "p-0!")'
-    assert_includes public_page, 'Shadcn::Card::Content.new(class: "pt-6")'
+    assert_includes public_page, 'Shadcn::Card::Content.new)'
+    refute_includes public_page, 'Shadcn::Card::Content.new(class: "pt-6")'
+
+    %w[app/views/maintenance_tasks/tasks/_task.html.erb app/views/maintenance_tasks/tasks/show.html.erb].each do |path|
+      refute_includes generated_file_source(path), 'pt-6', path
+    end
   end
 
   def test_page_titles_use_one_content_for_contract_across_generated_views

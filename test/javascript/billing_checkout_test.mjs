@@ -14,7 +14,7 @@ await module.link(async (name) => {
 await module.evaluate()
 const Checkout = module.namespace.default
 const controller = new Checkout()
-const targets = ["chain", "prepare", "authorize", "review", "terms", "message", "contractLink"]
+const targets = ["chain", "prepare", "authorize", "review", "terms", "message", "error", "errorMessage", "contractLink"]
 for (const name of targets) controller[`${name}Target`] = { disabled: false, hidden: false, textContent: "", focus() {} }
 controller.chainTarget.value = "8453"
 controller.labelsValue = { wrongWallet: "wrong-wallet", wrongChain: "wrong-chain", failed: "failed", review: "review", connecting: "connecting", signing: "signing" }
@@ -49,7 +49,9 @@ assert.equal(requests[1].path, contract.authorize_path)
 controller.sdk = { getProvider: () => ({ request: async () => ["0x9999999999999999999999999999999999999999"] }) }
 requests = []
 await controller.authorize({ preventDefault() {} })
-assert.equal(controller.messageTarget.textContent, "wrong-wallet")
+assert.equal(controller.messageTarget.textContent, "")
+assert.equal(controller.errorTarget.hidden, false)
+assert.equal(controller.errorMessageTarget.textContent, "wrong-wallet")
 assert.equal(requests.length, 0)
 assert.equal(controller.authorizeTarget.disabled, false)
 const resumed = new Checkout()

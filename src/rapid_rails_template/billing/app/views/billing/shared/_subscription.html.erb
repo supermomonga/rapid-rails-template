@@ -20,7 +20,9 @@
         <% end %>
       <% elsif @subscription.paid_until && Time.current >= @subscription.paid_until && @subscription.usable? %>
         <%= render(Shadcn::Alert.new) do %>
-          <%= billing_icon("exclamation-triangle") %><%= render(Shadcn::Alert::Description.new) { t("billing.ui.grace_help", until: l(@subscription.paid_until + Billing::Setting.current.grace_hours.hours, format: :long)) } %>
+          <%= billing_icon("exclamation-triangle") %>
+          <%= render(Shadcn::Alert::Title.new) { t("billing.states.grace") } %>
+          <%= render(Shadcn::Alert::Description.new) { t("billing.ui.grace_help", until: l(@subscription.paid_until + Billing::Setting.current.grace_hours.hours, format: :long)) } %>
         <% end %>
       <% elsif !@subscription.paid_until %>
         <%= render(Shadcn::Alert.new) do %>

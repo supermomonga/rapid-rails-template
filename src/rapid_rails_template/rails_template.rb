@@ -337,19 +337,19 @@ def configure_application_identity
       },
       "footer" => { "about_section" => "アプリについて", "guides_section" => "ガイド", "links_section" => "リンク", "about" => "%{app_name}について", "company" => "運営者情報", "manual" => "使い方", "faq" => "よくある質問", "terms" => "利用規約", "privacy" => "プライバシーポリシー", "transaction_law" => "特商法表記" },
       "home" => {
-        "badge" => "Railsアプリケーションテンプレート", "heading" => "迷わず始められる、モダンなRails開発環境。",
+        "badge" => "Railsアプリケーションテンプレート", "heading" => { "before" => "迷わず始める、", "emphasis" => "モダン", "after" => "なRails開発。" },
         "description" => "Rails 8.1の標準を活かしながら、認証、UI、テスト、デプロイまでを再現可能な構成で整えます。",
         "start_devise" => "無料で始める", "features_link" => "構成を見る", "starter" => "スターターキット", "features_title" => "最初から揃う開発基盤",
         "features" => { "rails" => { "title" => "Railsネイティブ", "description" => "Generator APIを中心に、安全な初期構成を生成します。" }, "ui" => { "title" => "読みやすいUI", "description" => "shadcnのコンポーネントで、読みやすい画面を用意します。" }, "production" => { "title" => "本番運用対応", "description" => "SQLiteとLitestreamを前提に、運用経路まで設計します。" } }
       },
       "accounts" => {
-        "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "サイドメニューから利用設定を管理できます。", "action_with_profile" => "サイドメニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
+        "show" => { "title" => "マイページ", "description" => "アプリケーションの状態を確認できます。", "description_with_profile" => "プロフィールとアプリケーションの状態を確認できます。", "next_step" => "次のステップ", "action" => "メニューから利用設定を管理できます。", "action_with_profile" => "メニューからプロフィールや利用設定を管理できます。", "back_home" => "ホームへ戻る" },
         "delete" => { "title" => "アカウント削除", "description" => "この操作は取り消せません。現在使えるログイン方法で再認証してください。", "with_passkey" => "Passkeyでアカウントを削除", "with_wallet" => "EVMウォレットでアカウントを削除" },
         "destroy" => { "notice" => "アカウントを削除しました", "last_admin" => "最後の管理者はアカウントを削除できません" }
       },
       "credential_risk" => { "warning" => "現在のログイン方法は未バックアップのPasskey 1件だけです。端末の紛失・故障に備えて別のログイン方法を追加してください。", "add_login_method" => "ログイン方法を追加" },
       "siwe" => { "statement" => "Login to %{app_name}" },
-      "common" => { "show" => "詳細", "edit" => "編集", "delete" => "削除", "destroy" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
+      "common" => { "show" => "詳細", "edit" => "編集", "delete" => "削除", "destroy" => "削除", "back" => "戻る", "update" => "更新", "create" => "作成", "cancel" => "キャンセル", "copy" => "コピー", "copied" => "コピーしました", "menu" => "メニュー", "actions" => "操作", "table_scroll_hint" => "表を左右にスクロールすると、ほかの項目や操作を表示できます。", "none" => "なし", "previous" => "前へ", "next" => "次へ", "unused" => "未使用", "not_set" => "未設定", "save" => "保存" }
     },
     en: {
       "meta" => { "description" => "The web application for %{app_name}." },
@@ -361,7 +361,7 @@ def configure_application_identity
       },
       "footer" => { "about_section" => "About", "guides_section" => "Guides", "links_section" => "Links", "about" => "About %{app_name}", "company" => "Operator information", "manual" => "Guides", "faq" => "Frequently asked questions", "terms" => "Terms", "privacy" => "Privacy policy", "transaction_law" => "Commercial transactions disclosure" },
       "home" => {
-        "badge" => "Rails application template", "heading" => "A modern Rails environment without the guesswork.",
+        "badge" => "Rails application template", "heading" => { "before" => "A ", "emphasis" => "modern Rails", "after" => " environment without the guesswork." },
         "description" => "Build on Rails 8.1 defaults with reproducible authentication, UI, testing, and deployment foundations.",
         "start_devise" => "Get started", "features_link" => "View features", "starter" => "Starter kit", "features_title" => "A complete development foundation",
         "features" => { "rails" => { "title" => "Rails native", "description" => "Generate a safe baseline centered on the Generator API." }, "ui" => { "title" => "Readable UI", "description" => "Start with readable screens built with shadcn components." }, "production" => { "title" => "Production ready", "description" => "Include an operational path designed for SQLite and Litestream." } }
@@ -373,7 +373,7 @@ def configure_application_identity
       },
       "credential_risk" => { "warning" => "Your only sign-in method is a passkey that is not backed up. Add another sign-in method in case this device is lost or damaged.", "add_login_method" => "Add sign-in method" },
       "siwe" => { "statement" => "Sign in to %{app_name}" },
-      "common" => { "show" => "Show", "edit" => "Edit", "delete" => "Delete", "destroy" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
+      "common" => { "show" => "Show", "edit" => "Edit", "delete" => "Delete", "destroy" => "Delete", "back" => "Back", "update" => "Update", "create" => "Create", "cancel" => "Cancel", "copy" => "Copy", "copied" => "Copied", "menu" => "Menu", "actions" => "Actions", "table_scroll_hint" => "Scroll the table sideways to see more fields and actions.", "none" => "None", "previous" => "Previous", "next" => "Next", "unused" => "Never used", "not_set" => "Not set", "save" => "Save" }
     }
   )
 
@@ -3480,8 +3480,8 @@ def install_siwe
             <% end %>
           <% end %>
         <% else %>
-          <%= render(Shadcn::Alert.new(role: "status")) do %>
-            <%= render(Shadcn::Alert::Description.new) { t("siwe.identities.empty") } %>
+          <%= render(Shadcn::Empty.new) do %>
+            <%= render(Shadcn::Empty::Header.new) { render(Shadcn::Empty::Title.new) { t("siwe.identities.empty") } } %>
           <% end %>
         <% end %>
     </section>
@@ -4574,6 +4574,7 @@ def configure_roles
 
       <%= render(Shadcn::Card.new(tag: :section)) do %>
         <%= render(Shadcn::Card::Content.new) do %>
+          <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
           <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
             <%= render(Shadcn::Table::Header.new) do %>
               <%= render(Shadcn::Table::Row.new) do %>
@@ -4588,9 +4589,10 @@ def configure_roles
                   <%= render(Shadcn::Table::Cell.new) { user.id.to_s } %>
                   <%= render(Shadcn::Table::Cell.new) do %>
                     <%= link_to admin_user_path(user), class: "inline-flex items-center gap-3 text-primary underline underline-offset-4" do %>
-                      <%= render(Shadcn::Avatar.new(class: "size-10")) { profile_avatar(T.must(user.profile), size: 40, alt: "") } %>
+                      <%= render(Shadcn::Avatar.new(size: :lg)) { profile_avatar(T.must(user.profile), size: 40, alt: "") } %>
                       <span><%= T.must(user.profile).display_name %></span>
                     <% end %>
+                    <% if user.has_role?(:admin) %><%= render(Shadcn::Badge.new(variant: :secondary, class: "desktop:hidden")) { t("admin.users.admin") } %><% end %>
                   <% end %>
                   <%= render(Shadcn::Table::Cell.new) do %>
                     <% if user.has_role?(:admin) %>
@@ -4624,7 +4626,7 @@ def configure_roles
           <dl class="divide-y">
             <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("admin.users.user_id") %></dt><dd class="font-semibold"><%= @user.id %></dd></div>
             <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("admin.users.webauthn_id") %></dt><dd><code class="break-all"><%= @user.webauthn_id %></code></dd></div>
-            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("admin.users.registered_at") %></dt><dd><time datetime="<%= @user.created_at.iso8601 %>"><%= @user.created_at.to_fs(:long) %></time></dd></div>
+            <div class="grid gap-2 py-2 sm:grid-cols-2"><dt class="text-sm text-muted-foreground"><%= t("admin.users.registered_at") %></dt><dd><time datetime="<%= @user.created_at.iso8601 %>"><%= l(@user.created_at, format: :long) %></time></dd></div>
           </dl>
         <% end %>
         <%= render(Shadcn::Card::Footer.new(class: "flex-wrap justify-end gap-2")) do %>
@@ -4732,9 +4734,9 @@ def configure_roles
           "statistics" => { "label" => "基本統計", "total_users" => "ユーザー数", "administrators" => "管理者数", "new_users_last_30_days" => "直近30日の新規ユーザー", "published_faqs" => "公開FAQ数", "managed_pages" => "管理対象ページ数" }
         },
         "users" => {
-          "title" => "ユーザー管理", "description" => "ユーザー情報、プロフィール、管理者roleを管理します。", "profile_name" => "表示名", "role" => "Role", "admin" => "管理者",
+          "title" => "ユーザー管理", "description" => "ユーザー情報、プロフィール、管理者権限を管理します。", "profile_name" => "表示名", "role" => "権限", "admin" => "管理者",
           "show_title" => "%{name}の詳細", "show_description" => "ユーザー情報とプロフィールを確認できます。", "edit_title" => "%{name}を編集", "edit" => "ユーザーを編集",
-          "user_information" => "ユーザー情報", "profile_information" => "プロフィール情報", "role_information" => "Role", "user_id" => "ユーザーID", "webauthn_id" => "WebAuthn ID", "registered_at" => "登録日時",
+          "user_information" => "ユーザー情報", "profile_information" => "プロフィール情報", "role_information" => "権限", "user_id" => "ユーザーID", "webauthn_id" => "WebAuthn ID", "registered_at" => "登録日時",
           "role_description" => "管理者roleはアプリケーション全体の管理権限を付与します。", "self_forbidden" => "自分自身は解除不可", "revoke" => "管理者を解除", "revoke_confirm" => "「%{name}」の管理者roleを解除しますか？",
           "grant" => "管理者にする", "grant_confirm" => "「%{name}」を管理者にしますか？", "pagination" => "ユーザー一覧のページング", "update" => { "notice" => "ユーザーのプロフィールを更新しました" },
           "avatar" => { "destroy" => { "notice" => "ユーザーのアバター画像を削除しました" } }
@@ -6379,7 +6381,7 @@ def configure_content_management
         <h1 class="text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
       </header>
       <%= render(Shadcn::Card.new) do %>
-      <%= render(Shadcn::Card::Content.new(class: "pt-6")) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
         <%= @page.content %>
       <% end %>
       <% end %>
@@ -6513,6 +6515,7 @@ def configure_content_management
       <%= render(Shadcn::Card.new) do %>
         <%= render(Shadcn::Card::Content.new) do %>
           <% if @faqs.any? %>
+            <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
             <div class="overflow-x-auto">
               <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
                 <%= render(Shadcn::Table::Header.new) do %>
@@ -6527,9 +6530,9 @@ def configure_content_management
                   <% @faqs.each do |faq| %>
                     <%= render(Shadcn::Table::Row.new) do %>
                       <%= render(Shadcn::Table::Cell.new) { faq.position.to_s } %>
-                      <%= render(Shadcn::Table::Cell.new) { faq.question } %>
+                      <%= render(Shadcn::Table::Cell.new) { link_to faq.question, edit_admin_faq_path(faq), class: "text-primary underline underline-offset-4" } %>
                       <%= render(Shadcn::Table::Cell.new) do %>
-                        <%= render(Shadcn::Badge.new(variant: :outline)) { faq.published? ? t("content_management.admin.faqs.published") : t("content_management.admin.faqs.unpublished") } %>
+                        <%= render(Shadcn::Badge.new(variant: faq.published? ? :default : :secondary)) { faq.published? ? t("content_management.admin.faqs.published") : t("content_management.admin.faqs.unpublished") } %>
                       <% end %>
                       <%= render(Shadcn::Table::Cell.new) do %>
                         <div class="flex flex-wrap justify-end gap-2">
@@ -6588,11 +6591,9 @@ def configure_content_management
             </div>
             <div class="grid gap-2">
               <%= form.label :github_url, "GitHub", class: Shadcn::Label.classes %>
-              <%= render(Shadcn::InputGroup.new) do %>
-                <%= form.url_field :github_url, class: Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes), data: { slot: "input-group-control" }, placeholder: "https://example.com/github-account" %>
-                <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) { form.submit t("common.update"), class: action_button_classes(:primary) } %>
-              <% end %>
+              <%= form.url_field :github_url, class: Shadcn::Input.classes(extra: "w-full"), placeholder: "https://example.com/github-account" %>
             </div>
+            <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("common.update"), class: action_button_classes(:primary) %></div>
           <% end %>
         <% end %>
       <% end %>
@@ -7192,10 +7193,6 @@ def install_image_cropper
         this.cropperImage().$resetTransform()
         selection.$reset()
         selection.aspectRatio = this.configuredAspectRatio()
-      }
-
-      cancel() {
-        this.dialogTarget.close()
       }
 
       close() {
@@ -7834,7 +7831,7 @@ def configure_profile
         def profile_avatar(profile, size:, alt:)
           variant = AVATAR_VARIANTS.fetch(size)
           if profile.avatar.attached?
-            image_tag profile.avatar.variant(variant), alt: alt, class: "object-cover", width: size, height: size
+            render(Shadcn::Avatar::Image.new(src: url_for(profile.avatar.variant(variant)), alt: alt, width: size, height: size))
           else
             accessibility = alt.present? ? { label: alt } : { hidden: true }
             boring_avatar(
@@ -7842,7 +7839,7 @@ def configure_profile
               variant: :beam,
               colors: BORING_AVATAR_COLORS,
               size: size,
-              class: "object-cover",
+              class: "size-full rounded-full",
               aria: accessibility
             )
           end
@@ -8006,7 +8003,7 @@ def configure_profile
             variant: :beam,
             colors: AvatarHelper::BORING_AVATAR_COLORS,
             size: 64,
-            class: "object-cover",
+            class: "size-full rounded-full",
             aria: { label: "デフォルトアバター" }
           )
 
@@ -8531,14 +8528,13 @@ def configure_profile
     <<~ERB
 
         <% avatar_crop_actions = capture do %>
-          <button type="button" class="<%= action_button_classes(:quiet) %>" data-action="image-crop#cancel"><%= t("profiles.avatar_crop.cancel") %></button>
           <button type="button" class="<%= action_button_classes(:primary) %>" data-image-crop-target="apply" data-action="image-crop#apply"><%= t("profiles.avatar_crop.apply") %></button>
         <% end %>
         <%= with_modal(
           id: "avatar-crop-modal",
           title: t("profiles.avatar_crop.title"),
           description: t("profiles.avatar_crop.description"),
-          close_label: t("profiles.avatar_crop.close"),
+          close_label: t("profiles.avatar_crop.cancel"),
           actions: avatar_crop_actions,
           dialog_data: { image_crop_target: "dialog", action: "close->image-crop#close" }
         ) do %>
@@ -8980,6 +8976,7 @@ def configure_api
       <%= render(Shadcn::Card.new) do %>
         <%= render(Shadcn::Card::Content.new) do %>
           <% if @api_credentials.any? %>
+            <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
             <div class="overflow-x-auto">
               <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
                 <%= render(Shadcn::Table::Header.new) do %>
@@ -8993,7 +8990,7 @@ def configure_api
                 <%= render(Shadcn::Table::Body.new) do %>
                   <% @api_credentials.each do |credential| %>
                     <%= render(Shadcn::Table::Row.new) do %>
-                      <%= render(Shadcn::Table::Cell.new(class: "font-semibold")) { credential.name } %>
+                      <%= render(Shadcn::Table::Cell.new(class: "font-semibold")) { link_to credential.name, api_credential_path(credential), class: "text-primary underline underline-offset-4" } %>
                       <%= render(Shadcn::Table::Cell.new) do %>
                         <div class="w-80" data-controller="clipboard" data-clipboard-copied-value="<%= t('common.copied') %>">
                           <%= render(Shadcn::InputGroup.new) do %>
@@ -9014,8 +9011,8 @@ def configure_api
               <% end %>
             </div>
           <% else %>
-            <%= render(Shadcn::Alert.new(role: "status")) do %>
-              <%= render(Shadcn::Alert::Description.new) { t("api_credentials.empty") } %>
+            <%= render(Shadcn::Empty.new) do %>
+              <%= render(Shadcn::Empty::Header.new) { render(Shadcn::Empty::Title.new) { t("api_credentials.empty") } } %>
             <% end %>
           <% end %>
         <% end %>
@@ -9540,10 +9537,6 @@ def configure_soft_maintenance
         this.formTarget.requestSubmit()
       }
 
-      cancelConfirmation() {
-        this.dialogTarget.close()
-      }
-
       resetConfirmation() {
         this.confirmationTarget.value = "0"
       }
@@ -9566,7 +9559,7 @@ def configure_soft_maintenance
     <<~ERB
       <fieldset class="grid min-w-0 gap-2">
         <legend class="text-sm font-medium"><%= t("soft_maintenance.admin.api_label") %></legend>
-        <label class="flex cursor-pointer items-center justify-between gap-4 rounded-md border border-border bg-muted p-4">
+        <label class="flex cursor-pointer items-center justify-between gap-4 rounded-md border border-border p-4">
           <span class="min-w-0 whitespace-normal"><%= t("soft_maintenance.admin.api_description") %></span>
           <%= form.hidden_field :api_enabled, value: "0", id: nil %>
           <%= render(Shadcn::Switch.new(id: form.field_id(:api_enabled), name: form.field_name(:api_enabled), value: "1", checked: @setting.api_enabled?, data: { soft_maintenance_form_target: "api", action: "change->soft-maintenance-form#resetConfirmation" })) %>
@@ -9611,7 +9604,7 @@ def configure_soft_maintenance
 
             <fieldset class="grid min-w-0 gap-2">
               <legend class="text-sm font-medium"><%= t("soft_maintenance.admin.site_label") %></legend>
-              <label class="flex cursor-pointer items-center justify-between gap-4 rounded-md border border-border bg-muted p-4">
+              <label class="flex cursor-pointer items-center justify-between gap-4 rounded-md border border-border p-4">
                 <span class="min-w-0 whitespace-normal"><%= t("soft_maintenance.admin.site_description") %></span>
                 <%= form.hidden_field :site_enabled, value: "0", id: nil %>
                 <%= render(Shadcn::Switch.new(id: form.field_id(:site_enabled), name: form.field_name(:site_enabled), value: "1", checked: @setting.site_enabled?, data: { soft_maintenance_form_target: "site", action: "change->soft-maintenance-form#resetConfirmation" })) %>
@@ -9633,8 +9626,7 @@ def configure_soft_maintenance
       <% end %>
 
       <% confirmation_actions = capture do %>
-        <button type="button" class="<%= action_button_classes(:quiet) %>" data-action="soft-maintenance-form#cancelConfirmation"><%= t("common.cancel") %></button>
-        <button type="button" class="<%= action_button_classes(:warning) %>" data-action="soft-maintenance-form#confirm"><%= t("soft_maintenance.admin.confirm") %></button>
+        <button type="button" class="<%= action_button_classes(:destructive_confirm) %>" data-action="soft-maintenance-form#confirm"><%= t("soft_maintenance.admin.confirm") %></button>
       <% end %>
       <%= with_modal(
         id: "soft-maintenance-confirmation",
@@ -9644,8 +9636,9 @@ def configure_soft_maintenance
         actions: confirmation_actions,
         dialog_data: { soft_maintenance_form_target: "dialog" }
       ) do %>
-        <%= render(Shadcn::Alert.new(role: "alert")) do %>
-          <%= render(Shadcn::Alert::Description.new) { t("soft_maintenance.admin.confirm_warning") } %>
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+          <%= render(Shadcn::Alert::Title.new(tag: :h3)) { t("soft_maintenance.admin.confirm_warning") } %>
         <% end %>
       <% end %>
     </div>
@@ -9852,7 +9845,7 @@ def configure_soft_maintenance
 
         assert_response :unprocessable_content
         assert_equal "Scheduled maintenance", @setting.reload.message
-        assert_select '[data-slot="alert"].text-destructive[role="alert"]', count: 1
+        assert_select 'form [data-slot="alert"].text-destructive[role="alert"]', count: 1
       end
 
       test "renders the saved maintenance body as a 200 preview" do
@@ -11201,6 +11194,7 @@ def configure_in_app_notifications
     <% end %>
     <%= render(Shadcn::Card.new(tag: :section)) do %>
       <%= render(Shadcn::Card::Content.new) do %>
+        <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
         <%= render(Shadcn::Table.new(class: "min-w-max")) do %>
           <%= render(Shadcn::Table::Header.new) do %>
             <%= render(Shadcn::Table::Row.new) do %>
@@ -11215,9 +11209,9 @@ def configure_in_app_notifications
           <%= render(Shadcn::Table::Body.new) do %>
             <% @notifications.each do |notification| %>
               <%= render(Shadcn::Table::Row.new) do %>
-                <%= render(Shadcn::Table::Cell.new(class: "max-w-md break-words")) { truncate(notification.message_plain_text, length: 80) } %>
+                <%= render(Shadcn::Table::Cell.new(class: "max-w-md break-words")) { link_to truncate(notification.message_plain_text, length: 80), admin_notification_path(notification), class: "text-primary underline underline-offset-4" } %>
                 <%= render(Shadcn::Table::Cell.new) do %>
-                  <%= render(Shadcn::Badge.new(variant: :outline)) { t("notifications.admin.states.\#{notification.published? ? 'published' : notification.draft? ? 'draft' : 'scheduled'}") } %>
+                  <%= render(Shadcn::Badge.new(variant: notification.published? ? :default : notification.draft? ? :secondary : :outline)) { t("notifications.admin.states.\#{notification.published? ? 'published' : notification.draft? ? 'draft' : 'scheduled'}") } %>
                 <% end %>
                 <%= render(Shadcn::Table::Cell.new) { t("notifications.audiences.\#{notification.audience}") } %>
                 <%= render(Shadcn::Table::Cell.new) { l(notification.published_at, format: :short) } %>
@@ -12414,8 +12408,8 @@ def configure_default_views
   end
   account_menu_trigger = if avatar_enabled
     <<~ERB
-      <%= render(Shadcn::DropdownMenu::Trigger.new(variant: :ghost, size: :icon, class: "rounded-full", aria: { label: t('navigation.open_account_menu') })) do %>
-        <%= render(Shadcn::Avatar.new(class: "size-10")) { profile_avatar(#{profile_owner}, size: 40, alt: "") } %>
+      <%= render(Shadcn::DropdownMenu::Trigger.new(variant: :ghost, size: :"icon-lg", class: "size-10 rounded-full p-0", aria: { label: t('navigation.open_account_menu') })) do %>
+        <%= render(Shadcn::Avatar.new(size: :lg)) { profile_avatar(#{profile_owner}, size: 40, alt: "") } %>
       <% end %>
     ERB
   else
@@ -12524,9 +12518,27 @@ def configure_default_views
 
     export default class extends Controller {
       connect() {
-        const active = this.element.querySelector('[data-slot="navigation-menu-link"][aria-current="page"]')
-        active?.scrollIntoView({ block: "nearest", inline: "nearest" })
+        this.observer = new ResizeObserver(() => this.revealCurrent())
+        this.observer.observe(this.element)
+        this.revealCurrent()
         this.element.dataset.activeNavigationReady = "true"
+      }
+
+      disconnect() {
+        this.observer.disconnect()
+      }
+
+      revealCurrent() {
+        const scroller = this.element.matches('[data-with-menu-scroll]')
+          ? this.element
+          : this.element.querySelector('[data-slot="navigation-menu"]')
+        const active = scroller?.querySelector('[aria-current="page"]')
+        if (!active || scroller.scrollWidth <= scroller.clientWidth) return
+        const box = active.getBoundingClientRect()
+        const frame = scroller.getBoundingClientRect()
+        if (box.left < frame.left || box.right > frame.right) {
+          scroller.scrollLeft += box.left - frame.left - (frame.width - box.width) / 2
+        }
       }
     }
   JAVASCRIPT
@@ -12600,12 +12612,18 @@ def configure_default_views
       def navigation_item(path:, active:, dropdown: false, &block)
         aria = active ? { current: "page" } : {}
         if dropdown
+          indicator = if active
+            tag.svg(tag.path(d: "m4.5 12.75 6 6 9-13.5", stroke_linecap: "round", stroke_linejoin: "round"),
+              xmlns: "http://www.w3.org/2000/svg", class: "ml-auto size-4", fill: "none", viewBox: "0 0 24 24",
+              stroke_width: "1.5", stroke: "currentColor", aria: { hidden: true })
+          end
           render(Shadcn::DropdownMenu::Item.new(tag: :a, href: path, aria:,
-            class: ("bg-accent text-accent-foreground" if active)), &block)
+            class: ("font-medium text-foreground" if active))) { safe_join([capture(&block), indicator].compact) }
         else
           render(Shadcn::NavigationMenu::Item.new) do
             render(Shadcn::NavigationMenu::Link.new(href: path, aria:,
-              data: (active ? { active: "" } : {}), class: "w-full"), &block)
+              data: (active ? { active: "" } : {}), class: class_names("w-full", "font-medium text-foreground": active,
+                "text-muted-foreground": !active)), &block)
           end
         end
       end
@@ -12795,12 +12813,13 @@ def configure_default_views
           active = index == active_index
           render(Shadcn::NavigationMenu::Item.new) do
             render(Shadcn::NavigationMenu::Link.new(href: tab.path,
-              data: (active ? { active: "" } : {}), aria: { current: ("page" if active) })) { tab.name }
+              data: (active ? { active: "" } : {}), aria: { current: ("page" if active) },
+              class: (active ? "font-medium text-foreground" : "text-muted-foreground"))) { tab.name }
           end
         end
 
         navigation_menu = render(Shadcn::NavigationMenu.new(tag: :div, class: "max-w-full overflow-x-auto justify-start")) do
-          render(Shadcn::NavigationMenu::List.new(class: "min-w-max")) { safe_join(items) }
+          render(Shadcn::NavigationMenu::List.new(class: "min-w-max justify-start")) { safe_join(items) }
         end
         navigation = tag.nav(navigation_menu, aria: { label: aria_label }, data: { controller: "active-navigation" })
         panel = render(Shadcn::Card.new) do
@@ -13136,13 +13155,13 @@ def configure_default_views
         <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
         <%= stylesheet_link_tag "lexxy", "data-turbo-track": "reload" %>
-    #{wallet_script}    <%= content_for?(:javascript_importmap) ? yield(:javascript_importmap) : javascript_importmap_tags %>
+    #{wallet_script}    <%= javascript_importmap_tags %>
       </head>
       <body class="min-h-screen bg-background text-foreground antialiased" data-layout="application"#{body_data_attributes}>
         <div class="flex min-h-screen flex-col">
           <%= render "shared/header" %>
-          <main class="flex-1 bg-muted">
-            <%= render "shared/flash" %>
+          <main class="flex-1 bg-background">
+            <%= render "shared/flash" unless content_for?(:with_menu_navigation) %>
             <%= content_for?(:content) ? yield(:content) : yield %>
           </main>
           <%= render "shared/footer" %>
@@ -13175,6 +13194,7 @@ def configure_default_views
         <aside class="min-w-0 h-fit"><%= yield :with_menu_navigation %></aside>
         <div class="min-w-0 [container-type:inline-size]">
           <% page_content = yield %>
+          <%= render "shared/flash", container_class: "w-full pb-6" %>
           <h1 class="mb-6 text-2xl font-bold leading-[1.5]"><%= content_for(:page_title) %></h1>
           <%= page_actions(card: true) unless content_for?(:page_actions_in_tab) %>
           <%= page_content %>
@@ -13189,7 +13209,7 @@ def configure_default_views
     <% content_for :with_menu_navigation, flush: true do %>
       <%= render(Shadcn::NavigationMenu.new(class: "w-full max-w-none flex-col items-stretch rounded-md border border-border bg-card", aria: { label: t('navigation.account_menu') })) do %>
         <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground desktop:hidden" data-with-menu-mobile-category><%= t("navigation.dashboard") %></p>
-        <div class="overflow-x-auto desktop:overflow-visible" data-with-menu-scroll>
+        <div class="overflow-x-auto desktop:overflow-visible" data-controller="active-navigation" data-with-menu-scroll>
           <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground max-desktop:hidden" data-with-menu-desktop-category><%= t("navigation.dashboard") %></p>
           <%= render(Shadcn::NavigationMenu::List.new(class: "w-max min-w-full justify-start gap-1 p-2 desktop:w-full desktop:flex-col desktop:items-stretch", data: { with_menu_items: true })) do %>
             <%= render "shared/account_navigation" %>
@@ -13230,7 +13250,7 @@ def configure_default_views
     <% content_for :with_menu_navigation, flush: true do %>
       <%= render(Shadcn::NavigationMenu.new(class: "w-full max-w-none flex-col items-stretch rounded-md border border-border bg-card", aria: { label: application_translate('navigation.admin_menu') })) do %>
         <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground desktop:hidden" data-with-menu-mobile-category><%= application_translate("navigation.admin") %></p>
-        <div class="overflow-x-auto desktop:overflow-visible" data-with-menu-scroll>
+        <div class="overflow-x-auto desktop:overflow-visible" data-controller="active-navigation" data-with-menu-scroll>
           <p class="px-4 pt-3 text-sm font-semibold text-muted-foreground max-desktop:hidden" data-with-menu-desktop-category><%= application_translate("navigation.admin") %></p>
           <%= render(Shadcn::NavigationMenu::List.new(class: "w-max min-w-full justify-start gap-1 p-2 desktop:w-full desktop:flex-col desktop:items-stretch", data: { with_menu_items: true })) do %>
             <%= render "shared/admin_navigation" %>
@@ -13305,7 +13325,7 @@ def configure_default_views
           <div class="desktop:hidden">
             <%= render(Shadcn::DropdownMenu.new) do %>
               <%= render(Shadcn::DropdownMenu::Trigger.new(variant: :outline)) { t("common.menu") } %>
-              <%= render(Shadcn::DropdownMenu::Content.new(align: :end, class: "z-20 w-52")) do %>
+              <%= render(Shadcn::DropdownMenu::Content.new(align: :end, class: "z-20 w-64")) do %>
     #{guest_mobile_navigation.lines.map { |line| "                #{line}" }.join}            <% end %>
             <% end %>
           </div>
@@ -13316,25 +13336,27 @@ def configure_default_views
 
   create_file "app/views/shared/_flash.html.erb", <<~ERB, force: true
     <% if flash[:credential_risk] %>
-      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
+      <div class="<%= local_assigns.fetch(:container_class, "mx-auto w-full max-w-[820px] px-5 pt-5") %>">
         <%= render(Shadcn::Alert.new) do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+          <%= render(Shadcn::Alert::Title.new) { t("credential_risk.warning") } %>
           <%= render(Shadcn::Alert::Description.new) do %>
-            <%= t("credential_risk.warning") %>
             <%= link_to t("credential_risk.add_login_method"), application_routes.account_passkeys_path, class: "underline whitespace-nowrap" %>
           <% end %>
         <% end %>
       </div>
     <% end %>
     <% if notice.present? %>
-      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
+      <div class="<%= local_assigns.fetch(:container_class, "mx-auto w-full max-w-[820px] px-5 pt-5") %>">
         <%= render(Shadcn::Alert.new(role: "status")) do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
           <%= render(Shadcn::Alert::Description.new) { notice } %>
         <% end %>
       </div>
     <% end %>
     <% if alert.present? %>
-      <div class="mx-auto w-full max-w-[820px] px-5 pt-5">
-        <%= render(Shadcn::Alert.new(variant: :destructive)) do %>
+      <div class="<%= local_assigns.fetch(:container_class, "mx-auto w-full max-w-[820px] px-5 pt-5") %>">
+        <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
           <%= render(Shadcn::Alert::Description.new) { alert } %>
         <% end %>
       </div>
@@ -13382,7 +13404,7 @@ def configure_default_views
         <div class="flex w-full flex-col items-start gap-6 p-6 sm:p-8 md:p-10">
           <%= render(Shadcn::Badge.new(variant: :outline)) { t("home.badge") } %>
           <div>
-            <h1 class="text-[1.75rem] font-bold leading-[1.5] desktop:text-[2.4rem]"><%= t("home.heading") %></h1>
+            <h1 class="text-balance text-[1.75rem] font-bold leading-[1.5] desktop:text-[2.4rem]"><%= t("home.heading.before") %><span class="whitespace-nowrap"><%= t("home.heading.emphasis") %></span><%= t("home.heading.after") %></h1>
             <p class="mt-5 max-w-2xl text-muted-foreground"><%= t("home.description") %></p>
           </div>
           <div class="flex flex-col gap-3 sm:flex-row">
@@ -14486,10 +14508,10 @@ def configure_web_push
           const tone = STATUS_TONES[state]
           if (!tone) throw new Error(`Unknown Web Push state: ${state}`)
           this.statusTarget.dataset.tone = tone
-          this.statusTarget.className = tone === "error"
+          this.statusTarget.className = tone === "error" || tone === "warning"
             ? this.statusTarget.dataset.destructiveClasses
             : this.statusTarget.dataset.defaultClasses
-          this.statusTarget.setAttribute("role", tone === "error" ? "alert" : "status")
+          this.statusTarget.setAttribute("role", tone === "error" || tone === "warning" ? "alert" : "status")
           this.statusTarget.textContent = message
         }
       }
@@ -14924,8 +14946,18 @@ def install_job_operations
   create_file "config/initializers/mission_control_jobs.rb", <<~RUBY, force: true
     MissionControl::Jobs.base_controller_class = "Admin::JobOperationsController"
     MissionControl::Jobs.http_basic_auth_enabled = false
-    MissionControl::Jobs.importmap.pin "controllers/active_navigation_controller", to: "controllers/active_navigation_controller.js"
   RUBY
+
+  append_to_file "config/importmap.rb", <<~RUBY
+    pin "mission_control/jobs/form_controller", to: "mission_control/jobs/controllers/form_controller.js"
+    pin "helpers", to: "mission_control/jobs/helpers/index.js"
+    pin "helpers/debounce_helpers", to: "mission_control/jobs/helpers/debounce_helpers.js"
+  RUBY
+  append_to_file "app/javascript/application.js", <<~JAVASCRIPT
+
+    import JobFormController from "mission_control/jobs/form_controller"
+    application.register("form", JobFormController)
+  JAVASCRIPT
 
   create_file "app/policies/job_operation_policy.rb", <<~RUBY, force: true
     class JobOperationPolicy < ApplicationPolicy
@@ -15082,9 +15114,6 @@ def install_job_operations
 
   create_file "app/views/layouts/mission_control/jobs/application.html.erb", <<~'ERB', force: true
     <%= with_host_application_locale do %>
-      <% content_for :javascript_importmap do %>
-        <%= javascript_importmap_tags "application", importmap: MissionControl::Jobs.importmap %>
-      <% end %>
       <% content_for :admin_content, flush: true do %>
         <%= render layout: "layouts/mission_control/jobs/navigation" do %>
           <div class="min-w-0 space-y-6" data-mission-control-jobs-root>
@@ -15180,6 +15209,7 @@ def install_job_operations
     <% else %>
       <%= render(Shadcn::Card.new(tag: :section)) do %>
         <%= render(Shadcn::Card::Content.new) do %>
+          <p class="mb-2 text-sm text-muted-foreground desktop:hidden"><%= t("common.table_scroll_hint") %></p>
           <%= render(Shadcn::Table.new(class: "min-w-96")) do %>
             <%= render(Shadcn::Table::Header.new) do %>
               <%= render(Shadcn::Table::Row.new) do %>
@@ -15713,13 +15743,13 @@ def install_job_operations
       "job_operations" => {
         "sections" => {
           "queues" => "キュー",
-          "failed_jobs" => "失敗したジョブ（%{count}）",
-          "in_progress_jobs" => "実行中のジョブ（%{count}）",
-          "blocked_jobs" => "ブロック中のジョブ（%{count}）",
-          "scheduled_jobs" => "実行待ちのジョブ（%{count}）",
-          "finished_jobs" => "完了したジョブ（%{count}）",
+          "failed_jobs" => "失敗（%{count}）",
+          "in_progress_jobs" => "実行中（%{count}）",
+          "blocked_jobs" => "ブロック（%{count}）",
+          "scheduled_jobs" => "待機（%{count}）",
+          "finished_jobs" => "完了（%{count}）",
           "workers" => "ワーカー",
-          "recurring_tasks" => "定期タスク"
+          "recurring_tasks" => "定期"
         },
         "titles" => {
           "queues" => "キュー",
@@ -16198,7 +16228,7 @@ def install_job_operations
         get MissionControl::Jobs::Engine.routes.url_helpers.application_job_path(
           **route_options, id: active_job.job_id
         )
-        assert_active_job_section(/^\#{Regexp.escape(host_translate("job_operations.titles.status_jobs.failed"))}/)
+        assert_active_job_section host_translate("job_operations.sections.failed_jobs", count: 1)
 
         worker = SolidQueue::Process.create!(
           kind: "Worker", last_heartbeat_at: Time.current, pid: Process.pid,
@@ -16261,7 +16291,7 @@ def install_job_operations
       private
         def assert_active_job_section(label)
           assert_response :success
-          assert_select 'a[data-slot="navigation-menu-link"][data-active][aria-current="page"]', text: label, count: 1
+          assert_select '[data-layout="with-menu"] nav[aria-label=?] a[data-slot="navigation-menu-link"][data-active][aria-current="page"]', host_translate('job_operations.aria.sections'), text: label, count: 1
           assert_select '[data-slot="card"] > [data-slot="card-content"] > [data-mission-control-jobs-root]', count: 1
         end
 
@@ -16433,7 +16463,7 @@ def install_maintenance_tasks
 
         sig { params(status: String).returns(ActiveSupport::SafeBuffer) }
         def status_tag(status)
-          render(Shadcn::Badge.new(variant: STATUS_BADGE_VARIANTS.fetch(status))) { status.capitalize }
+          render(Shadcn::Badge.new(variant: STATUS_BADGE_VARIANTS.fetch(status))) { t("maintenance_tasks_ui.status.\#{status}") }
         end
 
         sig { params(run: MaintenanceTasks::Run).returns(T.nilable(ActiveSupport::SafeBuffer)) }
@@ -16444,8 +16474,17 @@ def install_maintenance_tasks
           percent = if progress.value && progress.max.positive?
             100.0 * progress.value / progress.max
           end
+          count = run.tick_count.to_i
+          total = run.tick_total.to_i
+          progress_text = if total <= 0
+            t("maintenance_tasks_ui.progress.count", count:)
+          elsif count > total
+            t("maintenance_tasks_ui.progress.over_total", count:, total:)
+          else
+            t("maintenance_tasks_ui.progress.with_total", count:, total:, percent: (100.0 * count / total).round)
+          end
           tag.div(class: "space-y-2") do
-            render(Shadcn::Progress.new(value: percent)) + tag.p(tag.i(progress.text), class: "text-sm text-muted-foreground")
+            render(Shadcn::Progress.new(value: percent)) + tag.p(tag.i(progress_text), class: "text-sm text-muted-foreground")
           end
         end
 
@@ -16460,7 +16499,7 @@ def install_maintenance_tasks
           if inclusion_values
             return render(Shadcn::NativeSelect.new(id: form_builder.field_id(parameter_name), name: form_builder.field_name(parameter_name), class: "w-full")) do
               safe_join([
-                tag.option("Select a value", value: ""),
+                tag.option(t("maintenance_tasks_ui.select_value"), value: ""),
                 options_for_select(inclusion_values, form_builder.object.public_send(parameter_name))
               ])
             end
@@ -16493,7 +16532,7 @@ def install_maintenance_tasks
           else
             Time.now.zone
           end
-          tag.p("Timezone: \#{zone}.", class: "text-sm text-muted-foreground")
+          tag.p(t("maintenance_tasks_ui.timezone", zone: zone), class: "text-sm text-muted-foreground")
         end
 
         sig do
@@ -16502,7 +16541,7 @@ def install_maintenance_tasks
         end
         def time_ago(datetime)
           time_tag(datetime, title: datetime.utc, class: "cursor-help") do
-            time_ago_in_words(datetime) + " ago"
+            t("maintenance_tasks_ui.time_ago", distance: time_ago_in_words(datetime))
           end
         end
       end
@@ -16516,14 +16555,14 @@ def install_maintenance_tasks
       <% if @available_tasks.empty? %>
         <%= render(Shadcn::Card.new(tag: :section)) do %>
           <%= render(Shadcn::Card::Header.new) do %>
-            <%= render(Shadcn::Card::Title.new(tag: :h2)) { "The MaintenanceTasks gem has been successfully installed!" } %>
+            <%= render(Shadcn::Card::Title.new(tag: :h2)) { t("maintenance_tasks_ui.installed") } %>
           <% end %>
           <%= render(Shadcn::Card::Content.new) do %>
-            <p>Any new Tasks will show up here. To start writing your first Task, run <code>bin/rails generate maintenance_tasks:task my_task</code>.</p>
+            <p><%= t("maintenance_tasks_ui.installed_help") %> <code>bin/rails generate maintenance_tasks:task my_task</code></p>
           <% end %>
         <% end %>
       <% else %>
-        <% [["Active Tasks", @available_tasks[:active]], ["New Tasks", @available_tasks[:new]], ["Completed Tasks", @available_tasks[:completed]]].each do |heading, tasks| %>
+        <% [[t("maintenance_tasks_ui.active_tasks"), @available_tasks[:active]], [t("maintenance_tasks_ui.new_tasks"), @available_tasks[:new]], [t("maintenance_tasks_ui.completed_tasks"), @available_tasks[:completed]]].each do |heading, tasks| %>
           <% if tasks.present? %>
             <section class="space-y-4" aria-labelledby="<%= heading.parameterize %>">
               <h2 id="<%= heading.parameterize %>" class="text-xl font-bold leading-[1.5]"><%= heading %></h2>
@@ -16539,7 +16578,7 @@ def install_maintenance_tasks
 
   create_file "app/views/maintenance_tasks/tasks/_task.html.erb", <<~ERB, force: true
     <%= render(Shadcn::Card.new(tag: :article, class: "min-w-0")) do %>
-      <%= render(Shadcn::Card::Content.new(class: "min-w-0 pt-6")) do %>
+      <%= render(Shadcn::Card::Content.new(class: "min-w-0")) do %>
         <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <h3 class="min-w-0 text-base font-semibold leading-[1.5]">
             <%= link_to task, admin_maintenance_tasks.task_path(task), class: "underline min-w-0 break-all" %>
@@ -16551,12 +16590,12 @@ def install_maintenance_tasks
           <% if task.stale? %>
             <%= render(Shadcn::Alert.new(role: "status")) do %>
               <%= render(Shadcn::Alert::Description.new) do %>
-                This task last ran <%= MaintenanceTasks.task_staleness_threshold.inspect %> ago. Consider removing it as it may be stale.
+                <%= t("maintenance_tasks_ui.stale_task", threshold: MaintenanceTasks.task_staleness_threshold.inspect) %>
               <% end %>
             <% end %>
           <% end %>
 
-          <time class="text-sm font-semibold" datetime="<%= run.created_at.iso8601 %>" title="<%= run.created_at.utc %>"><%= run.created_at.to_fs(:long) %></time>
+          <time class="text-sm font-semibold" datetime="<%= run.created_at.iso8601 %>"><%= l(run.created_at, format: :long) %></time>
           <%= progress run %>
           <div class="text-sm"><%= render "maintenance_tasks/runs/info/\#{run.status}", run: run %></div>
           <div class="text-sm" id="custom-content"><%= render "maintenance_tasks/runs/info/custom", run: run %></div>
@@ -16572,7 +16611,7 @@ def install_maintenance_tasks
     <% content_for :page_title, @task %>
 
     <%= render(Shadcn::Card.new(tag: :section)) do %>
-      <%= render(Shadcn::Card::Content.new(class: "pt-6")) do %>
+      <%= render(Shadcn::Card::Content.new) do %>
         <%= form_with url: admin_maintenance_tasks.task_runs_path(@task), method: :post, class: "space-y-6" do |form| %>
           <% if @task.csv_task? %>
             <div class="grid gap-2">
@@ -16588,9 +16627,9 @@ def install_maintenance_tasks
                 <% parameter_names.each do |parameter_name| %>
                   <div class="grid min-w-0 gap-2">
                     <%= ff.label parameter_name, class: Shadcn::Label.classes do %>
-                      <span class="font-mono"><%= parameter_name %></span>
+                      <%= ff.object.class.human_attribute_name(parameter_name) %>
                       <% if attribute_required?(ff.object, parameter_name) %>
-                        <span class="text-destructive" aria-hidden="true">*</span><span class="sr-only"> required</span>
+                        <span class="text-destructive" aria-hidden="true">*</span><span class="sr-only"><%= t("maintenance_tasks_ui.required") %></span>
                       <% end %>
                     <% end %>
                     <%= parameter_field(ff, parameter_name) %>
@@ -16602,7 +16641,7 @@ def install_maintenance_tasks
 
           <%= render "maintenance_tasks/tasks/custom", form: form %>
           <div class="flex flex-wrap justify-end gap-2">
-            <%= form.submit "Run", class: action_button_classes(:primary), disabled: @task.deleted? %>
+            <%= form.submit t("maintenance_tasks_ui.run"), class: action_button_classes(:primary), disabled: @task.deleted? %>
           </div>
         <% end %>
       <% end %>
@@ -16610,7 +16649,7 @@ def install_maintenance_tasks
 
     <% if (code = @task.code) %>
       <%= render(Shadcn::Collapsible.new(class: Shadcn::Card.classes)) do %>
-        <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4 text-lg font-semibold")) { "Source code" } %>
+        <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4 text-lg font-semibold")) { t("maintenance_tasks_ui.source_code") } %>
         <%= render(Shadcn::Collapsible::Content.new(class: "px-6 pb-6")) do %>
           <div class="overflow-x-auto rounded-md bg-muted p-4 font-mono text-sm">
             <% code.lines(chomp: true).each.with_index(1) do |line, line_number| %>
@@ -16624,19 +16663,19 @@ def install_maintenance_tasks
     <%= tag.div(data: { refresh: @task.refresh? || "" }, class: "space-y-8") do %>
       <% if @task.active_runs.any? %>
         <section class="space-y-4">
-          <h2 class="text-xl font-bold leading-[1.5]">Active Runs</h2>
+          <h2 class="text-xl font-bold leading-[1.5]"><%= t("maintenance_tasks_ui.active_runs") %></h2>
           <%= render partial: "maintenance_tasks/runs/run", collection: @task.active_runs %>
         </section>
       <% end %>
 
       <% if @task.runs_page.records.present? %>
         <section class="space-y-4">
-          <h2 class="text-xl font-bold leading-[1.5]">Previous Runs</h2>
+          <h2 class="text-xl font-bold leading-[1.5]"><%= t("maintenance_tasks_ui.previous_runs") %></h2>
           <%= render partial: "maintenance_tasks/runs/run", collection: @task.runs_page.records %>
           <% unless @task.runs_page.last? %>
-            <%= with_pagination(aria_label: "Previous runs pagination") do %>
+            <%= with_pagination(aria_label: t("maintenance_tasks_ui.previous_runs_pagination")) do %>
               <%= render(Shadcn::Pagination::Item.new) do %>
-                <%= render(Shadcn::Pagination::Link.new(size: :default, href: admin_maintenance_tasks.task_path(@task, cursor: @task.runs_page.next_cursor))) { "Next page" } %>
+                <%= render(Shadcn::Pagination::Link.new(size: :default, href: admin_maintenance_tasks.task_path(@task, cursor: @task.runs_page.next_cursor))) { t("common.next") } %>
               <% end %>
             <% end %>
           <% end %>
@@ -16650,7 +16689,7 @@ def install_maintenance_tasks
       <%= render(Shadcn::Collapsible::Trigger.new(class: "px-6 py-4")) do %>
         <span class="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <span class="flex min-w-0 flex-wrap items-center gap-3">
-            <time class="font-semibold" datetime="<%= run.created_at.iso8601 %>" title="<%= run.created_at.utc %>"><%= run.created_at.to_fs(:long) %></time>
+            <time class="font-semibold" datetime="<%= run.created_at.iso8601 %>"><%= l(run.created_at, format: :long) %></time>
             <%= status_tag run.status %>
           </span>
           <a href="#run_<%= run.id %>" class="underline" title="Run ID">#<%= run.id %></a>
@@ -16667,19 +16706,19 @@ def install_maintenance_tasks
 
         <div class="flex flex-wrap justify-end gap-2">
           <% if run.paused? %>
-            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
+            <%= button_to t("maintenance_tasks_ui.resume"), admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
+            <%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
           <% elsif run.errored? %>
-            <%= button_to "Resume", admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
+            <%= button_to t("maintenance_tasks_ui.resume"), admin_maintenance_tasks.resume_task_run_path(@task, run), class: action_button_classes(:secondary), disabled: @task.deleted? %>
           <% elsif run.cancelling? %>
-            <% if run.stuck? %><%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
+            <% if run.stuck? %><%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
           <% elsif run.pausing? %>
-            <%= button_to "Pausing", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: true %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
-            <% if run.stuck? %><%= button_to "Force pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
+            <%= button_to t("maintenance_tasks_ui.pausing"), admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: true %>
+            <%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
+            <% if run.stuck? %><%= button_to t("maintenance_tasks_ui.force_pause"), admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:destructive), disabled: @task.deleted? %><% end %>
           <% elsif run.active? %>
-            <%= button_to "Pause", admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: @task.deleted? %>
-            <%= button_to "Cancel", admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
+            <%= button_to t("maintenance_tasks_ui.pause"), admin_maintenance_tasks.pause_task_run_path(@task, run), class: action_button_classes(:warning), disabled: @task.deleted? %>
+            <%= button_to t("maintenance_tasks_ui.cancel"), admin_maintenance_tasks.cancel_task_run_path(@task, run), class: action_button_classes(:destructive) %>
           <% end %>
         </div>
       <% end %>
@@ -16689,7 +16728,7 @@ def install_maintenance_tasks
   create_file "app/views/maintenance_tasks/runs/_arguments.html.erb", <<~ERB, force: true
     <% if arguments.present? %>
       <section class="space-y-3">
-        <h3 class="text-sm font-semibold leading-[1.5]">Arguments:</h3>
+        <h3 class="text-sm font-semibold leading-[1.5]"><%= t("maintenance_tasks_ui.arguments") %></h3>
         <%= render "maintenance_tasks/runs/serializable", serializable: arguments %>
       </section>
     <% end %>
@@ -16698,7 +16737,7 @@ def install_maintenance_tasks
   create_file "app/views/maintenance_tasks/runs/_metadata.html.erb", <<~ERB, force: true
     <% if metadata.present? %>
       <section class="space-y-3">
-        <h3 class="text-sm font-semibold leading-[1.5]">Metadata:</h3>
+        <h3 class="text-sm font-semibold leading-[1.5]"><%= t("maintenance_tasks_ui.metadata") %></h3>
         <%= render "maintenance_tasks/runs/serializable", serializable: metadata %>
       </section>
     <% end %>
@@ -16706,7 +16745,7 @@ def install_maintenance_tasks
 
   create_file "app/views/maintenance_tasks/runs/_csv.html.erb", <<~ERB, force: true
     <% if run.csv_file.present? %>
-      <%= link_to "Download CSV", csv_file_download_path(run), class: "underline" %>
+      <%= link_to t("maintenance_tasks_ui.download_csv"), csv_file_download_path(run), class: "underline" %>
     <% end %>
   ERB
 
@@ -16734,7 +16773,7 @@ def install_maintenance_tasks
 
   create_file "app/views/maintenance_tasks/runs/info/_errored.html.erb", <<~ERB, force: true
     <div class="space-y-4">
-      <p>Ran for <%= time_running_in_words run %> until an error happened <%= time_ago run.ended_at %>.</p>
+      <p><%= t("maintenance_tasks_ui.errored_summary", duration: time_running_in_words(run), ago: time_ago(run.ended_at)) %></p>
       <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
         <%= render(Shadcn::Alert::Title.new) { run.error_class } %>
         <%= render(Shadcn::Alert::Description.new) do %>
@@ -16744,6 +16783,30 @@ def install_maintenance_tasks
       <% end %>
     </div>
   ERB
+
+  %w[enqueued interrupted pausing cancelling].each do |status|
+    create_file "app/views/maintenance_tasks/runs/info/_#{status}.html.erb",
+      %(<p><%= t("maintenance_tasks_ui.info.#{status}") %></p>\n), force: true
+  end
+
+  create_file "app/views/maintenance_tasks/runs/info/_running.html.erb", <<~ERB, force: true
+    <% if (time_to_completion = run.time_to_completion) %>
+      <p><%= t("maintenance_tasks_ui.info.running", duration: time_running_in_words(run), remaining: distance_of_time_in_words(time_to_completion)) %></p>
+    <% end %>
+  ERB
+
+  create_file "app/views/maintenance_tasks/runs/info/_paused.html.erb", <<~ERB, force: true
+    <% if (time_to_completion = run.time_to_completion) %>
+      <p><%= t("maintenance_tasks_ui.info.paused_remaining", duration: time_running_in_words(run), remaining: distance_of_time_in_words(time_to_completion)) %></p>
+    <% else %>
+      <p><%= t("maintenance_tasks_ui.info.paused_count", duration: time_running_in_words(run), count: run.tick_count) %></p>
+    <% end %>
+  ERB
+
+  %w[cancelled succeeded].each do |status|
+    create_file "app/views/maintenance_tasks/runs/info/_#{status}.html.erb",
+      %(<p><%= t("maintenance_tasks_ui.info.#{status}", duration: time_running_in_words(run), ago: time_ago(run.ended_at)) %></p>\n), force: true
+  end
 
   create_file "app/javascript/controllers/maintenance_tasks_refresh_controller.js", <<~JAVASCRIPT, force: true
     import { Controller } from "@hotwired/stimulus"
@@ -16796,11 +16859,45 @@ def install_maintenance_tasks
     "maintenance_tasks",
     ja: {
       "navigation" => { "maintenance_tasks" => "運用タスク" },
-      "maintenance_tasks" => { "title" => "運用タスク" }
+      "maintenance_tasks" => { "title" => "運用タスク" },
+      "activemodel" => { "attributes" => { "maintenance/safe_test_task" => {
+        "note" => "メモ", "quantity" => "件数", "ratio" => "比率", "amount" => "金額", "scheduled_at" => "予定日時",
+        "due_on" => "期限日", "starts_at" => "開始時刻", "mode" => "モード", "notify" => "通知する"
+      } } },
+      "maintenance_tasks_ui" => {
+        "status" => { "new" => "未実行", "enqueued" => "待機中", "running" => "実行中", "interrupted" => "再開待ち", "pausing" => "一時停止中", "paused" => "一時停止", "succeeded" => "完了", "cancelling" => "中止中", "cancelled" => "中止", "errored" => "失敗" },
+        "select_value" => "選択してください", "timezone" => "タイムゾーン: %{zone}", "time_ago" => "%{distance}前",
+        "installed" => "運用タスクの導入が完了しました", "installed_help" => "新しいタスクはここに表示されます。最初のタスクを作成するには次のコマンドを実行してください。",
+        "active_tasks" => "実行中のタスク", "new_tasks" => "未実行のタスク", "completed_tasks" => "完了したタスク",
+        "stale_task" => "このタスクは%{threshold}以上実行されていません。不要であれば削除を検討してください。",
+        "required" => "必須", "run" => "実行", "source_code" => "ソースコード", "active_runs" => "実行中", "previous_runs" => "実行履歴", "previous_runs_pagination" => "実行履歴のページ切り替え",
+        "resume" => "再開", "cancel" => "中止", "pausing" => "一時停止中", "force_pause" => "強制的に一時停止", "pause" => "一時停止",
+        "arguments" => "引数", "metadata" => "メタデータ", "download_csv" => "CSVをダウンロード",
+        "errored_summary" => "%{duration}実行した後、%{ago}にエラーが発生しました。",
+        "progress" => { "count" => "%{count}件処理済みです。", "over_total" => "%{count}件処理済みです（予定%{total}件）。", "with_total" => "%{count}/%{total}件処理済み（%{percent}%）。" },
+        "info" => { "enqueued" => "実行待ちです。", "interrupted" => "中断しました。まもなく再開します。", "pausing" => "一時停止しています。", "cancelling" => "中止しています。", "running" => "%{duration}実行中です。残り約%{remaining}です。", "paused_remaining" => "%{duration}実行して一時停止しました。残り約%{remaining}です。", "paused_count" => "%{duration}実行して一時停止しました。%{count}件処理済みです。", "cancelled" => "%{duration}実行し、%{ago}に中止しました。", "succeeded" => "%{duration}実行し、%{ago}に完了しました。" }
+      }
     },
     en: {
       "navigation" => { "maintenance_tasks" => "Maintenance tasks" },
-      "maintenance_tasks" => { "title" => "Maintenance tasks" }
+      "maintenance_tasks" => { "title" => "Maintenance tasks" },
+      "activemodel" => { "attributes" => { "maintenance/safe_test_task" => {
+        "note" => "Note", "quantity" => "Quantity", "ratio" => "Ratio", "amount" => "Amount", "scheduled_at" => "Scheduled at",
+        "due_on" => "Due on", "starts_at" => "Starts at", "mode" => "Mode", "notify" => "Notify"
+      } } },
+      "maintenance_tasks_ui" => {
+        "status" => { "new" => "New", "enqueued" => "Enqueued", "running" => "Running", "interrupted" => "Interrupted", "pausing" => "Pausing", "paused" => "Paused", "succeeded" => "Succeeded", "cancelling" => "Cancelling", "cancelled" => "Cancelled", "errored" => "Errored" },
+        "select_value" => "Select a value", "timezone" => "Timezone: %{zone}", "time_ago" => "%{distance} ago",
+        "installed" => "Maintenance Tasks is installed", "installed_help" => "New tasks will appear here. To create your first task, run:",
+        "active_tasks" => "Active tasks", "new_tasks" => "New tasks", "completed_tasks" => "Completed tasks",
+        "stale_task" => "This task has not run for %{threshold}. Consider removing it if it is no longer needed.",
+        "required" => "required", "run" => "Run", "source_code" => "Source code", "active_runs" => "Active runs", "previous_runs" => "Previous runs", "previous_runs_pagination" => "Previous runs pagination",
+        "resume" => "Resume", "cancel" => "Cancel", "pausing" => "Pausing", "force_pause" => "Force pause", "pause" => "Pause",
+        "arguments" => "Arguments", "metadata" => "Metadata", "download_csv" => "Download CSV",
+        "errored_summary" => "Ran for %{duration} until an error happened %{ago}.",
+        "progress" => { "count" => "Processed %{count} items.", "over_total" => "Processed %{count} items (expected %{total}).", "with_total" => "Processed %{count} of %{total} items (%{percent}%)." },
+        "info" => { "enqueued" => "Waiting to start.", "interrupted" => "Interrupted momentarily; resuming shortly.", "pausing" => "Pausing…", "cancelling" => "Cancelling…", "running" => "Running for %{duration}. About %{remaining} remaining.", "paused_remaining" => "Ran for %{duration} until paused. About %{remaining} remaining.", "paused_count" => "Ran for %{duration} until paused. Processed %{count} items.", "cancelled" => "Ran for %{duration}, cancelled %{ago}.", "succeeded" => "Ran for %{duration}, finished %{ago}." }
+      }
     }
   )
 
@@ -16945,7 +17042,7 @@ def install_maintenance_tasks
         assert_select "title", text: "\#{page_title} | \#{app_name}", count: 1
         assert_select '[data-layout="with-menu"] [data-slot="tabs-content"]', count: 0
         assert_select '[data-slot="card"]', minimum: 1
-        assert_select '[data-slot="badge"]', text: "New", count: 3
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.new"), count: 3
         assert_select "a", text: "Maintenance::CountdownTask", count: 1
         assert_select 'link[href*="bulma"]', count: 0
         assert_select '[data-layout="with-menu"] nav[aria-label=?]', I18n.t("navigation.admin_menu"), count: 1
@@ -16959,6 +17056,9 @@ def install_maintenance_tasks
         assert_select "[data-maintenance-tasks-root]", count: 1
         assert_select 'form[action=?] .grid.min-w-0.gap-2', MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 9
         assert_select "textarea[name=?]", "task[note]", count: 1
+        assert_select 'label[for="task_note"]', count: 1 do |labels|
+          assert_includes T.must(labels.first).text, I18n.t("activemodel.attributes.maintenance/safe_test_task.note")
+        end
         assert_select "input[type=number][name=?]", "task[quantity]", count: 1
         assert_select "input[type=number][step=any][name=?]", "task[ratio]", count: 1
         assert_select "input[type=number][step=any][name=?]", "task[amount]", count: 1
@@ -16967,7 +17067,7 @@ def install_maintenance_tasks
         assert_select "input[type=time][name=?]", "task[starts_at]", count: 1
         assert_select 'select[data-slot="native-select"][name=?]', "task[mode]", count: 1
         assert_select 'input[data-slot="checkbox"][name=?]', "task[notify]", count: 1
-        assert_select "input[type=submit]", value: "Run", count: 1
+        assert_select "input[type=submit]", value: I18n.t("maintenance_tasks_ui.run"), count: 1
         assert_select "form[action=?]", MAINTENANCE_TASK_ROUTES.task_runs_path(TASK_NAME), count: 1
         assert_select 'details[data-slot="collapsible"]', minimum: 1
         assert_select '[data-slot="collapsible-content"] > .overflow-x-auto', count: 1
@@ -17036,14 +17136,15 @@ def install_maintenance_tasks
         get TASK_PATH
 
         assert_response :success
-        assert_select '[data-slot="badge"]', text: "Paused", count: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.paused"), count: 1
+        assert_select '[data-slot="progress"] + p', text: I18n.t("maintenance_tasks_ui.progress.with_total", count: 2, total: 10, percent: 20), count: 1
         assert_select '[data-slot="progress"][role="progressbar"][aria-valuenow="20.0"]', count: 1
         assert_select '[data-slot="progress"][role="progressbar"][aria-valuenow="10.0"]', count: 1
         assert_select '[data-slot="collapsible-content"] .flex.flex-wrap.justify-end.gap-2', minimum: 3
-        assert_select "form[action$='/resume'] button", text: "Resume", count: 2
-        assert_select "form[action$='/pause'] button", text: "Pause", count: 1
-        assert_select "form[action$='/cancel'] button", text: "Cancel", count: 2
-        assert_select '[data-slot="badge"]', text: "Errored", count: 1
+        assert_select "form[action$='/resume'] button", text: I18n.t("maintenance_tasks_ui.resume"), count: 2
+        assert_select "form[action$='/pause'] button", text: I18n.t("maintenance_tasks_ui.pause"), count: 1
+        assert_select "form[action$='/cancel'] button", text: I18n.t("maintenance_tasks_ui.cancel"), count: 2
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.errored"), count: 1
         assert_select '[data-slot="alert"][role="alert"]', text: /Something went wrong/, count: 1
       end
 
@@ -17063,8 +17164,8 @@ def install_maintenance_tasks
         get TASK_PATH
 
         assert_response :success
-        assert_select '[data-slot="pagination"][aria-label="Previous runs pagination"] > .flex.min-w-full > [data-slot="pagination-content"]', count: 1 do
-          assert_select 'a[data-slot="pagination-link"]', text: "Next page", count: 1
+        assert_select '[data-slot="pagination"][aria-label=?] > .flex.min-w-full > [data-slot="pagination-content"]', I18n.t("maintenance_tasks_ui.previous_runs_pagination"), count: 1 do
+          assert_select 'a[data-slot="pagination-link"]', text: I18n.t("common.next"), count: 1
         end
       end
 
@@ -17090,7 +17191,7 @@ def install_maintenance_tasks
 
         get TASK_PATH
         assert_response :success
-        assert_select '[data-slot="badge"]', text: "Succeeded", count: 1
+        assert_select '[data-slot="badge"]', text: I18n.t("maintenance_tasks_ui.status.succeeded"), count: 1
         assert_select '[data-slot="progress"][role="progressbar"]', count: 1
       end
     end
@@ -17129,6 +17230,7 @@ def configure_common_files
         screen_size: [1400, 900],
         options: {
           headless: true,
+          locale: I18n.default_locale.to_s == "ja" ? "ja-JP" : "en-US",
           playwright_cli_executable_path: Rails.root.join("node_modules/.bin/playwright").to_s
         }
 
@@ -17175,6 +17277,8 @@ def configure_evidence_capture
         "desktop" => { "width" => 1400, "height" => 900 },
         "mobile" => { "width" => 390, "height" => 844 }
       }.freeze
+      SELECTED_VIEWPORT = ENV.fetch("EVIDENCE_VIEWPORT")
+      VIEWPORTS.fetch(SELECTED_VIEWPORT)
       PRIVATE_KEY = "1".rjust(64, "0")
       REGULAR_PRIVATE_KEY = "2".rjust(64, "0")
       UNLINKED_PRIVATE_KEY = "3".rjust(64, "0")
@@ -17202,7 +17306,7 @@ def configure_evidence_capture
             "scenario_set" => SCENARIO_SET,
             "additional_login_methods" => ADDITIONAL_LOGIN_METHODS,
             "locale" => LOCALE,
-            "viewports" => VIEWPORTS,
+            "viewports" => VIEWPORTS.slice(SELECTED_VIEWPORT),
             "captures" => @captures
           ) + "\n"
         )
@@ -17210,7 +17314,7 @@ def configure_evidence_capture
 
       private
         def capture_common_scenarios
-          VIEWPORTS.each do |viewport_name, viewport|
+          VIEWPORTS.slice(SELECTED_VIEWPORT).each do |viewport_name, viewport|
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
             prepare_guest_data
             verify_footer_geometry if viewport_name == "desktop"
@@ -17233,7 +17337,7 @@ def configure_evidence_capture
           @user ||= create_evidence_user("evidence-primary")
           T.must(@user.profile).update!(screen_name: "evidence_user", display_name: "Evidence User")
 
-          VIEWPORTS.each do |viewport_name, viewport|
+          VIEWPORTS.slice(SELECTED_VIEWPORT).each do |viewport_name, viewport|
             Capybara.reset_sessions!
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
             @user.siwe_identities.delete_all
@@ -17487,7 +17591,7 @@ def configure_evidence_capture
         end
 
         def capture_avatar_scenarios
-          VIEWPORTS.each do |viewport_name, viewport|
+          VIEWPORTS.slice(SELECTED_VIEWPORT).each do |viewport_name, viewport|
             Capybara.reset_sessions!
             page.current_window.resize_to(viewport.fetch("width"), viewport.fetch("height"))
             prepare_guest_data
@@ -17501,7 +17605,7 @@ def configure_evidence_capture
               "avatar-home",
               "アバター（ホーム）",
               root_path,
-              translate("home.heading"),
+              home_heading_text,
               viewport_name,
               [40]
             )
@@ -17518,6 +17622,10 @@ def configure_evidence_capture
 
         def translate(key, **options)
           I18n.t(key, **options)
+        end
+
+        def home_heading_text
+          %w[before emphasis after].map { |part| translate("home.heading.#{part}") }.join
         end
 
         def host_translate(key, **options)
@@ -17575,7 +17683,7 @@ def configure_evidence_capture
         end
 
         def capture_guest_pages(viewport)
-          capture_page("home-guest", "ホーム（未ログイン）", root_path, translate("home.heading"), viewport)
+          capture_page("home-guest", "ホーム（未ログイン）", root_path, home_heading_text, viewport)
           capture_page("about", "アプリについて", about_path, Page::TITLES.fetch("about"), viewport)
           assert_selector ".lexxy-content", text: "管理画面から更新したAction Text本文"
           capture_page("corp", "運営者情報", corp_path, Page::TITLES.fetch("corp"), viewport)
@@ -17670,7 +17778,7 @@ def configure_evidence_capture
         end
 
         def capture_authenticated_pages(viewport)
-          capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, translate("home.heading"), viewport)
+          capture_page("home-authenticated", "ホーム（ログイン済み）", root_path, home_heading_text, viewport)
           capture_notification_scenarios(viewport)
           capture_page("account", "マイページ", account_path, translate("accounts.show.title"), viewport)
           assert_account_navigation_scope
@@ -17692,7 +17800,7 @@ def configure_evidence_capture
             visit api_credentials_path
             assert_equal 200, page.status_code
             assert_selector "h1", text: translate("api_credentials.title")
-            assert_selector '[data-slot="alert"]', text: translate("api_credentials.empty"), count: 1
+            assert_selector '[data-slot="empty"]', text: translate("api_credentials.empty"), count: 1
             capture_current_page("api-credentials-empty", "APIキー一覧（空）", viewport)
             capture_page("api-credential-new", "APIキー作成", new_api_credential_path, translate("api_credentials.new"), viewport)
             fill_in ApiCredential.human_attribute_name(:name), with: "Evidence CLI"
@@ -17710,6 +17818,7 @@ def configure_evidence_capture
           if JOB_OPERATIONS
             queues_title = translate("job_operations.titles.queues")
             failed_title = translate("job_operations.titles.status_jobs.failed")
+            failed_tab = translate("job_operations.sections.failed_jobs", count: 1)
             visit host_routes.admin_jobs_path
             assert_equal 200, page.status_code
             assert_selector "[data-mission-control-jobs-root]", count: 1
@@ -17718,19 +17827,21 @@ def configure_evidence_capture
             assert_job_operations_tabs_single_row if viewport == "desktop"
             capture_current_page("admin-job-operations", queues_title, viewport)
             if viewport == "mobile"
-          find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
+              find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
+              assert_selector 'header [data-slot="dropdown-menu-content"]:popover-open'
               capture_current_page(
                 "admin-job-operations-navigation-open",
                 "#{queues_title}のモバイルメニュー",
                 viewport
               )
-          find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
+              assert_selector 'header [data-slot="dropdown-menu-content"]:popover-open'
+              find('header [data-slot="dropdown-menu-trigger"]', visible: :visible).click
             end
             find(%Q{nav[aria-label="#{translate("job_operations.aria.sections")}"] a[data-slot="navigation-menu-link"]},
-              text: /^#{Regexp.escape(failed_title)}/).click
+              text: failed_tab).click
             assert_selector '[data-layout="with-menu"] > div > h1', text: failed_title, count: 1
             assert_selector 'a[data-slot="navigation-menu-link"][aria-current="page"]',
-              text: /^#{Regexp.escape(failed_title)}/, count: 1
+              text: failed_tab, count: 1
             assert_job_operations_tabs_single_row if viewport == "desktop"
             capture_current_page("admin-job-operations-failed", failed_title, viewport)
           end
@@ -17743,7 +17854,7 @@ def configure_evidence_capture
             click_link "Maintenance::SafeTestTask"
             assert_selector "textarea[name='task[note]']", count: 1
             assert_selector "input[data-slot='checkbox'][name='task[notify]']", count: 1
-            find('details[data-slot="collapsible"]', text: "Source code").find('summary[data-slot="collapsible-trigger"]').click
+            find('details[data-slot="collapsible"]', text: translate("maintenance_tasks_ui.source_code")).find('summary[data-slot="collapsible-trigger"]').click
             assert_selector 'details[data-slot="collapsible"][open] [data-slot="collapsible-content"] .font-mono', count: 1
             code_lines = all('details[data-slot="collapsible"][open] [data-slot="collapsible-content"] pre[data-line-number]')
             assert_operator code_lines.length, :>, 1
@@ -17768,10 +17879,10 @@ def configure_evidence_capture
               tick_total: 10
             )
             visit task_path
-            assert_selector '[data-slot="badge"]', text: "Paused", count: 1
-            assert_button "Pause"
-            assert_button "Resume"
-            assert_button "Cancel"
+            assert_selector '[data-slot="badge"]', text: translate("maintenance_tasks_ui.status.paused"), count: 1
+            assert_button translate("maintenance_tasks_ui.pause")
+            assert_button translate("maintenance_tasks_ui.resume")
+            assert_button translate("maintenance_tasks_ui.cancel")
             capture_current_page("admin-maintenance-task-paused", "運用タスク一時停止中", viewport)
             paused_run.destroy!
             running_run.destroy!
@@ -17786,17 +17897,17 @@ def configure_evidence_capture
               backtrace: ["app/tasks/maintenance/safe_test_task.rb:10"]
             )
             visit task_path
-            assert_selector '[data-slot="badge"]', text: "Errored", count: 1
+            assert_selector '[data-slot="badge"]', text: translate("maintenance_tasks_ui.status.errored"), count: 1
             assert_selector '[data-slot="alert"]', text: "Evidence task failure", count: 1
             capture_current_page("admin-maintenance-task-errored", "運用タスクエラー", viewport)
             errored_run.destroy!
             visit task_path
-            click_button "Run"
-            assert_text "Enqueued"
+            click_button translate("maintenance_tasks_ui.run")
+            assert_text translate("maintenance_tasks_ui.status.enqueued")
             perform_enqueued_jobs
             visit page.current_path
-            assert_text "Succeeded"
-            assert_selector '[data-slot="badge"]', text: "Succeeded", count: 1
+            assert_text translate("maintenance_tasks_ui.status.succeeded")
+            assert_selector '[data-slot="badge"]', text: translate("maintenance_tasks_ui.status.succeeded"), count: 1
             capture_current_page("admin-maintenance-task-completed", "運用タスク完了", viewport)
             if viewport == "mobile"
               visit admin_maintenance_tasks_path
@@ -18461,7 +18572,7 @@ def configure_evidence_capture
           perform_enqueued_jobs(only: ActiveStorage::TransformJob)
           stored = Vips::Image.new_from_buffer(T.must(@user.profile).reload.avatar.blob.download, "")
           assert_equal [512, 512], [stored.width, stored.height]
-          capture_avatar_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, translate("home.heading"), viewport, [40])
+          capture_avatar_page("home-uploaded-avatar", "ホーム（画像アバター）", root_path, home_heading_text, viewport, [40])
           capture_avatar_page("profile-uploaded-avatar", "プロフィール（画像アバター）", host_routes.profile_path, translate("profiles.title"), viewport, [40, 64])
           capture_avatar_page("profile-edit-uploaded-avatar", "プロフィール編集（画像アバター）", host_routes.edit_profile_path, translate("profiles.edit_title"), viewport, [40, 64])
 
@@ -18469,7 +18580,7 @@ def configure_evidence_capture
           assert_current_path host_routes.profile_path
           assert_selector '[data-slot="alert"][role="status"]', text: translate("profiles.avatar.destroy.notice")
           capture_current_page("profile-avatar-deleted", "プロフィール（画像削除後）", viewport)
-          capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, translate("home.heading"), viewport)
+          capture_page("home-avatar-deleted", "ホーム（画像削除後）", root_path, home_heading_text, viewport)
         ensure
           source&.close!
         end
@@ -19134,8 +19245,9 @@ def configure_evidence_capture
             end
 
             failed_title = translate("job_operations.titles.status_jobs.failed")
+            failed_tab = translate("job_operations.sections.failed_jobs", count: 1)
             find(%Q{nav[aria-label="#{translate("job_operations.aria.sections")}"] a[data-slot="navigation-menu-link"]},
-              text: /^#{Regexp.escape(failed_title)}/).click
+              text: failed_tab).click
             assert_selector '[data-layout="with-menu"] > div > h1', text: failed_title, count: 1
             failed_geometry = page.driver.with_playwright_page do |playwright_page|
               playwright_page.evaluate(<<~JAVASCRIPT)
@@ -19206,6 +19318,11 @@ def configure_evidence_capture
                 return {
                   rowCount: new Set(links.map((link) => Math.round(link.getBoundingClientRect().top))).size,
                   activeInsideNavigation: navigation.contains(active),
+                  allLinksVisible: links.every((link) => {
+                    const bounds = link.getBoundingClientRect()
+                    const frame = navigation.getBoundingClientRect()
+                    return bounds.left >= frame.left - 1 && bounds.right <= frame.right + 1
+                  }),
                   panelTop: panel.getBoundingClientRect().top,
                   navigationBottom: navigation.getBoundingClientRect().bottom
                 }
@@ -19214,6 +19331,7 @@ def configure_evidence_capture
           end
           assert_equal 1, geometry.fetch("rowCount"), "Mission Control Jobs desktop navigation must stay on one row"
           assert geometry.fetch("activeInsideNavigation")
+          assert geometry.fetch("allLinksVisible"), "Mission Control Jobs desktop navigation must show every section"
           assert_operator geometry.fetch("panelTop"), :>, geometry.fetch("navigationBottom")
         end
 
@@ -19378,7 +19496,10 @@ def configure_evidence_capture
               }
             JAVASCRIPT
             playwright_page.evaluate("() => document.fonts.ready")
-            playwright_page.screenshot(path: path.to_s, fullPage: true, animations: "disabled")
+            overlay_open = playwright_page.evaluate(<<~JAVASCRIPT)
+              () => Boolean(document.querySelector('dialog[open], [data-slot="dropdown-menu-content"]:popover-open, #notifications-popover:popover-open'))
+            JAVASCRIPT
+            playwright_page.screenshot(path: path.to_s, fullPage: !overlay_open, animations: "disabled")
           end
           @captures << { "id" => identifier, "title" => title, "viewport" => viewport, "path" => filename }
         end
@@ -19462,7 +19583,9 @@ def configure_evidence_capture
     # frozen_string_literal: true
 
     require "fileutils"
+    require "json"
     require "rbconfig"
+    require "tmpdir"
 
     namespace :evidence do
       desc "CapybaraとPlaywrightでUIエビデンスを撮影する"
@@ -19492,14 +19615,32 @@ def configure_evidence_capture
         end
 
         begin
-          raise "test databaseの再構築に失敗しました" unless rebuild_test_database.call
+          captures = []
+          viewports = {}
+          metadata = nil
+          %w[desktop mobile].each do |viewport|
+            raise "test databaseの再構築に失敗しました" unless rebuild_test_database.call
 
-          system(
-            { "RAILS_ENV" => "test", "EVIDENCE_OUTPUT_DIR" => output_directory.to_s }.merge(web_push_environment),
-            RbConfig.ruby,
-            "-Itest",
-            Rails.root.join("test/support/evidence_capture.rb").to_s
-          ) || raise("UIエビデンスの撮影に失敗しました")
+            Dir.mktmpdir("evidence-#{viewport}-") do |directory|
+              system(
+                { "RAILS_ENV" => "test", "EVIDENCE_OUTPUT_DIR" => directory, "EVIDENCE_VIEWPORT" => viewport }.merge(web_push_environment),
+                RbConfig.ruby,
+                "-Itest",
+                Rails.root.join("test/support/evidence_capture.rb").to_s
+              ) || raise("#{viewport}のUIエビデンス撮影に失敗しました")
+
+              result = JSON.parse(File.read(File.join(directory, "captures.json")))
+              metadata ||= result.slice("scenario_set", "additional_login_methods", "locale")
+              raise "viewport間の撮影条件が一致しません" unless metadata == result.slice("scenario_set", "additional_login_methods", "locale")
+
+              viewports.merge!(result.fetch("viewports"))
+              result.fetch("captures").each do |capture|
+                FileUtils.cp(File.join(directory, capture.fetch("path")), output_directory.join(capture.fetch("path")))
+                captures << capture
+              end
+            end
+          end
+          File.write(output_directory.join("captures.json"), JSON.pretty_generate(metadata.merge("viewports" => viewports, "captures" => captures)) + "\n")
         rescue StandardError => error
           capture_error = error
         ensure

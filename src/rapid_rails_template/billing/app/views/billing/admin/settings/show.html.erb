@@ -25,14 +25,12 @@
           <% end %>
           <%= render(Shadcn::Field.new) do %>
             <%= render(Shadcn::Field::Label.new(for: form.field_id(:grace_hours))) { t("billing.ui.grace_hours") } %>
-            <%= render(Shadcn::InputGroup.new) do %>
-              <%= form.number_field :grace_hours, required: true, min: 0, class: Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes), data: { slot: "input-group-control" } %>
-              <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) { form.submit t("billing.ui.save"), class: action_button_classes(:primary) } %>
-            <% end %>
+            <%= form.number_field :grace_hours, required: true, min: 0, class: Shadcn::Input.classes %>
           <% end %>
         <% end %>
         <%= render(Shadcn::Field::Description.new) { t("billing.ui.settings_help") } %>
       <% end %>
+      <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
     <% end %>
   <% end %>
 <% end %>

@@ -2,7 +2,8 @@
 <% content_for :page_actions_primary do %><%= link_to billing_label("chain_settings", "wallet"), admin_chain_settings_path, class: action_button_classes(:secondary) %><% end %>
 <div class="space-y-6">
   <% if @missing_configuration.any? %>
-    <%= render(Shadcn::Alert.new(role: "status")) do %>
+    <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert")) do %>
+      <%= billing_icon("exclamation-triangle") %>
       <%= render(Shadcn::Alert::Title.new(tag: :h2)) { t("billing.ui.missing_configuration") } %>
       <%= render(Shadcn::Alert::Description.new) do %>
         <ul class="list-disc pl-5 break-all"><% @missing_configuration.each do |item| %><li><%= item %></li><% end %></ul>
@@ -22,7 +23,7 @@
             <%= render(Shadcn::Item::Content.new(class: "min-w-0")) do %>
               <p><%= Billing::Chains.fetch(transaction.chain_setting.chain_id).name %> · <%= t("billing.kinds.#{transaction.kind}") %> · <%= t("billing.states.#{transaction.status}") %></p>
               <%= link_to t("billing.ui.transaction", id: transaction.id), transaction.explorer_url, class: "text-primary underline underline-offset-4", target: "_blank", rel: "noopener noreferrer" %>
-              <% if transaction.error_code %><p class="break-words"><%= transaction.error_code %></p><% end %>
+              <% if transaction.error_code %><p class="break-words"><%= t("billing.transaction_errors.#{transaction.error_code}") %></p><% end %>
             <% end %>
             <% if transaction.status == "review" %><%= render(Shadcn::Item::Actions.new(class: "w-full justify-end")) { button_to t("billing.ui.recheck"), recheck_admin_transaction_path(transaction), class: action_button_classes(:warning) } %><% end %>
           <% end %>

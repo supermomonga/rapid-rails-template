@@ -1,5 +1,10 @@
 <% contract = local_assigns[:subscription] %>
 <%= tag.div data: { controller: "billing-checkout", billing_checkout_create_url_value: account_subscriptions_path, billing_checkout_plan_id_value: plan.id, billing_checkout_app_name_value: application_identity.app_name, billing_checkout_labels_value: t("billing.checkout"), billing_checkout_contract_value: contract && { typed_data: Billing::Checkout.typed_data(contract), authorize_path: authorize_account_subscription_path(contract), subscription_path: account_subscription_path(contract), review: Billing::Checkout.review(contract) } } do %>
+  <%= render(Shadcn::Alert.new(variant: :destructive, role: "alert", hidden: true, data: { billing_checkout_target: "error" })) do %>
+    <%= billing_icon("exclamation-triangle") %>
+    <%= render(Shadcn::Alert::Title.new) { t("billing.checkout.error_title") } %>
+    <%= render(Shadcn::Alert::Description.new) { tag.span(data: { billing_checkout_target: "errorMessage" }) } %>
+  <% end %>
   <%= render(Shadcn::Field::Set.new) do %>
     <%= render(Shadcn::Field::Legend.new) { t("billing.ui.payment_wallet") } %>
     <%= render(Shadcn::Field::Description.new) { t("billing.ui.wallet_help") } %>

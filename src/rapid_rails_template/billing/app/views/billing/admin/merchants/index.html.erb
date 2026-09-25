@@ -3,7 +3,7 @@
   <%= render(Shadcn::Card.new) do %>
     <%= render(Shadcn::Card::Header.new) { render(Shadcn::Card::Title.new(tag: :h2, class: "break-words")) { merchant.display_name } } %>
     <%= render(Shadcn::Card::Content.new(class: "space-y-3")) do %>
-      <p><%= render(Shadcn::Badge.new(variant: :outline)) { t("billing.ui.business_states.#{merchant.status}") } %></p>
+      <p><%= render(Shadcn::Badge.new(variant: { "active" => :default, "closing" => :outline, "closed" => :secondary }.fetch(merchant.status))) { t("billing.ui.business_states.#{merchant.status}") } %></p>
       <p><%= t("billing.ui.effective_fee", percent: Billing::Amount.format(merchant.effective_fee_basis_points, decimals: 2)) %></p>
     <% end %>
     <%= render(Shadcn::Card::Footer.new(class: "justify-end")) { link_to billing_label("view_history", "document-text"), admin_merchant_path(merchant), class: action_button_classes(:secondary) } %>

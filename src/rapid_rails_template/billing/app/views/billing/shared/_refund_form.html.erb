@@ -20,12 +20,12 @@
       <% end %>
       <%= render(Shadcn::Field.new) do %>
         <%= render(Shadcn::Field::Label.new(for: form.field_id(:transaction_hash))) { t("billing.ui.transaction_hash") } %>
-        <%= render(Shadcn::InputGroup.new) do %>
-          <%= form.text_field :transaction_hash, required: true, class: Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes), data: { slot: "input-group-control" }, spellcheck: false, autocomplete: "off", aria: { invalid: @refund.errors[:transaction_hash].any? } %>
-          <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) { form.submit t("billing.ui.record_refund"), class: action_button_classes(:primary) } %>
-        <% end %>
+        <%= form.text_field :transaction_hash, required: true, class: Shadcn::Input.classes, spellcheck: false, autocomplete: "off", aria: { invalid: @refund.errors[:transaction_hash].any? } %>
       <% end %>
     <% end %>
   <% end %>
-  <div class="mt-4 flex flex-wrap justify-end gap-2"><%= link_to t("billing.ui.back"), back, class: action_button_classes(:quiet) %></div>
+  <div class="mt-4 flex flex-wrap justify-end gap-2">
+    <%= link_to t("billing.ui.back"), back, class: action_button_classes(:quiet) %>
+    <%= form.submit t("billing.ui.record_refund"), class: action_button_classes(:primary) %>
+  </div>
 <% end %>

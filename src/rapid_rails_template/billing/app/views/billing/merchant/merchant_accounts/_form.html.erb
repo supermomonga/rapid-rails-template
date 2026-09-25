@@ -18,8 +18,8 @@
         <%= form.text_area :introduction, rows: 4, maxlength: 5000, class: Shadcn::Textarea.classes %>
       <% end %>
       <%= render(Shadcn::Field.new) do %>
-        <% if @merchant.image.attached? %><%= render(Shadcn::Avatar.new(class: "size-20")) { render(Shadcn::Avatar::Image.new(src: main_app.rails_storage_proxy_path(@merchant.image), width: 80, height: 80, alt: @merchant.display_name)) } %><% end %>
         <%= render(Shadcn::Field::Label.new(for: form.field_id(:image_upload))) { t("billing.ui.image") } %>
+        <% if @merchant.image.attached? %><%= render(Shadcn::Avatar.new(class: "size-20 self-start")) { render(Shadcn::Avatar::Image.new(src: main_app.rails_storage_proxy_path(@merchant.image), width: 80, height: 80, alt: @merchant.display_name)) } %><% end %>
         <%= form.file_field :image_upload, accept: "image/png,image/jpeg,image/webp", class: Shadcn::Input.classes, aria: { describedby: "merchant-image-help" } %>
         <%= render(Shadcn::Field::Description.new(id: "merchant-image-help")) { t("billing.ui.image_help") } %>
       <% end %>

@@ -11,7 +11,7 @@
 <%= render(Shadcn::Card.new(class: "mt-6")) do %>
   <%= render(Shadcn::Card::Header.new) do %>
     <%= render(Shadcn::Card::Title.new(tag: :h2)) { billing_label("invitations", "clock") } %>
-    <%= render(Shadcn::Card::Description.new) { t("billing.ui.invitation_help") } %>
+    <%= render(Shadcn::Card::Description.new) { t("billing.ui.received_invitation_help") } %>
   <% end %>
   <%= render(Shadcn::Card::Footer.new(class: "justify-end")) { link_to billing_label("invitations", "clock"), merchant_invitations_path, class: action_button_classes(:secondary) } %>
 <% end %>

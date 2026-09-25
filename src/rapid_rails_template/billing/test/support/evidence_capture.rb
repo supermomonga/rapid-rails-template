@@ -39,12 +39,12 @@ class EvidenceCapture
     contract = billing_evidence_contract(plan, viewport)
     capture_page('billing-pending', '契約（初回支払・署名待ち）', routes.account_subscription_path(contract), translate('billing.ui.contract', id: contract.id), viewport)
     assert_selector '[data-billing-checkout-target="review"]', visible: true
-    assert_selector '[data-billing-checkout-target="terms"]', text: '10.000000 USDC'
+    assert_selector '[data-billing-checkout-target="terms"]', text: '10 USDC'
     page.execute_script(<<~JAVASCRIPT)
       window.createBaseAccountSDK = () => ({ getProvider: () => ({ request: async () => ["0x9999999999999999999999999999999999999999"] }) })
     JAVASCRIPT
     click_button translate('billing.ui.authorize_payment')
-    assert_selector '[data-billing-checkout-target="message"]', text: translate('billing.checkout.wrongWallet')
+    assert_selector '[data-billing-checkout-target="error"][role="alert"]', text: translate('billing.checkout.wrongWallet')
     assert_nil contract.reload.signature
     capture_current_page('billing-wallet-mismatch', '契約時と異なるウォレットの拒否', viewport)
     contract.update!(signature: '0xabcd', status: 'active', paid_from: contract.starts_at, paid_until: contract.starts_at + 30.days)
@@ -192,7 +192,19 @@ class EvidenceCapture
     header_menu_open = page.evaluate_script(<<~JAVASCRIPT)
       [...document.querySelectorAll('header [data-slot="dropdown-menu-content"]')].some(menu => menu.checkVisibility())
     JAVASCRIPT
-    unless header_menu_open
+    merchant_switcher_open = page.evaluate_script("!!document.querySelector('#billing-merchant-choices:popover-open')")
+    if merchant_switcher_open
+      choices_on_top = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const popup = document.querySelector('#billing-merchant-choices:popover-open');
+          return [...popup.querySelectorAll('[role="menuitem"], [aria-current="true"]')].every(item => {
+            const box = item.getBoundingClientRect();
+            return item.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+          });
+        })()
+      JAVASCRIPT
+      assert choices_on_top, 'open merchant choices must stay above page navigation'
+    elsif !header_menu_open
       links_unobstructed = page.evaluate_script(<<~JAVASCRIPT)
         (() => {
           const position = { left: scrollX, top: scrollY };

@@ -17,17 +17,20 @@ module Billing
     def billing_menu_item(key, path, icon, active:, dropdown: false)
       if dropdown
         render(Shadcn::DropdownMenu::Item.new(tag: :a, href: path,
-          class: ('bg-accent text-accent-foreground' if active), aria: { current: ('page' if active) })) { billing_label(key, icon) }
+          class: ('font-medium text-foreground' if active), aria: { current: ('page' if active) })) do
+          safe_join([billing_label(key, icon), (billing_icon('check-circle') if active)].compact)
+        end
       else
         render(Shadcn::NavigationMenu::Item.new) do
-          render(Shadcn::NavigationMenu::Link.new(href: path, class: 'desktop:w-full',
+          render(Shadcn::NavigationMenu::Link.new(href: path,
+            class: class_names('desktop:w-full', 'font-medium text-foreground': active, 'text-muted-foreground': !active),
             data: (active ? { active: '' } : {}), aria: { current: ('page' if active) })) { billing_label(key, icon) }
         end
       end
     end
 
     def billing_amount(units)
-      number_with_delimiter(Billing::Amount.format(units).sub(/\.?0+\z/, ''))
+      number_with_delimiter(Billing::Amount.display(units))
     end
 
     def billing_tabs(section)
@@ -67,6 +70,7 @@ module Billing
         t("billing.ui.#{group}.#{value}")
       when 'amount_units' then "#{billing_amount(value)} USDC"
       when 'fee_basis_points' then "#{Billing::Amount.format(value, decimals: 2)}%"
+      when 'expires_at' then l(Time.iso8601(value), format: :long)
       when 'chain_id' then Billing::Chains.fetch(value).name
       when 'chain_ids' then value.map { |id| Billing::Chains.fetch(id).name }.join(' / ')
       when 'accepting_subscriptions' then t(value ? 'billing.ui.accepting' : 'billing.ui.closed')

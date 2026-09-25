@@ -109,16 +109,16 @@ component内部の寸法とpaddingは公開コンポーネントの既定値を�
 - Passkeyのlogin・account登録はauthentication sub-layout、認証後の管理はaccount settings sub-layoutで表示します。ユーザーID、password、password recoveryは生成しません。Passkeyを主操作、SIWEを代替操作として表示し、認証方法の切替案内は同幅の別Cardへ置きます。
 - ブラウザ側はWebAuthn Level 3の`parseCreationOptionsFromJSON`、`parseRequestOptionsFromJSON`、credentialの`toJSON`を使用する。未対応ブラウザは利用不可を明示し、独自変換のfallbackは追加しない。
 - SIWE選択時だけsignup・login画面へ署名buttonを追加します。EIP-6963 Providerを収集し、複数Providerは共通`with_modal`で選択します。非対応時だけ`window.ethereum`を使用します。アカウント設定は`with_tab`でPasskeys、EVMウォレット、削除を切り替え、解除・削除は別資格情報による再認証画面へ分離します。
-- bodyの背景は`background`、main contentは`muted`、Cardは`card`のsemantic tokenを使用します。
+- bodyとmain contentの背景は`background`、Cardは`card`のsemantic tokenを使用します。NavigationMenuの選択状態が背景から見えることを確認します。
 - headerとfooterは全幅のbackground・borderと`max-w-6xl`の内側領域を分離します。メニュー付き画面は`with_menu` partial layoutを適用し、accountとadminのsub-layoutがnavigationを1回設定します。961px未満では1列、961px以上では`220px + minmax(0, 1fr)`の2列へ切り替えます。
 - ページ全体に作用する追加、簡易絞り込み、一括操作は`content_for :page_actions_primary`または`content_for :page_actions_secondary`へ渡します。slotは配置先だけを表します。複雑な検索formと個別modelの操作は本文内に残します。640px未満では1列、640px以上では2列に配置します。
 - Card、form、dialog、row内のaction groupは右寄せし、狭幅で折り返せるようにします。DOM順は`:quiet`、`:secondary`、`:warning`、`:primary`または`:destructive`とします。Card内では`Shadcn::Card::Footer`を使用できる場合は使用します。
 - `action_button_classes`の対象外は通知popover、受信者選択、Copy操作、header、dropdown、icon-only button、modal backdrop、Wallet Providerのmenuです。各公開コンポーネントのvariantを直接指定します。
 - `with_menu`は本文blockを先にcaptureし、タブなしのpage actionsを主見出し直下の`Shadcn::Card`へ配置します。`with_tab`はactive画面の`Card::Content`先頭へpage actionsを配置して二重出力を防ぎます。
-- account sub-layoutの左ペインにはユーザー向けnavigationと管理者限定のbridge linkを置き、admin sub-layoutには管理navigationとマイページへのbridge linkを置きます。現在の項目は`data-active`と`aria-current="page"`で示します。
+- account sub-layoutの左ペインにはユーザー向けnavigationと管理者限定のbridge linkを置き、admin sub-layoutには管理navigationとマイページへのbridge linkを置きます。現在の項目は`data-active`と`aria-current="page"`で示し、狭幅では現在の項目までnavigation内をスクロールします。Dropdown menuでは現在地をfocus表示と区別します。
 - 複数Viewで共通する階層navigationは個別Viewへ複製せず、機能単位のnested layoutで1回だけ定義します。
 - タブ付き画面は`ApplicationHelper#with_tab`で描画します。active判定は`is_active` lambdaを優先し、未指定時はpath prefixを使い、同長競合や候補なしでは失敗します。`Shadcn::NavigationMenu`を横スクロール可能な1段のリストとし、active画面は直下の`Shadcn::Card`へ描画します。desktopでは全項目が1段に並び、狭幅ではnavigation内のみスクロールします。
-- dialogは`ApplicationHelper#with_modal`で描画します。helperは`Shadcn::Dialog`の共通DOM、見出し、説明、actions、ARIA参照、閉じる操作を生成します。gemのDialogは背景クリックを処理しないため、共通`dialog-backdrop` controllerがdialogの外側をクリックした場合だけ閉じます。開閉triggerと画面固有のStimulus controllerは呼び出し側が担当し、formを入れ子にしません。
+- dialogは`ApplicationHelper#with_modal`で描画します。helperは`Shadcn::Dialog`の共通DOM、見出し、説明、actions、ARIA参照、閉じる操作を生成します。actionsを指定する画面では閉じる操作を1つだけ置きます。gemのDialogは背景クリックを処理しないため、共通`dialog-backdrop` controllerがdialogの外側をクリックした場合だけ閉じます。開閉triggerと画面固有のStimulus controllerは呼び出し側が担当し、formを入れ子にしません。
 - Cropper.js 2.1.1は全構成でImportmapの公式`pin` commandによりtransitive dependencyごと`vendor/javascript`へ固定し、実行時CDNとJavaScript bundlerを使用しない。汎用`image_crop` Stimulus controllerはoptionalなアスペクト比と出力幅・高さ、初期coverage、許可MIME type、容量・寸法上限、lossy品質をvaluesで受け取り、画像移動、zoom、reset、canvas出力、File置換、Object URLとCropper lifecycleを担当する。Cropper.jsが選択範囲の比率に合わせて指定出力寸法を再計算し1pxずれる場合は、完成canvasを指定寸法へ描画する。アスペクト比未指定時は自由cropとし、プロフィールViewだけが1:1と512×512を設定する。変換前のraw画像はformへ残さず、設定不正や変換失敗時にraw uploadへfallbackしない。
 - `640px`未満をmobile、`960px`以下をtablet、`961px`以上をdesktop layoutとして扱います。Tailwind CSS 4の`@theme`で`--breakpoint-desktop: 60.0625rem`を定義し、`desktop:`/`max-desktop:`を使用します。任意値の`min-[961px]:`は`sm:`より先に出力されるため、同じプロパティを指定するとdesktop側が上書きされません。全幅でviewport内へ収め、公開コンポーネントのsize指定と余白を確認します。
 
@@ -313,7 +313,7 @@ productionではPuma pluginを有効化せず、Kamalの常設`worker` roleで`b
 
 `MissionControl::Jobs.base_controller_class`には`Admin::JobOperationsController`を設定します。このcontrollerは既存`Admin::BaseController`を継承し、全engine actionを`JobOperationPolicy#manage?`で認可します。追加ログイン方法にかかわらずDeviseの`current_user`を既存Action Policy contextへ渡し、controller内でroleを直接判定しません。Mission Control標準のHTTP Basic認証は明示的に無効化し、別系統の認証は追加しません。
 
-Mission Controlの公式ViewはBulma classを出力するため、Rails 8.1 Enginesの公式View lookup順序を利用し、Mission Control Jobs 1.1.0向けのhost Viewでlayout、application/server選択、section tab、flash、queue、状態別job、filter、worker、定期task、詳細、paginationをshadowします。Bulma stylesheetや専用CSSは生成せず、Tailwind CSS 4と`shadcn_view_components`のNavigationMenu、Card、Table、Badge、Button、Field、Alert、Collapsible、Paginationへ統一します。上書きViewの見出し、tab、table、状態、日時、操作、確認文、ARIA labelは生成するja/en localeを正本とします。engineの英語専用I18n設定は専用layoutの描画範囲だけ通常のI18n設定へ切り替え、`ensure`で復元することで、hostのheader、footer、HTML metadataを既定localeのまま維持します。engine controller由来の操作後通知と例外message、route、controller、adapter、retry/discard/pause/resume/run操作契約は変更しません。専用layoutはlocaleに対応したqueue、状態別job、worker、定期taskのsection tabを`with_tab`へ渡し、desktopでは1段へ収め、狭幅ではNavigationMenu内だけで横スクロールさせます。操作buttonは公開Buttonの既定sizeを使用します。`current_section`を参照するlambdaでactiveを判定し、engine本文をactive画面のCardへ渡します。各engine Viewは実際の画面名を`page_title`へ設定します。application/server選択は画面切替navigationではないためhelper対象外とし、本文内に残します。通常画面ではhost Importmap、engine画面ではMission Control Importmapだけを出力し、専用layoutから既存admin layoutへnested renderします。document titleは翻訳済みpage titleとapplication nameを組み合わせます。
+Mission Controlの公式ViewはBulma classを出力するため、Rails 8.1 Enginesの公式View lookup順序を利用し、Mission Control Jobs 1.1.0向けのhost Viewでlayout、application/server選択、section tab、flash、queue、状態別job、filter、worker、定期task、詳細、paginationをshadowします。Bulma stylesheetや専用CSSは生成せず、Tailwind CSS 4と`shadcn_view_components`のNavigationMenu、Card、Table、Badge、Button、Field、Alert、Collapsible、Paginationへ統一します。上書きViewの見出し、tab、table、状態、日時、操作、確認文、ARIA labelは生成するja/en localeを正本とします。engineの英語専用I18n設定は専用layoutの描画範囲だけ通常のI18n設定へ切り替え、`ensure`で復元することで、hostのheader、footer、HTML metadataを既定localeのまま維持します。engine controller由来の操作後通知と例外message、route、controller、adapter、retry/discard/pause/resume/run操作契約は変更しません。専用layoutはlocaleに対応したqueue、状態別job、worker、定期taskのsection tabを`with_tab`へ渡し、desktopでは1段へ収め、狭幅ではNavigationMenu内だけで横スクロールさせます。操作buttonは公開Buttonの既定sizeを使用します。`current_section`を参照するlambdaでactiveを判定し、engine本文をactive画面のCardへ渡します。各engine Viewは実際の画面名を`page_title`へ設定します。application/server選択は画面切替navigationではないためhelper対象外とし、本文内に残します。通常画面とengine画面は同じhost Importmapを出力します。Mission Control Jobsのform controllerはhostのStimulusへ登録し、専用layoutから既存admin layoutへnested renderします。document titleは翻訳済みpage titleとapplication nameを組み合わせます。
 
 Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Control Jobsはqueueとjobの監視・retry/discard、Maintenance Tasksは運用taskの開始・進捗管理を担当し、`/admin/jobs`と`/admin/maintenance_tasks`のroute、policy、navigationを独立させます。
 
@@ -324,6 +324,8 @@ Mission Control JobsとMaintenance Tasksは役割を分けます。Mission Contr
 engineは`/admin/maintenance_tasks`へだけmountし、`Admin::MaintenanceTasksController`を`MaintenanceTasks.parent_controller`へ設定します。parent controllerは既存`Admin::BaseController`を継承し、全engine actionを`MaintenanceTaskPolicy#manage?`で認可します。metadataには`triggered_by_user_id`として`users.id`を保存し、追加ログイン方法にかかわらずDeviseの`current_user`を利用します。
 
 engineのroute、controller、helper API、Run操作は2.17.0公式実装を維持し、専用layoutから既存admin layoutへnested renderします。Bulma stylesheetは読み込まず、Bulma classを出力するtask、run、errorのViewと表示helperをhost側でshadowして、Tailwind CSS 4と`shadcn_view_components`のCard、Badge、Collapsible、form、Alertへ統一します。3秒ごとの`data-refresh`更新はhostのStimulus controllerで行い、外部stylesheet用CSP例外やinline scriptは追加しません。
+
+タスクのパラメータ名はActive Modelの翻訳を使用し、進捗の定型文はアプリのlocaleで表示します。個別タスクの属性名は、そのタスクを作る側がlocaleファイルへ定義します。全部入りsampleの検証用タスクには日本語・英語の属性名を用意します。
 
 Maintenance TaskはKamalの既存Solid Queue `worker` roleで実行し、専用roleを追加しません。
 

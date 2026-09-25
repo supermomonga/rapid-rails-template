@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import "billing/base_account"
 
 export default class extends Controller {
-  static targets = ["chain", "prepare", "authorize", "review", "terms", "message", "contractLink"]
+  static targets = ["chain", "prepare", "authorize", "review", "terms", "message", "error", "errorMessage", "contractLink"]
   static values = { createUrl: String, planId: Number, appName: String, contract: Object, labels: Object }
 
   connect() {
@@ -12,6 +12,7 @@ export default class extends Controller {
 
   async prepare(event) {
     event.preventDefault()
+    this.clearError()
     this.prepareTarget.disabled = true
     this.messageTarget.textContent = this.labelsValue.connecting
     try {
@@ -26,13 +27,14 @@ export default class extends Controller {
       this.messageTarget.textContent = this.labelsValue.review
       this.authorizeTarget.focus()
     } catch (error) {
-      this.messageTarget.textContent = error.message || this.labelsValue.failed
+      this.showError(error.message || this.labelsValue.failed)
       this.prepareTarget.disabled = false
     }
   }
 
   async authorize(event) {
     event.preventDefault()
+    this.clearError()
     this.authorizeTarget.disabled = true
     this.messageTarget.textContent = this.labelsValue.signing
     try {
@@ -47,7 +49,7 @@ export default class extends Controller {
       const result = await this.post(this.contract.authorize_path, { signature })
       window.location.assign(result.subscription_path)
     } catch (error) {
-      this.messageTarget.textContent = error.message || this.labelsValue.failed
+      this.showError(error.message || this.labelsValue.failed)
       this.authorizeTarget.disabled = false
     }
   }
@@ -64,6 +66,17 @@ export default class extends Controller {
     this.termsTarget.textContent = this.contract.review
     this.contractLinkTarget.href = this.contract.subscription_path
     this.contractLinkTarget.hidden = false
+  }
+
+  clearError() {
+    this.errorTarget.hidden = true
+    this.errorMessageTarget.textContent = ""
+  }
+
+  showError(message) {
+    this.messageTarget.textContent = ""
+    this.errorMessageTarget.textContent = message
+    this.errorTarget.hidden = false
   }
 
   async post(path, body) {

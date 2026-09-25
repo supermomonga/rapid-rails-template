@@ -9,7 +9,10 @@
       <p><%= t("billing.ui.checkout_terms") %></p>
       <% available = @plan.chain_ids.select { |id| @plan.available_on?(id) } %>
       <% if available.empty? %>
-        <%= render(Shadcn::Alert.new(role: "status")) { render(Shadcn::Alert::Description.new) { t("billing.ui.unavailable") } } %>
+        <%= render(Shadcn::Alert.new(role: "status")) do %>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+          <%= render(Shadcn::Alert::Title.new) { t("billing.ui.unavailable") } %>
+        <% end %>
       <% elsif !user_signed_in? %>
         <div class="flex justify-end"><%= link_to t("billing.ui.sign_in"), main_app.new_user_session_path, class: action_button_classes(:primary) %></div>
       <% else %>

@@ -160,7 +160,7 @@ CLI引数の事前回答を受け取り、`rails new`を起動する前に未指
 
 ### UIエビデンス
 
-生成アプリケーションにはtest環境専用の`evidence:capture` Rake taskを配置します。taskは撮影前にtest databaseを再構築し、Capybaraで実ページを操作してPlaywright Chromiumでfull-page PNGと撮影レポートを出力します。撮影の成否にかかわらずtest databaseを再度初期化するため、証跡用データは通常のfixture testへ残りません。共通画面は実際のDevise login form、SIWE画面はdatabase challengeと署名検証を通して同じUserへ認証し、テスト専用login routeや認証fallbackは追加しません。
+生成アプリケーションにはtest環境専用の`evidence:capture` Rake taskを配置します。taskはdesktopとmobileの撮影ごとにtest databaseを再構築し、Capybaraで実ページを操作してPlaywright ChromiumでPNGと撮影レポートを出力します。通常画面はfull-page、dialogとpopoverを開いた画面はviewportだけを撮影します。撮影の成否にかかわらずtest databaseを再度初期化するため、証跡用データは通常のfixture testへ残りません。ブラウザのlocaleは生成アプリの既定localeに合わせます。共通画面は実際のDevise login form、SIWE画面はdatabase challengeと署名検証を通して同じUserへ認証し、テスト専用login routeや認証fallbackは追加しません。
 
 リポジトリ側の`rake evidence:update`は選択可能な機能をすべて有効にした日本語sampleを1回だけ生成し、全Rails test、RuboCop、Thruster cache smoke、共通・SIWE・avatar画面の撮影が成功してからmanifest、Markdown索引、画像hashを確定して`docs/evidence/`を置換します。同じcapture IDとviewportの重複を拒否し、鮮度はcommit hashではなく、テンプレート分割ソースと撮影オーケストレーターの内容fingerprintで判定します。
 

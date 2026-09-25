@@ -2,7 +2,7 @@
 <% content_for :page_actions_primary do %><%= link_to billing_label("new_plan", "squares-2x2"), new_merchant_plan_path, class: action_button_classes(:primary) if merchant_editable? && @merchant.status == "active" && Billing::Setting.current.merchant_plan_creation_enabled? %><% end %>
 <% content_for :page_actions_secondary do %><%= link_to billing_label("public_page", "arrow-top-right-on-square"), Billing::Engine.routes.url_helpers.merchant_path(@merchant.public_id), class: action_button_classes(:secondary) %><% end %>
 <div class="space-y-6">
-  <div><h2 class="text-xl font-semibold break-words"><%= @merchant.display_name %></h2><p class="text-muted-foreground"><%= t("billing.ui.revenue_scope") %></p></div>
+  <p class="text-muted-foreground"><%= t("billing.ui.revenue_scope") %></p>
   <div class="grid gap-4 sm:grid-cols-2">
     <% [["gross_sales", @gross_units, "banknotes"], ["operator_fee", @fee_units, "receipt-percent"], ["merchant_received", @net_units, "wallet"], ["manual_refund_total", @refund_units, "arrow-uturn-left"]].each do |label, units, icon| %>
       <%= render(Shadcn::Card.new(class: "min-w-0")) do %>

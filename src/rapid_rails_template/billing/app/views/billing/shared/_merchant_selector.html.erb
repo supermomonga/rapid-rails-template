@@ -6,7 +6,7 @@
       <h2 id="billing-merchant-context" class="text-sm font-semibold"><%= t(current_account ? "billing.ui.current_merchant" : "billing.ui.select_merchant") %></h2>
       <% if current_account %>
         <p class="font-semibold [overflow-wrap:anywhere]" data-billing-current-merchant><%= current_account.display_name %></p>
-        <%= render(Shadcn::Badge.new(variant: :outline)) { t("billing.ui.business_states.#{current_account.status}") } %>
+        <%= render(Shadcn::Badge.new(variant: { "active" => :default, "closing" => :outline, "closed" => :secondary }.fetch(current_account.status))) { t("billing.ui.business_states.#{current_account.status}") } %>
       <% end %>
       <% if current_account.nil? || accounts.many? %>
         <%= render(Shadcn::DropdownMenu.new(class: "w-full")) do %>

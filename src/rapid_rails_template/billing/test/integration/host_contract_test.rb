@@ -99,7 +99,7 @@ class BillingHostContractTest < ActionDispatch::IntegrationTest
     assert_equal '2592000', permission.fetch('period')
     assert_equal "0x#{'22' * 20}", permission.fetch('spender')
     assert_equal Billing::Chains.fetch(8453).usdc, permission.fetch('token')
-    assert_includes body.fetch('review'), '10.000000 USDC'
+    assert_includes body.fetch('review'), '10 USDC'
     @plan.update!(amount_units: 20_000_000)
     contract = Billing::Subscription.find(body.fetch('id'))
     assert_equal 10_000_000, contract.amount_units

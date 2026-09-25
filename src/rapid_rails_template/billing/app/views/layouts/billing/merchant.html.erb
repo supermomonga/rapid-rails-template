@@ -15,7 +15,7 @@
 <%= render layout: "layouts/with_menu" do %>
   <div data-controller="billing-navigation">
     <% if params[:merchant_id].present? %>
-      <p class="mb-4 font-semibold break-words"><%= merchant_account.display_name %> <%= render(Shadcn::Badge.new(variant: :outline)) { t("billing.ui.business_states.#{merchant_account.status}") } %></p>
+      <p class="mb-4 font-semibold break-words"><%= merchant_account.display_name %> <%= render(Shadcn::Badge.new(variant: { "active" => :default, "closing" => :outline, "closed" => :secondary }.fetch(merchant_account.status))) { t("billing.ui.business_states.#{merchant_account.status}") } %></p>
       <% unless merchant_account.status == "active" %>
         <%= render(Shadcn::Alert.new(class: "mb-4")) do %>
           <%= billing_icon("clock") %>

@@ -17,14 +17,12 @@
               <% end %>
               <%= render(Shadcn::Field.new) do %>
                 <%= render(Shadcn::Field::Label.new(for: "gas_#{chain.chain_id}")) { t("billing.ui.gas_ceiling", symbol: network.native_symbol) } %>
-                <%= render(Shadcn::InputGroup.new) do %>
-                  <%= form.text_field :gas_ceiling_native, value: @invalid_chain&.chain_id == chain.chain_id ? params.dig(:chain, :gas_ceiling_native) : (chain.gas_ceiling_wei && Billing::Amount.format(chain.gas_ceiling_wei, decimals: 18)), id: "gas_#{chain.chain_id}", required: true, inputmode: "decimal", class: Shadcn::Input.classes(extra: Shadcn::InputGroup::Input.classes), data: { slot: "input-group-control" } %>
-                  <%= render(Shadcn::InputGroup::Addon.new(align: "inline-end")) { form.submit t("billing.ui.save"), class: action_button_classes(:primary) } %>
-                <% end %>
+                <%= form.text_field :gas_ceiling_native, value: @invalid_chain&.chain_id == chain.chain_id ? params.dig(:chain, :gas_ceiling_native) : (chain.gas_ceiling_wei && Billing::Amount.format(chain.gas_ceiling_wei, decimals: 18)), id: "gas_#{chain.chain_id}", required: true, inputmode: "decimal", class: Shadcn::Input.classes %>
               <% end %>
             <% end %>
             <%= render(Shadcn::Field::Description.new) { t("billing.ui.gas_help") } %>
           <% end %>
+          <div class="flex flex-wrap justify-end gap-2"><%= form.submit t("billing.ui.save"), class: action_button_classes(:primary) %></div>
         <% end %>
         <% unless chain.verified_at %>
           <%= form_with url: deploy_admin_chain_path(chain.chain_id), class: "space-y-3" do |form| %>

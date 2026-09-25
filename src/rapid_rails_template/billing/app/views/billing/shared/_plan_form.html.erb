@@ -15,7 +15,7 @@
           <% end %>
           <%= render(Shadcn::Field.new) do %>
             <%= render(Shadcn::Field::Label.new(for: form.field_id(:price_usdc))) { t("billing.ui.price") } %>
-            <%= form.text_field :price_usdc, value: params.dig(:plan, :price_usdc) || (@plan.amount_units && Billing::Amount.format(@plan.amount_units)), inputmode: "decimal", required: true, class: Shadcn::Input.classes %>
+            <%= form.text_field :price_usdc, value: params.dig(:plan, :price_usdc) || (@plan.amount_units && Billing::Amount.display(@plan.amount_units)), inputmode: "decimal", required: true, class: Shadcn::Input.classes %>
           <% end %>
           <%= render(Shadcn::Field.new) do %>
             <%= render(Shadcn::Field::Label.new(for: form.field_id(:period_days))) { t("billing.ui.period_days") } %>
